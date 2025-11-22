@@ -365,6 +365,29 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
                 planLimitMessage = scheduleResult.error;
               }
 
+              // Persist failure so UI does not show Scheduled when AWS scheduling failed post-DB update
+              try {
+                await prisma.content.update({
+                  where: { id: contentId },
+                  data: {
+                    status: 'failed',
+                    scheduledAt: null,
+                    schedulingError:
+                      scheduleResult.error || 'Scheduling failed after saving the post.',
+                  },
+                });
+              } catch (persistErr) {
+                console.error('Failed to persist scheduling failure state (post-DB)', persistErr);
+              }
+
+              return reply.code(planLimitHit ? 402 : 502).send({
+                success: false,
+                error:
+                  scheduleResult.error ||
+                  'Scheduling service unavailable. Your post was saved but not scheduled.',
+                data: null,
+              });
+
               // If this is auto-recovery from failed reschedule and scheduling still fails,
               // return error to user with helpful message
               // Do NOT return 500 here; degrade gracefully like initial scheduling
@@ -379,7 +402,28 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             }
           } catch (scheduleError) {
             console.error('Error creating schedule:', scheduleError);
-            // Degrade gracefully: do not fail the request
+            // Persist failure so UI doesn't show Scheduled when AWS call throws
+            try {
+              await prisma.content.update({
+                where: { id: contentId },
+                data: {
+                  status: 'failed',
+                  scheduledAt: null,
+                  schedulingError:
+                    scheduleError instanceof Error
+                      ? scheduleError.message
+                      : 'Scheduling failed unexpectedly',
+                },
+              });
+            } catch (persistErr) {
+              console.error('Failed to persist scheduling failure state (exception)', persistErr);
+            }
+
+            return reply.code(502).send({
+              success: false,
+              error: 'Scheduling service unavailable. Your post was saved but not scheduled.',
+              data: null,
+            });
           }
         }
         // Case 2: Cancel schedule (was scheduled, now isn't)

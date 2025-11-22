@@ -211,9 +211,16 @@ export class HttpHandler {
         );
       }
 
+      // Always use the authenticated userId from IAM for validation + creation
+      scheduleRequest.userId = userId;
+
       // Validate request
       const validation = validateScheduleRequest(scheduleRequest);
       if (!validation.valid) {
+        logger.warn('Schedule validation failed', {
+          errors: validation.errors,
+          userId,
+        });
         return createErrorResponse(400, 'Invalid request', { errors: validation.errors });
       }
 
@@ -223,15 +230,17 @@ export class HttpHandler {
         return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
       }
 
-      // Always use the authenticated userId for the schedule record
-      scheduleRequest.userId = userId;
-
       const result = await this.scheduleService.createSchedule(scheduleRequest);
 
       if (result.success) {
         metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
         return createSuccessResponse(201, result.schedule);
       } else {
+        logger.warn('Schedule service failed to create schedule', {
+          error: result.error,
+          userId,
+          brandId,
+        });
         return createErrorResponse(400, result.error || 'Failed to create schedule');
       }
     } catch (error) {

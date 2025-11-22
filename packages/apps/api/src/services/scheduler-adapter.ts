@@ -189,6 +189,7 @@ export class SchedulerAdapter {
     let originalScheduledAt: Date | null = null;
     // Minimal content info for notifications in catch
     let fetchedContent: { brandId: string; brand: { userId: string } } | null = null;
+    let campaignIdForEvents: string | undefined;
 
     try {
       // 1. Get content with brand and user info
@@ -205,9 +206,41 @@ export class SchedulerAdapter {
       });
 
       if (!content) {
+        try {
+          await eventEmitter.emitScheduleFailed({
+            contentId,
+            brandId: undefined,
+            campaignId: undefined,
+            operation: 'create',
+            error: 'Content not found',
+          });
+        } catch (emitErr) {
+          logger.warn('Failed to emit schedule.failed event for missing content', {
+            contentId,
+            error: emitErr,
+          });
+        }
         return { success: false, error: 'Content not found' };
       }
       fetchedContent = { brandId: content.brandId, brand: { userId: content.brand.userId } };
+      campaignIdForEvents = content.campaignId ?? undefined;
+
+      const emitScheduleFailure = async (message: string) => {
+        try {
+          await eventEmitter.emitScheduleFailed({
+            contentId,
+            brandId: content.brandId,
+            campaignId: content.campaignId ?? undefined,
+            operation: 'create',
+            error: message,
+          });
+        } catch (emitError) {
+          logger.warn('Failed to emit schedule.failed event from API layer', {
+            contentId,
+            error: emitError,
+          });
+        }
+      };
 
       // If content belongs to a campaign, enforce campaign validation rules.
       // Standalone content (no campaign) is now allowed to be scheduled.
@@ -218,6 +251,7 @@ export class SchedulerAdapter {
             campaignId: content.campaignId,
             contentId,
           });
+          await emitScheduleFailure('Associated campaign not found');
           return {
             success: false,
             error: 'Associated campaign not found',
@@ -234,9 +268,11 @@ export class SchedulerAdapter {
             campaignId: content.campaignId,
             status: content.campaign.status,
           });
+          const msg = `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`;
+          await emitScheduleFailure(msg);
           return {
             success: false,
-            error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
+            error: msg,
           };
         }
 
@@ -281,9 +317,11 @@ export class SchedulerAdapter {
             },
           });
           if (futureCountExcludingThis + 1 > maxAhead) {
+            const message = `Upgrade required: your plan allows up to ${maxAhead} scheduled posts ahead`;
+            await emitScheduleFailure(message);
             return {
               success: false,
-              error: `Upgrade required: your plan allows up to ${maxAhead} scheduled posts ahead`,
+              error: message,
             };
           }
         }
@@ -390,9 +428,11 @@ export class SchedulerAdapter {
             requiresImageAsset &&
             (!content.primaryAssetCdnUrl || content.primaryAssetCdnUrl.length === 0)
           ) {
+            const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
+            await emitScheduleFailure(msg);
             return {
               success: false,
-              error: 'Missing asset for scheduling. Please re-upload or regenerate the image.',
+              error: msg,
             };
           }
 
@@ -408,9 +448,11 @@ export class SchedulerAdapter {
           });
 
           if (!validation.ok) {
+            const msg = validation.errors[0]?.message || 'Invalid content payload for scheduling';
+            await emitScheduleFailure(msg);
             return {
               success: false,
-              error: validation.errors[0]?.message || 'Invalid content payload for scheduling',
+              error: msg,
             };
           }
 
@@ -557,6 +599,10 @@ export class SchedulerAdapter {
         });
       }
 
+      if (!awsScheduleCreated) {
+        await emitScheduleFailure('AWS Scheduler unavailable - content not scheduled');
+      }
+
       return awsScheduleCreated
         ? {
             success: true,
@@ -570,6 +616,22 @@ export class SchedulerAdapter {
           };
     } catch (error) {
       logger.error('Error scheduling content', { error });
+
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      try {
+        await eventEmitter.emitScheduleFailed({
+          contentId,
+          brandId: fetchedContent?.brandId,
+          campaignId: campaignIdForEvents,
+          operation: 'create',
+          error: message,
+        });
+      } catch (emitError) {
+        logger.warn('Failed to emit schedule.failed event from API catch', {
+          contentId,
+          error: emitError,
+        });
+      }
 
       // Attempt to restore original state in database
       if (originalStatus !== null && contentId) {

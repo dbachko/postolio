@@ -133,6 +133,54 @@ export class EventEmitter {
   }
 
   /**
+   * Emit schedule failure event (API-layer) to keep downstream consumers in sync
+   */
+  async emitScheduleFailed(params: {
+    contentId: string;
+    brandId?: string;
+    campaignId?: string | null;
+    operation: 'create' | 'update' | 'delete';
+    error: string;
+  }): Promise<void> {
+    const { contentId, brandId, campaignId, operation, error } = params;
+
+    try {
+      const result = await this.eventBridge.putEvents({
+        Entries: [
+          {
+            Source: 'postolio.scheduler',
+            DetailType: 'schedule.failed',
+            Detail: JSON.stringify({
+              contentId,
+              brandId,
+              campaignId,
+              operation,
+              error,
+              timestamp: new Date().toISOString(),
+            }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
+          },
+        ],
+      });
+
+      this.logPutEventsResult(
+        result,
+        'Schedule failure event emitted',
+        'Failed to emit schedule failure event',
+        { contentId, brandId, campaignId, operation }
+      );
+    } catch (emitError) {
+      this.logger.error('Error emitting schedule failure event', {
+        contentId,
+        brandId,
+        campaignId,
+        operation,
+        ...formatError(emitError),
+      });
+    }
+  }
+
+  /**
    * Emit content published event
    */
   async emitContentPublished(
