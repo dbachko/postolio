@@ -25,9 +25,9 @@ import {
 } from 'lucide-react';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
 import { format } from 'date-fns';
-import { fromZonedTime } from 'date-fns-tz';
+import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
-import { formatInUserTimezone } from '../lib/timezone';
+import { formatInUserTimezone, toUTCFromInput } from '../lib/timezone';
 import { toast } from 'sonner';
 import { getContentDisplayStatus } from '../utils/content-status';
 import { Loader2 } from 'lucide-react';
@@ -105,11 +105,13 @@ interface FormData {
   scheduledAt: string;
 }
 
-const buildFormStateFromPost = (post: PostDetailData): FormData => ({
+const buildFormStateFromPost = (post: PostDetailData, timezone: string): FormData => ({
   caption: post.caption || '',
   hashtags: stripHashtagPrefixes(post.hashtags || []),
   imageUrl: post.imageUrl || '',
-  scheduledAt: post.scheduledAt ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '',
+  scheduledAt: post.scheduledAt
+    ? formatInTimeZone(new Date(post.scheduledAt), timezone, "yyyy-MM-dd'T'HH:mm")
+    : '',
 });
 
 // Memoized metrics component to prevent unnecessary re-renders
@@ -310,11 +312,27 @@ export default function PostDetail() {
   // Initialize form data when post loads or editing starts
   useEffect(() => {
     if (post && isEditing) {
-      setFormData(buildFormStateFromPost(post));
+      setFormData(buildFormStateFromPost(post, brandTimezone || timezone));
       setHasChanges(false);
       formInitializedRef.current = true;
     }
-  }, [post, isEditing]);
+  }, [post, isEditing, brandTimezone, timezone]);
+
+  // If timezone changes after form initialized, realign scheduled time display to that zone
+  useEffect(() => {
+    if (post && isEditing && formInitializedRef.current) {
+      setFormData((prev) => ({
+        ...prev,
+        scheduledAt: post.scheduledAt
+          ? formatInTimeZone(
+              new Date(post.scheduledAt),
+              brandTimezone || timezone,
+              "yyyy-MM-dd'T'HH:mm"
+            )
+          : '',
+      }));
+    }
+  }, [brandTimezone, timezone, post, isEditing]);
 
   // Clean up object URL on unmount
   useEffect(() => {
@@ -391,7 +409,11 @@ export default function PostDetail() {
 
     const scheduledValue = formData.scheduledAt || '';
     const originalScheduled = post.scheduledAt
-      ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm")
+      ? formatInTimeZone(
+          new Date(post.scheduledAt),
+          brandTimezone || timezone,
+          "yyyy-MM-dd'T'HH:mm"
+        )
       : '';
 
     const formHashtags = normalizeHashtags(formData.hashtags);
@@ -407,7 +429,7 @@ export default function PostDetail() {
       scheduledValue !== originalScheduled;
 
     setHasChanges(formChanged);
-  }, [formData, post]);
+  }, [formData, post, brandTimezone, timezone]);
 
   const handleCaptionChange = (value: string) => {
     setFormData((prev) => ({ ...prev, caption: value }));
@@ -501,7 +523,7 @@ export default function PostDetail() {
     // CRITICAL: Interpret datetime-local input as being in brand timezone
     // datetime-local gives us "2025-01-15T09:00" which we interpret AS IF it's in brand timezone
     const scheduledAtPayload = formData.scheduledAt
-      ? fromZonedTime(formData.scheduledAt + ':00', brandTimezone).toISOString()
+      ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
       : undefined;
 
     mutateContent({
@@ -523,7 +545,7 @@ export default function PostDetail() {
     setLastSaved(null);
     setLearningFeedback({ isVisible: false, message: '' });
     if (post) {
-      setFormData(buildFormStateFromPost(post));
+      setFormData(buildFormStateFromPost(post, brandTimezone || timezone));
       setHasChanges(false);
       formInitializedRef.current = true;
     }
@@ -546,10 +568,9 @@ export default function PostDetail() {
     mutationFn: async (scheduledAt: string) => {
       let payload = scheduledAt;
       if (scheduledAt && !scheduledAt.endsWith('Z')) {
-        // CRITICAL: Interpret datetime string as being in brand timezone
-        // Append seconds if not present for proper ISO format
-        const dateTimeStr = scheduledAt.includes(':00:00') ? scheduledAt : scheduledAt + ':00';
-        payload = fromZonedTime(dateTimeStr, brandTimezone).toISOString();
+        // Normalize space-separated input to ISO-like then convert from brand timezone to UTC
+        const normalized = scheduledAt.includes('T') ? scheduledAt : scheduledAt.replace(' ', 'T');
+        payload = toUTCFromInput(normalized, brandTimezone).toISOString();
       }
       return contentApi.schedulePost(postId!, payload);
     },

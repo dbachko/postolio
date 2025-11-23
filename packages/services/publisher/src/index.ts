@@ -634,16 +634,39 @@ export const handler = async (
       hasToken: !!credentials.accessToken,
     });
 
-    // If video content, get signed URL
+    // Resolve media URL based on mediaType/contentType
+    const mediaFormat = (
+      publishableSchedule.mediaType ||
+      publishableSchedule.contentType ||
+      ''
+    ).toLowerCase();
+    const isVideoFormat = mediaFormat === 'video' || mediaFormat === 'reel';
+
     let mediaUrl = null;
-    if (schedule.contentType === 'video' && schedule.videoUrl) {
-      mediaUrl = await getSignedVideoUrl(schedule.videoUrl);
+    if (isVideoFormat && publishableSchedule.videoUrl) {
+      mediaUrl = await getSignedVideoUrl(publishableSchedule.videoUrl);
     } else if (publishableSchedule.mediaKeys?.[0]) {
       mediaUrl = await getSignedImageUrlFromKey(publishableSchedule.mediaKeys[0]);
     } else if (publishableSchedule.imageUrl) {
       // Backward compatibility: derive key from URL
       const key = extractS3Key(publishableSchedule.imageUrl);
       mediaUrl = key ? await getSignedImageUrlFromKey(key) : publishableSchedule.imageUrl;
+    } else if (publishableSchedule.videoUrl) {
+      // Fallback: if we have a video URL but mediaType was missing, still attempt to publish
+      mediaUrl = await getSignedVideoUrl(publishableSchedule.videoUrl);
+    }
+
+    if (!mediaUrl) {
+      logger.error('Missing media for publishing', {
+        scheduleId: event.scheduleId,
+        contentId: schedule.contentId,
+        mediaType: publishableSchedule.mediaType,
+        contentType: publishableSchedule.contentType,
+        hasVideoUrl: !!publishableSchedule.videoUrl,
+        mediaKeysCount: publishableSchedule.mediaKeys?.length || 0,
+        imageUrlPresent: !!publishableSchedule.imageUrl,
+      });
+      throw new Error('Media URL is required for Instagram publishing');
     }
 
     // Get platform adapter

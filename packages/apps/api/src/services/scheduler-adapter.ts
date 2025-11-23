@@ -202,6 +202,14 @@ export class SchedulerAdapter {
             },
           },
           campaign: true, // Include campaign data for validation
+          mediaAssets: {
+            select: {
+              cdnUrl: true,
+              usageContext: true,
+              displayOrder: true,
+            },
+            orderBy: { displayOrder: 'asc' },
+          },
         },
       });
 
@@ -442,13 +450,18 @@ export class SchedulerAdapter {
         try {
           const normalizedMediaType = (content.mediaType || 'image') as InstagramMediaType;
           const normalizedContentType = (content.contentType || 'post') as InstagramContentType;
+          const mediaAssets = (content as any).mediaAssets as
+            | { cdnUrl: string; usageContext: string }[]
+            | undefined;
+          const primaryAssetUrl =
+            content.primaryAssetCdnUrl ||
+            mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
+            mediaAssets?.[0]?.cdnUrl ||
+            null;
           // Enforce presence of media key for image/carousel content
           const requiresImageAsset =
             normalizedMediaType === 'image' || normalizedMediaType === 'carousel';
-          if (
-            requiresImageAsset &&
-            (!content.primaryAssetCdnUrl || content.primaryAssetCdnUrl.length === 0)
-          ) {
+          if (requiresImageAsset && (!primaryAssetUrl || primaryAssetUrl.length === 0)) {
             const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
             await emitScheduleFailure(msg);
             return {
@@ -457,7 +470,7 @@ export class SchedulerAdapter {
             };
           }
 
-          const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+          const mediaKey = normalizeMediaKey(primaryAssetUrl || undefined);
           const validation = validateContentPayload({
             platform: 'instagram',
             contentType: normalizedContentType,
@@ -1008,7 +1021,13 @@ export class SchedulerAdapter {
           hashtags: content.hashtags || [],
           // No metadata fallback for mediaKeys; upstream must supply keys
         };
-        const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+        const primaryAssetUrl =
+          content.primaryAssetCdnUrl ||
+          (content as any).mediaAssets?.find((asset: any) => asset.usageContext === 'primary')
+            ?.cdnUrl ||
+          (content as any).mediaAssets?.[0]?.cdnUrl ||
+          null;
+        const mediaKey = normalizeMediaKey(primaryAssetUrl || undefined);
         if (mediaKey) {
           updatePayload.mediaKeys = [mediaKey];
         }
