@@ -179,6 +179,8 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       // This prevents race conditions where local DB has new time but AWS doesn't
       const originalScheduledTime = content.scheduledAt?.toISOString();
       const newScheduledTime = updateData.scheduledAt?.toISOString();
+      const requestedScheduledAt =
+        (updateData.scheduledAt as Date | null | undefined) ?? content.scheduledAt ?? null;
 
       // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state
       // Skip AWS operations if content belongs to a draft campaign
@@ -296,7 +298,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             where: { id: contentId },
             data: {
               status: 'failed',
-              scheduledAt: null,
+              scheduledAt: requestedScheduledAt,
               schedulingError: message,
             },
           });
@@ -371,7 +373,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
                   where: { id: contentId },
                   data: {
                     status: 'failed',
-                    scheduledAt: null,
+                    scheduledAt: requestedScheduledAt,
                     schedulingError:
                       scheduleResult.error || 'Scheduling failed after saving the post.',
                   },
@@ -408,7 +410,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
                 where: { id: contentId },
                 data: {
                   status: 'failed',
-                  scheduledAt: null,
+                  scheduledAt: requestedScheduledAt,
                   schedulingError:
                     scheduleError instanceof Error
                       ? scheduleError.message

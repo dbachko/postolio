@@ -19,7 +19,7 @@ import { PostScheduler } from '@/components/PostScheduler';
 import { PostStatusCard, type PostStatus } from '@/components/PostStatusCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTimezone } from '@/contexts/TimezoneContext';
-import { convertLocalToUTC } from '@/lib/timezone';
+import { toUTCFromInput } from '@/lib/timezone';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import {
@@ -251,10 +251,7 @@ export function PostSidebar({
       if (!id) throw new Error('No post ID');
       if (!formData.scheduledAt) throw new Error('No scheduled time set');
 
-      const scheduledUtc = convertLocalToUTC(
-        new Date(formData.scheduledAt),
-        brandTimezone
-      ).toISOString();
+      const scheduledUtc = toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString();
       const isStory = formData.contentType === 'story';
 
       return contentApi.updateContent({
@@ -301,7 +298,10 @@ export function PostSidebar({
         mediaType: finalMediaType,
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
-        scheduledAt: mode === 'schedule' ? formData.scheduledAt : undefined,
+        scheduledAt:
+          mode === 'schedule' && formData.scheduledAt
+            ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
+            : undefined,
       });
     },
     onSuccess: (_response, mode) => {
@@ -374,7 +374,7 @@ export function PostSidebar({
     }
 
     const scheduledAtPayload = formData.scheduledAt
-      ? convertLocalToUTC(new Date(formData.scheduledAt), brandTimezone).toISOString()
+      ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
       : undefined;
 
     mutateContent({

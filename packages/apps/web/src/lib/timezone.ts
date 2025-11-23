@@ -89,6 +89,24 @@ export const convertLocalToUTC = (localDate: Date, timezone?: string): Date => {
 };
 
 /**
+ * Convert a datetime-local style input (e.g. "2025-01-15T09:00") to a UTC Date.
+ * If the value already contains an offset/Z, we respect it as-is.
+ */
+export const toUTCFromInput = (value: string, timezone?: string): Date => {
+  const tz = timezone || getUserTimezone();
+  const trimmed = value.trim();
+
+  // Add seconds if the input is minute precision
+  const normalized =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed) && !/[zZ]|[+-]\d{2}:\d{2}$/.test(trimmed)
+      ? `${trimmed}:00`
+      : trimmed;
+
+  const hasOffset = /[zZ]|[+-]\d{2}:\d{2}$/.test(normalized);
+  return hasOffset ? new Date(normalized) : fromZonedTime(normalized, tz);
+};
+
+/**
  * Convert UTC to user's local time
  */
 export const convertUTCToLocal = (utcDate: string | Date, timezone?: string): Date => {

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useTimezone } from '../contexts/TimezoneContext';
-import { convertLocalToUTC } from '../lib/timezone';
+import { toUTCFromInput } from '../lib/timezone';
 import { content as contentApi, type Content } from '../lib/api';
 import {
   validateContentPayload,
@@ -263,7 +263,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
 
     // Convert scheduledAt from local input to UTC ISO if present
     const payloadScheduledAt = formData.scheduledAt
-      ? convertLocalToUTC(new Date(formData.scheduledAt), timezone).toISOString()
+      ? toUTCFromInput(formData.scheduledAt, timezone).toISOString()
       : undefined;
 
     updateContentMutation.mutate({
