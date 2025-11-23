@@ -342,13 +342,34 @@ export class SchedulerAdapter {
       let scheduledTimeUTC: Date;
 
       if (customTime) {
-        // If customTime is provided, assume it's in the brand's timezone and convert to UTC
-        scheduledTimeUTC = TimezoneService.toUTC(customTime, brandTimezone);
-        logger.info('Custom time converted to UTC', {
-          brandId: content.brandId,
-          timezone: brandTimezone,
-          scheduledAtUTC: scheduledTimeUTC.toISOString(),
-        });
+        // customTime coming from the API layer is already an absolute instant (UTC ISO -> Date).
+        // Only fall back to timezone conversion if we somehow get a naive string without offset.
+        const candidate = customTime instanceof Date ? customTime : new Date(customTime);
+        if (isNaN(candidate.getTime())) {
+          return {
+            success: false,
+            error: 'Invalid scheduled time provided',
+          };
+        }
+        const needsConversionFromLocal =
+          typeof customTime === 'string' && !/[zZ]|[+-]\d{2}:\d{2}$/.test(customTime);
+
+        if (needsConversionFromLocal) {
+          scheduledTimeUTC = TimezoneService.toUTC(candidate, brandTimezone);
+          logger.warn('Received timezone-naive customTime; converted using brand timezone', {
+            brandId: content.brandId,
+            timezone: brandTimezone,
+            requestedAt: customTime,
+            scheduledAtUTC: scheduledTimeUTC.toISOString(),
+          });
+        } else {
+          scheduledTimeUTC = candidate;
+          logger.info('Using provided scheduledAt as absolute UTC instant', {
+            brandId: content.brandId,
+            scheduledAtUTC: scheduledTimeUTC.toISOString(),
+            timezone: brandTimezone,
+          });
+        }
       } else if (content.scheduledAt) {
         // If content already has a scheduled time, use it (assume it's already in UTC)
         scheduledTimeUTC = new Date(content.scheduledAt);

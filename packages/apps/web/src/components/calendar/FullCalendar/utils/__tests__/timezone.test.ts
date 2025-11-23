@@ -44,13 +44,12 @@ describe('Calendar Timezone Utilities', () => {
       expect(result?.toISOString()).toBe(isoString);
     });
 
-    it('should handle ISO string without Z suffix', () => {
-      const isoString = '2025-01-16T04:31:00';
-      const result = toWallTimeDate(isoString);
+    it('should treat timezone-naive ISO as brand wall time', () => {
+      // 9:00 AM New York should become 14:00 UTC in winter
+      const isoString = '2025-01-16T09:00:00';
+      const result = toWallTimeDate(isoString, 'America/New_York');
 
-      expect(result).toBeInstanceOf(Date);
-      // JavaScript interprets this as local timezone, but still valid
-      expect(result?.getTime()).toBeGreaterThan(0);
+      expect(result?.toISOString()).toBe('2025-01-16T14:00:00.000Z');
     });
   });
 

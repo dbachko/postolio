@@ -284,10 +284,15 @@ export class CampaignSlidingWindowService {
             const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
               d.getDate()
             ).padStart(2, '0')}`;
-            const localStart = TimezoneService.createDateInBrandTimezone(dayStr, '00:00', timezone);
-            const localEnd = TimezoneService.createDateInBrandTimezone(dayStr, '23:59', timezone);
-            utcStart = TimezoneService.toUTC(localStart, timezone);
-            utcEnd = TimezoneService.toUTC(localEnd, timezone);
+            // createDateInBrandTimezone already returns a UTC instant for the brand's wall time
+            const utcStartDate = TimezoneService.createDateInBrandTimezone(
+              dayStr,
+              '00:00',
+              timezone
+            );
+            const utcEndDate = TimezoneService.createDateInBrandTimezone(dayStr, '23:59', timezone);
+            utcStart = utcStartDate;
+            utcEnd = utcEndDate;
           }
 
           const existingCount = await tx.content.count({
@@ -434,18 +439,16 @@ export class CampaignSlidingWindowService {
       frequency === 'daily' ? 1 : frequency === 'every2days' ? 2 : frequency === '3weekly' ? 3 : 7;
 
     while (cursor <= endLocal && slots.length < maxSlots) {
-      // Create brand-local scheduled time then convert to UTC
+      // Create brand-local scheduled time (already converted to UTC)
       const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
-      const localScheduled = TimezoneService.createDateInBrandTimezone(
+      const scheduledUtc = TimezoneService.createDateInBrandTimezone(
         dateStr,
         `${String(hours ?? 12).padStart(2, '0')}:${String(minutes ?? 0).padStart(2, '0')}`,
         timezone
       );
 
-      if (localScheduled > todayLocal) {
-        // Convert to real UTC instant for storage/comparison
-        const utc = TimezoneService.toUTC(localScheduled, timezone);
-        slots.push(utc);
+      if (scheduledUtc > todayLocal) {
+        slots.push(scheduledUtc);
       }
 
       // Advance cursor
