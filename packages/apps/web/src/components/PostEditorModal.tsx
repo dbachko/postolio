@@ -270,7 +270,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       contentId: content.id,
       caption: formData.caption,
       hashtags: formData.hashtags,
-      imageUrl: formData.imageUrl || undefined,
+      // imageUrl is now managed via uploadContentImage / asset attach; do not send here
       scheduledAt: payloadScheduledAt,
     });
 

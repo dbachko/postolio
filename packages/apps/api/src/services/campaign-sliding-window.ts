@@ -337,36 +337,34 @@ export class CampaignSlidingWindowService {
         continue;
       }
 
-      // 2.5) Deferred asset import (OOM optimization) - import image asynchronously
-      // This happens AFTER content creation to avoid blocking on asset download/processing
+      // 2.5) Synchronous asset import via assets service to ensure media is attached
       if (post.imageUrl && post.imageMetadata) {
         const createdId = (created as { id: string }).id;
         const { imageUrl, imageMetadata } = post;
 
-        // Fire-and-forget asset import to prevent OOM
-        // Errors are logged but don't block campaign generation
-        importImageFromExternalUrl(imageUrl, {
-          contentId: createdId,
-          brandId: campaign.brandId,
-          campaignId: campaign.id,
-          source: imageMetadata.source,
-          originalPrompt: imageMetadata.originalPrompt,
-        })
-          .then(async (asset) => {
-            await attachAssetToContent({ contentId: createdId, asset });
-            console.log(`[SlidingWindow] Asset imported and attached for content ${createdId}`, {
-              campaignId,
-              assetId: asset.id,
-            });
-          })
-          .catch((error) => {
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error(`[SlidingWindow] Failed to import asset for content ${createdId}:`, {
+        try {
+          const asset = await importImageFromExternalUrl(imageUrl, {
+            contentId: createdId,
+            brandId: campaign.brandId,
+            campaignId: campaign.id,
+            source: imageMetadata.source,
+            originalPrompt: imageMetadata.originalPrompt,
+          });
+          await attachAssetToContent({ contentId: createdId, asset });
+          console.log(`[SlidingWindow] Asset imported and attached for content ${createdId}`, {
+            campaignId,
+            assetId: asset.id,
+          });
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          console.error(
+            `[SlidingWindow] Failed to import asset for content ${createdId}; leaving post without media`,
+            {
               campaignId,
               error: { name: err.name, message: err.message },
-            });
-            // Content still exists, just without the image - user can regenerate later
-          });
+            }
+          );
+        }
       }
 
       // 3) Schedule via AWS (fire-and-forget; sync will update status)

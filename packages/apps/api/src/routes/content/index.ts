@@ -10,6 +10,7 @@ import managementRoutes from './management.js';
 import publishingRoutes from './publishing.js';
 import updatesRoutes from './updates.js';
 import imagesRoutes from './images.js';
+import mediaRoutes from './media.js';
 import limitsRoutes from './limits.js';
 
 const contentRoutes: FastifyPluginAsync = async (fastify) => {
@@ -30,6 +31,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Image uploads
   await fastify.register(imagesRoutes);
+
+  // Media attachments (asset-based)
+  await fastify.register(mediaRoutes);
 
   // Subscription limits
   await fastify.register(limitsRoutes);

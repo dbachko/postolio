@@ -13,7 +13,6 @@ export class ContentClient {
     imageFile?: File;
     assetId?: string; // existing asset to attach instead of uploading a file
     videoUrl?: string; // CDN URL for uploaded video
-    carouselImageUrls?: string[]; // DEPRECATED: Use carouselAssetIds instead
     carouselAssetIds?: string[]; // Array of asset IDs for carousel images
     mediaType?: InstagramMediaType;
     contentType?: InstagramContentType;
@@ -30,9 +29,7 @@ export class ContentClient {
     if (data.mediaType) body.mediaType = data.mediaType;
     if (data.contentType) body.contentType = data.contentType;
     if (data.videoUrl) body.videoUrl = data.videoUrl;
-    // Prefer carouselAssetIds over deprecated carouselImageUrls
     if (data.carouselAssetIds) body.carouselAssetIds = data.carouselAssetIds;
-    else if (data.carouselImageUrls) body.carouselImageUrls = data.carouselImageUrls;
     if (data.assetId && !data.imageFile) {
       // Prefer direct asset attach when provided (no upload)
       body.assetId = data.assetId;
@@ -182,5 +179,22 @@ export class ContentClient {
 
   publishPost(postId: string) {
     return this.request(`/api/content/${postId}/publish`, { method: 'POST' });
+  }
+
+  attachAsset(contentId: string, assetId: string, usageContext?: string) {
+    return this.request(`/api/content/${contentId}/asset`, {
+      method: 'POST',
+      body: JSON.stringify({
+        assetId,
+        ...(usageContext ? { usageContext } : {}),
+      }),
+    });
+  }
+
+  updateMedia(contentId: string, assetIds: string[]) {
+    return this.request(`/api/content/${contentId}/media`, {
+      method: 'PUT',
+      body: JSON.stringify({ assetIds }),
+    });
   }
 }

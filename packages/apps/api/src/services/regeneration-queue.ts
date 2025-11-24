@@ -130,34 +130,33 @@ const regenerationWorker = new Worker(
             },
           });
 
-          // Deferred asset import (OOM optimization)
+          // Synchronous asset import via assets service to ensure media is attached
           if (newContent.imageUrl && newContent.imageMetadata) {
             const { imageUrl, imageMetadata } = newContent;
 
-            importImageFromExternalUrl(imageUrl, {
-              contentId,
-              brandId: existingContent.brandId,
-              campaignId: existingContent.campaignId || undefined,
-              source: imageMetadata.source,
-              originalPrompt: imageMetadata.originalPrompt,
-            })
-              .then(async (asset) => {
-                await attachAssetToContent({ contentId, asset });
-                console.log(`[RegenerationQueue] Asset imported for content ${contentId}`, {
-                  brandId: existingContent.brandId,
-                  assetId: asset.id,
-                });
-              })
-              .catch((error) => {
-                const err = error instanceof Error ? error : new Error(String(error));
-                console.error(
-                  `[RegenerationQueue] Failed to import asset for content ${contentId}:`,
-                  {
-                    brandId: existingContent.brandId,
-                    error: { name: err.name, message: err.message },
-                  }
-                );
+            try {
+              const asset = await importImageFromExternalUrl(imageUrl, {
+                contentId,
+                brandId: existingContent.brandId,
+                campaignId: existingContent.campaignId || undefined,
+                source: imageMetadata.source,
+                originalPrompt: imageMetadata.originalPrompt,
               });
+              await attachAssetToContent({ contentId, asset });
+              console.log(`[RegenerationQueue] Asset imported for content ${contentId}`, {
+                brandId: existingContent.brandId,
+                assetId: asset.id,
+              });
+            } catch (error) {
+              const err = error instanceof Error ? error : new Error(String(error));
+              console.error(
+                `[RegenerationQueue] Failed to import asset for content ${contentId}; leaving post without media`,
+                {
+                  brandId: existingContent.brandId,
+                  error: { name: err.name, message: err.message },
+                }
+              );
+            }
           }
 
           results.completed++;

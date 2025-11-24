@@ -52,7 +52,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           campaignId: true,
           schedulingError: true,
           mediaAssets: {
-            select: { cdnUrl: true, usageContext: true, displayOrder: true },
+            select: { cdnUrl: true, usageContext: true, displayOrder: true, assetId: true },
             orderBy: { displayOrder: 'asc' },
           },
           brand: {
@@ -90,7 +90,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
 
       // Build CDN URL and map to public response format
       const mediaAssets = (post as any).mediaAssets as
-        | { cdnUrl: string; usageContext: string }[]
+        | { cdnUrl: string; usageContext: string; displayOrder: number }[]
         | undefined;
       const primaryAssetUrl =
         post.primaryAssetCdnUrl ||
@@ -118,6 +118,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         schedulingError: post.schedulingError,
         brand: post.brand,
         campaign: post.campaign,
+        mediaAssets: mediaAssets ?? [],
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
       };

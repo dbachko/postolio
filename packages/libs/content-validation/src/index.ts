@@ -2,11 +2,11 @@ import { z } from 'zod';
 
 export type Platform = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
 export type ContentType = 'post' | 'reel' | 'story';
-export type MediaType = 'image' | 'video' | 'reel' | 'carousel';
+export type MediaType = 'image' | 'video' | 'reel';
 
 // Platform-specific aliases (useful for frontends/backends that target a single platform)
 export type InstagramContentType = Extract<ContentType, 'post' | 'reel' | 'story'>;
-export type InstagramMediaType = Extract<MediaType, 'image' | 'video' | 'reel' | 'carousel'>;
+export type InstagramMediaType = Extract<MediaType, 'image' | 'video' | 'reel'>;
 
 export interface ValidateContentPayload<
   P extends Platform = Platform,
@@ -50,7 +50,7 @@ const optionalMediaKeys = z.array(z.string()).optional().nullable();
 const instagramBase = z.object({
   platform: z.literal('instagram'),
   contentType: z.enum(['post', 'reel', 'story']).optional().nullable(),
-  mediaType: z.enum(['image', 'video', 'reel', 'carousel']).optional().nullable(),
+  mediaType: z.enum(['image', 'video', 'reel']).optional().nullable(),
   caption: optionalCaption,
   hashtags: optionalHashtags,
   mediaKeys: optionalMediaKeys,
@@ -75,27 +75,19 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
   const mediaCount = (data.mediaKeys?.length || 0) + (data.videoUrl ? 1 : 0);
 
   // Media requirements
-  if (mediaType === 'image' && mediaCount < 1) {
-    errors.push({
-      field: 'mediaKeys',
-      message: 'Image content requires at least one image asset',
-      code: 'MEDIA_REQUIRED',
-    });
-  }
-
-  if (mediaType === 'carousel') {
+  if (mediaType === 'image') {
     const count = data.mediaKeys?.length || 0;
-    if (count < 2) {
+    if (count < 1) {
       errors.push({
         field: 'mediaKeys',
-        message: 'Carousel requires at least 2 images',
+        message: 'Image content requires at least one image asset',
         code: 'MEDIA_REQUIRED',
       });
     }
     if (count > 10) {
       errors.push({
         field: 'mediaKeys',
-        message: 'Carousel allows up to 10 images',
+        message: 'Image content allows up to 10 images',
         code: 'MEDIA_LIMIT',
       });
     }
@@ -132,7 +124,7 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
 const facebookBase = z.object({
   platform: z.literal('facebook'),
   contentType: z.enum(['post']).optional().nullable(),
-  mediaType: z.enum(['image', 'video', 'reel', 'carousel']).optional().nullable(),
+  mediaType: z.enum(['image', 'video', 'reel']).optional().nullable(),
   caption: z
     .string()
     .max(63206, { message: 'Caption exceeds Facebook limit (~63k characters)' })
@@ -162,20 +154,14 @@ function validateFacebook(payload: ValidateContentPayload): ValidationResult {
   const mediaCount = data.mediaKeys?.length || 0;
   const hasText = !!(data.caption && data.caption.trim().length > 0);
 
-  if ((mediaType === 'image' || mediaType === 'carousel') && mediaCount < 1) {
+  if (mediaType === 'image' && mediaCount < 1) {
     errors.push({
       field: 'mediaKeys',
       message: 'A photo/album post needs at least one image',
       code: 'MEDIA_REQUIRED',
     });
   }
-  if (mediaType === 'carousel' && mediaCount > 0 && mediaCount < 2) {
-    errors.push({
-      field: 'mediaKeys',
-      message: 'Album/carousel should include at least 2 images',
-      code: 'MEDIA_REQUIRED',
-    });
-  }
+  // For Facebook, treat multiple images as an album/carousel implicitly; require at least 1 image.
   if (mediaType === 'video' && !data.videoUrl && mediaCount === 0) {
     errors.push({
       field: 'videoUrl',

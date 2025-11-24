@@ -194,33 +194,34 @@ class CampaignJobService {
           },
         });
 
-        // Deferred asset import (OOM optimization)
+        // Synchronous asset import via assets service to ensure media is attached
         if (post.imageUrl && post.imageMetadata) {
           const contentId = created.id;
           const { imageUrl, imageMetadata } = post;
 
-          // Fire-and-forget asset import
-          importImageFromExternalUrl(imageUrl, {
-            contentId,
-            brandId: campaign.brandId,
-            campaignId: campaign.id,
-            source: imageMetadata.source,
-            originalPrompt: imageMetadata.originalPrompt,
-          })
-            .then(async (asset) => {
-              await attachAssetToContent({ contentId, asset });
-              console.log(`[Preview] Asset imported for content ${contentId}`, {
-                campaignId: campaign.id,
-                assetId: asset.id,
-              });
-            })
-            .catch((error) => {
-              const err = error instanceof Error ? error : new Error(String(error));
-              console.error(`[Preview] Failed to import asset for content ${contentId}:`, {
+          try {
+            const asset = await importImageFromExternalUrl(imageUrl, {
+              contentId,
+              brandId: campaign.brandId,
+              campaignId: campaign.id,
+              source: imageMetadata.source,
+              originalPrompt: imageMetadata.originalPrompt,
+            });
+            await attachAssetToContent({ contentId, asset });
+            console.log(`[Preview] Asset imported for content ${contentId}`, {
+              campaignId: campaign.id,
+              assetId: asset.id,
+            });
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error(
+              `[Preview] Failed to import asset for content ${contentId}; leaving post without media`,
+              {
                 campaignId: campaign.id,
                 error: { name: err.name, message: err.message },
-              });
-            });
+              }
+            );
+          }
         }
 
         // Broadcast content created as draft

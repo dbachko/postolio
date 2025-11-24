@@ -458,9 +458,8 @@ export class SchedulerAdapter {
             mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
             mediaAssets?.[0]?.cdnUrl ||
             null;
-          // Enforce presence of media key for image/carousel content
-          const requiresImageAsset =
-            normalizedMediaType === 'image' || normalizedMediaType === 'carousel';
+          // Enforce presence of media key for image content
+          const requiresImageAsset = normalizedMediaType === 'image';
           if (requiresImageAsset && (!primaryAssetUrl || primaryAssetUrl.length === 0)) {
             const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
             await emitScheduleFailure(msg);

@@ -51,6 +51,7 @@ import {
   type InstagramContentType,
   type InstagramMediaType,
 } from '@postolio/content-validation';
+import AssetPicker from '@/features/assets/components/AssetPicker';
 
 interface PostDetailData {
   id: string;
@@ -64,6 +65,7 @@ interface PostDetailData {
   scheduledAt?: string;
   brandId?: string;
   brand: { id: string; name: string };
+  mediaAssets?: { cdnUrl: string; usageContext: string; displayOrder: number; assetId?: string }[];
   schedulingError?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -156,10 +158,12 @@ export function PostSidebar({
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
   const hasScheduleTime = Boolean(formData.scheduledAt);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
 
   const finalMediaType = useMemo<InstagramMediaType>(() => {
     if (formData.contentType === 'reel') return 'reel';
-    return formData.mediaType;
+    // Treat carousels as image posts with multiple assets
+    return formData.mediaType === 'video' ? 'video' : 'image';
   }, [formData.contentType, formData.mediaType]);
 
   const validation = useMemo(() => {
@@ -193,12 +197,18 @@ export function PostSidebar({
   // Initialize form from post
   useEffect(() => {
     if (!post) return;
+    const mediaAssets = post.mediaAssets || [];
+    const carouselAssetsFromPost: AssetReference[] = mediaAssets.map((asset) => ({
+      id: asset.assetId || asset.cdnUrl,
+      url: asset.cdnUrl,
+    }));
+
     setFormData({
       caption: post.caption || '',
       hashtags: stripHashtagPrefixes(post.hashtags || []),
       imageUrl: post.imageUrl || '',
       videoUrl: post.videoUrl || '',
-      carouselAssets: [], // TODO: Load from post.mediaAssets
+      carouselAssets: carouselAssetsFromPost,
       contentType: (post.contentType as InstagramContentType) || 'post',
       mediaType: (post.mediaType as InstagramMediaType) || 'image',
       scheduledAt: formatScheduledInput(post.scheduledAt),
@@ -226,7 +236,6 @@ export function PostSidebar({
       contentId: string;
       caption?: string;
       hashtags?: string[];
-      imageUrl?: string;
       scheduledAt?: string;
       campaignId?: string | null;
     }) => contentApi.updateContent(data),
@@ -258,7 +267,6 @@ export function PostSidebar({
         contentId: id,
         caption: isStory ? '' : formData.caption.trim(),
         hashtags: isStory ? [] : normalizeHashtags(formData.hashtags),
-        imageUrl: formData.imageUrl || undefined,
         campaignId: selectedCampaign || null,
         scheduledAt: scheduledUtc,
       });
@@ -355,12 +363,15 @@ export function PostSidebar({
 
     const formImage = formData.imageUrl || '';
     const postImage = post.imageUrl || '';
+    const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
+    const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId || asset.cdnUrl);
 
     const changed =
       trimmedCaption !== originalCaption ||
       JSON.stringify(formHashtags) !== JSON.stringify(postHashtags) ||
       scheduledValue !== originalScheduled ||
-      formImage !== postImage;
+      formImage !== postImage ||
+      JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds);
 
     setHasChanges(changed);
   }, [formData, id, post]);
@@ -371,6 +382,23 @@ export function PostSidebar({
     if (!validation.ok) {
       toast.error(validationError || 'Please fix validation errors before saving');
       return;
+    }
+
+    // Persist media changes first when in image mode with carousel assets
+    if (finalMediaType === 'image') {
+      const assetIds = formData.carouselAssets.map((a) => a.id).filter(Boolean);
+      if (assetIds.length > 0) {
+        contentApi
+          .updateMedia(id, assetIds)
+          .catch((error) => {
+            console.error('Failed to update post media', error);
+            toast.error('Failed to update post images. Please try again.');
+          })
+          .then(() => {
+            // Invalidate post detail so mediaAssets/imageUrl stay in sync
+            queryClient.invalidateQueries({ queryKey: ['post', id] });
+          });
+      }
     }
 
     const scheduledAtPayload = formData.scheduledAt
@@ -384,7 +412,6 @@ export function PostSidebar({
         formData.contentType === 'story'
           ? []
           : normalizeHashtags(Array.from(new Set(formData.hashtags))),
-      imageUrl: formData.imageUrl || undefined,
       campaignId: selectedCampaign || null,
       ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
     });
@@ -628,7 +655,7 @@ export function PostSidebar({
                   ) : (
                     /* Posts and Stories can be image(s) or video */
                     <Tabs
-                      value={formData.mediaType === 'carousel' ? 'image' : formData.mediaType}
+                      value={formData.mediaType === 'video' ? 'video' : 'image'}
                       onValueChange={(value) =>
                         setFormData((s) => ({
                           ...s,
@@ -655,12 +682,10 @@ export function PostSidebar({
                             <MultiImageUploader
                               value={formData.carouselAssets}
                               onChange={(assets) => {
-                                // Auto-detect mediaType based on image count
-                                const mediaType = assets.length >= 2 ? 'carousel' : 'image';
                                 setFormData((s) => ({
                                   ...s,
                                   carouselAssets: assets,
-                                  mediaType,
+                                  mediaType: 'image',
                                 }));
                               }}
                               brandId={selectedBrand.id}
@@ -834,10 +859,21 @@ export function PostSidebar({
                 <div className="text-muted-foreground text-sm">No image</div>
               )}
               {!disabled && (
-                <p className="text-muted-foreground text-xs">
-                  Note: Image editing for existing posts is not yet supported. Create a new post to
-                  change images.
-                </p>
+                <div className="flex flex-col gap-2">
+                  <p className="text-muted-foreground text-xs">
+                    Change the image for this post by selecting an asset from your library.
+                  </p>
+                  {post?.brand?.id && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAssetPicker(true)}
+                    >
+                      Choose from Assets
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -962,6 +998,33 @@ export function PostSidebar({
           </div>
         )}
       </div>
+      {showAssetPicker && post?.brand?.id && (
+        <AssetPicker
+          brandId={post.brand.id}
+          onSelect={async (asset) => {
+            try {
+              await contentApi.attachAsset(post.id, asset.id);
+              setFormData((s) => ({
+                ...s,
+                imageUrl: asset.url,
+              }));
+              queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
+                if (!oldData) return oldData;
+                return {
+                  ...oldData,
+                  imageUrl: asset.url,
+                };
+              });
+            } catch (error) {
+              console.error('Failed to attach asset to post', error);
+              toast.error('Failed to attach asset. Please try again.');
+            } finally {
+              setShowAssetPicker(false);
+            }
+          }}
+          onClose={() => setShowAssetPicker(false)}
+        />
+      )}
     </div>
   );
 }

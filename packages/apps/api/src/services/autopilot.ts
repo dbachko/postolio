@@ -347,34 +347,33 @@ class AutopilotService {
               },
             });
 
-            // Deferred asset import (OOM optimization)
+            // Synchronous asset import via assets service to ensure media is attached
             if (content.imageUrl && content.imageMetadata) {
               const contentId = created.id;
               const { imageUrl, imageMetadata } = content;
 
-              importImageFromExternalUrl(imageUrl, {
-                contentId,
-                brandId: gap.brandId,
-                source: imageMetadata.source,
-                originalPrompt: imageMetadata.originalPrompt,
-              })
-                .then(async (asset) => {
-                  await attachAssetToContent({ contentId, asset });
-                  autopilotLogger.info(`[Autopilot] Asset imported for content ${contentId}`, {
-                    brandId: gap.brandId,
-                    assetId: asset.id,
-                  });
-                })
-                .catch((error) => {
-                  const err = error instanceof Error ? error : new Error(String(error));
-                  autopilotLogger.error(
-                    `[Autopilot] Failed to import asset for content ${contentId}:`,
-                    {
-                      brandId: gap.brandId,
-                      error: { name: err.name, message: err.message },
-                    }
-                  );
+              try {
+                const asset = await importImageFromExternalUrl(imageUrl, {
+                  contentId,
+                  brandId: gap.brandId,
+                  source: imageMetadata.source,
+                  originalPrompt: imageMetadata.originalPrompt,
                 });
+                await attachAssetToContent({ contentId, asset });
+                autopilotLogger.info(`[Autopilot] Asset imported for content ${contentId}`, {
+                  brandId: gap.brandId,
+                  assetId: asset.id,
+                });
+              } catch (error) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                autopilotLogger.error(
+                  `[Autopilot] Failed to import asset for content ${contentId}; leaving post without media`,
+                  {
+                    brandId: gap.brandId,
+                    error: { name: err.name, message: err.message },
+                  }
+                );
+              }
             }
 
             totalGenerated++;

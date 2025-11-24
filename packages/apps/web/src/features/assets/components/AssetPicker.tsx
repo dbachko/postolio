@@ -14,7 +14,7 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
 
   const { data, isLoading } = useQuery({
     queryKey: ['assets-picker', brandId, search],
-    queryFn: () => assetsApi.listAssets({ brandId, limit: 50, search, type: 'image' }),
+    queryFn: () => assetsApi.listAssets({ brandId, limit: 50, search }),
   });
 
   const assets = data?.assets || [];
@@ -56,7 +56,7 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
               <div className="rounded-lg border-2 border-dashed py-12 text-center">
                 <p className="text-muted-foreground">No assets found</p>
                 <p className="text-muted-foreground mt-2 text-sm">
-                  Upload images to your asset library first
+                  Upload images or videos to your asset library first
                 </p>
               </div>
             ) : (
@@ -72,12 +72,28 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
                         : 'hover:ring-primary hover:ring-2')
                     }
                   >
-                    <img
-                      src={asset.thumbnailUrl || asset.url}
-                      alt={asset.altText || asset.fileName}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+                    {asset.fileType === 'video' ? (
+                      <div className="relative h-full w-full">
+                        <video
+                          src={asset.thumbnailUrl || asset.url}
+                          className="h-full w-full object-cover"
+                          muted
+                          playsInline
+                        />
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <div className="rounded-full bg-black/60 p-2">
+                            <span className="text-sm font-semibold text-white">▶</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <img
+                        src={asset.thumbnailUrl || asset.url}
+                        alt={asset.altText || asset.fileName}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    )}
                     <div className="absolute inset-0 flex items-end bg-black/60 p-3 opacity-0 transition-opacity group-hover:opacity-100">
                       <div className="w-full truncate text-sm text-white">
                         {asset.title || asset.fileName}

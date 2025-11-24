@@ -40,7 +40,6 @@ interface CreateManualContentBody {
   mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
   videoUrl?: string;
-  carouselImageUrls?: string[]; // DEPRECATED: Use carouselAssetIds
   carouselAssetIds?: string[]; // Asset IDs from Assets database
   campaignId?: string;
   scheduledAt?: string;
@@ -68,7 +67,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           mediaType,
           contentType,
           videoUrl,
-          carouselImageUrls,
           carouselAssetIds,
           campaignId,
           scheduledAt,
@@ -76,6 +74,14 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
 
         const normalizedContentType: ValidationContentType = contentType ?? 'post';
         const normalizedMediaType: ValidationMediaType = mediaType ?? 'image';
+
+        const mediaKeys: string[] = [];
+        if (carouselAssetIds && carouselAssetIds.length > 0) {
+          mediaKeys.push(...carouselAssetIds);
+        }
+        if (assetId) {
+          mediaKeys.push(assetId);
+        }
 
         // Unified platform validation (Instagram defaults)
         const validation = validateContentPayload({
@@ -85,7 +91,7 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           caption,
           hashtags,
           videoUrl,
-          mediaKeys: [...(carouselImageUrls || []), ...(assetId ? [assetId] : [])],
+          mediaKeys,
         });
 
         if (!validation.ok) {
@@ -140,11 +146,7 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           height: number | null;
         }> | null = null;
 
-        if (
-          (mediaType === 'image' || mediaType === 'carousel') &&
-          carouselAssetIds &&
-          carouselAssetIds.length > 0
-        ) {
+        if (mediaType === 'image' && carouselAssetIds && carouselAssetIds.length > 0) {
           const assetsClient = getAssetsClient();
 
           try {
@@ -274,40 +276,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               primaryAssetCdnUrl: firstAsset.url,
               primaryAssetWidth: firstAsset.width,
               primaryAssetHeight: firstAsset.height,
-            };
-          }
-
-          // Fallback: Handle legacy carouselImageUrls (deprecated)
-          if (
-            (mediaType === 'image' || mediaType === 'carousel') &&
-            carouselImageUrls &&
-            carouselImageUrls.length > 0
-          ) {
-            // Create PostMediaAsset records for each image
-            for (let i = 0; i < carouselImageUrls.length; i++) {
-              await tx.postMediaAsset.create({
-                data: {
-                  contentId: created.id,
-                  assetId: `legacy_${created.id}_${i}`, // Placeholder ID since these are direct URLs
-                  cdnUrl: carouselImageUrls[i],
-                  displayOrder: i,
-                  usageContext: i === 0 ? 'primary' : `carousel_${i}`,
-                },
-              });
-            }
-
-            // Update the Content record to set the primary image URL in the database
-            await tx.content.update({
-              where: { id: created.id },
-              data: {
-                primaryAssetCdnUrl: carouselImageUrls[0],
-              },
-            });
-
-            // Set first image as primary
-            return {
-              ...created,
-              primaryAssetCdnUrl: carouselImageUrls[0],
             };
           }
 

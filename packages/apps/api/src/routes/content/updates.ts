@@ -24,7 +24,6 @@ interface UpdateContentBody {
   contentId: string;
   caption?: string;
   hashtags?: string[];
-  imageUrl?: string;
   videoUrl?: string;
   mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
@@ -41,7 +40,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       const contentId = request.params.contentId;
-      const { caption, hashtags, imageUrl, videoUrl, mediaType, contentType, scheduledAt } =
+      const { caption, hashtags, videoUrl, mediaType, contentType, scheduledAt } =
         request.body as Partial<UpdateContentBody>;
 
       // Verify user owns the content and it's editable (not published)
@@ -103,7 +102,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
       const effectiveHashtags =
         hashtags !== undefined ? hashtags : Array.isArray(content.hashtags) ? content.hashtags : [];
-      const effectiveImage = imageUrl !== undefined ? imageUrl : content.primaryAssetCdnUrl || '';
+      const effectiveImage = content.primaryAssetCdnUrl || '';
       const effectiveVideo = videoUrl !== undefined ? videoUrl : content.videoUrl || undefined;
       const mediaKeys = [effectiveImage].filter(Boolean);
 
@@ -130,9 +129,8 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       if (hashtags !== undefined) {
         updateData.hashtags = normalizeHashtags(hashtags);
       }
-      if (imageUrl !== undefined) {
-        updateData.primaryAssetCdnUrl = imageUrl || null;
-      }
+      // NOTE: imageUrl is intentionally not applied to primaryAssetCdnUrl anymore.
+      // Media changes must go through /upload-image or /:contentId/asset to keep assetId and join table in sync.
       if (videoUrl !== undefined) {
         updateData.videoUrl = videoUrl || null;
       }

@@ -57,8 +57,7 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
           style: style || undefined,
         });
 
-        // Save generated content to database
-
+        // Save generated content to database and synchronously attach assets
         const contentRecords = await Promise.all(
           generatedContent.map(async (content) => {
             // Validate content before saving
@@ -96,32 +95,33 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
               },
             });
 
-            // Deferred asset import (OOM optimization)
+            // Synchronous asset import via assets service to ensure media is attached
             if (content.imageUrl && content.imageMetadata) {
               const contentId = created.id;
               const { imageUrl, imageMetadata } = content;
 
-              // Fire-and-forget asset import
-              importImageFromExternalUrl(imageUrl, {
-                contentId,
-                brandId,
-                source: imageMetadata.source,
-                originalPrompt: imageMetadata.originalPrompt,
-              })
-                .then(async (asset) => {
-                  await attachAssetToContent({ contentId, asset });
-                  console.log(`[ContentGen] Asset imported for content ${contentId}`, {
-                    brandId,
-                    assetId: asset.id,
-                  });
-                })
-                .catch((error) => {
-                  const err = error instanceof Error ? error : new Error(String(error));
-                  console.error(`[ContentGen] Failed to import asset for content ${contentId}:`, {
+              try {
+                const asset = await importImageFromExternalUrl(imageUrl, {
+                  contentId,
+                  brandId,
+                  source: imageMetadata.source,
+                  originalPrompt: imageMetadata.originalPrompt,
+                });
+                await attachAssetToContent({ contentId, asset });
+                console.log(`[ContentGen] Asset imported for content ${contentId}`, {
+                  brandId,
+                  assetId: asset.id,
+                });
+              } catch (error) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                console.error(
+                  `[ContentGen] Failed to import asset for content ${contentId}; leaving post without media`,
+                  {
                     brandId,
                     error: { name: err.name, message: err.message },
-                  });
-                });
+                  }
+                );
+              }
             }
 
             return {

@@ -114,12 +114,28 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
                 tabIndex={0}
                 className="bg-muted hover:ring-primary focus-visible:ring-primary group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all hover:ring-2 focus-visible:ring-2 focus-visible:outline-none"
               >
-                <img
-                  src={asset.thumbnailUrl || asset.url}
-                  alt={asset.altText || asset.fileName}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
+                {asset.fileType === 'video' ? (
+                  <div className="relative h-full w-full">
+                    <video
+                      src={asset.thumbnailUrl || asset.url}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                    />
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className="rounded-full bg-black/60 p-2">
+                        <span className="text-sm font-semibold text-white">▶</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <img
+                    src={asset.thumbnailUrl || asset.url}
+                    alt={asset.altText || asset.fileName}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                )}
                 {/* Hover overlay with actions */}
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-3 opacity-0 transition-opacity group-hover:opacity-100">
                   <div className="flex w-full max-w-[80%] flex-col items-center gap-3 text-center">
