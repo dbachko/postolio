@@ -11,9 +11,8 @@ export class ContentClient {
     caption: string;
     hashtags: string[];
     imageFile?: File;
-    assetId?: string; // existing asset to attach instead of uploading a file
+    assetIds?: string[]; // Array of asset IDs (single image or carousel)
     videoUrl?: string; // CDN URL for uploaded video
-    carouselAssetIds?: string[]; // Array of asset IDs for carousel images
     mediaType?: InstagramMediaType;
     contentType?: InstagramContentType;
     campaignId?: string;
@@ -29,11 +28,7 @@ export class ContentClient {
     if (data.mediaType) body.mediaType = data.mediaType;
     if (data.contentType) body.contentType = data.contentType;
     if (data.videoUrl) body.videoUrl = data.videoUrl;
-    if (data.carouselAssetIds) body.carouselAssetIds = data.carouselAssetIds;
-    if (data.assetId && !data.imageFile) {
-      // Prefer direct asset attach when provided (no upload)
-      body.assetId = data.assetId;
-    }
+    if (data.assetIds) body.assetIds = data.assetIds;
     if (data.imageFile) {
       const uploadInfo = await assetsApi.getUploadUrl({
         brandId: data.brandId,
@@ -51,7 +46,7 @@ export class ContentClient {
         mimeType: data.imageFile.type || 'application/octet-stream',
         fileType: data.imageFile.type.startsWith('video/') ? 'video' : 'image',
       });
-      body.assetId = asset.asset.id;
+      body.assetIds = [asset.asset.id];
     }
     return this.request('/api/content', { method: 'POST', body: JSON.stringify(body) });
   }

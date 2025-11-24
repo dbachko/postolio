@@ -301,8 +301,7 @@ export function PostSidebar({
         caption: isStory ? '' : formData.caption.trim(),
         hashtags: isStory ? [] : hashtagArray,
         videoUrl: formData.videoUrl || undefined,
-        carouselAssetIds:
-          formData.carouselAssets.length > 0 ? formData.carouselAssets.map((a) => a.id) : undefined,
+        assetIds: formData.carouselAssets.map((a) => a.id),
         mediaType: finalMediaType,
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,

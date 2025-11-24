@@ -118,7 +118,7 @@ describe('Content management carousel assets', () => {
     authHeader = `Bearer ${token}`;
   });
 
-  it('creates content when a single carouselAssetId is provided and batch lookup fails', async () => {
+  it('creates content when a single assetId is provided', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/content',
@@ -132,7 +132,30 @@ describe('Content management carousel assets', () => {
         hashtags: [],
         mediaType: 'image',
         contentType: 'post',
-        carouselAssetIds: ['asset-1'],
+        assetIds: ['asset-1'],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const payload = JSON.parse(response.payload);
+    expect(payload?.content?.id).toBeDefined();
+  });
+
+  it('creates content when multiple assetIds are provided for carousel', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/content',
+      headers: {
+        authorization: authHeader,
+        'content-type': 'application/json',
+      },
+      payload: {
+        brandId: 'brand-1',
+        caption: 'Test carousel caption',
+        hashtags: [],
+        mediaType: 'image',
+        contentType: 'post',
+        assetIds: ['asset-1', 'asset-2'],
       },
     });
 
