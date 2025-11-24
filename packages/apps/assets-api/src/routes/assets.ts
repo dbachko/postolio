@@ -325,7 +325,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         const assets = await prismaAssets.asset.findMany({
           where: {
             id: { in: body.assetIds },
-            deletedAt: null,
+            archivedAt: null,
           },
           include: {
             folder: true,
