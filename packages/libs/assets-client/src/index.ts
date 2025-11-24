@@ -247,10 +247,42 @@ export class AssetsServiceClient {
   }
 
   async getBatchAssets(assetIds: string[]): Promise<(AssetRecord | null)[]> {
-    const result = await this.post<{ assets: (AssetRecord | null)[] }>('/assets/batch', {
-      assetIds,
-    });
-    return result.assets;
+    if (assetIds.length === 0) {
+      return [];
+    }
+
+    try {
+      const result = await this.post<{ assets: (AssetRecord | null)[] }>('/assets/batch', {
+        assetIds,
+      });
+      return result.assets;
+    } catch (error) {
+      // Fallback: if batch endpoint is unavailable or not implemented in the
+      // assets service, degrade gracefully by fetching each asset individually.
+      if (error instanceof AssetsClientError && (error.status === 404 || error.status === 501)) {
+        const assets = await Promise.all(
+          assetIds.map(async (assetId) => {
+            try {
+              const asset = await this.getAsset(assetId);
+              return asset;
+            } catch (singleError) {
+              // If an individual asset is missing, surface this as a null entry
+              // to keep behavior consistent with the batch API contract.
+              if (
+                singleError instanceof AssetsClientError &&
+                (singleError.status === 404 || singleError.status === 410)
+              ) {
+                return null;
+              }
+              throw singleError;
+            }
+          })
+        );
+        return assets;
+      }
+
+      throw error;
+    }
   }
 
   async listAssets(params: ListAssetsParams): Promise<ListAssetsResponse> {

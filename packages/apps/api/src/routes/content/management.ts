@@ -150,7 +150,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           const assetsClient = getAssetsClient();
 
           try {
-            // Fetch all assets in a single batch request
             const assets = await assetsClient.getBatchAssets(carouselAssetIds);
 
             // Verify all assets exist
@@ -165,20 +164,15 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             }
 
             // At this point, all assets are guaranteed to be non-null (verified above)
-            const validAssets = assets as NonNullable<(typeof assets)[number]>[];
+            const validAssets = assets.filter(Boolean) as NonNullable<(typeof assets)[number]>[];
 
             // Verify all assets belong to the same brand as the content
-            const firstAsset = validAssets[0];
-            await verifyAssetOwnership(firstAsset.id, brandId);
-
-            // Verify all other assets belong to the same brand
-            const invalidAssets = validAssets.filter(
-              (asset) => asset.brandId !== firstAsset.brandId
-            );
+            const expectedBrandId = brandId;
+            const invalidAssets = validAssets.filter((asset) => asset.brandId !== expectedBrandId);
             if (invalidAssets.length > 0) {
-              return reply
-                .code(400)
-                .send({ error: 'All carousel assets must belong to the same brand' });
+              return reply.code(400).send({
+                error: 'All carousel assets must belong to the same brand as the content',
+              });
             }
 
             resolvedCarouselAssets = validAssets.map((asset) => ({

@@ -145,7 +145,17 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
       } else {
         // Fetch all assets in a single batch request
         const assetsClient = getAssetsClient();
-        const assets = await assetsClient.getBatchAssets(assetIds);
+        let assets: (AssetRecord | null)[];
+
+        try {
+          assets = await assetsClient.getBatchAssets(assetIds);
+        } catch (error) {
+          request.log.error(
+            { err: error, assetIds },
+            'Failed to fetch media assets for content update'
+          );
+          return reply.code(400).send({ error: 'Failed to fetch media assets. Please try again.' });
+        }
 
         // Verify all assets exist
         const missingAssets = assets
@@ -156,12 +166,11 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: `Assets not found: ${missingAssets.join(', ')}` });
         }
 
-        const validAssets = assets as AssetRecord[];
+        const validAssets = assets.filter(Boolean) as AssetRecord[];
 
         // Verify assets belong to the same brand as the content
-        const firstAsset = validAssets[0];
-        await verifyAssetOwnership(firstAsset.id, content.brand.id);
-        const invalidAssets = validAssets.filter((asset) => asset.brandId !== firstAsset.brandId);
+        const expectedBrandId = content.brand.id;
+        const invalidAssets = validAssets.filter((asset) => asset.brandId !== expectedBrandId);
         if (invalidAssets.length > 0) {
           return reply
             .code(400)
