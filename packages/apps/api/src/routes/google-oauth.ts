@@ -175,7 +175,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60,
       });
@@ -183,7 +183,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/api/auth',
         maxAge: 30 * 24 * 60 * 60,
       });

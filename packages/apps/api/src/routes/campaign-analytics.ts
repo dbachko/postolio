@@ -107,42 +107,6 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Week 3: Compare multiple campaigns
-  fastify.get<{ Querystring: { ids: string } }>(
-    '/campaigns/compare',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-        const { ids } = request.query;
-
-        if (!ids) {
-          reply.status(400).send({
-            success: false,
-            error: 'Campaign IDs are required (query param: ids)',
-          });
-          return;
-        }
-
-        const campaignIds = ids.split(',').map((id) => id.trim());
-
-        const comparison = await campaignAnalyticsService.compareCampaigns(campaignIds, userId);
-
-        reply.send({
-          success: true,
-          data: comparison,
-          lastUpdated: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Compare campaigns error:', error);
-        reply.status(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to compare campaigns',
-        });
-      }
-    }
-  );
-
   // Get analytics summary for all campaigns of a brand
   fastify.get<{ Params: { brandId: string } }>(
     '/brands/:brandId/analytics/summary',

@@ -113,7 +113,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60, // 1 hour access token
       });
@@ -122,7 +122,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/api/auth',
         maxAge: 7 * 24 * 60 * 60, // 7 days for new users
       });
@@ -332,7 +332,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60, // 1 hour access token
       });
@@ -341,7 +341,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/api/auth', // Sent to all /api/auth endpoints
         maxAge: rememberMe
           ? 30 * 24 * 60 * 60 // 30 days if remember me
@@ -391,7 +391,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie('auth_token', result.accessToken, {
       httpOnly: true,
       secure: isProductionEnv(),
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60, // 1 hour
     });
@@ -400,7 +400,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie('refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: isProductionEnv(),
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/api/auth',
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
