@@ -843,8 +843,20 @@ export function PostSidebar({
             />
 
             <div className="space-y-2">
-              <Label>Post Image</Label>
-              {formData.imageUrl ? (
+              <Label>{formData.contentType === 'reel' ? 'Video' : 'Post Image'}</Label>
+              {formData.contentType === 'reel' ? (
+                formData.videoUrl ? (
+                  <div className="bg-muted overflow-hidden rounded-lg">
+                    <video
+                      src={formData.videoUrl}
+                      className="h-auto max-h-[250px] w-full object-cover"
+                      controls
+                    />
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-sm">No video</div>
+                )
+              ) : formData.imageUrl ? (
                 <div className="bg-muted overflow-hidden rounded-lg">
                   <img
                     src={formData.imageUrl}
@@ -860,7 +872,9 @@ export function PostSidebar({
               {!disabled && (
                 <div className="flex flex-col gap-2">
                   <p className="text-muted-foreground text-xs">
-                    Change the image for this post by selecting an asset from your library.
+                    {formData.contentType === 'reel'
+                      ? 'Change the video for this post by selecting an asset from your library.'
+                      : 'Change the image for this post by selecting an asset from your library.'}
                   </p>
                   {post?.brand?.id && (
                     <Button

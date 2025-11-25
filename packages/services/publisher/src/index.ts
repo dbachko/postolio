@@ -167,8 +167,21 @@ class InstagramAdapter implements PlatformAdapter {
         });
 
         if (code === 'FINISHED' || code === 'PUBLISHED') return; // Ready
-        if (code === 'ERROR') throw new Error('Instagram media processing error');
+        if (code === 'ERROR') {
+          logger.error('Instagram media processing error reported by API', {
+            creationId,
+            attempt,
+            status_code: code || 'UNKNOWN',
+            raw_body: body,
+          });
+          // Non-retryable: Instagram explicitly reported a processing error
+          throw new Error('Instagram media processing error');
+        }
       } catch (e) {
+        // Treat explicit processing errors as terminal and bubble them up
+        if ((e as Error)?.message === 'Instagram media processing error') {
+          throw e;
+        }
         // Log and continue until timeout; transient errors are common
         logger.warn('Failed to check Instagram media status', {
           creationId,
