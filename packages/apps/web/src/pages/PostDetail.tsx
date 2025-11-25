@@ -48,6 +48,9 @@ interface PostDetailData {
   caption: string;
   hashtags: string[];
   imageUrl?: string;
+  videoUrl?: string;
+  contentType?: string;
+  mediaType?: string;
   status: string;
   brandId: string;
   brand: {
@@ -211,6 +214,9 @@ export default function PostDetail() {
       const raw = response.data as any;
       return {
         ...raw,
+        videoUrl: raw.videoUrl || undefined,
+        contentType: raw.contentType || undefined,
+        mediaType: raw.mediaType || undefined,
         brandId: raw.brand?.id,
         brand: raw.brand || { id: '', name: '' },
         scheduledAt: raw.scheduledAt || undefined,
@@ -787,15 +793,23 @@ export default function PostDetail() {
               </div>
             ) : (
               <>
-                {/* Image */}
+                {/* Media */}
                 <div className="bg-muted mb-4 overflow-hidden rounded-lg">
-                  <img
-                    src={getPostImageOrPlaceholder(post.imageUrl)}
-                    alt="Post content"
-                    className="h-auto max-h-[250px] w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  {post.contentType === 'reel' && post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className="h-auto max-h-[250px] w-full object-cover"
+                      controls
+                    />
+                  ) : (
+                    <img
+                      src={getPostImageOrPlaceholder(post.imageUrl)}
+                      alt="Post content"
+                      className="h-auto max-h-[250px] w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  )}
                 </div>
 
                 {/* Caption and Hashtags */}
