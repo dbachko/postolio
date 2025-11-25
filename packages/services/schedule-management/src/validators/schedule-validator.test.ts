@@ -10,7 +10,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
         caption: 'Test content',
         hashtags: ['test', 'content'],
@@ -28,7 +29,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
       };
@@ -60,7 +62,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'invalid-platform',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
       };
 
@@ -75,7 +78,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
       };
 
@@ -90,7 +94,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: 'not-a-date',
       };
 
@@ -108,7 +113,8 @@ describe('Schedule Validator', () => {
           brandId: 'brand-789',
           userId: 'user-012',
           platform,
-          contentType: 'image',
+          contentType: 'post',
+          mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
           mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
         };
@@ -125,7 +131,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         hashtags: ['tag1', 'tag2', 'tag3'],
         mediaKeys: ['images/2025-01-01/brand/img1.jpg', 'images/2025-01-01/brand/img2.jpg'],
@@ -142,7 +149,8 @@ describe('Schedule Validator', () => {
         brandId: '',
         userId: '',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
       };
 
@@ -154,7 +162,7 @@ describe('Schedule Validator', () => {
     });
 
     it('should validate content types correctly', () => {
-      const validContentTypes = ['image', 'video', 'carousel', 'reel', 'story'];
+      const validContentTypes = ['post', 'reel', 'story'];
 
       validContentTypes.forEach((contentType) => {
         const request = {
@@ -163,10 +171,9 @@ describe('Schedule Validator', () => {
           userId: 'user-012',
           platform: 'instagram',
           contentType,
+          mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-          ...(contentType === 'image' && {
-            mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
-          }), // Required only for image content
+          mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image media
         };
 
         const result = validateScheduleRequest(request);
@@ -182,6 +189,7 @@ describe('Schedule Validator', () => {
         userId: 'user-012',
         platform: 'instagram',
         contentType: 'invalid-type',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
       };
 
@@ -196,7 +204,8 @@ describe('Schedule Validator', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         hashtags: ['valid', 123, 'another-valid'], // 123 is not a string
         mediaKeys: ['images/2025-01-01/brand/img.jpg', null], // null is not a string

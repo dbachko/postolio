@@ -17,7 +17,10 @@ export interface ScheduleRequest {
   userId: string;
   platform: string;
   scheduledAt: string;
+  // User-facing content type: post/reel/story
   contentType: string;
+  // Media format: image/video/carousel/reel
+  mediaType?: string;
   caption?: string;
   hashtags?: string[];
   mediaKeys?: string[];
@@ -66,6 +69,10 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     errors.push('contentType is required and must be a string');
   }
 
+  if (request.mediaType !== undefined && typeof request.mediaType !== 'string') {
+    errors.push('mediaType must be a string if provided');
+  }
+
   // Validate optional fields
   if (request.campaignId !== undefined && typeof request.campaignId !== 'string') {
     errors.push('campaignId must be a string if provided');
@@ -107,8 +114,8 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     errors.push(`platform must be one of: ${validPlatforms.join(', ')}`);
   }
 
-  // Validate content type values
-  const validContentTypes = ['image', 'video', 'carousel', 'reel', 'story'];
+  // Validate content type values (user-facing type)
+  const validContentTypes = ['post', 'reel', 'story'];
   if (
     request.contentType &&
     !validContentTypes.includes((request.contentType as string).toLowerCase())
@@ -116,9 +123,15 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     errors.push(`contentType must be one of: ${validContentTypes.join(', ')}`);
   }
 
-  // Strict requirement: for image content, mediaKeys must be non-empty
-  const ct = (request.contentType as string | undefined)?.toLowerCase();
-  if (ct === 'image') {
+  // Validate media type values (media format)
+  const validMediaTypes = ['image', 'video', 'carousel', 'reel'];
+  if (request.mediaType && !validMediaTypes.includes((request.mediaType as string).toLowerCase())) {
+    errors.push(`mediaType must be one of: ${validMediaTypes.join(', ')}`);
+  }
+
+  // Strict requirement: for image media, mediaKeys must be non-empty
+  const mt = (request.mediaType as string | undefined)?.toLowerCase();
+  if (mt === 'image') {
     const mk = request.mediaKeys as unknown;
     if (
       !Array.isArray(mk) ||

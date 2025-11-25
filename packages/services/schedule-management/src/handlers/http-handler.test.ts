@@ -88,7 +88,8 @@ describe('HttpHandler', () => {
           brandId: 'brand-789',
           userId: 'user-012',
           platform: 'instagram',
-          contentType: 'image',
+          contentType: 'post',
+          mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
           mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
         }),
@@ -103,7 +104,8 @@ describe('HttpHandler', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         status: 'pending',
       };
@@ -125,7 +127,8 @@ describe('HttpHandler', () => {
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
-        contentType: 'image',
+        contentType: 'post',
+        mediaType: 'image',
         scheduledAt: expect.any(String),
         mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
       });
