@@ -59,6 +59,7 @@ import {
 } from '@postolio/content-validation';
 import AssetPicker from '@/features/assets/components/AssetPicker';
 import { Switch } from '@/components/ui/switch';
+import { assetsApi } from '@/features/assets/api/client';
 
 interface PostDetailData {
   id: string;
@@ -451,29 +452,73 @@ export function PostSidebar({
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
 
+  // Parse query params for prefill
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const qCaption = searchParams.get('caption');
+  const qHashtags = searchParams.get('hashtags');
+  const qScheduledAt = searchParams.get('scheduledAt');
+  const qCampaignId = searchParams.get('campaignId');
+  const qAssetId = searchParams.get('assetId');
+
+  // Optional asset prefill via React Query (image-only)
+  const { data: prefillAsset, isLoading: isPrefillAssetLoading } = useQuery({
+    queryKey: ['prefill-asset', qAssetId],
+    enabled: isCreating && Boolean(qAssetId),
+    queryFn: async () => {
+      const { asset } = await assetsApi.getAsset(qAssetId!);
+      return asset;
+    },
+    retry: 0,
+  });
+
   // Prefill from query params when creating
   const prefillAppliedRef = useRef(false);
   useEffect(() => {
     if (!isCreating || prefillAppliedRef.current === true) return;
-    if (!location.search) return;
-    const params = new URLSearchParams(location.search);
-    const qCaption = params.get('caption');
-    const qHashtags = params.get('hashtags');
-    const qScheduledAt = params.get('scheduledAt');
-    const qCampaignId = params.get('campaignId');
-    if (qCaption || qHashtags || qScheduledAt || qCampaignId) {
-      setFormData((prev) => ({
-        ...prev,
-        caption: qCaption ?? prev.caption,
-        hashtags: qHashtags
-          ? stripHashtagPrefixes(qHashtags.split(/[,\s]+/).filter(Boolean))
-          : prev.hashtags,
-        scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
-      }));
-      if (qCampaignId) setSelectedCampaign(qCampaignId);
-      prefillAppliedRef.current = true;
+    if (!qCaption && !qHashtags && !qScheduledAt && !qCampaignId && !qAssetId) {
+      return;
     }
-  }, [isCreating, location.search]);
+
+    // If we have an assetId, wait until asset query finishes (success or error)
+    if (qAssetId && isPrefillAssetLoading) {
+      return;
+    }
+
+    const imageAsset =
+      qAssetId && prefillAsset && prefillAsset.fileType === 'image'
+        ? {
+            id: prefillAsset.id,
+            url: prefillAsset.thumbnailUrl || prefillAsset.url,
+          }
+        : null;
+
+    setFormData((prev) => ({
+      ...prev,
+      caption: qCaption ?? prev.caption,
+      hashtags: qHashtags
+        ? stripHashtagPrefixes(qHashtags.split(/[,\s]+/).filter(Boolean))
+        : prev.hashtags,
+      scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
+      ...(imageAsset
+        ? {
+            carouselAssets: [imageAsset],
+            mediaType: 'image' as InstagramMediaType,
+            videoUrl: '',
+          }
+        : {}),
+    }));
+    if (qCampaignId) setSelectedCampaign(qCampaignId);
+    prefillAppliedRef.current = true;
+  }, [
+    isCreating,
+    qCaption,
+    qHashtags,
+    qScheduledAt,
+    qCampaignId,
+    qAssetId,
+    isPrefillAssetLoading,
+    prefillAsset,
+  ]);
 
   // Fetch campaigns for the brand
   useEffect(() => {
