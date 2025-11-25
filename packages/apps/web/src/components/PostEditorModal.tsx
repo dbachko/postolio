@@ -462,7 +462,11 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         />
 
         <div className="space-y-6">
-          <PostCaptionEditor value={formData.caption} onChange={handleCaptionChange} />
+          <PostCaptionEditor
+            value={formData.caption}
+            onChange={handleCaptionChange}
+            brandId={content.brandId}
+          />
 
           <PostHashtagEditor hashtags={formData.hashtags} onChange={handleHashtagsChange} />
 

@@ -783,7 +783,11 @@ export default function PostDetail() {
                 </div>
 
                 {/* Caption Editor */}
-                <PostCaptionEditor value={formData.caption} onChange={handleCaptionChange} />
+                <PostCaptionEditor
+                  value={formData.caption}
+                  onChange={handleCaptionChange}
+                  brandId={post.brandId}
+                />
 
                 {/* Hashtag Editor */}
                 <PostHashtagEditor hashtags={formData.hashtags} onChange={handleHashtagsChange} />

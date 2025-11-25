@@ -848,6 +848,7 @@ export function PostSidebar({
                     <PostCaptionEditor
                       value={formData.caption}
                       onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
+                      brandId={selectedBrand?.id}
                       disabled={false}
                       showIcon={true}
                     />
@@ -1023,6 +1024,7 @@ export function PostSidebar({
                 <PostCaptionEditor
                   value={formData.caption}
                   onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
+                  brandId={post?.brand?.id}
                   disabled={disabled}
                   showIcon={true}
                 />
