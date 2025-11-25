@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Save, Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
 
 interface PostEditorModalProps {
   content: Content | null;
@@ -44,6 +45,7 @@ interface FormData {
   videoUrl?: string;
   mediaType: InstagramMediaType;
   scheduledAt: string;
+  shareToFeed?: boolean;
 }
 
 export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalProps) {
@@ -56,6 +58,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     videoUrl: '',
     mediaType: 'image',
     scheduledAt: '',
+    shareToFeed: true,
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -103,6 +106,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         scheduledAt: content.scheduledAt
           ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm")
           : '',
+        shareToFeed: (content as any).shareToFeed ?? true,
       };
       setFormData(initialData);
       originalDataRef.current = initialData;
@@ -156,7 +160,8 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       newData.caption !== originalDataRef.current.caption ||
       JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags) ||
       newData.imageUrl !== originalDataRef.current.imageUrl ||
-      newData.scheduledAt !== originalDataRef.current.scheduledAt;
+      newData.scheduledAt !== originalDataRef.current.scheduledAt ||
+      newData.shareToFeed !== originalDataRef.current.shareToFeed;
 
     setHasChanges(hasFormChanges);
 
@@ -180,6 +185,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       hashtags?: string[];
       imageUrl?: string;
       scheduledAt?: string;
+      shareToFeed?: boolean;
     }) => {
       // Critical logging before mutation
       console.log('MUTATION CALL:', {
@@ -190,6 +196,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         imageUrl: data.imageUrl,
         scheduledAt: data.scheduledAt,
         scheduledAtType: typeof data.scheduledAt,
+        shareToFeed: data.shareToFeed,
       });
 
       // Final safety check before API call
@@ -272,6 +279,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       hashtags: formData.hashtags,
       // imageUrl is now managed via uploadContentImage / asset attach; do not send here
       scheduledAt: payloadScheduledAt,
+      shareToFeed: formData.shareToFeed,
     });
 
     // Update the original data reference after successful save
@@ -487,13 +495,33 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
 
               <TabsContent value="video" className="mt-4">
                 {content?.brandId && (
-                  <VideoUploader
-                    value={formData.videoUrl}
-                    onChange={handleVideoChange}
-                    brandId={content.brandId}
-                    maxSizeInMB={300}
-                    acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
-                  />
+                  <div className="space-y-3">
+                    <VideoUploader
+                      value={formData.videoUrl}
+                      onChange={handleVideoChange}
+                      brandId={content.brandId}
+                      maxSizeInMB={300}
+                      acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                    />
+                    <div className="border-border bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="editor-share-to-feed" className="text-xs font-medium">
+                          Share to Feed
+                        </Label>
+                        <p className="text-muted-foreground text-xs">
+                          Control whether this reel appears in your feed grid as well as the Reels
+                          tab.
+                        </p>
+                      </div>
+                      <Switch
+                        id="editor-share-to-feed"
+                        checked={formData.shareToFeed}
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({ ...prev, shareToFeed: checked }))
+                        }
+                      />
+                    </div>
+                  </div>
                 )}
               </TabsContent>
             </Tabs>

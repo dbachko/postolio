@@ -58,6 +58,7 @@ import {
   type InstagramMediaType,
 } from '@postolio/content-validation';
 import AssetPicker from '@/features/assets/components/AssetPicker';
+import { Switch } from '@/components/ui/switch';
 
 interface PostDetailData {
   id: string;
@@ -67,6 +68,7 @@ interface PostDetailData {
   videoUrl?: string;
   mediaType?: string;
   contentType?: string;
+  shareToFeed?: boolean | null;
   status: string; // 'draft' | 'scheduled' | 'published' | ...
   scheduledAt?: string;
   brandId?: string;
@@ -160,6 +162,7 @@ export function PostSidebar({
     contentType: 'post' as InstagramContentType,
     mediaType: 'image' as InstagramMediaType,
     scheduledAt: '',
+    shareToFeed: true,
   });
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
@@ -231,6 +234,7 @@ export function PostSidebar({
       contentType: normalizedContentType,
       mediaType: normalizedMediaType,
       scheduledAt: formatScheduledInput(post.scheduledAt),
+      shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
     });
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
     setHasChanges(false);
@@ -324,6 +328,7 @@ export function PostSidebar({
         mediaType: finalMediaType,
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
+        shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : undefined,
         scheduledAt:
           mode === 'schedule' && formData.scheduledAt
             ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
@@ -383,13 +388,19 @@ export function PostSidebar({
     const postImage = post.imageUrl || '';
     const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
     const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId || asset.cdnUrl);
+    const formShareToFeed = formData.shareToFeed ?? true;
+    const postShareToFeed =
+      (post.contentType as InstagramContentType | undefined) === 'reel'
+        ? (post.shareToFeed ?? true)
+        : true;
 
     const changed =
       trimmedCaption !== originalCaption ||
       JSON.stringify(formHashtags) !== JSON.stringify(postHashtags) ||
       scheduledValue !== originalScheduled ||
       formImage !== postImage ||
-      JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds);
+      JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds) ||
+      formShareToFeed !== postShareToFeed;
 
     setHasChanges(changed);
   }, [formData, id, post]);
@@ -729,6 +740,24 @@ export function PostSidebar({
                             Upload a vertical video for your reel (max 300MB, 9:16 aspect ratio
                             recommended)
                           </p>
+                          <div className="border-border bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
+                            <div className="space-y-0.5">
+                              <Label htmlFor="share-to-feed-toggle" className="text-xs font-medium">
+                                Share to Feed
+                              </Label>
+                              <p className="text-muted-foreground text-xs">
+                                When enabled, this reel appears in both your feed grid and the Reels
+                                tab.
+                              </p>
+                            </div>
+                            <Switch
+                              id="share-to-feed-toggle"
+                              checked={formData.shareToFeed}
+                              onCheckedChange={(checked) =>
+                                setFormData((s) => ({ ...s, shareToFeed: checked }))
+                              }
+                            />
+                          </div>
                         </>
                       )}
                     </div>

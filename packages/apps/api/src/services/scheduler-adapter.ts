@@ -519,6 +519,10 @@ export class SchedulerAdapter {
               localTime: customTime ? customTime.toISOString() : undefined,
               campaignName: content.campaign?.name, // Include campaign context for debugging
             },
+            ...(normalizedContentType === 'reel' &&
+            typeof (content as any).shareToFeed === 'boolean'
+              ? { shareToFeed: Boolean((content as any).shareToFeed) }
+              : {}),
             ...(content.campaignId ? { campaignId: content.campaignId } : {}),
           };
           if (mediaKey) {

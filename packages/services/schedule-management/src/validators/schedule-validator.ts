@@ -25,6 +25,7 @@ export interface ScheduleRequest {
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
+  shareToFeed?: boolean;
 }
 
 /**
@@ -106,6 +107,10 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
 
   if (request.metadata !== undefined && typeof request.metadata !== 'object') {
     errors.push('metadata must be an object if provided');
+  }
+
+  if (request.shareToFeed !== undefined && typeof request.shareToFeed !== 'boolean') {
+    errors.push('shareToFeed must be a boolean if provided');
   }
 
   // Validate platform values

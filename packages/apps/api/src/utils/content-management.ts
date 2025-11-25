@@ -26,6 +26,7 @@ export interface CreateManualContentBody {
   videoUrl?: string;
   campaignId?: string;
   scheduledAt?: string;
+  shareToFeed?: boolean;
 }
 
 export interface ApproveContentBody {
@@ -190,6 +191,7 @@ export async function createContentInTransaction(
     videoUrl?: string;
     campaignId?: string;
     scheduledAt?: string;
+    shareToFeed?: boolean;
     resolvedAsset: any;
     resolvedCarouselAssets: any;
   },
@@ -210,6 +212,7 @@ export async function createContentInTransaction(
         mediaType: params.mediaType || 'image',
         contentType: params.contentType || 'post',
         videoUrl: params.videoUrl || null,
+        shareToFeed: params.shareToFeed ?? null,
         generationParams: Prisma.JsonNull,
       },
       select: {
@@ -227,6 +230,7 @@ export async function createContentInTransaction(
         mediaType: true,
         contentType: true,
         videoUrl: true,
+        shareToFeed: true,
       },
     });
 

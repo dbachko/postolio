@@ -89,6 +89,7 @@ export interface ScheduleRequest {
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
+  shareToFeed?: boolean;
   // RELIABILITY: Idempotency token to prevent duplicate schedules
   idempotencyToken?: string;
 }
@@ -114,6 +115,7 @@ export interface Schedule {
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
+  shareToFeed?: boolean;
   createdAt: string;
   updatedAt: string;
   ttl?: number;
@@ -194,6 +196,7 @@ export class ScheduleService {
         hashtags: request.hashtags || [],
         mediaKeys: request.mediaKeys || [],
         metadata: request.metadata,
+        shareToFeed: request.shareToFeed,
         createdAt: now,
         updatedAt: now,
         // Set TTL for 30 days after scheduled time for cleanup

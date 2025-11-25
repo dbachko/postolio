@@ -24,6 +24,7 @@ export interface PublishRequest {
   mediaUrl?: string;
   mediaType?: 'IMAGE' | 'VIDEO' | 'REELS' | 'CAROUSEL_ALBUM';
   thumbOffset?: number; // Thumbnail offset in milliseconds (for videos)
+  shareToFeed?: boolean; // For reels: show in both feed and Reels tab
   metadata?: Record<string, unknown>;
 }
 

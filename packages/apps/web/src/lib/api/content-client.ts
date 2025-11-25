@@ -17,6 +17,7 @@ export class ContentClient {
     contentType?: InstagramContentType;
     campaignId?: string;
     scheduledAt?: string;
+    shareToFeed?: boolean;
   }) {
     const body: Record<string, unknown> = {
       brandId: data.brandId,
@@ -29,6 +30,7 @@ export class ContentClient {
     if (data.contentType) body.contentType = data.contentType;
     if (data.videoUrl) body.videoUrl = data.videoUrl;
     if (data.assetIds) body.assetIds = data.assetIds;
+    if (data.shareToFeed !== undefined) body.shareToFeed = data.shareToFeed;
     if (data.imageFile) {
       const uploadInfo = await assetsApi.getUploadUrl({
         brandId: data.brandId,

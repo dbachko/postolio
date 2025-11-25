@@ -255,7 +255,13 @@ export class InstagramConnector implements Connector {
       // Add media URL based on type
       if (isVideo) {
         containerData.video_url = req.mediaUrl || req.imageUrl || '';
-        containerData.media_type = isReel ? 'REELS' : 'VIDEO';
+        // Instagram Graph API has deprecated VIDEO for feed posts; use REELS
+        // for all video uploads and explicitly control share-to-feed.
+        containerData.media_type = 'REELS';
+        containerData.share_to_feed = String(
+          // default to true to keep existing "video in feed" behavior
+          req.shareToFeed ?? true
+        );
         // Optional: specify thumbnail offset (in milliseconds from start)
         if (req.thumbOffset !== undefined) {
           containerData.thumb_offset = String(req.thumbOffset);

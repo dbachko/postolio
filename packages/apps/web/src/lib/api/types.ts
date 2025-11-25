@@ -31,6 +31,7 @@ export interface Content {
   mediaType?: string | null;
   contentType?: string | null;
   videoUrl?: string | null;
+  shareToFeed?: boolean | null;
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
   scheduledAt: string | null;
   postedAt: string | null;

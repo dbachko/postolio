@@ -367,6 +367,10 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
             : content.mediaType === 'video'
               ? ('VIDEO' as const)
               : ('IMAGE' as const);
+          const shareToFeed =
+            isReel && typeof (content as any).shareToFeed === 'boolean'
+              ? Boolean((content as any).shareToFeed)
+              : undefined;
 
           publishResult = await connector.publish(
             {
@@ -375,6 +379,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
               imageUrl: content.primaryAssetCdnUrl || undefined,
               mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
               mediaType: instagramMediaType,
+              ...(shareToFeed !== undefined ? { shareToFeed } : {}),
             },
             {
               accessToken: tokens.accessToken,

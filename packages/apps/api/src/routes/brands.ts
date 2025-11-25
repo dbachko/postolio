@@ -697,6 +697,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             postedAt: true,
             createdAt: true,
             updatedAt: true,
+            shareToFeed: true,
             publications: { select: { platform: true, permalink: true } },
           },
           orderBy: { updatedAt: 'desc' },
@@ -718,6 +719,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
             permalink: primaryPermalink,
+            shareToFeed: (item as any).shareToFeed,
           };
         });
 

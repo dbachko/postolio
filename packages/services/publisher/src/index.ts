@@ -83,6 +83,7 @@ interface Schedule {
   imageUrl?: string;
   mediaKeys?: string[];
   videoUrl?: string;
+  shareToFeed?: boolean;
   platform: PlatformName;
   [key: string]: unknown; // allow additional persisted attributes
 }
@@ -222,10 +223,18 @@ class InstagramAdapter implements PlatformAdapter {
         access_token: credentials.accessToken,
       });
       if (isVideo) {
+        const shareToFeed =
+          schedule.contentType === 'reel'
+            ? typeof schedule.shareToFeed === 'boolean'
+              ? schedule.shareToFeed
+              : true
+            : true;
         createMediaParams.set('video_url', mediaUrl);
-        // Instagram Graph API requires media_type for all video uploads.
-        // Use REELS for reels, VIDEO for standard feed videos.
-        createMediaParams.set('media_type', isReel ? 'REELS' : 'VIDEO');
+        // Instagram Graph API has deprecated VIDEO; all video posts
+        // (including "feed videos") must use the REELS media type.
+        createMediaParams.set('media_type', 'REELS');
+        // Control whether the reel should also appear in the feed grid.
+        createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
       } else {
         createMediaParams.set('image_url', mediaUrl);
       }

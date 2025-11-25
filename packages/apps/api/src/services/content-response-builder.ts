@@ -31,6 +31,7 @@ export interface ContentWithMetadata extends ContentBase {
   mediaType?: string | null;
   contentType?: string | null;
   videoUrl?: string | null;
+  shareToFeed?: boolean | null;
 }
 
 /**
@@ -51,6 +52,7 @@ export interface ContentResponse {
   mediaType?: string | null;
   contentType?: string | null;
   videoUrl?: string | null;
+  shareToFeed?: boolean | null;
 }
 
 /**
@@ -97,6 +99,9 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   }
   if (content.videoUrl !== undefined) {
     response.videoUrl = content.videoUrl;
+  }
+  if (content.shareToFeed !== undefined) {
+    response.shareToFeed = content.shareToFeed;
   }
 
   return response;

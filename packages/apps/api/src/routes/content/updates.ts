@@ -28,6 +28,7 @@ interface UpdateContentBody {
   mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
   scheduledAt?: string;
+  shareToFeed?: boolean;
 }
 
 const updatesRoutes: FastifyPluginAsync = async (fastify) => {
@@ -40,7 +41,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       const contentId = request.params.contentId;
-      const { caption, hashtags, videoUrl, mediaType, contentType, scheduledAt } =
+      const { caption, hashtags, videoUrl, mediaType, contentType, scheduledAt, shareToFeed } =
         request.body as Partial<UpdateContentBody>;
 
       // Verify user owns the content and it's editable (not published)
@@ -89,6 +90,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         contentType?: ValidationContentType;
         scheduledAt?: Date | null;
         status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
+        shareToFeed?: boolean | null;
       }
       const updateData: MutableContentUpdate = {};
 
@@ -162,6 +164,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           // If removing scheduledAt, revert to draft
           updateData.status = 'draft';
         }
+      }
+
+      if (shareToFeed !== undefined) {
+        updateData.shareToFeed = shareToFeed ?? null;
       }
 
       // Log the update for debugging

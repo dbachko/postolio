@@ -46,6 +46,7 @@ const CreateScheduleInputSchema = z.object({
   hashtags: z.array(z.string()).optional(),
   mediaKeys: z.array(z.string()).optional(),
   metadata: MetadataSchema.optional(),
+  shareToFeed: z.boolean().optional(),
 });
 
 const UpdateScheduleInputSchema = z
@@ -91,6 +92,7 @@ const ScheduleSchema = z.object({
   caption: z.string().nullish(),
   hashtags: z.array(z.string()).nullish(),
   mediaKeys: z.array(z.string()).nullish(),
+  shareToFeed: z.boolean().nullish(),
   status: ScheduleStatusSchema,
   retryCount: z.number().default(0),
   metadata: MetadataSchema.nullish(),
