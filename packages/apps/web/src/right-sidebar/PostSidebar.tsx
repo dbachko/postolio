@@ -460,7 +460,7 @@ export function PostSidebar({
   const qCampaignId = searchParams.get('campaignId');
   const qAssetId = searchParams.get('assetId');
 
-  // Optional asset prefill via React Query (image-only)
+  // Optional asset prefill via React Query (images & videos)
   const { data: prefillAsset, isLoading: isPrefillAssetLoading } = useQuery({
     queryKey: ['prefill-asset', qAssetId],
     enabled: isCreating && Boolean(qAssetId),
@@ -492,6 +492,9 @@ export function PostSidebar({
           }
         : null;
 
+    const videoAssetUrl =
+      qAssetId && prefillAsset && prefillAsset.fileType === 'video' ? prefillAsset.url : null;
+
     setFormData((prev) => ({
       ...prev,
       caption: qCaption ?? prev.caption,
@@ -504,6 +507,13 @@ export function PostSidebar({
             carouselAssets: [imageAsset],
             mediaType: 'image' as InstagramMediaType,
             videoUrl: '',
+          }
+        : {}),
+      ...(videoAssetUrl
+        ? {
+            carouselAssets: [],
+            mediaType: 'video' as InstagramMediaType,
+            videoUrl: videoAssetUrl,
           }
         : {}),
     }));
