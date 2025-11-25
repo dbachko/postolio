@@ -1144,9 +1144,22 @@ async function sendToRetryQueue(
 // This maintains proper microservices patterns with secure service-to-service authentication
 
 async function getSignedVideoUrl(videoKey: string): Promise<string> {
+  const candidate = videoKey.trim();
+  if (!candidate) {
+    throw new Error('Media key is required for video publishing');
+  }
+
+  // In the current architecture, content.videoUrl is a public CDN URL,
+  // not a raw S3 key. For backward compatibility:
+  // - If given an absolute URL, return it as-is for Instagram's video_url.
+  // - If given a key, sign it against VIDEO_BUCKET.
+  if (/^https?:\/\//i.test(candidate)) {
+    return candidate;
+  }
+
   const command = new GetObjectCommand({
     Bucket: process.env.VIDEO_BUCKET!,
-    Key: videoKey,
+    Key: candidate,
   });
 
   return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
