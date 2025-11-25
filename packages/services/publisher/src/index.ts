@@ -223,10 +223,9 @@ class InstagramAdapter implements PlatformAdapter {
       });
       if (isVideo) {
         createMediaParams.set('video_url', mediaUrl);
-        // Set media_type to REELS if specified
-        if (isReel) {
-          createMediaParams.set('media_type', 'REELS');
-        }
+        // Instagram Graph API requires media_type for all video uploads.
+        // Use REELS for reels, VIDEO for standard feed videos.
+        createMediaParams.set('media_type', isReel ? 'REELS' : 'VIDEO');
       } else {
         createMediaParams.set('image_url', mediaUrl);
       }
