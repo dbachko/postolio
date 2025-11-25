@@ -13,6 +13,13 @@ interface VideoUploaderProps {
   className?: string;
   maxSizeInMB?: number;
   acceptedFormats?: string[];
+  minDurationSeconds?: number;
+  maxDurationSeconds?: number;
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  allowedAspectRatios?: { label: string; width: number; height: number }[];
 }
 
 export function VideoUploader({
@@ -22,6 +29,13 @@ export function VideoUploader({
   className,
   maxSizeInMB = 300, // Instagram limit
   acceptedFormats = ['video/mp4', 'video/quicktime', 'video/mpeg'],
+  minDurationSeconds,
+  maxDurationSeconds,
+  minWidth,
+  minHeight,
+  maxWidth,
+  maxHeight,
+  allowedAspectRatios,
 }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>(value || '');
@@ -43,9 +57,94 @@ export function VideoUploader({
   // Extract video duration when video loads
   const handleVideoLoad = useCallback(() => {
     if (videoRef.current) {
-      setVideoDuration(videoRef.current.duration);
+      const duration = videoRef.current.duration;
+      const width = videoRef.current.videoWidth;
+      const height = videoRef.current.videoHeight;
+      setVideoDuration(duration);
+
+      const metadataErrors: string[] = [];
+
+      if (Number.isFinite(duration)) {
+        if (typeof minDurationSeconds === 'number' && duration < minDurationSeconds) {
+          metadataErrors.push(
+            `Video is too short. Instagram reels require at least ${minDurationSeconds} seconds.`
+          );
+        }
+        if (typeof maxDurationSeconds === 'number' && duration > maxDurationSeconds) {
+          metadataErrors.push(
+            `Video is too long. Instagram reels support up to ${maxDurationSeconds} seconds.`
+          );
+        }
+      }
+
+      if (width > 0 && height > 0) {
+        if (typeof minWidth === 'number' && width < minWidth) {
+          metadataErrors.push(
+            `Video width is too small (${Math.round(width)}px). Minimum recommended width is ${minWidth}px.`
+          );
+        }
+        if (typeof minHeight === 'number' && height < minHeight) {
+          metadataErrors.push(
+            `Video height is too small (${Math.round(height)}px). Minimum recommended height is ${minHeight}px.`
+          );
+        }
+        if (typeof maxWidth === 'number' && width > maxWidth) {
+          metadataErrors.push(
+            `Video width is too large (${Math.round(width)}px). Maximum supported width is ${maxWidth}px.`
+          );
+        }
+        if (typeof maxHeight === 'number' && height > maxHeight) {
+          metadataErrors.push(
+            `Video height is too large (${Math.round(height)}px). Maximum supported height is ${maxHeight}px.`
+          );
+        }
+
+        if (allowedAspectRatios && allowedAspectRatios.length > 0) {
+          const ratio = width / height;
+          const normalized = allowedAspectRatios.map((r) => ({
+            label: r.label,
+            value: r.width / r.height,
+          }));
+          const closest = normalized.reduce<{ label: string; value: number; diff: number }>(
+            (best, current) => {
+              const diff = Math.abs(current.value - ratio);
+              return diff < best.diff ? { ...current, diff } : best;
+            },
+            { label: normalized[0].label, value: normalized[0].value, diff: Infinity }
+          );
+
+          const tolerance = 0.03; // ~3% tolerance
+          if (closest.diff > tolerance) {
+            const labels = allowedAspectRatios.map((r) => r.label).join(', ');
+            metadataErrors.push(
+              `Unusual aspect ratio detected. Instagram works best with ${labels}. Your video is approximately ${(
+                width / height
+              ).toFixed(2)}:1 (${Math.round(width)}×${Math.round(height)}).`
+            );
+          }
+        }
+      }
+
+      if (metadataErrors.length > 0) {
+        setError(metadataErrors.join(' '));
+      } else {
+        // Only clear errors that were caused by previous metadata issues, not hard upload failures
+        setError((prev) =>
+          prev && prev.toLowerCase().includes('video') && prev.toLowerCase().includes('instagram')
+            ? null
+            : prev
+        );
+      }
     }
-  }, []);
+  }, [
+    allowedAspectRatios,
+    maxDurationSeconds,
+    maxHeight,
+    maxWidth,
+    minDurationSeconds,
+    minHeight,
+    minWidth,
+  ]);
 
   const validateFile = useCallback(
     (file: File): string | null => {

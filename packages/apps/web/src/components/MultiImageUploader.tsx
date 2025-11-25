@@ -1,8 +1,10 @@
-import { useState, useRef } from 'react';
-import { Upload, X, GripVertical, Image as ImageIcon } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Upload, X, GripVertical, Video as VideoIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { assetsApi } from '@/features/assets/api/client';
+import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export interface AssetReference {
   id: string; // Asset ID from Assets database
@@ -16,6 +18,11 @@ interface MultiImageUploaderProps {
   className?: string;
   maxImages?: number;
   maxSizeInMB?: number;
+  // Optional video support: when provided, users can upload either images OR a single video.
+  videoUrl?: string;
+  onVideoChange?: (url: string) => void;
+  maxVideoSizeInMB?: number;
+  acceptedVideoFormats?: string[];
 }
 
 interface ImageItem {
@@ -32,32 +39,42 @@ export function MultiImageUploader({
   className,
   maxImages = 10,
   maxSizeInMB = 10,
+  videoUrl,
+  onVideoChange,
+  maxVideoSizeInMB = 300,
+  acceptedVideoFormats = ['video/mp4', 'video/quicktime', 'video/mpeg'],
 }: MultiImageUploaderProps) {
   const [images, setImages] = useState<ImageItem[]>(
     value.map((asset) => ({ id: asset.id, url: asset.url }))
   );
+  const [isDragging, setIsDragging] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<UploadProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = async (files: FileList | null) => {
+  const resetError = () => setError(null);
+
+  const handleImageFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files);
     const validFiles = fileArray.filter((file) => {
       if (!file.type.startsWith('image/')) {
-        alert(`${file.name} is not an image file`);
+        window.alert(`${file.name} is not an image file`);
         return false;
       }
       const sizeInMB = file.size / (1024 * 1024);
       if (sizeInMB > maxSizeInMB) {
-        alert(`${file.name} exceeds ${maxSizeInMB}MB limit`);
+        window.alert(`${file.name} exceeds ${maxSizeInMB}MB limit`);
         return false;
       }
       return true;
     });
 
     if (images.length + validFiles.length > maxImages) {
-      alert(`Maximum ${maxImages} images allowed`);
+      window.alert(`Maximum ${maxImages} images allowed`);
       return;
     }
 
@@ -130,6 +147,97 @@ export function MultiImageUploader({
       ...successfulAssets,
     ];
     onChange(allAssets);
+
+    // Clear any existing video when switching to images
+    if (successfulAssets.length > 0 && onVideoChange) {
+      onVideoChange('');
+    }
+  };
+
+  const handleVideoFile = useCallback(
+    async (file: File) => {
+      resetError();
+
+      if (!acceptedVideoFormats.includes(file.type)) {
+        setError(
+          `Invalid video type. Accepted formats: ${acceptedVideoFormats
+            .map((f) => f.split('/')[1])
+            .join(', ')}`
+        );
+        return;
+      }
+
+      const sizeInMB = file.size / (1024 * 1024);
+      if (sizeInMB > maxVideoSizeInMB) {
+        setError(
+          `Video size exceeds ${maxVideoSizeInMB}MB limit. Current size: ${sizeInMB.toFixed(2)}MB`
+        );
+        return;
+      }
+
+      if (!onVideoChange) {
+        setError('Video upload is not enabled in this context.');
+        return;
+      }
+
+      setIsUploadingVideo(true);
+      setVideoUploadProgress(null);
+
+      try {
+        const { cdnUrl } = await VideoUploadClient.uploadVideo(file, brandId, (progress) => {
+          setVideoUploadProgress(progress);
+        });
+
+        onVideoChange(cdnUrl);
+        // Clear images when switching to video
+        setImages([]);
+        onChange([]);
+      } catch (err) {
+        console.error('Failed to upload video', err);
+        setError(
+          err instanceof Error ? err.message : 'Failed to upload video. Please try again later.'
+        );
+      } finally {
+        setIsUploadingVideo(false);
+        setVideoUploadProgress(null);
+      }
+    },
+    [acceptedVideoFormats, brandId, maxVideoSizeInMB, onChange, onVideoChange]
+  );
+
+  const handleFiles = async (files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
+    const videoFiles = fileArray.filter((f) => f.type.startsWith('video/'));
+
+    if (imageFiles.length > 0 && videoFiles.length > 0) {
+      setError('Please upload either images or a video, not both at the same time.');
+      return;
+    }
+
+    if (videoFiles.length > 0) {
+      if (images.length > 0) {
+        setError('Remove existing images before uploading a video.');
+        return;
+      }
+      // Only support a single video file
+      await handleVideoFile(videoFiles[0]);
+      return;
+    }
+
+    if (imageFiles.length > 0) {
+      if (videoUrl) {
+        setError('Remove the existing video before uploading images.');
+        return;
+      }
+      await handleImageFiles(imageFiles);
+    }
+  };
+
+  const handleFileSelect = async (files: FileList | null) => {
+    await handleFiles(files);
   };
 
   const handleRemove = (index: number) => {
@@ -168,33 +276,105 @@ export function MultiImageUploader({
 
   return (
     <div className={cn('space-y-3', className)}>
-      {/* Upload Button */}
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={images.length >= maxImages}
-        >
-          <Upload className="mr-2 h-4 w-4" />
-          Add Images ({images.length}/{maxImages})
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFileSelect(e.target.files)}
-        />
-        {images.length > 0 && (
-          <span className="text-muted-foreground text-sm">Drag to reorder</span>
+      {/* Error message */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Hidden file input (images or video) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleFileSelect(e.target.files)}
+      />
+
+      {/* Unified dropzone / click area */}
+      <div
+        className={cn(
+          'relative cursor-pointer rounded-lg border-2 border-dashed p-4 text-center transition-all',
+          isDragging ? 'border-ring bg-muted' : 'border-border hover:border-foreground/30 border',
+          (isUploadingVideo || images.some((i) => i.uploading)) && 'cursor-not-allowed opacity-75'
         )}
+        onClick={() => {
+          if (isUploadingVideo || images.some((i) => i.uploading)) return;
+          fileInputRef.current?.click();
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (isUploadingVideo || images.some((i) => i.uploading)) return;
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(false);
+          if (isUploadingVideo || images.some((i) => i.uploading)) return;
+          void handleFiles(e.dataTransfer.files);
+        }}
+      >
+        <div className="flex flex-col items-center space-y-2">
+          <Upload className="text-muted-foreground h-8 w-8" />
+          <div>
+            <p className="text-foreground text-sm font-medium">
+              Drop images or a video here, or click to browse
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Images: up to {maxImages} (max {maxSizeInMB}MB each). Video: MP4/MOV/MPEG (max{' '}
+              {maxVideoSizeInMB}MB).
+            </p>
+          </div>
+        </div>
       </div>
 
+      {/* Video preview */}
+      {videoUrl && (
+        <div className="space-y-2">
+          <div className="bg-muted relative overflow-hidden rounded-lg">
+            {isUploadingVideo && videoUploadProgress && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 text-white">
+                <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
+                <p className="text-sm">Uploading video... {videoUploadProgress.percentage}%</p>
+              </div>
+            )}
+            <video src={videoUrl} controls className="h-full w-full object-contain" />
+          </div>
+          <div className="flex justify-between gap-2">
+            <div className="text-muted-foreground flex items-center text-xs">
+              <VideoIcon className="mr-1 h-3 w-3" />
+              <span>Video selected</span>
+            </div>
+            {onVideoChange && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  onVideoChange('');
+                  resetError();
+                }}
+                disabled={isUploadingVideo}
+              >
+                <X className="mr-1 h-4 w-4" />
+                Remove video
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Image Grid */}
-      {images.length > 0 ? (
+      {!videoUrl && images.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {images.map((image, index) => (
             <div
@@ -247,14 +427,6 @@ export function MultiImageUploader({
               )}
             </div>
           ))}
-        </div>
-      ) : (
-        <div className="border-muted-foreground/25 flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center">
-          <ImageIcon className="text-muted-foreground mb-2 h-10 w-10" />
-          <p className="text-muted-foreground text-sm">No images added yet</p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Add 2-{maxImages} images to create a carousel
-          </p>
         </div>
       )}
     </div>

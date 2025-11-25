@@ -17,7 +17,13 @@ import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
 import { PostStatusCard, type PostStatus } from '@/components/PostStatusCard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { toUTCFromInput } from '@/lib/timezone';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -28,8 +34,8 @@ import {
   Save,
   Upload,
   Calendar,
+  HelpCircle,
   Image as ImageIcon,
-  Video as VideoIcon,
   Film,
   Zap,
 } from 'lucide-react';
@@ -625,11 +631,60 @@ export function PostSidebar({
                   </RadioGroup>
                 </div>
 
-                {/* Media Upload - Tabs for Image/Video or Video-only for Reels */}
+                {/* Media Upload - unified media uploader or video-only for Reels */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
                     {formData.contentType === 'reel' ? 'Video' : 'Media'}
+                    {formData.contentType === 'reel' && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 p-0">
+                            <HelpCircle className="text-muted-foreground h-4 w-4" />
+                            <span className="sr-only">Instagram reel video requirements</span>
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-lg">
+                          <DialogHeader>
+                            <DialogTitle>Instagram reel video requirements</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-3 text-sm">
+                            <p>
+                              To avoid Instagram media processing errors, try to match these
+                              guidelines when uploading a reel video:
+                            </p>
+                            <ul className="list-disc space-y-1 pl-5">
+                              <li>
+                                <strong>Resolution:</strong> minimum{' '}
+                                <span className="font-mono">540×960</span>, recommended{' '}
+                                <span className="font-mono">1080×1920</span> (Full HD vertical)
+                              </li>
+                              <li>
+                                <strong>Aspect ratio:</strong> vertical{' '}
+                                <span className="font-mono">9:16</span> (Instagram also accepts
+                                square <span className="font-mono">1:1</span> and portrait{' '}
+                                <span className="font-mono">4:5</span>)
+                              </li>
+                              <li>
+                                <strong>Length:</strong> between 3 and 90 seconds
+                              </li>
+                              <li>
+                                <strong>File size:</strong> up to 300MB per video
+                              </li>
+                              <li>
+                                <strong>Formats:</strong> MP4 or MOV using common codecs
+                                (H.264/HEVC)
+                              </li>
+                            </ul>
+                            <p className="text-muted-foreground text-xs">
+                              If your video falls outside these ranges, Instagram may reject or fail
+                              to process it. Re-export from your editor using a vertical 1080×1920
+                              preset for best results.
+                            </p>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
                   </Label>
 
                   {/* Reels can only be video */}
@@ -643,6 +698,17 @@ export function PostSidebar({
                             brandId={selectedBrand.id}
                             maxSizeInMB={300}
                             acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                            minDurationSeconds={3}
+                            maxDurationSeconds={90}
+                            minWidth={540}
+                            minHeight={960}
+                            maxWidth={1920}
+                            maxHeight={1920}
+                            allowedAspectRatios={[
+                              { label: '9:16', width: 9, height: 16 },
+                              { label: '4:5', width: 4, height: 5 },
+                              { label: '1:1', width: 1, height: 1 },
+                            ]}
                           />
                           <p className="text-muted-foreground text-sm">
                             Upload a vertical video for your reel (max 300MB, 9:16 aspect ratio
@@ -652,66 +718,38 @@ export function PostSidebar({
                       )}
                     </div>
                   ) : (
-                    /* Posts and Stories can be image(s) or video */
-                    <Tabs
-                      value={formData.mediaType === 'video' ? 'video' : 'image'}
-                      onValueChange={(value) =>
-                        setFormData((s) => ({
-                          ...s,
-                          mediaType: value as 'image' | 'video',
-                          // Clear carousel assets when switching to video
-                          carouselAssets: value === 'video' ? [] : s.carouselAssets,
-                        }))
-                      }
-                    >
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="image" className="flex items-center gap-2">
-                          <ImageIcon className="h-4 w-4" />
-                          Image
-                        </TabsTrigger>
-                        <TabsTrigger value="video" className="flex items-center gap-2">
-                          <VideoIcon className="h-4 w-4" />
-                          Video
-                        </TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="image" className="mt-4">
-                        {selectedBrand?.id && (
-                          <>
-                            <MultiImageUploader
-                              value={formData.carouselAssets}
-                              onChange={(assets) => {
-                                setFormData((s) => ({
-                                  ...s,
-                                  carouselAssets: assets,
-                                  mediaType: 'image',
-                                }));
-                              }}
-                              brandId={selectedBrand.id}
-                              maxImages={10}
-                              maxSizeInMB={10}
-                            />
-                          </>
-                        )}
-                      </TabsContent>
-
-                      <TabsContent value="video" className="mt-4">
-                        {selectedBrand?.id && (
-                          <>
-                            <VideoUploader
-                              value={formData.videoUrl}
-                              onChange={(url) => setFormData((s) => ({ ...s, videoUrl: url }))}
-                              brandId={selectedBrand.id}
-                              maxSizeInMB={300}
-                              acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
-                            />
-                            <p className="text-muted-foreground mt-2 text-sm">
-                              Upload a video for your {formData.contentType} (optional, max 300MB)
-                            </p>
-                          </>
-                        )}
-                      </TabsContent>
-                    </Tabs>
+                    /* Posts and Stories can be image(s) or video; detect media type automatically */
+                    <>
+                      {selectedBrand?.id && (
+                        <MultiImageUploader
+                          value={formData.carouselAssets}
+                          onChange={(assets) => {
+                            setFormData((s) => ({
+                              ...s,
+                              carouselAssets: assets,
+                              mediaType: assets.length > 0 ? 'image' : s.mediaType,
+                              // Clear any video when switching to images
+                              videoUrl: assets.length > 0 ? '' : s.videoUrl,
+                            }));
+                          }}
+                          brandId={selectedBrand.id}
+                          maxImages={10}
+                          maxSizeInMB={10}
+                          videoUrl={formData.videoUrl}
+                          onVideoChange={(url) => {
+                            setFormData((s) => ({
+                              ...s,
+                              videoUrl: url,
+                              mediaType: url ? 'video' : s.mediaType,
+                              // Clear carousel assets when switching to video
+                              carouselAssets: url ? [] : s.carouselAssets,
+                            }));
+                          }}
+                          maxVideoSizeInMB={300}
+                          acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
 
