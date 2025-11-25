@@ -795,7 +795,7 @@ export default function PostDetail() {
               <>
                 {/* Media */}
                 <div className="bg-muted mb-4 overflow-hidden rounded-lg">
-                  {post.contentType === 'reel' && post.videoUrl ? (
+                  {post.videoUrl ? (
                     <video
                       src={post.videoUrl}
                       className="h-auto max-h-[250px] w-full object-cover"

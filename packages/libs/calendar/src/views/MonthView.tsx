@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps */
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { Localizer } from '../localizers';
 import type { CalendarEventBase } from '../types';
 import { useDrop } from 'react-dnd';
@@ -172,9 +172,11 @@ function MonthCell<E extends CalendarEventBase>({
   if (dragAndDrop) drop(ref);
 
   const label = localizer.format(day, 'd');
-  const maxVisible = 3;
+  const MAX_COLLAPSED = 3;
+  const [showAll, setShowAll] = useState(false);
+  const maxVisible = showAll ? events.length : MAX_COLLAPSED;
   const visible = events.slice(0, maxVisible);
-  const overflow = events.length - visible.length;
+  const overflow = Math.max(0, events.length - MAX_COLLAPSED);
 
   return (
     <div
@@ -200,10 +202,15 @@ function MonthCell<E extends CalendarEventBase>({
             className="pc-more"
             onClick={(e) => {
               e.stopPropagation();
-              onMoreClick?.(day);
+              setShowAll((prev) => !prev);
+              // onMoreClick is kept for backwards compatibility but no longer controls navigation;
+              // consumers can still observe "show more" interactions if needed.
+              if (!showAll) {
+                onMoreClick?.(day);
+              }
             }}
           >
-            +{overflow} more
+            {showAll ? 'Show less' : `+${overflow} more`}
           </button>
         )}
       </div>

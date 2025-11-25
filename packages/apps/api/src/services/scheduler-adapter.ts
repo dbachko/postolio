@@ -448,8 +448,19 @@ export class SchedulerAdapter {
         });
       } else {
         try {
-          const normalizedMediaType = (content.mediaType || 'image') as InstagramMediaType;
           const normalizedContentType = (content.contentType || 'post') as InstagramContentType;
+
+          // Backward-compatible normalization:
+          // - Historical rows may have mediaType = 'reel' – treat as 'video'.
+          // - If mediaType is missing, infer from contentType (reels => video, otherwise image).
+          let normalizedMediaType: InstagramMediaType;
+          if (content.mediaType === 'video') {
+            normalizedMediaType = 'video';
+          } else if (content.mediaType === 'image') {
+            normalizedMediaType = 'image';
+          } else {
+            normalizedMediaType = normalizedContentType === 'reel' ? 'video' : 'image';
+          }
           const mediaAssets = (content as any).mediaAssets as
             | { cdnUrl: string; usageContext: string }[]
             | undefined;
@@ -458,8 +469,9 @@ export class SchedulerAdapter {
             mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
             mediaAssets?.[0]?.cdnUrl ||
             null;
-          // Enforce presence of media key for image content
-          const requiresImageAsset = normalizedMediaType === 'image';
+          // Enforce presence of media key for image content (non-reel)
+          const requiresImageAsset =
+            normalizedMediaType === 'image' && normalizedContentType !== 'reel';
           if (requiresImageAsset && (!primaryAssetUrl || primaryAssetUrl.length === 0)) {
             const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
             await emitScheduleFailure(msg);

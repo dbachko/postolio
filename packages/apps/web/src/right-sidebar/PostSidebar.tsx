@@ -167,8 +167,9 @@ export function PostSidebar({
   const [showAssetPicker, setShowAssetPicker] = useState(false);
 
   const finalMediaType = useMemo<InstagramMediaType>(() => {
-    if (formData.contentType === 'reel') return 'reel';
-    // Treat carousels as image posts with multiple assets
+    // For reels, always treat media format as video; for other content types
+    // rely on the explicit mediaType ('image' | 'video').
+    if (formData.contentType === 'reel') return 'video';
     return formData.mediaType === 'video' ? 'video' : 'image';
   }, [formData.contentType, formData.mediaType]);
 
@@ -209,14 +210,26 @@ export function PostSidebar({
       url: asset.cdnUrl,
     }));
 
+    // Normalize mediaType from API/DB:
+    // If missing, infer from contentType (reel => video, otherwise image).
+    const normalizedContentType = (post.contentType as InstagramContentType) || 'post';
+    let normalizedMediaType: InstagramMediaType;
+    if (post.mediaType === 'video') {
+      normalizedMediaType = 'video';
+    } else if (post.mediaType === 'image') {
+      normalizedMediaType = 'image';
+    } else {
+      normalizedMediaType = normalizedContentType === 'reel' ? 'video' : 'image';
+    }
+
     setFormData({
       caption: post.caption || '',
       hashtags: stripHashtagPrefixes(post.hashtags || []),
       imageUrl: post.imageUrl || '',
       videoUrl: post.videoUrl || '',
       carouselAssets: carouselAssetsFromPost,
-      contentType: (post.contentType as InstagramContentType) || 'post',
-      mediaType: (post.mediaType as InstagramMediaType) || 'image',
+      contentType: normalizedContentType,
+      mediaType: normalizedMediaType,
       scheduledAt: formatScheduledInput(post.scheduledAt),
     });
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
@@ -516,6 +529,8 @@ export function PostSidebar({
 
   const bodyClass =
     layout === 'sidebar' ? 'flex-1 overflow-y-auto px-4 py-3' : 'flex-1 overflow-y-auto px-4 py-4';
+
+  const isVideoMedia = finalMediaType === 'video';
 
   return (
     <div className={containerClass} role="complementary" aria-labelledby="right-sidebar-title">
@@ -881,8 +896,8 @@ export function PostSidebar({
             />
 
             <div className="space-y-2">
-              <Label>{formData.contentType === 'reel' ? 'Video' : 'Post Image'}</Label>
-              {formData.contentType === 'reel' ? (
+              <Label>{isVideoMedia ? 'Video' : 'Post Image'}</Label>
+              {isVideoMedia ? (
                 formData.videoUrl ? (
                   <div className="bg-muted overflow-hidden rounded-lg">
                     <video
@@ -910,7 +925,7 @@ export function PostSidebar({
               {!disabled && (
                 <div className="flex flex-col gap-2">
                   <p className="text-muted-foreground text-xs">
-                    {formData.contentType === 'reel'
+                    {isVideoMedia
                       ? 'Change the video for this post by selecting an asset from your library.'
                       : 'Change the image for this post by selecting an asset from your library.'}
                   </p>

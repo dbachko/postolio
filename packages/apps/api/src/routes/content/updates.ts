@@ -95,7 +95,19 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const effectiveContentType = (contentType ||
         content.contentType ||
         'post') as ValidationContentType;
-      const effectiveMediaType = (mediaType || content.mediaType || 'image') as ValidationMediaType;
+
+      // Normalize mediaType to the new model:
+      // If not provided, infer from existing content, falling back to image/video by contentType.
+      let effectiveMediaType: ValidationMediaType;
+      if (mediaType) {
+        effectiveMediaType = mediaType;
+      } else if (content.mediaType === 'video') {
+        effectiveMediaType = 'video';
+      } else if (content.mediaType === 'image') {
+        effectiveMediaType = 'image';
+      } else {
+        effectiveMediaType = effectiveContentType === 'reel' ? 'video' : 'image';
+      }
       const effectiveCaption =
         caption !== undefined
           ? caption

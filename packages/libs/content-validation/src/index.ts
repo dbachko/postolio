@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
 export type Platform = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
+
+// Logical content kind (how the platform will treat the post)
 export type ContentType = 'post' | 'reel' | 'story';
-export type MediaType = 'image' | 'video' | 'reel';
+
+// Pure media format (what kind of asset is attached)
+// Reels are modeled as contentType === 'reel' + mediaType === 'video'
+export type MediaType = 'image' | 'video';
 
 // Platform-specific aliases (useful for frontends/backends that target a single platform)
 export type InstagramContentType = Extract<ContentType, 'post' | 'reel' | 'story'>;
-export type InstagramMediaType = Extract<MediaType, 'image' | 'video' | 'reel'>;
+export type InstagramMediaType = Extract<MediaType, 'image' | 'video'>;
 
 export interface ValidateContentPayload<
   P extends Platform = Platform,
@@ -50,7 +55,7 @@ const optionalMediaKeys = z.array(z.string()).optional().nullable();
 const instagramBase = z.object({
   platform: z.literal('instagram'),
   contentType: z.enum(['post', 'reel', 'story']).optional().nullable(),
-  mediaType: z.enum(['image', 'video', 'reel']).optional().nullable(),
+  mediaType: z.enum(['image', 'video']).optional().nullable(),
   caption: optionalCaption,
   hashtags: optionalHashtags,
   mediaKeys: optionalMediaKeys,
@@ -74,8 +79,12 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
   const mediaType = data.mediaType || 'image';
   const mediaCount = (data.mediaKeys?.length || 0) + (data.videoUrl ? 1 : 0);
 
+  const isReel = contentType === 'reel';
+  const isImageLike = mediaType === 'image' && !isReel;
+  const isVideoLike = mediaType === 'video' || isReel;
+
   // Media requirements
-  if (mediaType === 'image') {
+  if (isImageLike) {
     const count = data.mediaKeys?.length || 0;
     if (count < 1) {
       errors.push({
@@ -93,11 +102,7 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
     }
   }
 
-  if (
-    (mediaType === 'video' || mediaType === 'reel') &&
-    !data.videoUrl &&
-    !data.mediaKeys?.length
-  ) {
+  if (isVideoLike && !data.videoUrl && !data.mediaKeys?.length) {
     errors.push({
       field: 'videoUrl',
       message: 'Video/Reel requires a video asset',
@@ -124,7 +129,7 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
 const facebookBase = z.object({
   platform: z.literal('facebook'),
   contentType: z.enum(['post']).optional().nullable(),
-  mediaType: z.enum(['image', 'video', 'reel']).optional().nullable(),
+  mediaType: z.enum(['image', 'video']).optional().nullable(),
   caption: z
     .string()
     .max(63206, { message: 'Caption exceeds Facebook limit (~63k characters)' })

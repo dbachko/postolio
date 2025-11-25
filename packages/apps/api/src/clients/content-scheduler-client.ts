@@ -26,7 +26,8 @@ const ScheduleStatusSchema = z.enum([
   'cancelled',
 ]);
 const ContentTypeSchema = z.enum(['post', 'reel', 'story']); // User-facing content type
-const MediaTypeSchema = z.enum(['image', 'video', 'reel', 'carousel']); // Media format
+// Pure media format; reels are modeled as contentType === 'reel' + mediaType === 'video'
+const MediaTypeSchema = z.enum(['image', 'video']); // Media format
 
 // Schema that matches Lambda's expected format
 const MetadataSchema = z.record(z.string(), z.unknown());
@@ -39,7 +40,7 @@ const CreateScheduleInputSchema = z.object({
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(), // Changed from scheduledTime to scheduledAt
   contentType: ContentTypeSchema.optional(), // User-facing type: post/reel/story
-  mediaType: MediaTypeSchema.optional(), // Media format: image/video/reel/carousel
+  mediaType: MediaTypeSchema.optional(), // Media format: image/video
   videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
@@ -85,7 +86,7 @@ const ScheduleSchema = z.object({
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(),
   contentType: ContentTypeSchema.optional(), // User-facing type: post/reel/story
-  mediaType: MediaTypeSchema.optional(), // Media format: image/video/reel/carousel
+  mediaType: MediaTypeSchema.optional(), // Media format: image/video
   videoUrl: z.string().url().nullish(),
   caption: z.string().nullish(),
   hashtags: z.array(z.string()).nullish(),

@@ -107,7 +107,7 @@ model Content {
   primaryAssetCdnUrl String?       // Cached CDN URL for fast reads
   primaryAssetWidth  Int?
   primaryAssetHeight Int?
-  mediaType          String        @default("image") // 'image' | 'video' | 'reel' (carousels = image + multiple mediaAssets)
+  mediaType          String        @default("image") // 'image' | 'video' (carousels = image + multiple mediaAssets; reels = contentType='reel' + mediaType='video')
   contentType        String        @default("post") // 'post' | 'reel' | 'story'
   videoUrl           String?       // CDN URL for video content
   videoDuration      Int?          // Duration in seconds (for videos/reels)

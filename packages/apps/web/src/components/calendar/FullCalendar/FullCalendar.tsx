@@ -80,24 +80,6 @@ function FullCalendarImpl({
     [brandId, queryClient, tzRef]
   );
 
-  const handleMoreClick = useCallback((value: Date) => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const day = new Date(value);
-      const yyyy = day.getFullYear();
-      const mm = String(day.getMonth() + 1).padStart(2, '0');
-      const dd = String(day.getDate()).padStart(2, '0');
-      const dayStr = `${yyyy}-${mm}-${dd}`;
-      const url = new URL(window.location.href);
-      url.searchParams.set('view', 'three-day');
-      url.searchParams.set('date', dayStr);
-      window.location.assign(url.toString());
-    } catch (error) {
-      console.error(error);
-    }
-  }, []);
-
   const handleBackgroundClick = useCallback(
     (value: Date) => {
       if (typeof window === 'undefined') return;
@@ -131,7 +113,6 @@ function FullCalendarImpl({
         dndBackend={isTouch ? TouchBackend : undefined}
         dndOptions={isTouch ? { enableMouseEvents: true } : undefined}
         onEventDrop={handleEventDrop}
-        onMoreClick={handleMoreClick}
         components={{
           event: ({ event }: { event: CalendarEvent }) => (
             <EventRenderer
