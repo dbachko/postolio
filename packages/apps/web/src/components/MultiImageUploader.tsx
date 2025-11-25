@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
-import { Upload, X, GripVertical, Video as VideoIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Upload } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { assetsApi } from '@/features/assets/api/client';
 import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { MediaCard } from '@/components/MediaCard';
 
 export interface AssetReference {
   id: string; // Asset ID from Assets database
@@ -44,20 +45,35 @@ export function MultiImageUploader({
   maxVideoSizeInMB = 300,
   acceptedVideoFormats = ['video/mp4', 'video/quicktime', 'video/mpeg'],
 }: MultiImageUploaderProps) {
-  const [images, setImages] = useState<ImageItem[]>(
-    value.map((asset) => ({ id: asset.id, url: asset.url }))
-  );
+  const [images, setImages] = useState<ImageItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const draggedIndexRef = useRef<number | null>(null);
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Keep internal images state in sync with parent value
+  useEffect(() => {
+    setImages(value.map((asset) => ({ id: asset.id, url: asset.url })));
+  }, [value]);
+
+  const hasImages = images.length > 0;
+  const hasVideo = Boolean(videoUrl);
+  const hasUploadingImages = images.some((i) => i.uploading);
+  const isUploadInProgress = isUploadingVideo || hasUploadingImages;
+
   const resetError = () => setError(null);
 
   const handleImageFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
+
+    // Prevent mixing media types if a video is already selected
+    if (hasVideo) {
+      setError('Mixed media is not allowed. Remove the video before adding images.');
+      return;
+    }
 
     const fileArray = Array.from(files);
     const validFiles = fileArray.filter((file) => {
@@ -202,24 +218,32 @@ export function MultiImageUploader({
         setVideoUploadProgress(null);
       }
     },
-    [acceptedVideoFormats, brandId, maxVideoSizeInMB, onChange, onVideoChange]
+    [acceptedVideoFormats, brandId, hasImages, maxVideoSizeInMB, onChange, onVideoChange]
   );
 
   const handleFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
+
+    resetError();
 
     const fileArray = Array.from(files);
     const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
     const videoFiles = fileArray.filter((f) => f.type.startsWith('video/'));
 
     if (imageFiles.length > 0 && videoFiles.length > 0) {
-      setError('Please upload either images or a video, not both at the same time.');
+      setError('Mixed media is not allowed. Please upload either images or a video.');
       return;
     }
 
     if (videoFiles.length > 0) {
-      if (images.length > 0) {
-        setError('Remove existing images before uploading a video.');
+      if (hasImages) {
+        setError('Mixed media is not allowed. Remove existing images before uploading a video.');
+        return;
+      }
+      if (hasVideo) {
+        setError(
+          'Only one video is allowed. Remove the existing video before uploading another media file.'
+        );
         return;
       }
       // Only support a single video file
@@ -228,8 +252,8 @@ export function MultiImageUploader({
     }
 
     if (imageFiles.length > 0) {
-      if (videoUrl) {
-        setError('Remove the existing video before uploading images.');
+      if (hasVideo) {
+        setError('Mixed media is not allowed. Remove the existing video before uploading images.');
         return;
       }
       await handleImageFiles(imageFiles);
@@ -250,27 +274,149 @@ export function MultiImageUploader({
     );
   };
 
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
+    draggedIndexRef.current = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Some browsers require data to be set for drag to start
+      e.dataTransfer.setData('text/plain', String(index));
+    }
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === index) return;
+    const currentIndex = draggedIndexRef.current;
+    if (currentIndex === null || currentIndex === index) return;
 
-    const newImages = [...images];
-    const draggedImage = newImages[draggedIndex];
-    newImages.splice(draggedIndex, 1);
-    newImages.splice(index, 0, draggedImage);
+    setImages((prev) => {
+      const updated = [...prev];
+      const draggedImage = updated[currentIndex];
+      if (!draggedImage) return prev;
 
-    setImages(newImages);
+      updated.splice(currentIndex, 1);
+      updated.splice(index, 0, draggedImage);
+      return updated;
+    });
+
+    draggedIndexRef.current = index;
     setDraggedIndex(index);
   };
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
-    onChange(
-      images.filter((img) => !img.uploading && img.id).map((img) => ({ id: img.id!, url: img.url }))
+    draggedIndexRef.current = null;
+    setImages((prev) => {
+      onChange(
+        prev.filter((img) => !img.uploading && img.id).map((img) => ({ id: img.id!, url: img.url }))
+      );
+      return prev;
+    });
+  };
+
+  const isUploadDisabled = isUploadInProgress || hasVideo;
+
+  const handleDropzoneClick = () => {
+    if (isUploadDisabled) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleDropzoneDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isUploadDisabled) return;
+    setIsDragging(true);
+  };
+
+  const handleDropzoneDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDropzoneDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (isUploadDisabled) {
+      if (hasVideo) {
+        setError(
+          'Only one video is allowed. Remove the existing video before uploading another media file.'
+        );
+      }
+      return;
+    }
+    void handleFiles(e.dataTransfer.files);
+  };
+
+  const renderDropzone = (variant: 'full' | 'card') => {
+    const baseClasses =
+      'relative cursor-pointer rounded-lg border-2 border-dashed text-center transition-all';
+    const activeBorderClasses = isDragging
+      ? 'border-ring bg-muted'
+      : 'border-border hover:border-foreground/30 border';
+    const disabledClasses = isUploadInProgress ? 'cursor-not-allowed opacity-75' : '';
+
+    if (variant === 'full') {
+      return (
+        <div
+          className={cn(baseClasses, activeBorderClasses, disabledClasses, 'p-4')}
+          onClick={handleDropzoneClick}
+          onDragOver={handleDropzoneDragOver}
+          onDragLeave={handleDropzoneDragLeave}
+          onDrop={handleDropzoneDrop}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            {isUploadingVideo && videoUploadProgress ? (
+              <>
+                <div className="border-foreground h-10 w-10 animate-spin rounded-full border-b-2" />
+                <p className="text-muted-foreground text-sm">
+                  Uploading video... {videoUploadProgress.percentage}%
+                </p>
+                <div className="w-full max-w-xs">
+                  <Progress value={videoUploadProgress.percentage} className="h-2" />
+                </div>
+              </>
+            ) : (
+              <>
+                <Upload className="text-muted-foreground h-8 w-8" />
+                <div>
+                  <p className="text-foreground text-sm font-medium">
+                    Drop images or a video here, or click to browse
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Images: up to {maxImages} (max {maxSizeInMB}MB each). Video: MP4/MOV/MPEG (max{' '}
+                    {maxVideoSizeInMB}MB).
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Compact card-style dropzone (used when at least one image exists)
+    return (
+      <button
+        type="button"
+        className={cn(
+          baseClasses,
+          activeBorderClasses,
+          disabledClasses,
+          'bg-muted flex aspect-square flex-col items-center justify-center border text-xs'
+        )}
+        onClick={handleDropzoneClick}
+        onDragOver={handleDropzoneDragOver}
+        onDragLeave={handleDropzoneDragLeave}
+        onDrop={handleDropzoneDrop}
+      >
+        <Upload className="text-muted-foreground mb-1 h-6 w-6" />
+        <span className="text-foreground font-medium">Add media</span>
+        <span className="text-muted-foreground mt-0.5 text-[10px]">
+          Images only · {images.length}/{maxImages}
+        </span>
+      </button>
     );
   };
 
@@ -293,140 +439,56 @@ export function MultiImageUploader({
         onChange={(e) => handleFileSelect(e.target.files)}
       />
 
-      {/* Unified dropzone / click area */}
-      <div
-        className={cn(
-          'relative cursor-pointer rounded-lg border-2 border-dashed p-4 text-center transition-all',
-          isDragging ? 'border-ring bg-muted' : 'border-border hover:border-foreground/30 border',
-          (isUploadingVideo || images.some((i) => i.uploading)) && 'cursor-not-allowed opacity-75'
-        )}
-        onClick={() => {
-          if (isUploadingVideo || images.some((i) => i.uploading)) return;
-          fileInputRef.current?.click();
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (isUploadingVideo || images.some((i) => i.uploading)) return;
-          setIsDragging(true);
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsDragging(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsDragging(false);
-          if (isUploadingVideo || images.some((i) => i.uploading)) return;
-          void handleFiles(e.dataTransfer.files);
-        }}
-      >
-        <div className="flex flex-col items-center space-y-2">
-          <Upload className="text-muted-foreground h-8 w-8" />
-          <div>
-            <p className="text-foreground text-sm font-medium">
-              Drop images or a video here, or click to browse
-            </p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Images: up to {maxImages} (max {maxSizeInMB}MB each). Video: MP4/MOV/MPEG (max{' '}
-              {maxVideoSizeInMB}MB).
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Media layout */}
+      {/* Case 1: No media yet -> full-width dropzone */}
+      {!hasImages && !hasVideo && renderDropzone('full')}
 
-      {/* Video preview */}
-      {videoUrl && (
-        <div className="space-y-2">
-          <div className="bg-muted relative overflow-hidden rounded-lg">
-            {isUploadingVideo && videoUploadProgress && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 text-white">
-                <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
-                <p className="text-sm">Uploading video... {videoUploadProgress.percentage}%</p>
-              </div>
-            )}
-            <video src={videoUrl} controls className="h-full w-full object-contain" />
-          </div>
-          <div className="flex justify-between gap-2">
-            <div className="text-muted-foreground flex items-center text-xs">
-              <VideoIcon className="mr-1 h-3 w-3" />
-              <span>Video selected</span>
-            </div>
-            {onVideoChange && (
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                onClick={() => {
-                  onVideoChange('');
-                  resetError();
-                }}
-                disabled={isUploadingVideo}
-              >
-                <X className="mr-1 h-4 w-4" />
-                Remove video
-              </Button>
-            )}
-          </div>
+      {/* Case 2: Video selected -> single card with controls, upload disabled */}
+      {hasVideo && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <MediaCard
+            type="video"
+            src={videoUrl ?? ''}
+            index={0}
+            showOrderBadge
+            draggable={false}
+            onRemove={
+              onVideoChange
+                ? () => {
+                    onVideoChange('');
+                    resetError();
+                  }
+                : undefined
+            }
+            isUploading={isUploadingVideo}
+            progressPercent={videoUploadProgress?.percentage}
+            showDragHandle={false}
+          />
         </div>
       )}
 
-      {/* Image Grid */}
-      {!videoUrl && images.length > 0 && (
+      {/* Case 3: One or more images -> grid of images plus compact upload card */}
+      {hasImages && !hasVideo && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {images.map((image, index) => (
-            <div
+            <MediaCard
               key={`${image.url}-${index}`}
+              type="image"
+              src={image.url}
+              index={index}
+              alt={`Upload ${index + 1}`}
               draggable={!image.uploading}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
+              onDragStart={(event) => handleDragStart(event, index)}
+              onDragOver={(event) => handleDragOver(event, index)}
               onDragEnd={handleDragEnd}
-              className={cn(
-                'group bg-muted relative aspect-square overflow-hidden rounded-lg border',
-                !image.uploading && 'cursor-move',
-                draggedIndex === index && 'opacity-50'
-              )}
-            >
-              {/* Order Badge */}
-              <div className="absolute top-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs font-medium text-white">
-                {index + 1}
-              </div>
-
-              {/* Drag Handle */}
-              {!image.uploading && (
-                <div className="absolute top-2 right-2 z-10 rounded bg-black/60 p-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <GripVertical className="h-4 w-4 text-white" />
-                </div>
-              )}
-
-              {/* Remove Button */}
-              {!image.uploading && (
-                <button
-                  type="button"
-                  onClick={() => handleRemove(index)}
-                  className="absolute right-2 bottom-2 z-10 rounded-full bg-red-500 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-
-              {/* Image */}
-              <img
-                src={image.url}
-                alt={`Upload ${index + 1}`}
-                className="h-full w-full object-cover"
-              />
-
-              {/* Uploading Overlay */}
-              {image.uploading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent" />
-                </div>
-              )}
-            </div>
+              onRemove={!image.uploading ? () => handleRemove(index) : undefined}
+              isUploading={image.uploading}
+              className={cn(draggedIndex === index && 'opacity-50')}
+            />
           ))}
+
+          {/* Upload card as the last item when more images are allowed */}
+          {images.length < maxImages && renderDropzone('card')}
         </div>
       )}
     </div>

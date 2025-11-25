@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Upload, X, Video as VideoIcon, AlertCircle } from 'lucide-react';
+import { Upload, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
+import { MediaCard } from '@/components/MediaCard';
 
 interface VideoUploaderProps {
   value?: string;
@@ -43,9 +43,7 @@ export function VideoUploader({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Update preview when value changes
   React.useEffect(() => {
@@ -55,12 +53,13 @@ export function VideoUploader({
   }, [value, selectedFile]);
 
   // Extract video duration when video loads
-  const handleVideoLoad = useCallback(() => {
-    if (videoRef.current) {
-      const duration = videoRef.current.duration;
-      const width = videoRef.current.videoWidth;
-      const height = videoRef.current.videoHeight;
-      setVideoDuration(duration);
+  const handleVideoLoad = useCallback(
+    (video: HTMLVideoElement | null) => {
+      if (!video) return;
+
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      const duration = video.duration;
 
       const metadataErrors: string[] = [];
 
@@ -113,7 +112,7 @@ export function VideoUploader({
             { label: normalized[0].label, value: normalized[0].value, diff: Infinity }
           );
 
-          const tolerance = 0.03; // ~3% tolerance
+          const tolerance = 0.03;
           if (closest.diff > tolerance) {
             const labels = allowedAspectRatios.map((r) => r.label).join(', ');
             metadataErrors.push(
@@ -128,23 +127,23 @@ export function VideoUploader({
       if (metadataErrors.length > 0) {
         setError(metadataErrors.join(' '));
       } else {
-        // Only clear errors that were caused by previous metadata issues, not hard upload failures
         setError((prev) =>
           prev && prev.toLowerCase().includes('video') && prev.toLowerCase().includes('instagram')
             ? null
             : prev
         );
       }
-    }
-  }, [
-    allowedAspectRatios,
-    maxDurationSeconds,
-    maxHeight,
-    maxWidth,
-    minDurationSeconds,
-    minHeight,
-    minWidth,
-  ]);
+    },
+    [
+      allowedAspectRatios,
+      maxDurationSeconds,
+      maxHeight,
+      maxWidth,
+      minDurationSeconds,
+      minHeight,
+      minWidth,
+    ]
+  );
 
   const validateFile = useCallback(
     (file: File): string | null => {
@@ -251,7 +250,6 @@ export function VideoUploader({
     setPreviewUrl('');
     setSelectedFile(null);
     setError(null);
-    setVideoDuration(null);
     setUploadProgress(null);
 
     // Reset file input
@@ -266,12 +264,6 @@ export function VideoUploader({
   const handleClickUpload = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
-
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   return (
     <div
@@ -340,92 +332,29 @@ export function VideoUploader({
           </div>
         </div>
       ) : (
-        /* Video Preview */
-        <div className="group relative">
-          {/* Drag overlay when dragging over existing video */}
-          {isDragging && (
-            <div className="bg-primary/90 absolute inset-0 z-20 flex items-center justify-center rounded-lg">
-              <div className="text-center text-white">
-                <Upload className="mx-auto mb-2 h-12 w-12" />
-                <p className="text-sm font-medium">Drop to replace video</p>
-              </div>
-            </div>
-          )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <MediaCard
+            type="video"
+            src={previewUrl}
+            index={0}
+            showOrderBadge
+            draggable={false}
+            onRemove={handleRemoveVideo}
+            isUploading={isUploading}
+            progressPercent={uploadProgress?.percentage}
+            showDragHandle={false}
+            onVideoLoaded={handleVideoLoad}
+            onVideoError={() => {
+              if (!selectedFile) {
+                // eslint-disable-next-line no-console
+                console.error('Failed to load existing video preview', previewUrl);
+                return;
+              }
 
-          <div className="bg-muted relative aspect-video overflow-hidden rounded-lg">
-            {/* Loading state for upload progress */}
-            {isUploading && uploadProgress && (
-              <div className="bg-opacity-50 absolute inset-0 z-10 flex flex-col items-center justify-center bg-black">
-                <div className="text-center text-white">
-                  <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
-                  <p className="text-sm">Uploading... {uploadProgress.percentage}%</p>
-                  <Progress value={uploadProgress.percentage} className="mt-2 h-2 w-48" />
-                </div>
-              </div>
-            )}
-
-            {/* Video */}
-            <video
-              ref={videoRef}
-              src={previewUrl}
-              controls
-              className="h-full w-full object-contain"
-              onLoadedMetadata={handleVideoLoad}
-              onError={() => {
-                setError('Failed to load video preview');
-                if (!selectedFile) {
-                  setPreviewUrl('');
-                }
-              }}
-            />
-
-            {/* Actions Overlay */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="pointer-events-auto space-x-2 opacity-0 transition-opacity group-hover:opacity-100">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleClickUpload}
-                  disabled={isUploading}
-                  className="shadow-lg"
-                >
-                  <Upload className="mr-1 h-4 w-4" />
-                  Replace
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleRemoveVideo}
-                  disabled={isUploading}
-                  className="shadow-lg"
-                >
-                  <X className="mr-1 h-4 w-4" />
-                  Remove
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Video Info */}
-          <div className="text-muted-foreground mt-2 text-xs">
-            {selectedFile && (
-              <>
-                <p>File: {selectedFile.name}</p>
-                <p>Size: {(selectedFile.size / (1024 * 1024)).toFixed(2)}MB</p>
-              </>
-            )}
-            {videoDuration !== null && <p>Duration: {formatDuration(videoDuration)}</p>}
-          </div>
-        </div>
-      )}
-
-      {/* Status indicator when video is ready */}
-      {previewUrl && !isUploading && (
-        <div className="text-muted-foreground flex items-center justify-center text-sm">
-          <VideoIcon className="mr-1 h-4 w-4" />
-          <span>Video ready for post</span>
+              setError('Failed to load video preview');
+              setPreviewUrl('');
+            }}
+          />
         </div>
       )}
     </div>
