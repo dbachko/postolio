@@ -205,6 +205,8 @@ export function PostSidebar({
 
   const validationError = validation.ok ? null : validation.errors[0]?.message;
 
+  const brandIdForAssets = post?.brand?.id ?? selectedBrand?.id ?? null;
+
   // Initialize form from post
   useEffect(() => {
     if (!post) return;
@@ -813,6 +815,16 @@ export function PostSidebar({
                               }
                             />
                           </div>
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowAssetPicker(true)}
+                            >
+                              Choose from Assets
+                            </Button>
+                          </div>
                         </>
                       )}
                     </div>
@@ -820,33 +832,45 @@ export function PostSidebar({
                     /* Posts and Stories can be image(s) or video; detect media type automatically */
                     <>
                       {selectedBrand?.id && (
-                        <MultiImageUploader
-                          value={formData.carouselAssets}
-                          onChange={(assets) => {
-                            setFormData((s) => ({
-                              ...s,
-                              carouselAssets: assets,
-                              mediaType: assets.length > 0 ? 'image' : s.mediaType,
-                              // Clear any video when switching to images
-                              videoUrl: assets.length > 0 ? '' : s.videoUrl,
-                            }));
-                          }}
-                          brandId={selectedBrand.id}
-                          maxImages={10}
-                          maxSizeInMB={10}
-                          videoUrl={formData.videoUrl}
-                          onVideoChange={(url) => {
-                            setFormData((s) => ({
-                              ...s,
-                              videoUrl: url,
-                              mediaType: url ? 'video' : s.mediaType,
-                              // Clear carousel assets when switching to video
-                              carouselAssets: url ? [] : s.carouselAssets,
-                            }));
-                          }}
-                          maxVideoSizeInMB={300}
-                          acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
-                        />
+                        <>
+                          <MultiImageUploader
+                            value={formData.carouselAssets}
+                            onChange={(assets) => {
+                              setFormData((s) => ({
+                                ...s,
+                                carouselAssets: assets,
+                                mediaType: assets.length > 0 ? 'image' : s.mediaType,
+                                // Clear any video when switching to images
+                                videoUrl: assets.length > 0 ? '' : s.videoUrl,
+                              }));
+                            }}
+                            brandId={selectedBrand.id}
+                            maxImages={10}
+                            maxSizeInMB={10}
+                            videoUrl={formData.videoUrl}
+                            onVideoChange={(url) => {
+                              setFormData((s) => ({
+                                ...s,
+                                videoUrl: url,
+                                mediaType: url ? 'video' : s.mediaType,
+                                // Clear carousel assets when switching to video
+                                carouselAssets: url ? [] : s.carouselAssets,
+                              }));
+                            }}
+                            maxVideoSizeInMB={300}
+                            acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                          />
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowAssetPicker(true)}
+                            >
+                              Choose from Assets
+                            </Button>
+                          </div>
+                        </>
                       )}
                     </>
                   )}
@@ -1150,29 +1174,60 @@ export function PostSidebar({
           </div>
         )}
       </div>
-      {showAssetPicker && post?.brand?.id && (
+      {showAssetPicker && brandIdForAssets && (
         <AssetPicker
-          brandId={post.brand.id}
+          brandId={brandIdForAssets}
+          type={isCreating ? (formData.contentType === 'reel' ? 'video' : undefined) : 'image'}
           onSelect={async (asset) => {
-            try {
-              await contentApi.attachAsset(post.id, asset.id);
-              setFormData((s) => ({
-                ...s,
-                imageUrl: asset.url,
-              }));
-              queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
-                if (!oldData) return oldData;
-                return {
-                  ...oldData,
+            if (post && id) {
+              try {
+                await contentApi.attachAsset(post.id, asset.id);
+                setFormData((s) => ({
+                  ...s,
                   imageUrl: asset.url,
-                };
-              });
-            } catch (error) {
-              console.error('Failed to attach asset to post', error);
-              toast.error('Failed to attach asset. Please try again.');
-            } finally {
-              setShowAssetPicker(false);
+                }));
+                queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
+                  if (!oldData) return oldData;
+                  return {
+                    ...oldData,
+                    imageUrl: asset.url,
+                  };
+                });
+              } catch (error) {
+                console.error('Failed to attach asset to post', error);
+                toast.error('Failed to attach asset. Please try again.');
+              } finally {
+                setShowAssetPicker(false);
+              }
+              return;
             }
+
+            // Creation mode: map selected asset into form data
+            setFormData((s) => {
+              if (asset.fileType === 'video') {
+                return {
+                  ...s,
+                  carouselAssets: [],
+                  mediaType: 'video' as InstagramMediaType,
+                  videoUrl: asset.url,
+                };
+              }
+
+              const imageUrl = asset.thumbnailUrl || asset.url;
+              return {
+                ...s,
+                carouselAssets: [
+                  ...s.carouselAssets,
+                  {
+                    id: asset.id,
+                    url: imageUrl,
+                  },
+                ],
+                mediaType: 'image' as InstagramMediaType,
+                videoUrl: '',
+              };
+            });
+            setShowAssetPicker(false);
           }}
           onClose={() => setShowAssetPicker(false)}
         />

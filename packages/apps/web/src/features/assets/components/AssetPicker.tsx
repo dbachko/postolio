@@ -6,15 +6,16 @@ export interface AssetPickerProps {
   onSelect: (asset: AssetType) => void;
   onClose: () => void;
   brandId: string;
+  type?: 'image' | 'video';
 }
 
-export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerProps) {
+export default function AssetPicker({ onSelect, onClose, brandId, type }: AssetPickerProps) {
   const [selectedAsset, setSelectedAsset] = useState<AssetType | null>(null);
   const [search, setSearch] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['assets-picker', brandId, search],
-    queryFn: () => assetsApi.listAssets({ brandId, limit: 50, search }),
+    queryKey: ['assets-picker', brandId, search, type],
+    queryFn: () => assetsApi.listAssets({ brandId, limit: 50, search, type }),
   });
 
   const assets = data?.assets || [];
@@ -24,11 +25,32 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAsset]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      event.preventDefault();
+      onClose();
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [onClose]);
+
   return (
     <div className="pl-assets">
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-background w-full max-w-5xl rounded-lg border shadow-lg">
-          <div className="flex items-center justify-between border-b p-4">
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+        role="dialog"
+        aria-modal="true"
+        data-pl-asset-picker="open"
+      >
+        <div className="bg-background flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col rounded-lg border shadow-lg">
+          <div className="flex shrink-0 items-center justify-between border-b p-4">
             <h2 className="text-2xl font-bold">Choose Asset</h2>
             <button
               onClick={onClose}
@@ -38,7 +60,7 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
             </button>
           </div>
 
-          <div className="p-4">
+          <div className="overflow-y-auto p-4">
             <input
               type="text"
               placeholder="Search assets..."
@@ -105,7 +127,7 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t p-4">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t p-4">
             <button
               onClick={onClose}
               className="ring-offset-background focus-visible:ring-ring border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"

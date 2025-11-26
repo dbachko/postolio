@@ -141,9 +141,33 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
     if (!open || isSmall) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) {
-        close();
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+
+      const doc = document;
+
+      // If any portalled overlay (dialog, popover, select, etc.) is open,
+      // let that component handle Escape without closing the sidebar.
+      const hasOpenPortal = doc.querySelector(
+        '[data-radix-portal] [data-state="open"],[data-radix-popper-content-wrapper] [data-state="open"]'
+      );
+      if (hasOpenPortal) {
+        return;
       }
+
+      const asideEl = asideRef.current;
+      const activeEl = doc.activeElement as HTMLElement | null;
+
+      // If focus is inside the sidebar, blur first; a subsequent Escape can close it.
+      if (asideEl && activeEl && asideEl.contains(activeEl)) {
+        if (typeof activeEl.blur === 'function') {
+          activeEl.blur();
+          event.preventDefault();
+          return;
+        }
+      }
+
+      // No overlays or focused elements on top of the sidebar; safe to close it.
+      close();
     };
 
     const handleMouseDown = (event: MouseEvent) => {
