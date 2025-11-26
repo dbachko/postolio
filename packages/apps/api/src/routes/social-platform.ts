@@ -6,6 +6,7 @@ import { ConnectorFactory } from '../services/connectors/index.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { getRedisClient } from '../services/redis.js';
 import { fetchTokensFromService } from '../utils/token-service-client.js';
+import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 const logger = baseLogger.child({ module: 'social-platform-routes' });
 
@@ -309,22 +310,18 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Validate content against platform limits
-        const platformLimits: Record<
-          string,
-          { maxCaptionLength: number; maxHashtags: number | null }
-        > = {
-          instagram: { maxCaptionLength: 2200, maxHashtags: 30 },
-          facebook: { maxCaptionLength: 63206, maxHashtags: null },
-          linkedin: { maxCaptionLength: 3000, maxHashtags: null },
-          x: { maxCaptionLength: 280, maxHashtags: null },
-          youtube: { maxCaptionLength: 5000, maxHashtags: 15 },
-          tiktok: { maxCaptionLength: 2200, maxHashtags: null },
+        // Validate content against platform caption limits
+        const platformLimits: Record<string, { maxCaptionLength: number }> = {
+          instagram: { maxCaptionLength: 2200 },
+          facebook: { maxCaptionLength: 63206 },
+          linkedin: { maxCaptionLength: 3000 },
+          x: { maxCaptionLength: 280 },
+          youtube: { maxCaptionLength: 5000 },
+          tiktok: { maxCaptionLength: 2200 },
         };
 
         const limits = platformLimits[platform];
         const caption = content.caption || '';
-        const hashtags = content.hashtags || [];
 
         if (caption.length > limits.maxCaptionLength) {
           return reply.code(400).send({
@@ -332,15 +329,6 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
             message: `Caption exceeds ${platform} limit of ${limits.maxCaptionLength} characters`,
             maxLength: limits.maxCaptionLength,
             currentLength: caption.length,
-          });
-        }
-
-        if (limits.maxHashtags && hashtags.length > limits.maxHashtags) {
-          return reply.code(400).send({
-            error: 'too_many_hashtags',
-            message: `Too many hashtags for ${platform}. Maximum ${limits.maxHashtags} allowed`,
-            maxHashtags: limits.maxHashtags,
-            currentHashtags: hashtags.length,
           });
         }
 
@@ -375,7 +363,6 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           publishResult = await connector.publish(
             {
               caption: content.caption || '',
-              hashtags: content.hashtags || [],
               imageUrl: content.primaryAssetCdnUrl || undefined,
               mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
               mediaType: instagramMediaType,
@@ -722,7 +709,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
               data: {
                 brandId,
                 caption: post.caption,
-                hashtags: post.hashtags || [],
+                hashtags: extractHashtagsFromCaption(post.caption),
                 primaryAssetCdnUrl: post.mediaUrl,
                 status: 'published',
                 createdAt: post.postedAt ? new Date(post.postedAt) : new Date(),

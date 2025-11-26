@@ -23,7 +23,6 @@ interface PublishRequest {
   platform: string;
   content: {
     caption: string;
-    hashtags: string[];
     mediaUrl?: string;
     mediaType?: 'image' | 'video';
   };
@@ -305,7 +304,7 @@ async function publishToTikTok(
       'https://open.tiktokapis.com/v2/post/publish/video/init',
       {
         post_info: {
-          title: formatCaption(content.caption, content.hashtags),
+          title: formatCaption(content.caption),
           privacy_level: 'PUBLIC',
           disable_duet: false,
           disable_comment: false,
@@ -416,23 +415,18 @@ async function downloadVideo(videoUrl: string): Promise<Buffer> {
   }
 }
 
-function formatCaption(caption: string, hashtags: string[]): string {
+function formatCaption(caption: string): string {
   // TikTok best practices:
   // - Maximum 2,200 characters for captions
   // - Hashtags are very important for discovery
   // - Trending hashtags can boost visibility
 
-  const hashtagString = hashtags
-    .slice(0, 20) // TikTok allows many hashtags
-    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-    .join(' ');
-
-  const fullCaption = `${caption} ${hashtagString}`;
+  const fullCaption = caption;
 
   // Truncate if too long
   if (fullCaption.length > 2200) {
-    const truncatedCaption = caption.substring(0, 2200 - hashtagString.length - 4);
-    return `${truncatedCaption}... ${hashtagString}`;
+    const truncatedCaption = caption.substring(0, 2197);
+    return `${truncatedCaption}...`;
   }
 
   return fullCaption;

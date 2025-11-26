@@ -10,7 +10,6 @@ const fbGraph = (path: string) => `https://graph.facebook.com/${FB_GRAPH_API_VER
 
 export interface PlatformContent {
   caption: string;
-  hashtags: string[];
   mediaUrl?: string;
   imageUrl?: string;
   mediaType?: 'image' | 'video' | 'carousel';
@@ -109,19 +108,6 @@ export class InstagramAdapter implements PlatformAdapter {
       errors.push('Caption exceeds Instagram limit of 2,200 characters');
     }
 
-    if (content.hashtags.length > 30) {
-      warnings.push('Instagram allows maximum 30 hashtags, excess will be truncated');
-    }
-
-    // Check for banned hashtags (simplified list)
-    const bannedHashtags = ['spam', 'follow4follow'];
-    const hasBanned = content.hashtags.some((tag) =>
-      bannedHashtags.includes(tag.toLowerCase().replace('#', ''))
-    );
-    if (hasBanned) {
-      warnings.push('Content contains potentially banned hashtags');
-    }
-
     return {
       valid: errors.length === 0,
       errors,
@@ -130,22 +116,12 @@ export class InstagramAdapter implements PlatformAdapter {
   }
 
   formatContent(content: PlatformContent): PlatformContent {
-    // Format hashtags
-    const formattedHashtags = content.hashtags
-      .slice(0, 30) // Limit to 30
-      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
-
-    // Combine caption and hashtags
-    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(' ')}`;
-
-    // Truncate if needed
     const finalCaption =
-      fullCaption.length > 2200 ? fullCaption.substring(0, 2197) + '...' : fullCaption;
+      content.caption.length > 2200 ? content.caption.substring(0, 2197) + '...' : content.caption;
 
     return {
       ...content,
       caption: finalCaption,
-      hashtags: [], // Hashtags are now in caption
     };
   }
 
@@ -257,10 +233,6 @@ export class LinkedInAdapter implements PlatformAdapter {
       errors.push('Caption exceeds LinkedIn limit of 3,000 characters');
     }
 
-    if (content.hashtags.length > 30) {
-      warnings.push('LinkedIn performs best with 3-5 hashtags');
-    }
-
     if (content.mediaType === 'carousel') {
       warnings.push('LinkedIn does not support carousel posts, will post as single image');
     }
@@ -273,17 +245,9 @@ export class LinkedInAdapter implements PlatformAdapter {
   }
 
   formatContent(content: PlatformContent): PlatformContent {
-    // LinkedIn prefers hashtags at the end
-    const formattedHashtags = content.hashtags
-      .slice(0, 10) // LinkedIn best practice
-      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
-
-    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(' ')}`;
-
     return {
       ...content,
-      caption: fullCaption.substring(0, 3000),
-      hashtags: [],
+      caption: content.caption.substring(0, 3000),
     };
   }
 
@@ -395,10 +359,6 @@ export class FacebookAdapter implements PlatformAdapter {
       errors.push('Caption exceeds Facebook limit of 63,206 characters');
     }
 
-    if (content.hashtags.length > 30) {
-      warnings.push('Facebook hashtags are less effective than on other platforms');
-    }
-
     return {
       valid: errors.length === 0,
       errors,
@@ -407,17 +367,8 @@ export class FacebookAdapter implements PlatformAdapter {
   }
 
   formatContent(content: PlatformContent): PlatformContent {
-    // Facebook hashtags are optional
-    const hashtagString = content.hashtags
-      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-      .join(' ');
-
-    const fullCaption = hashtagString ? `${content.caption}\n\n${hashtagString}` : content.caption;
-
     return {
       ...content,
-      caption: fullCaption,
-      hashtags: [],
     };
   }
 
@@ -569,10 +520,6 @@ export class TikTokAdapter implements PlatformAdapter {
       errors.push('Caption exceeds TikTok limit of 2,200 characters');
     }
 
-    if (content.hashtags.length > 100) {
-      warnings.push('TikTok allows up to 100 hashtags but 3-5 is recommended');
-    }
-
     return {
       valid: errors.length === 0,
       errors,
@@ -581,17 +528,9 @@ export class TikTokAdapter implements PlatformAdapter {
   }
 
   formatContent(content: PlatformContent): PlatformContent {
-    // TikTok hashtags in caption
-    const formattedHashtags = content.hashtags
-      .slice(0, 10) // Reasonable limit
-      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
-
-    const fullCaption = `${content.caption} ${formattedHashtags.join(' ')}`;
-
     return {
       ...content,
-      caption: fullCaption.substring(0, 2200),
-      hashtags: [],
+      caption: content.caption.substring(0, 2200),
     };
   }
 

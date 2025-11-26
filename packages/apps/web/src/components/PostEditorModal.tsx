@@ -12,7 +12,6 @@ import {
 import { ImageUploader } from './ImageUploader';
 import { VideoUploader } from './VideoUploader';
 import { PostCaptionEditor } from './PostCaptionEditor';
-import { PostHashtagEditor } from './PostHashtagEditor';
 import { PostScheduler } from './PostScheduler';
 import { PostStatusCard } from './PostStatusCard';
 import { PostSaveIndicator, type SaveStatus } from './PostSaveIndicator';
@@ -40,7 +39,6 @@ interface PostEditorModalProps {
 
 interface FormData {
   caption: string;
-  hashtags: string[];
   imageUrl: string;
   videoUrl?: string;
   mediaType: InstagramMediaType;
@@ -53,7 +51,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   const resetSchedulerStore = usePostSchedulerStore((state) => state.reset);
   const [formData, setFormData] = useState<FormData>({
     caption: '',
-    hashtags: [],
     imageUrl: '',
     videoUrl: '',
     mediaType: 'image',
@@ -99,7 +96,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
 
       const initialData: FormData = {
         caption: content.caption || '',
-        hashtags: (content.hashtags || []).map((t: string) => (t.startsWith('#') ? t.slice(1) : t)),
         imageUrl: content.imageUrl || '',
         videoUrl: (content as any).videoUrl || '',
         mediaType,
@@ -121,7 +117,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       console.log('Modal closed - resetting form data');
       setFormData({
         caption: '',
-        hashtags: [],
         imageUrl: '',
         videoUrl: '',
         mediaType: 'image',
@@ -158,18 +153,15 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
 
     const hasFormChanges =
       newData.caption !== originalDataRef.current.caption ||
-      JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags) ||
       newData.imageUrl !== originalDataRef.current.imageUrl ||
       newData.scheduledAt !== originalDataRef.current.scheduledAt ||
       newData.shareToFeed !== originalDataRef.current.shareToFeed;
 
     setHasChanges(hasFormChanges);
 
-    // Show learning message when user makes edits to caption or hashtags
+    // Show learning message when user makes edits to caption
     if (hasFormChanges && !showLearningMessage) {
-      const textChanged =
-        newData.caption !== originalDataRef.current.caption ||
-        JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags);
+      const textChanged = newData.caption !== originalDataRef.current.caption;
       if (textChanged) {
         setShowLearningMessage(true);
       }
@@ -182,7 +174,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     mutationFn: (data: {
       contentId: string;
       caption?: string;
-      hashtags?: string[];
       imageUrl?: string;
       scheduledAt?: string;
       shareToFeed?: boolean;
@@ -192,7 +183,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         contentId: data.contentId,
         caption: data.caption,
         captionLength: data.caption?.length || 0,
-        hashtags: data.hashtags,
         imageUrl: data.imageUrl,
         scheduledAt: data.scheduledAt,
         scheduledAtType: typeof data.scheduledAt,
@@ -276,7 +266,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     updateContentMutation.mutate({
       contentId: content.id,
       caption: formData.caption,
-      hashtags: formData.hashtags,
       // imageUrl is now managed via uploadContentImage / asset attach; do not send here
       scheduledAt: payloadScheduledAt,
       shareToFeed: formData.shareToFeed,
@@ -289,12 +278,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
 
   const handleCaptionChange = (value: string) => {
     const newData = { ...formData, caption: value };
-    setFormData(newData);
-    checkForChanges(newData);
-  };
-
-  const handleHashtagsChange = (hashtags: string[]) => {
-    const newData = { ...formData, hashtags };
     setFormData(newData);
     checkForChanges(newData);
   };
@@ -379,18 +362,10 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       contentType: (content.contentType as InstagramContentType) || 'post',
       mediaType: formData.mediaType,
       caption: formData.caption,
-      hashtags: formData.hashtags,
       mediaKeys,
       videoUrl: formData.videoUrl || undefined,
     });
-  }, [
-    content,
-    formData.caption,
-    formData.hashtags,
-    formData.imageUrl,
-    formData.mediaType,
-    formData.videoUrl,
-  ]);
+  }, [content, formData.caption, formData.imageUrl, formData.mediaType, formData.videoUrl]);
 
   const validationError = validation.ok ? null : validation.errors[0]?.message;
 
@@ -467,8 +442,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
             onChange={handleCaptionChange}
             brandId={content.brandId}
           />
-
-          <PostHashtagEditor hashtags={formData.hashtags} onChange={handleHashtagsChange} />
 
           {/* Media Upload - Tabs for Image/Video */}
           <div className="space-y-2">

@@ -43,7 +43,6 @@ const CreateScheduleInputSchema = z.object({
   mediaType: MediaTypeSchema.optional(), // Media format: image/video
   videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
-  hashtags: z.array(z.string()).optional(),
   mediaKeys: z.array(z.string()).optional(),
   metadata: MetadataSchema.optional(),
   shareToFeed: z.boolean().optional(),
@@ -53,7 +52,6 @@ const UpdateScheduleInputSchema = z
   .object({
     scheduledAt: z.string().datetime().optional(), // Changed from scheduledTime
     caption: z.string().optional(),
-    hashtags: z.array(z.string()).optional(),
     mediaKeys: z.array(z.string()).optional(),
     status: ScheduleStatusSchema.optional(),
     metadata: MetadataSchema.optional(),
@@ -90,7 +88,6 @@ const ScheduleSchema = z.object({
   mediaType: MediaTypeSchema.optional(), // Media format: image/video
   videoUrl: z.string().url().nullish(),
   caption: z.string().nullish(),
-  hashtags: z.array(z.string()).nullish(),
   mediaKeys: z.array(z.string()).nullish(),
   shareToFeed: z.boolean().nullish(),
   status: ScheduleStatusSchema,

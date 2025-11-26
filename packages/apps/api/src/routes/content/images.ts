@@ -75,7 +75,6 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             id: true,
             caption: true,
-            hashtags: true,
             primaryAssetCdnUrl: true,
             primaryAssetId: true,
             status: true,

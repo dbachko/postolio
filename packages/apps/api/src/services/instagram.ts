@@ -8,6 +8,7 @@ import { prisma } from '../config/database.js';
 import type { Prisma } from '@postolio/database';
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import type { AssetRecord } from '@postolio/assets-client';
+import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 // Centralize Facebook Graph API version to ease upgrades
 const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
@@ -20,9 +21,9 @@ export interface InstagramPost {
   media_url: string;
   permalink: string;
   timestamp: string;
-  hashtags: string[];
   like_count?: number;
   comments_count?: number;
+  hashtags?: string[];
 }
 
 export interface InstagramProfile {
@@ -41,7 +42,6 @@ export interface InstagramProfile {
 export interface PublishMediaRequest {
   cdnImageUrl: string;
   caption: string;
-  hashtags: string[];
 }
 
 const instagramLogger = baseLogger.child({ module: 'instagram-service' });
@@ -576,21 +576,19 @@ class InstagramService {
         comments_count?: number;
       }
       return mediaData.map((media: RawMediaItem) => {
-        // Extract hashtags from caption
         const caption = media.caption || '';
-        const hashtagMatches = caption.match(/#\w+/g) || [];
-        const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+        const hashtags = extractHashtagsFromCaption(caption);
 
         return {
           id: media.id,
-          caption: caption,
+          caption,
           media_type: media.media_type,
           media_url: media.media_url,
           permalink: media.permalink,
           timestamp: media.timestamp,
-          hashtags: hashtags,
           like_count: media.like_count,
           comments_count: media.comments_count,
+          hashtags,
         };
       });
     } catch (error) {
@@ -617,7 +615,7 @@ class InstagramService {
       await this.checkRateLimit(String(credentials.accountId));
 
       // Step 1: Create media container
-      const caption = `${request.caption}\n\n${request.hashtags.map((tag) => `#${tag}`).join(' ')}`;
+      const caption = request.caption;
       const containerUrl = fbGraph(`${credentials.accountId}/media`);
 
       const containerData = {
@@ -981,10 +979,7 @@ class InstagramService {
     }
 
     const posts: InstagramPost[] = mediaData.map((media: InstagramMediaResponse) => {
-      // Extract hashtags from caption
       const caption = media.caption || '';
-      const hashtagMatches = caption.match(/#\w+/g) || [];
-      const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
       return {
         id: media.id,
@@ -993,7 +988,6 @@ class InstagramService {
         media_url: media.media_url || '',
         permalink: media.permalink || '',
         timestamp: media.timestamp || '',
-        hashtags: hashtags,
         like_count: media.like_count,
         comments_count: media.comments_count,
       };
@@ -1155,7 +1149,7 @@ class InstagramService {
 
       campaignId: null,
       caption: post.caption,
-      hashtags: post.hashtags || [],
+      hashtags: extractHashtagsFromCaption(post.caption || ''),
       status: 'published' as const,
       postedAt,
       scheduledAt: postedAt,
@@ -1390,7 +1384,6 @@ class InstagramService {
       postId: post.id,
       brandId: brand.id,
       hasImage: !!importedAsset,
-      hasHashtags: (post.hashtags?.length || 0) > 0,
       engagement: {
         likes: post.like_count || 0,
         comments: post.comments_count || 0,

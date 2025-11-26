@@ -487,7 +487,6 @@ export class SchedulerAdapter {
             contentType: normalizedContentType,
             mediaType: normalizedMediaType,
             caption: normalizedContentType === 'story' ? '' : content.caption,
-            hashtags: normalizedContentType === 'story' ? [] : content.hashtags,
             mediaKeys: mediaKey ? [mediaKey] : [],
             videoUrl: content.videoUrl || undefined,
           });
@@ -512,7 +511,6 @@ export class SchedulerAdapter {
             // Store content details in scheduler's DynamoDB
             // When content is edited, EventBridge events will update this
             caption: content.caption || '',
-            hashtags: content.hashtags || [],
             videoUrl: content.videoUrl || undefined, // Video CDN URL for video content
             metadata: {
               timezone: brandTimezone,
@@ -1033,7 +1031,6 @@ export class SchedulerAdapter {
           platform: 'instagram', // Default to instagram for now
           // Include content details in case they were edited
           caption: content.caption || '',
-          hashtags: content.hashtags || [],
           // No metadata fallback for mediaKeys; upstream must supply keys
         };
         const primaryAssetUrl =
@@ -1153,7 +1150,6 @@ export class SchedulerAdapter {
       id: string;
       brandId: string;
       caption: string;
-      hashtags: string[];
       status: string;
       scheduledAt: Date | null;
       scheduleId?: string;
@@ -1364,7 +1360,6 @@ export class SchedulerAdapter {
       id: string;
       brandId: string;
       caption: string;
-      hashtags: string[];
       status: string;
       scheduledAt: Date | null;
       [key: string]: unknown;
@@ -1373,7 +1368,6 @@ export class SchedulerAdapter {
     id: string;
     brandId: string;
     caption: string;
-    hashtags: string[];
     status: string;
     scheduledAt: Date | null;
     scheduleId?: string;

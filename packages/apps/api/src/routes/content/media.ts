@@ -65,7 +65,6 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           caption: true,
-          hashtags: true,
           primaryAssetCdnUrl: true,
           primaryAssetId: true,
           primaryAssetWidth: true,

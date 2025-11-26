@@ -15,11 +15,11 @@ import {
   type ContentType as ValidationContentType,
   type MediaType as ValidationMediaType,
 } from '@postolio/content-validation';
+import { extractHashtagsFromCaption } from './hashtag-extractor.js';
 
 export interface CreateManualContentBody {
   brandId: string;
   caption: string;
-  hashtags: string[];
   assetIds?: string[]; // Asset IDs from Assets database (single image or carousel)
   mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
@@ -48,7 +48,6 @@ export function validateRequestBody(body: CreateManualContentBody) {
     contentType: normalizedContentType,
     mediaType: normalizedMediaType,
     caption: body.caption,
-    hashtags: body.hashtags,
     videoUrl: body.videoUrl,
     mediaKeys,
   });
@@ -60,13 +59,6 @@ export function validateRequestBody(body: CreateManualContentBody) {
         error: validation.errors[0]?.message || 'Invalid content',
         details: validation.errors,
       },
-    };
-  }
-
-  if (!Array.isArray(body.hashtags)) {
-    return {
-      ok: false,
-      error: { error: 'Hashtags must be an array' },
     };
   }
 
@@ -185,7 +177,6 @@ export async function createContentInTransaction(
   params: {
     brandId: string;
     caption: string;
-    hashtags: string[];
     mediaType?: string;
     contentType?: string;
     videoUrl?: string;
@@ -204,7 +195,7 @@ export async function createContentInTransaction(
     const created = await tx.content.create({
       data: {
         caption: params.caption,
-        hashtags: params.hashtags,
+        hashtags: extractHashtagsFromCaption(params.caption),
         status,
         brandId: params.brandId,
         campaignId: resolvedCampaignId,
@@ -218,7 +209,6 @@ export async function createContentInTransaction(
       select: {
         id: true,
         caption: true,
-        hashtags: true,
         primaryAssetCdnUrl: true,
         primaryAssetId: true,
         primaryAssetHeight: true,

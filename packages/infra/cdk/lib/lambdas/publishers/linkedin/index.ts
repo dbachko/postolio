@@ -23,7 +23,6 @@ interface PublishRequest {
   platform: string;
   content: {
     caption: string;
-    hashtags: string[];
     mediaUrl?: string;
   };
   metadata?: Record<string, any>;
@@ -224,7 +223,7 @@ async function publishToLinkedIn(
   content: PublishRequest['content']
 ): Promise<LinkedInShareResponse> {
   try {
-    const caption = formatCaption(content.caption, content.hashtags);
+    const caption = formatCaption(content.caption);
 
     // Build LinkedIn share document
     const shareContent: any = {
@@ -335,23 +334,18 @@ async function publishToLinkedIn(
   }
 }
 
-function formatCaption(caption: string, hashtags: string[]): string {
+function formatCaption(caption: string): string {
   // LinkedIn best practices:
   // - Maximum 3,000 characters for posts
   // - Hashtags work but are less important than on Instagram
   // - Focus on professional tone
 
-  const hashtagString = hashtags
-    .slice(0, 10) // Limit hashtags
-    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-    .join(' ');
-
-  const fullCaption = hashtagString ? `${caption}\n\n${hashtagString}` : caption;
+  const fullCaption = caption;
 
   // Truncate if too long
   if (fullCaption.length > 3000) {
-    const truncatedCaption = caption.substring(0, 3000 - hashtagString.length - 7);
-    return `${truncatedCaption}...\n\n${hashtagString}`;
+    const truncatedCaption = caption.substring(0, 2997);
+    return `${truncatedCaption}...`;
   }
 
   return fullCaption;

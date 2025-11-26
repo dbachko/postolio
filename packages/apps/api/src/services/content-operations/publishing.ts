@@ -142,7 +142,6 @@ export async function publishContent(
     const publishResult = await connector.publish(
       {
         caption: content.caption || '',
-        hashtags: content.hashtags || [],
         imageUrl: content.primaryAssetCdnUrl || undefined,
         mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
         mediaType: instagramMediaType,

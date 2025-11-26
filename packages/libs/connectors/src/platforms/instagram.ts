@@ -49,7 +49,6 @@ export class InstagramConnector implements Connector {
         mediaUrl: m.media_url,
         permalink: m.permalink,
         postedAt: m.timestamp,
-        hashtags: (String(m.caption || '').match(/#\w+/g) || []).map((t: string) => t.substring(1)),
       }));
       const paging = res.data?.paging || {};
       return { data: posts, hasMore: !!paging.next, cursor: paging.cursors?.after || null };
@@ -239,12 +238,7 @@ export class InstagramConnector implements Connector {
       const isReel = req.mediaType === 'REELS';
 
       // Step 1: create media container
-      const captionParts = [req.caption || ''];
-      if (Array.isArray(req.hashtags) && req.hashtags.length > 0) {
-        const tags = req.hashtags.map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)).join(' ');
-        captionParts.push('', tags);
-      }
-      const caption = captionParts.join('\n').trim();
+      const caption = (req.caption || '').trim();
 
       const containerUrl = fbGraph(`${account.externalAccountId}/media`);
       const containerData: Record<string, string> = {

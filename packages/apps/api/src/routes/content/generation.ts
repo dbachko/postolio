@@ -65,14 +65,9 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
               console.error('Generated content has empty caption:', content);
               throw new Error('Generated content has empty caption');
             }
-            if (!content.hashtags || !Array.isArray(content.hashtags)) {
-              console.error('Generated content has invalid hashtags:', content);
-              throw new Error('Generated content has invalid hashtags');
-            }
             const created = await prisma.content.create({
               data: {
                 caption: content.caption,
-                hashtags: content.hashtags,
                 status: 'draft',
                 brandId,
 
@@ -89,7 +84,6 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
               select: {
                 id: true,
                 caption: true,
-                hashtags: true,
                 status: true,
                 createdAt: true,
               },
@@ -127,7 +121,6 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
             return {
               id: created.id,
               caption: created.caption,
-              hashtags: created.hashtags,
               primaryAssetCdnUrl: null, // Will be populated after async import
               status: created.status,
               createdAt: created.createdAt,

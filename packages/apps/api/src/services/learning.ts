@@ -57,13 +57,11 @@ export class AILearningService {
     _brandId: string,
     originalContent: {
       caption: string;
-      hashtags: string[];
       imageUrl?: string;
       scheduledAt?: string;
     },
     editedContent: {
       caption: string;
-      hashtags: string[];
       imageUrl?: string;
       scheduledAt?: string;
     }
@@ -75,10 +73,12 @@ export class AILearningService {
         originalContent.caption,
         editedContent.caption
       ),
-      hashtagChanges: await this.analyzeHashtagChanges(
-        originalContent.hashtags,
-        editedContent.hashtags
-      ),
+      hashtagChanges: {
+        countChange: 0,
+        addedCategories: [],
+        removedCategories: [],
+        popularityShift: 'no_change',
+      },
       imageChanges: this.analyzeImageChanges(originalContent.imageUrl, editedContent.imageUrl),
       timingChanges: this.analyzeTimingChanges(
         originalContent.scheduledAt,
@@ -344,33 +344,15 @@ Focus on significant changes only. Return only JSON.`;
     original: string[],
     edited: string[]
   ): Promise<EditAnalysis['hashtagChanges']> {
-    const originalSet = new Set(original);
-    const editedSet = new Set(edited);
-
-    const added = edited.filter((tag) => !originalSet.has(tag));
-    const removed = original.filter((tag) => !editedSet.has(tag));
     const countChange = edited.length - original.length;
-
-    // Categorize hashtags using AI
-    try {
-      const addedCategories = added.length > 0 ? await this.categorizeHashtags(added) : [];
-      const removedCategories = removed.length > 0 ? await this.categorizeHashtags(removed) : [];
-
-      return {
-        countChange,
-        addedCategories,
-        removedCategories,
-        popularityShift: this.analyzePopularityShift(added, removed),
-      };
-    } catch (error) {
-      learningLogger.error('Hashtag analysis error', formatError(error));
-      return {
-        countChange,
-        addedCategories: [],
-        removedCategories: [],
-        popularityShift: 'no_change',
-      };
-    }
+    void original;
+    // Hashtag-based learning is currently disabled; return neutral changes.
+    return {
+      countChange,
+      addedCategories: [],
+      removedCategories: [],
+      popularityShift: 'no_change',
+    };
   }
 
   /**
@@ -432,72 +414,6 @@ Focus on significant changes only. Return only JSON.`;
   }
 
   /**
-   * Categorize hashtags into content themes
-   */
-  private async categorizeHashtags(hashtags: string[]): Promise<string[]> {
-    if (hashtags.length === 0) return [];
-
-    const openai = getOpenAIClient();
-    if (!openai) {
-      learningLogger.warn('OpenAI client is not configured. Skipping hashtag categorization.');
-      return [];
-    }
-
-    try {
-      const prompt = `Categorize these Instagram hashtags into content themes: ${hashtags.join(', ')}
-
-Return a JSON array of theme categories (e.g., ["lifestyle", "business", "fashion", "food", "travel", "fitness", "technology", "art", "photography", "motivation"])
-
-Focus on the primary theme each hashtag represents. Return only the JSON array.`;
-
-      const response = await openai.chat.completions.create({
-        model: (await import('./openai-client.js')).getDefaultOpenAIModel(),
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 200,
-      });
-
-      const categories = JSON.parse(response.choices[0]?.message?.content || '[]');
-      return Array.isArray(categories) ? categories : [];
-    } catch (error) {
-      learningLogger.error('Hashtag categorization error', formatError(error));
-      return [];
-    }
-  }
-
-  /**
-   * Analyze if hashtag changes indicate popularity preference shift
-   */
-  private analyzePopularityShift(
-    added: string[],
-    removed: string[]
-  ): 'more_popular' | 'more_niche' | 'no_change' {
-    const popularHashtags = [
-      'love',
-      'instagood',
-      'photooftheday',
-      'beautiful',
-      'happy',
-      'follow',
-      'like4like',
-      'followme',
-    ];
-
-    const addedPopular = added.filter((tag) =>
-      popularHashtags.some((popular) => tag.toLowerCase().includes(popular))
-    ).length;
-
-    const removedPopular = removed.filter((tag) =>
-      popularHashtags.some((popular) => tag.toLowerCase().includes(popular))
-    ).length;
-
-    if (addedPopular > removedPopular) return 'more_popular';
-    if (removedPopular > addedPopular) return 'more_niche';
-    return 'no_change';
-  }
-
-  /**
    * Generate learning insights for different edit patterns
    */
   private async generateToneInsight(
@@ -520,17 +436,14 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
     hashtagChanges: EditAnalysis['hashtagChanges'],
     _profile: StyleProfile
   ): Promise<LearningInsight> {
+    void hashtagChanges;
     void _profile;
-    const hasSignificantChange =
-      hashtagChanges.addedCategories.length > 0 || hashtagChanges.removedCategories.length > 0;
-    const confidence = hasSignificantChange ? 0.7 : 0.1;
-
     return {
-      pattern: `User ${hashtagChanges.popularityShift === 'more_niche' ? 'prefers niche-specific' : 'adds popular'} hashtags`,
-      confidence,
+      pattern: 'Hashtag usage no longer tracked',
+      confidence: 0.0,
       category: 'hashtag_preference',
-      recommendation: `Focus on ${hashtagChanges.addedCategories.join(' and ')} content themes`,
-      appliedToFuturePosts: confidence > 0.6 ? Math.floor(Math.random() * 8 + 3) : 0,
+      recommendation: 'No hashtag-based adjustments applied',
+      appliedToFuturePosts: 0,
     };
   }
 

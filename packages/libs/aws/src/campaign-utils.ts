@@ -42,7 +42,6 @@ export interface Schedule {
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
   scheduledAt?: string;
   caption?: string;
-  hashtags?: string[];
   // ... other schedule fields
 }
 

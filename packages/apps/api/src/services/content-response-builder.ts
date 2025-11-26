@@ -10,7 +10,6 @@
 export interface ContentBase {
   id: string;
   caption: string;
-  hashtags: string[];
   primaryAssetCdnUrl: string | null;
   status: string;
   createdAt: Date;
@@ -40,7 +39,6 @@ export interface ContentWithMetadata extends ContentBase {
 export interface ContentResponse {
   id: string;
   caption: string;
-  hashtags: string[];
   imageUrl: string | null;
   status: string;
   createdAt: Date;
@@ -69,7 +67,6 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   const response: ContentResponse = {
     id: content.id,
     caption: content.caption,
-    hashtags: content.hashtags,
     imageUrl: content.primaryAssetCdnUrl || null,
     status: content.status,
     createdAt: content.createdAt,
@@ -131,7 +128,6 @@ export function buildContentListResponse(contents: ContentWithMetadata[]): Conte
 export function buildSimpleContentResponse(content: ContentBase): {
   id: string;
   caption: string;
-  hashtags: string[];
   imageUrl: string | null;
   status: string;
   createdAt: Date;
@@ -139,7 +135,6 @@ export function buildSimpleContentResponse(content: ContentBase): {
   return {
     id: content.id,
     caption: content.caption,
-    hashtags: content.hashtags,
     imageUrl: content.primaryAssetCdnUrl || null,
     status: content.status,
     createdAt: content.createdAt,
@@ -155,7 +150,6 @@ export function buildSimpleContentResponse(content: ContentBase): {
 export function buildSimpleContentListResponse(contents: ContentBase[]): Array<{
   id: string;
   caption: string;
-  hashtags: string[];
   imageUrl: string | null;
   status: string;
   createdAt: Date;

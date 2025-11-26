@@ -1,6 +1,6 @@
 /**
  * Content Update Routes
- * Handles content updates including caption, hashtags, and scheduling changes
+ * Handles content updates including caption and scheduling changes
  */
 
 import { FastifyPluginAsync } from 'fastify';
@@ -9,7 +9,6 @@ import { Prisma } from '@postolio/database';
 import learningService from '../../services/learning.js';
 import { schedulerService } from '../../services/scheduler.js';
 import { buildContentResponse } from '../../services/content-response-builder.js';
-import { normalizeHashtags } from '../../utils/hashtag-normalizer.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
 import {
@@ -17,13 +16,13 @@ import {
   type ContentType as ValidationContentType,
   type MediaType as ValidationMediaType,
 } from '@postolio/content-validation';
+import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 
 const prisma = getDatabaseClient();
 
 interface UpdateContentBody {
   contentId: string;
   caption?: string;
-  hashtags?: string[];
   videoUrl?: string;
   mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
@@ -41,7 +40,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       const contentId = request.params.contentId;
-      const { caption, hashtags, videoUrl, mediaType, contentType, scheduledAt, shareToFeed } =
+      const { caption, videoUrl, mediaType, contentType, scheduledAt, shareToFeed } =
         request.body as Partial<UpdateContentBody>;
 
       // Verify user owns the content and it's editable (not published)
@@ -72,11 +71,9 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       // Store original content for learning analysis
       const originalContent: {
         caption: string;
-        hashtags: string[];
         scheduledAt?: string;
       } = {
         caption: content.caption,
-        hashtags: content.hashtags,
         ...(content.scheduledAt ? { scheduledAt: content.scheduledAt.toISOString() } : {}),
       };
 
@@ -114,8 +111,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         caption !== undefined
           ? caption
           : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
-      const effectiveHashtags =
-        hashtags !== undefined ? hashtags : Array.isArray(content.hashtags) ? content.hashtags : [];
       const effectiveImage = content.primaryAssetCdnUrl || '';
       const effectiveVideo = videoUrl !== undefined ? videoUrl : content.videoUrl || undefined;
       const mediaKeys = [effectiveImage].filter(Boolean);
@@ -125,7 +120,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         contentType: effectiveContentType,
         mediaType: effectiveMediaType,
         caption: effectiveCaption,
-        hashtags: effectiveHashtags,
         mediaKeys,
         videoUrl: effectiveVideo || undefined,
       });
@@ -138,10 +132,9 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (caption !== undefined) {
-        updateData.caption = effectiveCaption.trim();
-      }
-      if (hashtags !== undefined) {
-        updateData.hashtags = normalizeHashtags(hashtags);
+        const normalizedCaption = effectiveCaption.trim();
+        updateData.caption = normalizedCaption;
+        updateData.hashtags = extractHashtagsFromCaption(normalizedCaption);
       }
       // NOTE: imageUrl is intentionally not applied to primaryAssetCdnUrl anymore.
       // Media changes must go through /upload-image or /:contentId/asset to keep assetId and join table in sync.
@@ -336,7 +329,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           caption: true,
-          hashtags: true,
           primaryAssetCdnUrl: true,
           status: true,
           scheduledAt: true,
@@ -470,19 +462,15 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       let learningResults = null;
       const hasChanges =
         (caption !== undefined && caption !== originalContent.caption) ||
-        (hashtags !== undefined &&
-          JSON.stringify(hashtags) !== JSON.stringify(originalContent.hashtags)) ||
         (scheduledAt !== undefined && scheduledAt !== originalContent.scheduledAt);
 
       if (hasChanges) {
         try {
           const editedContent: {
             caption: string;
-            hashtags: string[];
             scheduledAt?: string;
           } = {
             caption: updatedContent.caption,
-            hashtags: updatedContent.hashtags,
             ...(updatedContent.scheduledAt
               ? { scheduledAt: updatedContent.scheduledAt.toISOString() }
               : {}),

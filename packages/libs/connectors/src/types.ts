@@ -19,7 +19,6 @@ export interface ConnectorCapabilities {
 
 export interface PublishRequest {
   caption: string;
-  hashtags: string[];
   imageUrl?: string;
   mediaUrl?: string;
   mediaType?: 'IMAGE' | 'VIDEO' | 'REELS' | 'CAROUSEL_ALBUM';
@@ -56,7 +55,6 @@ export interface PostSummary {
   mediaUrl?: string;
   permalink?: string;
   postedAt?: string;
-  hashtags?: string[];
 }
 
 export interface Pagination<TCursor = string> {

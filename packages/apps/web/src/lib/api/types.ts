@@ -22,7 +22,6 @@ export interface Brand {
 export interface Content {
   id: string;
   caption: string;
-  hashtags: string[];
   primaryAssetId?: string | null;
   imageUrl?: string | null;
   primaryAssetCdnUrl?: string | null;

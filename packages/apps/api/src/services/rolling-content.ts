@@ -4,6 +4,7 @@ import { importImageFromExternalUrl, attachAssetToContent } from './assets-media
 import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
+import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 const prisma = getDatabaseClient();
 const rollingLogger = baseLogger.child({ module: 'rolling-content' });
@@ -248,7 +249,7 @@ class RollingContentService {
         const savedContent = await prisma.content.create({
           data: {
             caption: content.caption,
-            hashtags: content.hashtags,
+            hashtags: extractHashtagsFromCaption(content.caption),
             brandId,
             campaignId: activeCampaign?.id || null,
             status: 'scheduled', // Auto-schedule rolling content

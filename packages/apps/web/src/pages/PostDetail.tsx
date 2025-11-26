@@ -34,19 +34,16 @@ import { Loader2 } from 'lucide-react';
 
 // Import our new reusable components
 import { PostCaptionEditor } from '../components/PostCaptionEditor';
-import { PostHashtagEditor } from '../components/PostHashtagEditor';
 import { PostScheduler } from '../components/PostScheduler';
 import { PostStatusCard } from '../components/PostStatusCard';
 import { PostSaveIndicator, type SaveStatus } from '../components/PostSaveIndicator';
 import { PostLearningFeedback } from '../components/PostLearningFeedback';
 import { ImageUploader } from '../components/ImageUploader';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
-import { normalizeHashtags, stripHashtagPrefixes } from '../utils/hashtags';
 
 interface PostDetailData {
   id: string;
   caption: string;
-  hashtags: string[];
   imageUrl?: string;
   videoUrl?: string;
   contentType?: string;
@@ -103,14 +100,12 @@ interface PostInsights {
 
 interface FormData {
   caption: string;
-  hashtags: string[];
   imageUrl: string;
   scheduledAt: string;
 }
 
 const buildFormStateFromPost = (post: PostDetailData, timezone: string): FormData => ({
   caption: post.caption || '',
-  hashtags: stripHashtagPrefixes(post.hashtags || []),
   imageUrl: post.imageUrl || '',
   scheduledAt: post.scheduledAt
     ? formatInTimeZone(new Date(post.scheduledAt), timezone, "yyyy-MM-dd'T'HH:mm")
@@ -171,7 +166,6 @@ export default function PostDetail() {
   const editingInitializedRef = useRef(false);
   const [formData, setFormData] = useState<FormData>({
     caption: '',
-    hashtags: [],
     imageUrl: '',
     scheduledAt: '',
   });
@@ -422,15 +416,11 @@ export default function PostDetail() {
         )
       : '';
 
-    const formHashtags = normalizeHashtags(formData.hashtags);
-    const postHashtags = normalizeHashtags(post.hashtags || []);
-
     const formImage = formData.imageUrl || '';
     const postImage = post.imageUrl || '';
 
     const formChanged =
       trimmedCaption !== originalCaption ||
-      JSON.stringify(formHashtags) !== JSON.stringify(postHashtags) ||
       formImage !== postImage ||
       scheduledValue !== originalScheduled;
 
@@ -439,10 +429,6 @@ export default function PostDetail() {
 
   const handleCaptionChange = (value: string) => {
     setFormData((prev) => ({ ...prev, caption: value }));
-  };
-
-  const handleHashtagsChange = (hashtags: string[]) => {
-    setFormData((prev) => ({ ...prev, hashtags }));
   };
 
   const handleScheduledAtChange = (value: string) => {
@@ -535,7 +521,6 @@ export default function PostDetail() {
     mutateContent({
       contentId: postId,
       caption: trimmedCaption,
-      hashtags: normalizeHashtags(formData.hashtags),
       imageUrl: formData.imageUrl || undefined,
       ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
     });
@@ -789,9 +774,6 @@ export default function PostDetail() {
                   brandId={post.brandId}
                 />
 
-                {/* Hashtag Editor */}
-                <PostHashtagEditor hashtags={formData.hashtags} onChange={handleHashtagsChange} />
-
                 {/* Scheduler */}
                 <PostScheduler value={formData.scheduledAt} onChange={handleScheduledAtChange} />
               </div>
@@ -816,15 +798,9 @@ export default function PostDetail() {
                   )}
                 </div>
 
-                {/* Caption and Hashtags */}
+                {/* Caption */}
                 <div className="space-y-4">
                   <p className="text-foreground whitespace-pre-wrap">{post.caption}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {post.hashtags.map((tag, index) => {
-                      const t = typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
-                      return <span key={index}>#{t}</span>;
-                    })}
-                  </div>
                 </div>
               </>
             )}

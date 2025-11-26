@@ -40,7 +40,6 @@ export const ContentCreatedEventSchema = PlatformEventSchema.extend({
     contentId: z.string(),
     brandId: z.string(),
     caption: z.string(),
-    hashtags: z.array(z.string()),
     mediaUrl: z.string().url().optional(),
     campaignId: z.string().optional(),
     status: z.enum(['draft', 'scheduled', 'published']),
@@ -55,7 +54,6 @@ export const ContentUpdatedEventSchema = PlatformEventSchema.extend({
     brandId: z.string(),
     updates: z.object({
       caption: z.string().optional(),
-      hashtags: z.array(z.string()).optional(),
       mediaUrl: z.string().url().optional(),
       status: z.enum(['draft', 'scheduled', 'published']).optional(),
     }),
@@ -95,7 +93,6 @@ export const ScheduleUpdatedEventSchema = PlatformEventSchema.extend({
       content: z
         .object({
           caption: z.string().optional(),
-          hashtags: z.array(z.string()).optional(),
           mediaUrl: z.string().url().optional(),
         })
         .optional(),
@@ -125,7 +122,6 @@ export const ScheduleReadyEventSchema = PlatformEventSchema.extend({
     platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     content: z.object({
       caption: z.string(),
-      hashtags: z.array(z.string()),
       mediaUrl: z.string().url().optional(),
     }),
   }),

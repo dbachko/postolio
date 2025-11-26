@@ -408,7 +408,7 @@ async function publishToInstagram(
       throw new Error('Media URL is required for Instagram posts');
     }
 
-    const caption = formatCaption(content.caption, content.hashtags || []);
+    const caption = (content.caption || '').trim();
 
     // Step 1: Create media container
     logger.info('Creating Instagram media container', { accountId });
@@ -522,26 +522,6 @@ async function waitForMediaProcessing(
   }
 
   throw new Error('Instagram media processing timeout');
-}
-
-/**
- * Format caption with hashtags
- */
-function formatCaption(caption: string, hashtags: string[]): string {
-  const hashtagString = hashtags
-    .slice(0, 30) // Instagram limit
-    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-    .join(' ');
-
-  const fullCaption = `${caption}\n\n${hashtagString}`;
-
-  // Truncate if too long
-  if (fullCaption.length > 2200) {
-    const truncatedCaption = caption.substring(0, 2200 - hashtagString.length - 4) + '...';
-    return `${truncatedCaption}\n\n${hashtagString}`;
-  }
-
-  return fullCaption;
 }
 
 /**

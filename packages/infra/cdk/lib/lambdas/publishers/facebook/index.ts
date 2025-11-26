@@ -23,7 +23,6 @@ interface PublishRequest {
   platform: string;
   content: {
     caption: string;
-    hashtags: string[];
     mediaUrl?: string;
   };
   metadata?: Record<string, any>;
@@ -240,7 +239,7 @@ async function publishToFacebook(
   content: PublishRequest['content']
 ): Promise<FacebookPostResponse> {
   try {
-    const message = formatMessage(content.caption, content.hashtags);
+    const message = formatMessage(content.caption);
 
     let endpoint = `https://graph.facebook.com/v18.0/${pageId}/feed`;
     let params: any = {
@@ -320,18 +319,13 @@ async function publishToFacebook(
   }
 }
 
-function formatMessage(caption: string, hashtags: string[]): string {
+function formatMessage(caption: string): string {
   // Facebook best practices:
   // - Maximum 63,206 characters for posts
   // - Hashtags are less effective than on Instagram
   // - Focus on engaging content
 
-  const hashtagString = hashtags
-    .slice(0, 5) // Limit hashtags on Facebook
-    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-    .join(' ');
-
-  const fullMessage = hashtagString ? `${caption}\n\n${hashtagString}` : caption;
+  const fullMessage = caption;
 
   // Truncate if too long (though unlikely to hit this limit)
   if (fullMessage.length > 63206) {

@@ -11,7 +11,6 @@ export const PublishRequestSchema = z.object({
     caption: z.string().max(2200), // Instagram caption limit
     mediaUrl: z.string().url().optional(),
     mediaType: z.enum(['IMAGE', 'VIDEO', 'CAROUSEL']).optional(),
-    hashtags: z.array(z.string()).max(30).optional(),
     mentions: z.array(z.string()).optional(),
     location: z
       .object({
@@ -91,7 +90,6 @@ export const ScheduleRequestSchema = z.object({
   content: z.object({
     caption: z.string(),
     mediaUrl: z.string().url().optional(),
-    hashtags: z.array(z.string()).optional(),
   }),
   metadata: z.record(z.string(), z.any()).optional(),
 });

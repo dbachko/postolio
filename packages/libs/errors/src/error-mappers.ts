@@ -133,16 +133,6 @@ export function mapInstagramError(error: any): PlatformError {
     );
   }
 
-  // Too many hashtags
-  if (code === 352) {
-    return createPlatformError(
-      PlatformErrorCode.INSTAGRAM_HASHTAGS_LIMIT,
-      'instagram',
-      'Instagram post exceeds 30 hashtag limit',
-      error
-    );
-  }
-
   // Invalid media type
   if (code === 9003) {
     return createPlatformError(

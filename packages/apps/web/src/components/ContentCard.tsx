@@ -92,18 +92,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
           <p className="text-foreground text-sm leading-relaxed">{content.caption}</p>
         </div>
 
-        <div className="mb-4">
-          <div className="flex flex-wrap gap-1">
-            {content.hashtags.map((tag, index) => {
-              const t = typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
-              return (
-                <span key={index} className="bg-muted inline-block rounded px-2 py-1 text-xs">
-                  #{t}
-                </span>
-              );
-            })}
-          </div>
-        </div>
+        {/* Hashtags removed from content model */}
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

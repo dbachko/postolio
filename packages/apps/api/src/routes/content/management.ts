@@ -25,7 +25,6 @@ import {
   type CreateManualContentBody,
   type ApproveContentBody,
 } from '../../utils/content-management.js';
-import { normalizeHashtags } from '../../utils/hashtag-normalizer.js';
 
 const prisma = getDatabaseClient();
 
@@ -45,9 +44,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send(validationResult.error);
         }
 
-        // Normalize hashtags
-        const normalizedHashtags = normalizeHashtags(body.hashtags);
-
         // Verify brand and campaign access
         const authResult = await verifyBrandAndCampaign(userId, body.brandId, body.campaignId);
         if (!authResult.authorized) {
@@ -64,7 +60,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         const content = await createContentInTransaction(
           {
             ...body,
-            hashtags: normalizedHashtags,
             resolvedAsset: assetResult.resolvedAsset,
             resolvedCarouselAssets: assetResult.resolvedCarouselAssets,
           },
@@ -120,7 +115,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             id: true,
             caption: true,
-            hashtags: true,
             primaryAssetCdnUrl: true,
             status: true,
             createdAt: true,
@@ -188,7 +182,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             id: true,
             caption: true,
-            hashtags: true,
             status: true,
             scheduledAt: true,
             updatedAt: true,

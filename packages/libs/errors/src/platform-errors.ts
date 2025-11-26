@@ -20,7 +20,6 @@ export enum PlatformErrorCode {
   INSTAGRAM_DUPLICATE_MEDIA = 'IG_9002',
   INSTAGRAM_INVALID_MEDIA_TYPE = 'IG_9003',
   INSTAGRAM_CAPTION_TOO_LONG = 'IG_100',
-  INSTAGRAM_HASHTAGS_LIMIT = 'IG_352',
 
   // Facebook
   FACEBOOK_INVALID_TOKEN = 'FB_190',
@@ -144,11 +143,6 @@ export const PLATFORM_RETRY_STRATEGIES: Record<PlatformErrorCode, RetryStrategy>
     retryAfter: 0,
     maxRetries: 0,
     description: 'Caption too long - requires manual fix',
-  },
-  [PlatformErrorCode.INSTAGRAM_HASHTAGS_LIMIT]: {
-    retryAfter: 0,
-    maxRetries: 0,
-    description: 'Too many hashtags - requires manual fix',
   },
 
   // Facebook

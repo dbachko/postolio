@@ -21,6 +21,7 @@ import {
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
+import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 const prisma = getDatabaseClient();
 
@@ -458,15 +459,11 @@ class CampaignService {
           console.error('Attempting to save content with empty caption:', post);
           throw new Error('Cannot save content with empty caption');
         }
-        if (!post.hashtags || !Array.isArray(post.hashtags)) {
-          console.error('Attempting to save content with invalid hashtags:', post);
-          throw new Error('Cannot save content with invalid hashtags');
-        }
 
         const savedPost = await prisma.content.create({
           data: {
             caption: post.caption,
-            hashtags: post.hashtags,
+            hashtags: extractHashtagsFromCaption(post.caption),
             brandId: campaign.brandId,
             campaignId: campaignId,
             status: 'draft', // Preview posts start as draft

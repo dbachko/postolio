@@ -41,37 +41,6 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
   });
 
   /**
-   * GET /api/recommendations/:brandId/hashtags
-   * Get only hashtag recommendations
-   */
-  fastify.get<{
-    Params: { brandId: string };
-    Querystring: { days?: string };
-  }>('/:brandId/hashtags', async (request, reply) => {
-    try {
-      const { brandId } = request.params;
-      const days = request.query.days ? parseInt(request.query.days) : 90;
-
-      const report = await recommendationEngine.generateRecommendations(brandId, days);
-
-      return reply.send({
-        success: true,
-        data: {
-          hashtags: report.hashtags,
-          generatedAt: report.generatedAt,
-        },
-      });
-    } catch (error: any) {
-      fastify.log.error('Failed to generate hashtag recommendations:', error);
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to generate hashtag recommendations',
-        message: error.message,
-      });
-    }
-  });
-
-  /**
    * GET /api/recommendations/:brandId/posting-times
    * Get only posting time recommendations
    */

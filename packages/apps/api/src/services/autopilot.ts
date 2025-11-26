@@ -14,6 +14,7 @@ import {
 } from '../constants/scheduler.js';
 import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
 import { getDatabaseClient } from '../config/database.js';
+import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 const prisma = getDatabaseClient();
 const autopilotLogger = baseLogger.child({ module: 'autopilot-service' });
@@ -335,7 +336,7 @@ class AutopilotService {
             const created = await prisma.content.create({
               data: {
                 caption: content.caption,
-                hashtags: content.hashtags,
+                hashtags: extractHashtagsFromCaption(content.caption),
                 status: 'scheduled', // Auto-schedule autopilot content
                 brandId: gap.brandId,
                 generationParams: {

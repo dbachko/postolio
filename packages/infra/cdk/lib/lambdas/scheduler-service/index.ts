@@ -35,7 +35,6 @@ interface Schedule {
   timezone: string;
   content: {
     caption: string;
-    hashtags: string[];
     mediaUrl?: string;
   };
   status: 'pending' | 'scheduled' | 'published' | 'failed';
@@ -47,7 +46,6 @@ interface ContentUpdatedEvent {
   brandId: string;
   updates: {
     caption?: string;
-    hashtags?: string[];
     mediaUrl?: string;
   };
   userId: string;

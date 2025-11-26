@@ -9,7 +9,6 @@ export class ContentClient {
   async createManualContent(data: {
     brandId: string;
     caption: string;
-    hashtags: string[];
     imageFile?: File;
     assetIds?: string[]; // Array of asset IDs (single image or carousel)
     videoUrl?: string; // CDN URL for uploaded video
@@ -22,7 +21,6 @@ export class ContentClient {
     const body: Record<string, unknown> = {
       brandId: data.brandId,
       caption: data.caption,
-      hashtags: data.hashtags,
     };
     if (data.campaignId) body.campaignId = data.campaignId;
     if (data.scheduledAt) body.scheduledAt = data.scheduledAt;

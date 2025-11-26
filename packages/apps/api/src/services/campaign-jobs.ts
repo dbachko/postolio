@@ -6,6 +6,7 @@ import {
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
+import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 const prisma = getDatabaseClient();
 
@@ -178,7 +179,7 @@ class CampaignJobService {
         const created = await prisma.content.create({
           data: {
             caption: post.caption,
-            hashtags: post.hashtags,
+            hashtags: extractHashtagsFromCaption(post.caption),
             brandId: campaign.brandId,
             campaignId: campaign.id,
             status: 'draft', // Preview posts start as draft

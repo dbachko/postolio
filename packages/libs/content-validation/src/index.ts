@@ -22,7 +22,6 @@ export interface ValidateContentPayload<
   contentType?: CT;
   mediaType?: MT;
   caption?: string | null;
-  hashtags?: string[] | null;
   mediaKeys?: string[] | null; // S3 keys or asset identifiers
   videoUrl?: string | null;
 }
@@ -44,12 +43,6 @@ const optionalCaption = z
   .optional()
   .nullable();
 
-const optionalHashtags = z
-  .array(z.string())
-  .max(30, { message: 'Maximum 30 hashtags allowed' })
-  .optional()
-  .nullable();
-
 const optionalMediaKeys = z.array(z.string()).optional().nullable();
 
 const instagramBase = z.object({
@@ -57,7 +50,6 @@ const instagramBase = z.object({
   contentType: z.enum(['post', 'reel', 'story']).optional().nullable(),
   mediaType: z.enum(['image', 'video']).optional().nullable(),
   caption: optionalCaption,
-  hashtags: optionalHashtags,
   mediaKeys: optionalMediaKeys,
   videoUrl: z.string().url().optional().nullable(),
 });
@@ -135,7 +127,6 @@ const facebookBase = z.object({
     .max(63206, { message: 'Caption exceeds Facebook limit (~63k characters)' })
     .optional()
     .nullable(),
-  hashtags: z.array(z.string()).optional().nullable(),
   mediaKeys: optionalMediaKeys,
   videoUrl: z.string().url().optional().nullable(),
 });
@@ -194,7 +185,6 @@ const twitterBase = z.object({
     .string()
     .min(1, { message: 'Tweet text is required' })
     .max(280, { message: 'Tweet exceeds 280 characters' }),
-  hashtags: z.array(z.string()).optional().nullable(),
   mediaKeys: optionalMediaKeys,
   videoUrl: z.string().url().optional().nullable(),
 });
@@ -235,7 +225,6 @@ const linkedinBase = z.object({
     .max(3000, { message: 'Caption exceeds LinkedIn limit (~3000 characters)' })
     .optional()
     .nullable(),
-  hashtags: z.array(z.string()).optional().nullable(),
   mediaKeys: optionalMediaKeys,
   videoUrl: z.string().url().optional().nullable(),
 });
@@ -281,7 +270,6 @@ const youtubeBase = z.object({
   contentType: z.enum(['post']).optional().nullable(),
   mediaType: z.enum(['video']).optional().nullable(),
   caption: z.string().optional().nullable(),
-  hashtags: z.array(z.string()).optional().nullable(),
   mediaKeys: optionalMediaKeys,
   videoUrl: z.string().url().optional().nullable(),
 });

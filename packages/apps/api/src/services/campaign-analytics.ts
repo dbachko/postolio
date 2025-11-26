@@ -234,13 +234,15 @@ export class CampaignAnalyticsService {
         performanceByDate.push({ date, impressions, engagement });
       }
 
-      // Track hashtag performance
-      post.hashtags.forEach((tag) => {
-        if (!hashtagCounts[tag]) {
-          hashtagCounts[tag] = { count: 0, totalEngagement: 0 };
+      // Track hashtag performance (derived from caption)
+      (post.hashtags || []).forEach((tag) => {
+        const key = String(tag || '').toLowerCase();
+        if (!key) return;
+        if (!hashtagCounts[key]) {
+          hashtagCounts[key] = { count: 0, totalEngagement: 0 };
         }
-        hashtagCounts[tag].count++;
-        hashtagCounts[tag].totalEngagement += engagement;
+        hashtagCounts[key].count++;
+        hashtagCounts[key].totalEngagement += engagement;
       });
 
       // Week 3: Posts timeline
@@ -508,13 +510,15 @@ export class CampaignAnalyticsService {
       const avgHashtagEngagement =
         metrics.topHashtags.reduce((sum, h) => sum + h.avgEngagement, 0) /
         metrics.topHashtags.length;
-      if (avgHashtagEngagement < (metrics.totalEngagement / metrics.totalPosts) * 0.8) {
+      const overallAvg = metrics.totalPosts > 0 ? metrics.totalEngagement / metrics.totalPosts : 0;
+
+      if (overallAvg > 0 && avgHashtagEngagement < overallAvg * 0.8) {
         recommendations.push({
           type: 'hashtags',
           message:
             'Hashtag performance is below campaign average. Research trending hashtags in your niche.',
           priority: 'medium',
-          impact: 'Better hashtags can increase discoverability by 25%',
+          impact: 'Better hashtags can increase discoverability by ~25%.',
           actionable: true,
           data: { topPerformingTags: metrics.topHashtags.slice(0, 3) },
         });

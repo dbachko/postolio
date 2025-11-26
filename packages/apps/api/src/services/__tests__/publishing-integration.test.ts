@@ -106,7 +106,6 @@ describe('publishContent (connector integration)', () => {
     const [publishReq, publishCreds, publishAccount] = (__mockConnector.publish as any).mock
       .calls[0];
     expect(publishReq.caption).toBe('Test caption');
-    expect(publishReq.hashtags).toEqual(['test']);
     expect(publishCreds.accessToken).toBe('test-access-token');
     expect(publishAccount.platform).toBe('instagram');
     expect(publishAccount.externalAccountId).toBe('ig-account-123');

@@ -14,7 +14,6 @@ import { Separator } from '@/components/ui/separator';
 import { VideoUploader } from '@/components/VideoUploader';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
-import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
 import { PostStatusCard, type PostStatus } from '@/components/PostStatusCard';
 import {
@@ -49,7 +48,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { normalizeHashtags, stripHashtagPrefixes } from '@/utils/hashtags';
 import { cn } from '@/lib/utils';
 import { AppEmptyState } from '@/components/AppEmptyState';
 import {
@@ -64,7 +62,6 @@ import { assetsApi } from '@/features/assets/api/client';
 interface PostDetailData {
   id: string;
   caption: string;
-  hashtags: string[];
   imageUrl?: string;
   videoUrl?: string;
   mediaType?: string;
@@ -156,7 +153,6 @@ export function PostSidebar({
 
   const [formData, setFormData] = useState({
     caption: '',
-    hashtags: [] as string[],
     imageUrl: '',
     videoUrl: '',
     carouselAssets: [] as AssetReference[],
@@ -189,7 +185,6 @@ export function PostSidebar({
       contentType: formData.contentType,
       mediaType: finalMediaType,
       caption: isStory ? '' : formData.caption,
-      hashtags: isStory ? [] : formData.hashtags,
       mediaKeys,
       videoUrl: formData.videoUrl || undefined,
     });
@@ -198,7 +193,6 @@ export function PostSidebar({
     formData.caption,
     formData.carouselAssets,
     formData.contentType,
-    formData.hashtags,
     formData.imageUrl,
     formData.videoUrl,
   ]);
@@ -230,7 +224,6 @@ export function PostSidebar({
 
     setFormData({
       caption: post.caption || '',
-      hashtags: stripHashtagPrefixes(post.hashtags || []),
       imageUrl: post.imageUrl || '',
       videoUrl: post.videoUrl || '',
       carouselAssets: carouselAssetsFromPost,
@@ -261,7 +254,6 @@ export function PostSidebar({
     mutationFn: async (data: {
       contentId: string;
       caption?: string;
-      hashtags?: string[];
       scheduledAt?: string;
       campaignId?: string | null;
     }) => contentApi.updateContent(data),
@@ -292,7 +284,6 @@ export function PostSidebar({
       return contentApi.updateContent({
         contentId: id,
         caption: isStory ? '' : formData.caption.trim(),
-        hashtags: isStory ? [] : normalizeHashtags(formData.hashtags),
         campaignId: selectedCampaign || null,
         scheduledAt: scheduledUtc,
       });
@@ -316,8 +307,6 @@ export function PostSidebar({
     mutationFn: async (mode: 'draft' | 'schedule') => {
       if (!selectedBrand) throw new Error('No brand selected');
 
-      const hashtagArray = Array.from(new Set(normalizeHashtags(formData.hashtags)));
-
       // Determine final mediaType based on contentType
       // Stories don't support captions or hashtags per Instagram API
       const isStory = formData.contentType === 'story';
@@ -325,7 +314,6 @@ export function PostSidebar({
       return contentApi.createManualContent({
         brandId: selectedBrand.id,
         caption: isStory ? '' : formData.caption.trim(),
-        hashtags: isStory ? [] : hashtagArray,
         videoUrl: formData.videoUrl || undefined,
         assetIds: formData.carouselAssets.map((a) => a.id),
         mediaType: finalMediaType,
@@ -384,9 +372,6 @@ export function PostSidebar({
     const scheduledValue = formData.scheduledAt || '';
     const originalScheduled = formatScheduledInput(post.scheduledAt);
 
-    const formHashtags = normalizeHashtags(formData.hashtags);
-    const postHashtags = normalizeHashtags(post.hashtags || []);
-
     const formImage = formData.imageUrl || '';
     const postImage = post.imageUrl || '';
     const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
@@ -399,7 +384,6 @@ export function PostSidebar({
 
     const changed =
       trimmedCaption !== originalCaption ||
-      JSON.stringify(formHashtags) !== JSON.stringify(postHashtags) ||
       scheduledValue !== originalScheduled ||
       formImage !== postImage ||
       JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds) ||
@@ -440,10 +424,6 @@ export function PostSidebar({
     mutateContent({
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
-      hashtags:
-        formData.contentType === 'story'
-          ? []
-          : normalizeHashtags(Array.from(new Set(formData.hashtags))),
       campaignId: selectedCampaign || null,
       ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
     });
@@ -457,7 +437,6 @@ export function PostSidebar({
   // Parse query params for prefill
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const qCaption = searchParams.get('caption');
-  const qHashtags = searchParams.get('hashtags');
   const qScheduledAt = searchParams.get('scheduledAt');
   const qCampaignId = searchParams.get('campaignId');
   const qAssetId = searchParams.get('assetId');
@@ -477,7 +456,7 @@ export function PostSidebar({
   const prefillAppliedRef = useRef(false);
   useEffect(() => {
     if (!isCreating || prefillAppliedRef.current === true) return;
-    if (!qCaption && !qHashtags && !qScheduledAt && !qCampaignId && !qAssetId) {
+    if (!qCaption && !qScheduledAt && !qCampaignId && !qAssetId) {
       return;
     }
 
@@ -500,9 +479,6 @@ export function PostSidebar({
     setFormData((prev) => ({
       ...prev,
       caption: qCaption ?? prev.caption,
-      hashtags: qHashtags
-        ? stripHashtagPrefixes(qHashtags.split(/[,\s]+/).filter(Boolean))
-        : prev.hashtags,
       scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
       ...(imageAsset
         ? {
@@ -524,7 +500,6 @@ export function PostSidebar({
   }, [
     isCreating,
     qCaption,
-    qHashtags,
     qScheduledAt,
     qCampaignId,
     qAssetId,
@@ -876,20 +851,13 @@ export function PostSidebar({
                   )}
                 </div>
 
-                {/* Caption and Hashtags - Not supported for Stories */}
+                {/* Caption - Not supported for Stories */}
                 {formData.contentType !== 'story' && (
                   <>
                     <PostCaptionEditor
                       value={formData.caption}
                       onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
                       brandId={selectedBrand?.id}
-                      disabled={false}
-                      showIcon={true}
-                    />
-
-                    <PostHashtagEditor
-                      hashtags={formData.hashtags}
-                      onChange={(tags) => setFormData((s) => ({ ...s, hashtags: tags }))}
                       disabled={false}
                       showIcon={true}
                     />
@@ -1052,20 +1020,13 @@ export function PostSidebar({
               )}
             </div>
 
-            {/* Caption and Hashtags - Not supported for Stories */}
+            {/* Caption - Not supported for Stories */}
             {formData.contentType !== 'story' && (
               <>
                 <PostCaptionEditor
                   value={formData.caption}
                   onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
                   brandId={post?.brand?.id}
-                  disabled={disabled}
-                  showIcon={true}
-                />
-
-                <PostHashtagEditor
-                  hashtags={formData.hashtags}
-                  onChange={(tags) => setFormData((s) => ({ ...s, hashtags: tags }))}
                   disabled={disabled}
                   showIcon={true}
                 />

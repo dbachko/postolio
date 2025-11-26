@@ -395,7 +395,6 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
     try {
       const { brandId } = request.params as { brandId: string };
 
-      // Get all publications for the brand
       const contents = await prisma.content.findMany({
         where: { brandId, status: 'published' },
         select: {
@@ -410,7 +409,6 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      // Aggregate hashtag performance
       const hashtagMap = new Map<
         string,
         {
@@ -423,7 +421,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       >();
 
       for (const content of contents) {
-        for (const hashtag of content.hashtags) {
+        for (const hashtag of content.hashtags || []) {
           const tag = hashtag.toLowerCase();
           const existing = hashtagMap.get(tag) || {
             uses: 0,
@@ -435,7 +433,6 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
 
           existing.uses += 1;
 
-          // Aggregate metrics from all publications of this content
           for (const pub of content.publications) {
             if (pub.metricsLatest) {
               existing.totalReach += pub.metricsLatest.reach || 0;
@@ -456,7 +453,6 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Convert to array and calculate averages
       const hashtags = Array.from(hashtagMap.entries()).map(([tag, stats]) => ({
         hashtag: tag,
         uses: stats.uses,
@@ -466,7 +462,6 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
         bestPost: stats.bestPost,
       }));
 
-      // Sort by average engagement (descending)
       hashtags.sort((a, b) => b.avgEngagement - a.avgEngagement);
 
       return reply.send({ success: true, data: hashtags.slice(0, 50) });
