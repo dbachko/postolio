@@ -86,12 +86,12 @@ export function HashtagSuggestionsButton({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
           disabled={disabled || !brandId}
-          className="text-muted-foreground hover:text-foreground h-8 gap-2"
+          className="text-muted-foreground hover:text-foreground h-8 w-8"
+          aria-label="Insert hashtag"
         >
           <Hash className="h-4 w-4" />
-          <span className="text-xs">Hashtag</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[400px] p-0" align="start">

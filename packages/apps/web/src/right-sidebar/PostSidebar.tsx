@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { toUTCFromInput, getUserTimezone } from '@/lib/timezone';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -697,7 +698,8 @@ export function PostSidebar({
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    {formData.contentType === 'reel' ? 'Video' : 'Media'}
+                    {formData.contentType === 'reel' ? 'Video' : 'Media'}{' '}
+                    <span className="text-destructive">*</span>
                     {formData.contentType === 'reel' && (
                       <Dialog>
                         <DialogTrigger asChild>
@@ -776,6 +778,16 @@ export function PostSidebar({
                             Upload a vertical video for your reel (max 300MB, 9:16 aspect ratio
                             recommended)
                           </p>
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowAssetPicker(true)}
+                            >
+                              Choose from Assets
+                            </Button>
+                          </div>
                           <div className="border-border bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
                             <div className="space-y-0.5">
                               <Label htmlFor="share-to-feed-toggle" className="text-xs font-medium">
@@ -793,16 +805,6 @@ export function PostSidebar({
                                 setFormData((s) => ({ ...s, shareToFeed: checked }))
                               }
                             />
-                          </div>
-                          <div className="flex justify-end pt-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowAssetPicker(true)}
-                            >
-                              Choose from Assets
-                            </Button>
                           </div>
                         </>
                       )}
@@ -918,46 +920,54 @@ export function PostSidebar({
                 {/* Action Buttons */}
                 <div className="space-y-3 pt-4">
                   <Separator />
-                  {!validation.ok && (
-                    <p className="text-destructive text-sm">
-                      {validationError || 'Please fix validation errors before continuing.'}
-                    </p>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => createPost('draft')}
-                      disabled={isCreatingPost || !validation.ok}
-                    >
-                      {isCreatingPost ? (
-                        <>
-                          <Save className="mr-2 h-4 w-4 animate-pulse" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          Save as Draft
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => createPost('schedule')}
-                      disabled={isCreatingPost || !validation.ok || !hasScheduleTime}
-                    >
-                      {isCreatingPost ? (
-                        <>
-                          <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="mr-2 h-4 w-4" />
-                          Schedule Post
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                  <TooltipProvider>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => createPost('draft')}
+                        disabled={isCreatingPost || !validation.ok}
+                      >
+                        {isCreatingPost ? (
+                          <>
+                            <Save className="mr-2 h-4 w-4 animate-pulse" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            Save as Draft
+                          </>
+                        )}
+                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={() => createPost('schedule')}
+                            disabled={isCreatingPost || !validation.ok || !hasScheduleTime}
+                          >
+                            {isCreatingPost ? (
+                              <>
+                                <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                                Creating...
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="mr-2 h-4 w-4" />
+                                Schedule Post
+                              </>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        {!validation.ok && (
+                          <TooltipContent>
+                            <p className="text-sm">
+                              {validationError || 'Please fix validation errors before continuing.'}
+                            </p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                 </div>
               </>
             )}
@@ -1093,47 +1103,55 @@ export function PostSidebar({
             {!disabled && (
               <div className="space-y-3 pt-4">
                 <Separator />
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                  {!validation.ok && (
-                    <p className="text-destructive text-sm">
-                      {validationError || 'Please fix validation errors before continuing.'}
-                    </p>
-                  )}
-                  <Button
-                    onClick={handleSaveChanges}
-                    disabled={!hasChanges || isSaving || !validation.ok}
-                  >
-                    {isSaving ? (
-                      <>
-                        <Save className="mr-2 h-4 w-4 animate-pulse" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                  {canScheduleExisting && (
+                <TooltipProvider>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
                     <Button
-                      onClick={() => schedulePost()}
-                      disabled={isScheduling || !validation.ok || !hasScheduleTime}
+                      onClick={handleSaveChanges}
+                      disabled={!hasChanges || isSaving || !validation.ok}
                     >
-                      {isScheduling ? (
+                      {isSaving ? (
                         <>
-                          <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                          Scheduling...
+                          <Save className="mr-2 h-4 w-4 animate-pulse" />
+                          Saving...
                         </>
                       ) : (
                         <>
-                          <Clock className="mr-2 h-4 w-4" />
-                          Schedule Post
+                          <Save className="mr-2 h-4 w-4" />
+                          Save Changes
                         </>
                       )}
                     </Button>
-                  )}
-                </div>
+                    {canScheduleExisting && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={() => schedulePost()}
+                            disabled={isScheduling || !validation.ok || !hasScheduleTime}
+                          >
+                            {isScheduling ? (
+                              <>
+                                <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                                Scheduling...
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="mr-2 h-4 w-4" />
+                                Schedule Post
+                              </>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        {!validation.ok && (
+                          <TooltipContent>
+                            <p className="text-sm">
+                              {validationError || 'Please fix validation errors before continuing.'}
+                            </p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    )}
+                  </div>
+                </TooltipProvider>
               </div>
             )}
           </div>

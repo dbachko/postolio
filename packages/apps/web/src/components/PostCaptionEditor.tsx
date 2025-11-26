@@ -74,13 +74,15 @@ export function PostCaptionEditor({
           disabled={disabled}
           maxLength={maxLength}
         />
-        <CaptionToolbar brandId={brandId} onInsert={handleInsert} disabled={disabled} />
+        <CaptionToolbar
+          brandId={brandId}
+          onInsert={handleInsert}
+          disabled={disabled}
+          value={value}
+          maxLength={maxLength}
+          showCharacterCount={showCharacterCount}
+        />
       </div>
-      {showCharacterCount && (
-        <div className="text-muted-foreground text-right text-xs">
-          {value.length}/{maxLength} characters
-        </div>
-      )}
     </div>
   );
 }

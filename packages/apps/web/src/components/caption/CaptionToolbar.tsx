@@ -6,18 +6,35 @@ interface CaptionToolbarProps {
   brandId: string | undefined;
   onInsert: (text: string) => void;
   disabled?: boolean;
+  value?: string;
+  maxLength?: number;
+  showCharacterCount?: boolean;
 }
 
-export function CaptionToolbar({ brandId, onInsert, disabled }: CaptionToolbarProps) {
+export function CaptionToolbar({
+  brandId,
+  onInsert,
+  disabled,
+  value = '',
+  maxLength = 2200,
+  showCharacterCount = true,
+}: CaptionToolbarProps) {
   return (
-    <div className="border-border bg-muted/30 flex items-center gap-1 border-t px-2 py-1">
-      <EmojiPickerButton onEmojiSelect={onInsert} disabled={disabled} />
-      <Separator orientation="vertical" className="h-5" />
-      <HashtagSuggestionsButton
-        brandId={brandId}
-        onHashtagSelect={(hashtag) => onInsert(`#${hashtag} `)}
-        disabled={disabled}
-      />
+    <div className="border-border bg-muted/30 flex items-center justify-between gap-1 border-t px-2 py-1">
+      <div className="flex items-center gap-1">
+        <EmojiPickerButton onEmojiSelect={onInsert} disabled={disabled} />
+        <Separator orientation="vertical" className="h-5" />
+        <HashtagSuggestionsButton
+          brandId={brandId}
+          onHashtagSelect={(hashtag) => onInsert(`#${hashtag} `)}
+          disabled={disabled}
+        />
+      </div>
+      {showCharacterCount && (
+        <div className="text-muted-foreground text-xs">
+          {value.length}/{maxLength}
+        </div>
+      )}
     </div>
   );
 }

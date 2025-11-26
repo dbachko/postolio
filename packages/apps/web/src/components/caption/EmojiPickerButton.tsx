@@ -31,12 +31,12 @@ export function EmojiPickerButton({ onEmojiSelect, disabled }: EmojiPickerButton
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
           disabled={disabled}
-          className="text-muted-foreground hover:text-foreground h-8 gap-2"
+          className="text-muted-foreground hover:text-foreground h-8 w-8"
+          aria-label="Insert emoji"
         >
           <Smile className="h-4 w-4" />
-          <span className="text-xs">Emoji</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0" align="start">
