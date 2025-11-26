@@ -27,7 +27,7 @@ import { getPlatformConfig, type Platform } from '@/lib/platform-config';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
-import { formatInUserTimezone, toUTCFromInput } from '../lib/timezone';
+import { formatInUserTimezone, toUTCFromInput, getUserTimezone } from '../lib/timezone';
 import { toast } from 'sonner';
 import { getContentDisplayStatus } from '../utils/content-status';
 import { Loader2 } from 'lucide-react';
@@ -104,13 +104,18 @@ interface FormData {
   scheduledAt: string;
 }
 
-const buildFormStateFromPost = (post: PostDetailData, timezone: string): FormData => ({
-  caption: post.caption || '',
-  imageUrl: post.imageUrl || '',
-  scheduledAt: post.scheduledAt
-    ? formatInTimeZone(new Date(post.scheduledAt), timezone, "yyyy-MM-dd'T'HH:mm")
-    : '',
-});
+const buildFormStateFromPost = (post: PostDetailData, timezone: string): FormData => {
+  // CRITICAL: Always ensure we have a valid timezone for conversion
+  const effectiveTimezone = timezone || getUserTimezone();
+
+  return {
+    caption: post.caption || '',
+    imageUrl: post.imageUrl || '',
+    scheduledAt: post.scheduledAt
+      ? formatInTimeZone(new Date(post.scheduledAt), effectiveTimezone, "yyyy-MM-dd'T'HH:mm")
+      : '',
+  };
+};
 
 // Memoized metrics component to prevent unnecessary re-renders
 const MetricsGrid = memo(({ insights }: { insights: PostInsights }) => (
@@ -233,10 +238,12 @@ export default function PostDetail() {
     (async () => {
       const brandId = post?.brand?.id;
       if (!brandId) return;
+
       try {
         const tz = await getBrandTimezone(brandId);
         if (mounted && tz) setBrandTimezone(tz);
-      } catch {
+      } catch (error) {
+        console.error('[PostDetail] Failed to fetch brand timezone:', error);
         if (mounted) setBrandTimezone(timezone);
       }
     })();

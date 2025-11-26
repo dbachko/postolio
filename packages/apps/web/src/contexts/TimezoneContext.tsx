@@ -1,5 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { getUserTimezone } from '../lib/timezone';
 import { getLocalSetting, setLocalSetting, removeLocalSetting } from '@/lib/settings/localSettings';
 import { useAuthStore } from '../stores/authStore';
@@ -37,6 +44,8 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   const [timezone, setTimezoneState] = useState<string>(getUserTimezone());
   const [isAutoDetected, setIsAutoDetected] = useState<boolean>(true);
   const [brandTimezones, setBrandTimezones] = useState<Map<string, string>>(new Map());
+  // Use ref for synchronous access to in-flight requests (prevents race conditions)
+  const inFlightRequestsRef = useRef<Map<string, Promise<string>>>(new Map());
 
   // Initialize timezone on mount and when user changes
   useEffect(() => {
@@ -97,25 +106,46 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     }
   };
 
-  // Get timezone for a specific brand (with caching)
+  // Get timezone for a specific brand (with caching and request deduplication)
   const getBrandTimezone = async (brandId: string): Promise<string> => {
     // Check cache first
     if (brandTimezones.has(brandId)) {
       return brandTimezones.get(brandId)!;
     }
 
-    try {
-      const data = await brandApi.getBrandTimezone(brandId);
-      const brandTz = data.timezone || timezone;
-
-      // Cache the result
-      setBrandTimezones((prev) => new Map(prev).set(brandId, brandTz));
-      return brandTz;
-    } catch (error) {
-      // Log error but don't throw - fallback to user timezone
-      console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error);
-      return timezone;
+    // Check if there's already a request in flight for this brandId (using ref for synchronous access)
+    const inFlightRequests = inFlightRequestsRef.current;
+    if (inFlightRequests.has(brandId)) {
+      return inFlightRequests.get(brandId)!;
     }
+
+    // Create a new request
+    const requestPromise = (async () => {
+      try {
+        const data = await brandApi.getBrandTimezone(brandId);
+        const brandTz = data.timezone || timezone;
+
+        // Cache the result
+        setBrandTimezones((prev) => new Map(prev).set(brandId, brandTz));
+
+        // Remove from in-flight requests
+        inFlightRequestsRef.current.delete(brandId);
+
+        return brandTz;
+      } catch (error) {
+        // Remove from in-flight requests
+        inFlightRequestsRef.current.delete(brandId);
+
+        // Log error but don't throw - fallback to user timezone
+        console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error);
+        return timezone;
+      }
+    })();
+
+    // Store the promise to deduplicate concurrent requests (synchronous operation)
+    inFlightRequestsRef.current.set(brandId, requestPromise);
+
+    return requestPromise;
   };
 
   // Refresh timezone from user settings

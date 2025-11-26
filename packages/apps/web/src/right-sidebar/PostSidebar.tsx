@@ -24,7 +24,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useTimezone } from '@/contexts/TimezoneContext';
-import { toUTCFromInput } from '@/lib/timezone';
+import { toUTCFromInput, getUserTimezone } from '@/lib/timezone';
+import { formatInTimeZone } from 'date-fns-tz';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import {
@@ -91,8 +92,11 @@ interface PostDetailData {
   } | null;
 }
 
-const formatScheduledInput = (value?: string) =>
-  value ? new Date(value).toISOString().slice(0, 16) : '';
+const formatScheduledInput = (value?: string, timezone?: string) => {
+  if (!value) return '';
+  const effectiveTimezone = timezone || getUserTimezone();
+  return formatInTimeZone(new Date(value), effectiveTimezone, "yyyy-MM-dd'T'HH:mm");
+};
 
 type PostSidebarLayout = 'sidebar' | 'page';
 
@@ -201,9 +205,9 @@ export function PostSidebar({
 
   const brandIdForAssets = post?.brand?.id ?? selectedBrand?.id ?? null;
 
-  // Initialize form from post
+  // Initialize form from post (wait for brandTimezone to be loaded)
   useEffect(() => {
-    if (!post) return;
+    if (!post || !brandTimezone) return;
     const mediaAssets = post.mediaAssets || [];
     const carouselAssetsFromPost: AssetReference[] = mediaAssets.map((asset) => ({
       id: asset.assetId || asset.cdnUrl,
@@ -229,13 +233,13 @@ export function PostSidebar({
       carouselAssets: carouselAssetsFromPost,
       contentType: normalizedContentType,
       mediaType: normalizedMediaType,
-      scheduledAt: formatScheduledInput(post.scheduledAt),
+      scheduledAt: formatScheduledInput(post.scheduledAt, brandTimezone),
       shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
     });
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
     setHasChanges(false);
     formInitializedRef.current = true;
-  }, [post]);
+  }, [post, brandTimezone]);
 
   // Clean up object URL on unmount
   useEffect(() => {
@@ -370,7 +374,7 @@ export function PostSidebar({
     const originalCaption = (post.caption || '').trim();
 
     const scheduledValue = formData.scheduledAt || '';
-    const originalScheduled = formatScheduledInput(post.scheduledAt);
+    const originalScheduled = formatScheduledInput(post.scheduledAt, brandTimezone);
 
     const formImage = formData.imageUrl || '';
     const postImage = post.imageUrl || '';
