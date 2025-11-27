@@ -129,15 +129,18 @@ export async function publishContent(
       brandId: content.brandId,
     });
 
-    // Convert content/media type to Instagram's uppercase format.
+    // Convert content/media type to Instagram Graph media_type semantics.
     // Internally, carousels are modeled as image posts with multiple assets.
-    // Reels are identified purely via contentType === 'reel' (mediaType remains 'video').
+    // Reels and stories are identified via contentType; mediaType remains the raw format.
     const isReel = content.contentType === 'reel';
+    const isStory = content.contentType === 'story';
     const instagramMediaType = isReel
       ? ('REELS' as const)
-      : content.mediaType === 'video'
-        ? ('VIDEO' as const)
-        : ('IMAGE' as const);
+      : isStory
+        ? ('STORIES' as const)
+        : content.mediaType === 'video'
+          ? ('VIDEO' as const)
+          : ('IMAGE' as const);
 
     const publishResult = await connector.publish(
       {

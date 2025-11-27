@@ -233,9 +233,15 @@ export class InstagramConnector implements Connector {
         throw new Error('cdnImageUrl/mediaUrl is required for Instagram publishing');
       }
 
-      // Determine media type from request
-      const isVideo = req.mediaType === 'VIDEO' || req.mediaType === 'REELS';
-      const isReel = req.mediaType === 'REELS';
+      // Determine media/product type semantics from request.
+      // mediaType maps directly to Instagram's media_type parameter for video flows:
+      // - VIDEO: feed video
+      // - REELS: reel (short‑form video)
+      // - STORIES: ephemeral story (image or video)
+      const mediaType = req.mediaType || 'IMAGE';
+      const isReel = mediaType === 'REELS';
+      const isStory = mediaType === 'STORIES';
+      const isVideo = mediaType === 'VIDEO' || mediaType === 'REELS' || mediaType === 'STORIES';
 
       // Step 1: create media container
       const caption = (req.caption || '').trim();
@@ -249,19 +255,23 @@ export class InstagramConnector implements Connector {
       // Add media URL based on type
       if (isVideo) {
         containerData.video_url = req.mediaUrl || req.imageUrl || '';
-        // Instagram Graph API has deprecated VIDEO for feed posts; use REELS
-        // for all video uploads and explicitly control share-to-feed.
-        containerData.media_type = 'REELS';
-        containerData.share_to_feed = String(
-          // default to true to keep existing "video in feed" behavior
-          req.shareToFeed ?? true
-        );
-        // Optional: specify thumbnail offset (in milliseconds from start)
-        if (req.thumbOffset !== undefined) {
-          containerData.thumb_offset = String(req.thumbOffset);
+        // For video containers, media_type controls whether this is a feed video,
+        // reel, or story per Meta docs.
+        containerData.media_type = mediaType;
+        if (isReel) {
+          // For reels, explicitly control whether it also appears in the feed.
+          containerData.share_to_feed = String(req.shareToFeed ?? true);
+          // Optional: specify thumbnail offset (in milliseconds from start)
+          if (req.thumbOffset !== undefined) {
+            containerData.thumb_offset = String(req.thumbOffset);
+          }
         }
       } else {
         containerData.image_url = req.imageUrl || req.mediaUrl || '';
+        // For image stories, Instagram supports media_type=STORIES as well.
+        if (isStory) {
+          containerData.media_type = 'STORIES';
+        }
       }
 
       const containerResponse = await axios.post(containerUrl, containerData);

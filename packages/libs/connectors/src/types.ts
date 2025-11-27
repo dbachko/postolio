@@ -21,7 +21,12 @@ export interface PublishRequest {
   caption: string;
   imageUrl?: string;
   mediaUrl?: string;
-  mediaType?: 'IMAGE' | 'VIDEO' | 'REELS' | 'CAROUSEL_ALBUM';
+  // mediaType maps to Instagram Graph API media_type semantics:
+  // - IMAGE / VIDEO: feed posts
+  // - REELS: short‑form video in Reels
+  // - STORIES: ephemeral story (image or video)
+  // - CAROUSEL_ALBUM: multi‑media carousel
+  mediaType?: 'IMAGE' | 'VIDEO' | 'REELS' | 'STORIES' | 'CAROUSEL_ALBUM';
   thumbOffset?: number; // Thumbnail offset in milliseconds (for videos)
   shareToFeed?: boolean; // For reels: show in both feed and Reels tab
   metadata?: Record<string, unknown>;

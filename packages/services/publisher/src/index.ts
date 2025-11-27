@@ -221,10 +221,13 @@ class InstagramAdapter implements PlatformAdapter {
       }
 
       const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
-      // Use mediaType to determine media format (fallback to contentType for backward compatibility)
-      const mediaFormat = (schedule.mediaType || schedule.contentType || '').toLowerCase();
-      const isVideo = mediaFormat === 'video' || mediaFormat === 'reel';
-      const isReel = mediaFormat === 'reel';
+      // Derive media/product type semantics from schedule.
+      const contentType = (schedule.contentType || '').toLowerCase();
+      const rawMediaType = (schedule.mediaType || '').toLowerCase();
+      const isReel = contentType === 'reel' || rawMediaType === 'reel';
+      const isStory = contentType === 'story';
+      const hasVideoAsset = !!schedule.videoUrl;
+      const isVideo = rawMediaType === 'video' || isReel || (isStory && hasVideoAsset);
 
       // Step 1: Create media container
       const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
@@ -233,26 +236,44 @@ class InstagramAdapter implements PlatformAdapter {
         access_token: credentials.accessToken,
       });
       if (isVideo) {
-        const shareToFeed =
-          schedule.contentType === 'reel'
-            ? typeof schedule.shareToFeed === 'boolean'
-              ? schedule.shareToFeed
-              : true
-            : true;
         createMediaParams.set('video_url', mediaUrl);
-        // Instagram Graph API has deprecated VIDEO; all video posts
-        // (including "feed videos") must use the REELS media type.
-        createMediaParams.set('media_type', 'REELS');
-        // Control whether the reel should also appear in the feed grid.
-        createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
+        // For video containers, media_type controls whether this is a feed video,
+        // reel, or story per Meta docs.
+        if (isReel) {
+          createMediaParams.set('media_type', 'REELS');
+          const shareToFeed =
+            schedule.contentType === 'reel'
+              ? typeof schedule.shareToFeed === 'boolean'
+                ? schedule.shareToFeed
+                : true
+              : true;
+          // Control whether the reel should also appear in the feed grid.
+          createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
+        } else if (isStory) {
+          createMediaParams.set('media_type', 'STORIES');
+        } else {
+          createMediaParams.set('media_type', 'VIDEO');
+        }
       } else {
         createMediaParams.set('image_url', mediaUrl);
+        // For image stories, Instagram supports media_type=STORIES as well.
+        if (isStory) {
+          createMediaParams.set('media_type', 'STORIES');
+        }
       }
 
       logger.info('Creating Instagram media container', {
         accountId: credentials.accountId,
         hasMediaUrl: !!mediaUrl,
-        mediaKind: isReel ? 'reel' : isVideo ? 'video' : 'image',
+        mediaKind: isReel
+          ? 'reel'
+          : isStory
+            ? isVideo
+              ? 'story_video'
+              : 'story_image'
+            : isVideo
+              ? 'video'
+              : 'image',
         contentType: schedule.contentType,
       });
 
