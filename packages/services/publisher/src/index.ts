@@ -146,7 +146,9 @@ class InstagramAdapter implements PlatformAdapter {
     isVideo: boolean
   ): Promise<void> {
     const statusUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
-    const maxWaitMs = isVideo ? 120_000 : 30_000;
+    // Give videos significantly more time to process on Instagram than images,
+    // while staying comfortably under the Lambda's overall timeout.
+    const maxWaitMs = isVideo ? 360_000 : 60_000;
     const started = Date.now();
     let attempt = 0;
 
@@ -166,6 +168,14 @@ class InstagramAdapter implements PlatformAdapter {
           attempt,
           status_code: code || 'UNKNOWN',
         });
+
+        if (!code) {
+          logger.warn('Instagram media status response had no status code', {
+            creationId,
+            attempt,
+            raw_body: body,
+          });
+        }
 
         if (code === 'FINISHED' || code === 'PUBLISHED') return; // Ready
         if (code === 'ERROR') {
