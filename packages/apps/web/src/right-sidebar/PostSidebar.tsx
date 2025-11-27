@@ -10,12 +10,13 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { VideoUploader } from '@/components/VideoUploader';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostScheduler } from '@/components/PostScheduler';
-import { PostStatusCard, type PostStatus } from '@/components/PostStatusCard';
+import type { PostStatus } from '@/components/PostStatusCard';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,8 @@ import {
   Image as ImageIcon,
   Film,
   Zap,
+  Instagram,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
@@ -71,12 +74,14 @@ interface PostDetailData {
   shareToFeed?: boolean | null;
   status: string; // 'draft' | 'scheduled' | 'published' | ...
   scheduledAt?: string;
+  postedAt?: string;
   brandId?: string;
   brand: { id: string; name: string };
   mediaAssets?: { cdnUrl: string; usageContext: string; displayOrder: number; assetId?: string }[];
   schedulingError?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  instagramPermalink?: string;
   generationParams?: {
     processing?: {
       active: boolean;
@@ -580,6 +585,38 @@ export function PostSidebar({
 
   const isVideoMedia = finalMediaType === 'video';
 
+  const getStatusBadgeVariant = (status: PostStatus) => {
+    switch (status) {
+      case 'draft':
+        return 'secondary';
+      case 'scheduled':
+        return 'default';
+      case 'published':
+        return 'secondary';
+      case 'failed':
+        return 'destructive';
+      case 'skipped':
+        return 'outline';
+      default:
+        return 'secondary';
+    }
+  };
+
+  const formatSidebarTimestamp = () => {
+    if (!post) return '';
+    const base =
+      (post.status === 'published' && post.postedAt) ||
+      post.scheduledAt ||
+      post.createdAt ||
+      post.updatedAt;
+    if (!base) return '';
+    try {
+      return formatInTimeZone(new Date(base), brandTimezone, 'MMM d, yyyy h:mm a');
+    } catch {
+      return '';
+    }
+  };
+
   return (
     <div className={containerClass} role="complementary" aria-labelledby="right-sidebar-title">
       {showHeader ? (
@@ -979,12 +1016,47 @@ export function PostSidebar({
           </div>
         ) : (
           <div className="space-y-4">
-            <PostStatusCard
-              status={(post.status as PostStatus) || 'draft'}
-              createdAt={post.createdAt || post.updatedAt || new Date().toISOString()}
-              processing={Boolean(post.generationParams?.processing?.active)}
-              errorMessage={post.schedulingError || null}
-            />
+            {/* Compact status + external link panel */}
+            <div className="bg-card border-border flex flex-col gap-1.5 rounded-md border px-3 py-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {post.generationParams?.processing?.active ? (
+                    <Badge variant="secondary" className="gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Scheduling...
+                    </Badge>
+                  ) : (
+                    <Badge variant={getStatusBadgeVariant((post.status as PostStatus) || 'draft')}>
+                      {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                    </Badge>
+                  )}
+                  {formatSidebarTimestamp() && (
+                    <span className="text-muted-foreground text-xs">
+                      {post.status === 'published'
+                        ? `Published ${formatSidebarTimestamp()}`
+                        : post.status === 'scheduled'
+                          ? `Scheduled ${formatSidebarTimestamp()}`
+                          : `Last updated ${formatSidebarTimestamp()}`}
+                    </span>
+                  )}
+                </div>
+                {post.status === 'published' && post.instagramPermalink && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => window.open(post.instagramPermalink as string, '_blank')}
+                  >
+                    <Instagram className="mr-1 h-4 w-4" />
+                    <span>View on Instagram</span>
+                  </Button>
+                )}
+              </div>
+              {post.status === 'failed' && post.schedulingError && (
+                <p className="text-destructive text-xs leading-snug">{post.schedulingError}</p>
+              )}
+            </div>
 
             <div className="space-y-2">
               <Label>{isVideoMedia ? 'Video' : 'Post Image'}</Label>
