@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
 import { MediaCard } from '@/components/MediaCard';
+import { validateMediaKind } from '@/lib/media-kind-validator';
 
 interface VideoUploaderProps {
   value?: string;
@@ -20,6 +21,10 @@ interface VideoUploaderProps {
   maxWidth?: number;
   maxHeight?: number;
   allowedAspectRatios?: { label: string; width: number; height: number }[];
+  /** Optional override for main dropzone heading text. */
+  headline?: string;
+  /** Optional override for secondary help text under the heading. */
+  subtext?: string;
 }
 
 export function VideoUploader({
@@ -36,6 +41,8 @@ export function VideoUploader({
   maxWidth,
   maxHeight,
   allowedAspectRatios,
+  headline,
+  subtext,
 }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>(value || '');
@@ -223,7 +230,15 @@ export function VideoUploader({
       setIsDragging(false);
 
       const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0 && files[0]) {
+      if (!files.length) return;
+
+      const kindError = validateMediaKind(files, 'video-only');
+      if (kindError) {
+        setError(kindError);
+        return;
+      }
+
+      if (files[0]) {
         handleFile(files[0]);
       }
     },
@@ -233,7 +248,15 @@ export function VideoUploader({
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if (files && files.length > 0 && files[0]) {
+      if (!files || !files.length) return;
+
+      const kindError = validateMediaKind(files, 'video-only');
+      if (kindError) {
+        setError(kindError);
+        return;
+      }
+
+      if (files[0]) {
         handleFile(files[0]);
       }
     },
@@ -267,7 +290,7 @@ export function VideoUploader({
 
   return (
     <div
-      className={cn('space-y-4', className)}
+      className={cn('space-y-3', className)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -295,7 +318,7 @@ export function VideoUploader({
         <div
           onClick={handleClickUpload}
           className={cn(
-            'relative cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-all',
+            'relative cursor-pointer rounded-lg border-2 border-dashed p-4 text-center transition-all',
             isDragging ? 'border-ring bg-muted' : 'border-border hover:border-foreground/30 border',
             isUploading && 'cursor-not-allowed opacity-50'
           )}
@@ -303,7 +326,7 @@ export function VideoUploader({
           <div className="flex flex-col items-center space-y-4">
             {isUploading ? (
               <>
-                <div className="border-foreground h-12 w-12 animate-spin rounded-full border-b-2" />
+                <div className="border-foreground h-10 w-10 animate-spin rounded-full border-b-2" />
                 <p className="text-muted-foreground text-sm">
                   Uploading video... {uploadProgress?.percentage || 0}%
                 </p>
@@ -318,13 +341,13 @@ export function VideoUploader({
               </>
             ) : (
               <>
-                <Upload className="text-muted-foreground h-12 w-12" />
+                <Upload className="text-muted-foreground h-8 w-8" />
                 <div>
                   <p className="text-foreground text-sm font-medium">
-                    Drop your video here or click to browse
+                    {headline || 'Drop your video here or click to browse'}
                   </p>
                   <p className="text-muted-foreground mt-1 text-xs">
-                    Supports: MP4, MOV, MPEG (max {maxSizeInMB}MB)
+                    {subtext || `Supports: MP4, MOV, MPEG (max ${maxSizeInMB}MB)`}
                   </p>
                 </div>
               </>
@@ -332,7 +355,7 @@ export function VideoUploader({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           <MediaCard
             type="video"
             src={previewUrl}

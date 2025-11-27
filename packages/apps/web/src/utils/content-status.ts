@@ -26,7 +26,7 @@ interface DisplayStatus {
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped' | 'processing';
   label: string;
   showSpinner: boolean;
-  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info';
   description?: string;
 }
 
@@ -42,7 +42,7 @@ export function getContentDisplayStatus(content: Content): DisplayStatus {
       status: 'processing',
       label: 'Scheduling...',
       showSpinner: true,
-      variant: 'secondary',
+      variant: 'info',
       description: 'Content is being scheduled for publishing',
     };
   }
@@ -65,7 +65,7 @@ export function getContentDisplayStatus(content: Content): DisplayStatus {
         status: 'scheduled',
         label: 'Scheduled',
         showSpinner: false,
-        variant: 'default',
+        variant: 'info',
         description: content.scheduledAt
           ? `Scheduled for ${formatScheduledTime(content.scheduledAt)}`
           : 'Content is scheduled for publishing',
@@ -76,7 +76,7 @@ export function getContentDisplayStatus(content: Content): DisplayStatus {
         status: 'published',
         label: 'Published',
         showSpinner: false,
-        variant: 'default',
+        variant: 'success',
         description: 'Content has been successfully published',
       };
 

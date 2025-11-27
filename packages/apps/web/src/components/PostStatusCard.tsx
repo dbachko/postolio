@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { PostStatusBadge } from './PostStatusBadge';
 
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
 
@@ -20,23 +20,6 @@ export function PostStatusCard({
   processing = false,
   errorMessage,
 }: PostStatusCardProps) {
-  const getBadgeVariant = (status: PostStatus) => {
-    switch (status) {
-      case 'draft':
-        return 'secondary';
-      case 'scheduled':
-        return 'default';
-      case 'published':
-        return 'secondary';
-      case 'failed':
-        return 'destructive';
-      case 'skipped':
-        return 'outline';
-      default:
-        return 'secondary';
-    }
-  };
-
   const formattedDate =
     typeof createdAt === 'string'
       ? format(new Date(createdAt), "MMM d, yyyy 'at' h:mm a")
@@ -46,15 +29,21 @@ export function PostStatusCard({
     <div className={`bg-muted rounded-lg p-4 ${className}`}>
       <div className="text-foreground mb-2 text-sm font-medium">Post Status</div>
       <div className="flex items-center gap-2">
-        {processing ? (
-          <Badge variant="secondary" className="gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" /> Scheduling...
-          </Badge>
-        ) : (
-          <Badge variant={getBadgeVariant(status)}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </Badge>
-        )}
+        <PostStatusBadge
+          status={status}
+          generationParams={
+            processing
+              ? {
+                  processing: {
+                    active: true,
+                    operation: 'scheduling',
+                    startedAt: new Date().toISOString(),
+                  },
+                }
+              : undefined
+          }
+          schedulingError={errorMessage}
+        />
         <span className="text-muted-foreground text-xs">Created: {formattedDate}</span>
       </div>
       {status === 'failed' && errorMessage ? (

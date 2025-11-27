@@ -5,7 +5,6 @@ import { content as contentApi, analyticsV2 } from '../lib/api';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,8 +28,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { formatInUserTimezone, toUTCFromInput, getUserTimezone } from '../lib/timezone';
 import { toast } from 'sonner';
-import { getContentDisplayStatus } from '../utils/content-status';
-import { Loader2 } from 'lucide-react';
+import { PostStatusBadge } from '../components/PostStatusBadge';
 
 // Import our new reusable components
 import { PostCaptionEditor } from '../components/PostCaptionEditor';
@@ -672,21 +670,12 @@ export default function PostDetail() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {(() => {
-              const display = getContentDisplayStatus({
-                id: post.id,
-                status: post.status as any,
-                generationParams: post.generationParams as any,
-                schedulingError: post.schedulingError || null,
-                scheduledAt: post.scheduledAt || undefined,
-              });
-              return (
-                <Badge variant={display.variant || 'default'} className="gap-1">
-                  {display.showSpinner && <Loader2 className="h-3 w-3 animate-spin" />}
-                  {display.label}
-                </Badge>
-              );
-            })()}
+            <PostStatusBadge
+              status={post.status as any}
+              generationParams={post.generationParams as any}
+              schedulingError={post.schedulingError || null}
+              scheduledAt={post.scheduledAt || undefined}
+            />
             {(() => {
               const pubs = publicationsQuery.data?.data || [];
               if (!pubs.length) return null;

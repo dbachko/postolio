@@ -10,39 +10,21 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { VideoUploader } from '@/components/VideoUploader';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
+import { VideoUploader } from '@/components/VideoUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostScheduler } from '@/components/PostScheduler';
 import type { PostStatus } from '@/components/PostStatusCard';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { PostSidebarStatusPanel } from './PostSidebarStatusPanel';
+import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { toUTCFromInput, getUserTimezone } from '@/lib/timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import {
-  X,
-  Clock,
-  Save,
-  Upload,
-  Calendar,
-  HelpCircle,
-  Image as ImageIcon,
-  Film,
-  Zap,
-  Instagram,
-  Loader2,
-} from 'lucide-react';
+import { X, Clock, Save, Upload, Calendar, Image as ImageIcon, Film, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
 import {
@@ -585,38 +567,6 @@ export function PostSidebar({
 
   const isVideoMedia = finalMediaType === 'video';
 
-  const getStatusBadgeVariant = (status: PostStatus) => {
-    switch (status) {
-      case 'draft':
-        return 'secondary';
-      case 'scheduled':
-        return 'default';
-      case 'published':
-        return 'secondary';
-      case 'failed':
-        return 'destructive';
-      case 'skipped':
-        return 'outline';
-      default:
-        return 'secondary';
-    }
-  };
-
-  const formatSidebarTimestamp = () => {
-    if (!post) return '';
-    const base =
-      (post.status === 'published' && post.postedAt) ||
-      post.scheduledAt ||
-      post.createdAt ||
-      post.updatedAt;
-    if (!base) return '';
-    try {
-      return formatInTimeZone(new Date(base), brandTimezone, 'MMM d, yyyy h:mm a');
-    } catch {
-      return '';
-    }
-  };
-
   return (
     <div className={containerClass} role="complementary" aria-labelledby="right-sidebar-title">
       {showHeader ? (
@@ -735,62 +685,12 @@ export function PostSidebar({
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    {formData.contentType === 'reel' ? 'Video' : 'Media'}{' '}
-                    <span className="text-destructive">*</span>
-                    {formData.contentType === 'reel' && (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 p-0">
-                            <HelpCircle className="text-muted-foreground h-4 w-4" />
-                            <span className="sr-only">Instagram reel video requirements</span>
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-lg">
-                          <DialogHeader>
-                            <DialogTitle>Instagram reel video requirements</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-3 text-sm">
-                            <p>
-                              To avoid Instagram media processing errors, try to match these
-                              guidelines when uploading a reel video:
-                            </p>
-                            <ul className="list-disc space-y-1 pl-5">
-                              <li>
-                                <strong>Resolution:</strong> minimum{' '}
-                                <span className="font-mono">540×960</span>, recommended{' '}
-                                <span className="font-mono">1080×1920</span> (Full HD vertical)
-                              </li>
-                              <li>
-                                <strong>Aspect ratio:</strong> vertical{' '}
-                                <span className="font-mono">9:16</span> (Instagram also accepts
-                                square <span className="font-mono">1:1</span> and portrait{' '}
-                                <span className="font-mono">4:5</span>)
-                              </li>
-                              <li>
-                                <strong>Length:</strong> between 3 and 90 seconds
-                              </li>
-                              <li>
-                                <strong>File size:</strong> up to 300MB per video
-                              </li>
-                              <li>
-                                <strong>Formats:</strong> MP4 or MOV using common codecs
-                                (H.264/HEVC)
-                              </li>
-                            </ul>
-                            <p className="text-muted-foreground text-xs">
-                              If your video falls outside these ranges, Instagram may reject or fail
-                              to process it. Re-export from your editor using a vertical 1080×1920
-                              preset for best results.
-                            </p>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    )}
+                    Media <span className="text-destructive">*</span>
                   </Label>
 
                   {/* Reels can only be video */}
                   {formData.contentType === 'reel' ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {selectedBrand?.id && (
                         <>
                           <VideoUploader
@@ -810,21 +710,10 @@ export function PostSidebar({
                               { label: '4:5', width: 4, height: 5 },
                               { label: '1:1', width: 1, height: 1 },
                             ]}
+                            headline="Drop reel video here, or click to browse"
+                            subtext="Reels: MP4/MOV/MPEG · 3–90s · max 300MB"
                           />
-                          <p className="text-muted-foreground text-sm">
-                            Upload a vertical video for your reel (max 300MB, 9:16 aspect ratio
-                            recommended)
-                          </p>
-                          <div className="flex justify-end pt-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowAssetPicker(true)}
-                            >
-                              Choose from Assets
-                            </Button>
-                          </div>
+                          <ChooseFromAssetsButton onClick={() => setShowAssetPicker(true)} />
                           <div className="border-border bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
                             <div className="space-y-0.5">
                               <Label htmlFor="share-to-feed-toggle" className="text-xs font-medium">
@@ -877,17 +766,8 @@ export function PostSidebar({
                             }}
                             maxVideoSizeInMB={300}
                             acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                            onChooseFromAssets={() => setShowAssetPicker(true)}
                           />
-                          <div className="flex justify-end pt-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowAssetPicker(true)}
-                            >
-                              Choose from Assets
-                            </Button>
-                          </div>
                         </>
                       )}
                     </>
@@ -1016,50 +896,17 @@ export function PostSidebar({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Compact status + external link panel */}
-            <div className="bg-card border-border flex flex-col gap-1.5 rounded-md border px-3 py-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-1.5">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {post.generationParams?.processing?.active ? (
-                    <Badge variant="secondary" className="gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Scheduling...
-                    </Badge>
-                  ) : (
-                    <Badge variant={getStatusBadgeVariant((post.status as PostStatus) || 'draft')}>
-                      {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
-                    </Badge>
-                  )}
-                  {formatSidebarTimestamp() && (
-                    <span className="text-muted-foreground text-xs">
-                      {post.status === 'published'
-                        ? `Published ${formatSidebarTimestamp()}`
-                        : post.status === 'scheduled'
-                          ? `Scheduled ${formatSidebarTimestamp()}`
-                          : `Last updated ${formatSidebarTimestamp()}`}
-                    </span>
-                  )}
-                </div>
-                {post.status === 'published' && post.instagramPermalink && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => window.open(post.instagramPermalink as string, '_blank')}
-                  >
-                    <Instagram className="mr-1 h-4 w-4" />
-                    <span>View on Instagram</span>
-                  </Button>
-                )}
-              </div>
-              {post.status === 'failed' && post.schedulingError && (
-                <p className="text-destructive text-xs leading-snug">{post.schedulingError}</p>
-              )}
-            </div>
+            <PostSidebarStatusPanel
+              status={(post.status as PostStatus) || 'draft'}
+              processing={Boolean(post.generationParams?.processing?.active)}
+              schedulingError={post.schedulingError || null}
+              instagramPermalink={post.instagramPermalink}
+              brandTimezone={brandTimezone}
+              scheduledAt={post.scheduledAt}
+            />
 
             <div className="space-y-2">
-              <Label>{isVideoMedia ? 'Video' : 'Post Image'}</Label>
+              <Label>{isVideoMedia ? 'Video' : 'Post Media'}</Label>
               {isVideoMedia ? (
                 formData.videoUrl ? (
                   <div className="bg-muted overflow-hidden rounded-lg">
@@ -1072,35 +919,43 @@ export function PostSidebar({
                 ) : (
                   <div className="text-muted-foreground text-sm">No video</div>
                 )
-              ) : formData.imageUrl ? (
-                <div className="bg-muted overflow-hidden rounded-lg">
-                  <img
-                    src={formData.imageUrl}
-                    alt="Post content"
-                    className="h-auto max-h-[250px] w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
               ) : (
-                <div className="text-muted-foreground text-sm">No image</div>
+                <div className="space-y-2">
+                  {post?.brand?.id && (
+                    <MultiImageUploader
+                      value={formData.carouselAssets}
+                      onChange={(assets) => {
+                        setFormData((s) => ({
+                          ...s,
+                          carouselAssets: assets,
+                          imageUrl: assets[0]?.url || '',
+                          mediaType: assets.length > 0 ? 'image' : s.mediaType,
+                        }));
+                      }}
+                      brandId={post.brand.id}
+                      maxImages={10}
+                      maxSizeInMB={10}
+                      enableUpload={false}
+                    />
+                  )}
+                  {!formData.carouselAssets.length && (
+                    <div className="text-muted-foreground text-sm">No image</div>
+                  )}
+                </div>
               )}
               {!disabled && (
                 <div className="flex flex-col gap-2">
                   <p className="text-muted-foreground text-xs">
                     {isVideoMedia
                       ? 'Change the video for this post by selecting an asset from your library.'
-                      : 'Change the image for this post by selecting an asset from your library.'}
+                      : 'Change the images for this post by selecting assets from your library.'}
                   </p>
                   {post?.brand?.id && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
+                    <ChooseFromAssetsButton
                       onClick={() => setShowAssetPicker(true)}
-                    >
-                      Choose from Assets
-                    </Button>
+                      size="compact"
+                      fullWidth={false}
+                    />
                   )}
                 </div>
               )}
@@ -1235,25 +1090,21 @@ export function PostSidebar({
           type={isCreating ? (formData.contentType === 'reel' ? 'video' : undefined) : 'image'}
           onSelect={async (asset) => {
             if (post && id) {
-              try {
-                await contentApi.attachAsset(post.id, asset.id);
-                setFormData((s) => ({
-                  ...s,
-                  imageUrl: asset.url,
-                }));
-                queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
-                  if (!oldData) return oldData;
-                  return {
-                    ...oldData,
-                    imageUrl: asset.url,
-                  };
-                });
-              } catch (error) {
-                console.error('Failed to attach asset to post', error);
-                toast.error('Failed to attach asset. Please try again.');
-              } finally {
-                setShowAssetPicker(false);
-              }
+              // Edit mode: update local media selection; actual attachment is saved via updateMedia on Save.
+              const imageUrl = asset.thumbnailUrl || asset.url;
+              setFormData((s) => ({
+                ...s,
+                imageUrl,
+                mediaType: 'image',
+                carouselAssets: [
+                  ...s.carouselAssets,
+                  {
+                    id: asset.id,
+                    url: imageUrl,
+                  },
+                ],
+              }));
+              setShowAssetPicker(false);
               return;
             }
 

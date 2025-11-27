@@ -91,7 +91,9 @@ async function main() {
         email,
         password: await bcrypt.hash(password, 10),
         name,
-        subscriptionTier: 'premium',
+        // Seed as the lowest tier so dev flows exercise realistic limits
+        // (schedule-ahead capped at ~10 posts instead of paid limits).
+        subscriptionTier: 'free',
         timezone: 'UTC',
         timezoneAutoDetected: true,
       },

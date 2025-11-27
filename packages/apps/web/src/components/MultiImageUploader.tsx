@@ -6,6 +6,7 @@ import { assetsApi } from '@/features/assets/api/client';
 import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MediaCard } from '@/components/MediaCard';
+import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 
 export interface AssetReference {
   id: string; // Asset ID from Assets database
@@ -19,6 +20,10 @@ interface MultiImageUploaderProps {
   className?: string;
   maxImages?: number;
   maxSizeInMB?: number;
+  /** When false, disables direct uploads/dropzones and only renders existing media cards. */
+  enableUpload?: boolean;
+  /** Optional handler to surface a "Choose from Assets" button under the main dropzone. */
+  onChooseFromAssets?: () => void;
   // Optional video support: when provided, users can upload either images OR a single video.
   videoUrl?: string;
   onVideoChange?: (url: string) => void;
@@ -40,6 +45,8 @@ export function MultiImageUploader({
   className,
   maxImages = 10,
   maxSizeInMB = 10,
+  enableUpload = true,
+  onChooseFromAssets,
   videoUrl,
   onVideoChange,
   maxVideoSizeInMB = 300,
@@ -314,7 +321,7 @@ export function MultiImageUploader({
     });
   };
 
-  const isUploadDisabled = isUploadInProgress || hasVideo;
+  const isUploadDisabled = isUploadInProgress || hasVideo || !enableUpload;
 
   const handleDropzoneClick = () => {
     if (isUploadDisabled) return;
@@ -423,29 +430,31 @@ export function MultiImageUploader({
   return (
     <div className={cn('space-y-3', className)}>
       {/* Error message */}
-      {error && (
+      {error && enableUpload && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
       {/* Hidden file input (images or video) */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,video/*"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileSelect(e.target.files)}
-      />
+      {enableUpload && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files)}
+        />
+      )}
 
       {/* Media layout */}
       {/* Case 1: No media yet -> full-width dropzone */}
-      {!hasImages && !hasVideo && renderDropzone('full')}
+      {!hasImages && !hasVideo && enableUpload && renderDropzone('full')}
 
       {/* Case 2: Video selected -> single card with controls, upload disabled */}
       {hasVideo && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           <MediaCard
             type="video"
             src={videoUrl ?? ''}
@@ -469,7 +478,7 @@ export function MultiImageUploader({
 
       {/* Case 3: One or more images -> grid of images plus compact upload card */}
       {hasImages && !hasVideo && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           {images.map((image, index) => (
             <MediaCard
               key={`${image.url}-${index}`}
@@ -488,8 +497,12 @@ export function MultiImageUploader({
           ))}
 
           {/* Upload card as the last item when more images are allowed */}
-          {images.length < maxImages && renderDropzone('card')}
+          {enableUpload && images.length < maxImages && renderDropzone('card')}
         </div>
+      )}
+
+      {enableUpload && onChooseFromAssets && (
+        <ChooseFromAssetsButton onClick={onChooseFromAssets} />
       )}
     </div>
   );

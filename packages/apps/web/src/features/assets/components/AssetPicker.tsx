@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { assetsApi, type AssetType } from '@/features/assets/api/client';
+import { X } from 'lucide-react';
 
 export interface AssetPickerProps {
   onSelect: (asset: AssetType) => void;
@@ -53,10 +54,12 @@ export default function AssetPicker({ onSelect, onClose, brandId, type }: AssetP
           <div className="flex shrink-0 items-center justify-between border-b p-4">
             <h2 className="text-2xl font-bold">Choose Asset</h2>
             <button
+              type="button"
               onClick={onClose}
-              className="ring-offset-background focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground inline-flex h-8 items-center justify-center rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+              aria-label="Close"
+              className="ring-offset-background focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground text-muted-foreground inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
             >
-              Close
+              <X className="h-4 w-4" />
             </button>
           </div>
 
