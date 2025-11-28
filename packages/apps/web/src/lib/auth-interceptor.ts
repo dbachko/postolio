@@ -23,17 +23,17 @@ export class AuthInterceptor {
     console.log('[Auth] Starting automatic token refresh (every 12 minutes)');
 
     // Refresh immediately on start (if user is logged in)
-    this.refreshIfNeeded();
+    this.refreshIfNeeded('startup');
 
     // Then refresh every 12 minutes
     this.refreshTimer = setInterval(() => {
-      this.refreshIfNeeded();
+      this.refreshIfNeeded('interval');
     }, this.REFRESH_INTERVAL);
 
     // Also refresh when tab becomes visible (user returns)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        this.refreshIfNeeded();
+        this.refreshIfNeeded('visibility');
       }
     });
 
@@ -54,27 +54,26 @@ export class AuthInterceptor {
   }
 
   /**
-   * Check if user has auth cookies (indicating they're logged in)
-   * This is a simple heuristic to avoid noisy refresh attempts when not logged in
+   * Start a refresh cycle with a shared promise to avoid concurrent rotations
    */
-  private static hasAuthCookies(): boolean {
-    // Check if auth_token or refresh_token cookies exist
-    return document.cookie.includes('auth_token') || document.cookie.includes('refresh_token');
+  private static startRefresh(reason: string): Promise<void> {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    // Use a shared promise to prevent concurrent refresh calls (which can invalidate tokens)
+    this.refreshPromise = this.performRefresh(reason).finally(() => {
+      this.refreshPromise = null;
+    });
+
+    return this.refreshPromise;
   }
 
   /**
    * Refresh token if needed (throttled)
    * Only refreshes if:
-   * - User appears to be logged in (has auth cookies)
    * - More than 11 minutes since last refresh
    * - No refresh currently in progress
    */
-  private static async refreshIfNeeded(): Promise<void> {
-    // Skip refresh if user doesn't appear to be logged in
-    if (!this.hasAuthCookies()) {
-      return;
-    }
-
+  private static async refreshIfNeeded(reason: string): Promise<void> {
     const now = Date.now();
     const timeSinceLastRefresh = now - this.lastRefreshTime;
 
@@ -83,29 +82,25 @@ export class AuthInterceptor {
       return;
     }
 
-    // Don't start a new refresh if one is already in progress
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    this.refreshPromise = this.performRefresh();
-    await this.refreshPromise;
-    this.refreshPromise = null;
+    await this.startRefresh(reason);
   }
 
   /**
    * Perform the actual token refresh
    * Silently fails if user is not logged in
    */
-  private static async performRefresh(): Promise<void> {
+  private static async performRefresh(trigger: string): Promise<void> {
     try {
-      console.log('[Auth] Refreshing token...');
+      console.log(`[Auth] Refreshing token (trigger: ${trigger})...`);
       await authApi.refreshToken();
       this.lastRefreshTime = Date.now();
-      console.log('[Auth] Token refreshed successfully');
+      console.log(`[Auth] Token refreshed successfully (trigger: ${trigger})`);
     } catch (error) {
+      // Update last refresh time to avoid tight retry loops if user is logged out
+      this.lastRefreshTime = Date.now();
       // Don't throw - user will be logged out on next API request if refresh failed
-      console.warn('[Auth] Token refresh failed (user may not be logged in):', error);
+      console.warn(`[Auth] Token refresh failed (trigger: ${trigger}):`, error);
+      throw error;
     }
   }
 
@@ -119,22 +114,9 @@ export class AuthInterceptor {
   static async handleUnauthorized<T>(
     retryRequest: () => Promise<T>
   ): Promise<{ shouldRetry: boolean; result?: T }> {
-    // If refresh is already in progress, wait for it
-    if (this.refreshPromise) {
-      await this.refreshPromise;
-      // Try the request again with the refreshed token
-      try {
-        const result = await retryRequest();
-        return { shouldRetry: true, result };
-      } catch (_error) {
-        // Still failing after refresh, user needs to log in
-        return { shouldRetry: false };
-      }
-    }
-
-    // Attempt to refresh the token
     try {
-      await this.performRefresh();
+      // Attempt to refresh the token (shared promise prevents concurrent refreshes)
+      await this.startRefresh('401');
       // Refresh succeeded, retry the original request
       try {
         const result = await retryRequest();
