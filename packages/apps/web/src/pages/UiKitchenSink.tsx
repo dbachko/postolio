@@ -28,7 +28,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function UiKitchenSink() {
   return (
-    <div className="container mx-auto space-y-8 p-6">
+    <div className="mx-auto w-full space-y-8">
       <Card>
         <CardHeader>
           <CardTitle>Buttons & Inputs</CardTitle>

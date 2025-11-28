@@ -378,8 +378,8 @@ export default function Analytics() {
   };
 
   return (
-    <div className="min-h-screen p-4 sm:p-8">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-screen">
+      <div className="mx-auto w-full max-w-6xl">
         <PageHeader title="Analytics" description="Performance metrics and insights" />
 
         {error && (

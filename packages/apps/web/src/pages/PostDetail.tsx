@@ -629,7 +629,7 @@ export default function PostDetail() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
+    <div className="mx-auto w-full max-w-7xl">
       {/* Header */}
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

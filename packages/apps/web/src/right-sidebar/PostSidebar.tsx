@@ -432,14 +432,36 @@ export function PostSidebar({
   const qScheduledAt = searchParams.get('scheduledAt');
   const qCampaignId = searchParams.get('campaignId');
   const qAssetId = searchParams.get('assetId');
+  const qAssetIdsParam = searchParams.get('assetIds');
+  const prefillAssetIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (qAssetId) ids.add(qAssetId);
+    if (qAssetIdsParam) {
+      qAssetIdsParam
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .forEach((id) => ids.add(id));
+    }
+    return Array.from(ids);
+  }, [qAssetId, qAssetIdsParam]);
 
   // Optional asset prefill via React Query (images & videos)
-  const { data: prefillAsset, isLoading: isPrefillAssetLoading } = useQuery({
-    queryKey: ['prefill-asset', qAssetId],
-    enabled: isCreating && Boolean(qAssetId),
+  const { data: prefillAssets, isLoading: isPrefillAssetsLoading } = useQuery({
+    queryKey: ['prefill-assets', prefillAssetIds.join(',')],
+    enabled: isCreating && prefillAssetIds.length > 0,
     queryFn: async () => {
-      const { asset } = await assetsApi.getAsset(qAssetId!);
-      return asset;
+      const results = await Promise.all(
+        prefillAssetIds.map(async (id) => {
+          try {
+            const { asset } = await assetsApi.getAsset(id);
+            return asset;
+          } catch {
+            return null;
+          }
+        })
+      );
+      return results.filter((asset): asset is NonNullable<typeof asset> => Boolean(asset));
     },
     retry: 0,
   });
@@ -448,42 +470,46 @@ export function PostSidebar({
   const prefillAppliedRef = useRef(false);
   useEffect(() => {
     if (!isCreating || prefillAppliedRef.current === true) return;
-    if (!qCaption && !qScheduledAt && !qCampaignId && !qAssetId) {
+    const hasPrefillInput =
+      Boolean(qCaption) ||
+      Boolean(qScheduledAt) ||
+      Boolean(qCampaignId) ||
+      prefillAssetIds.length > 0;
+    if (!hasPrefillInput) {
       return;
     }
 
-    // If we have an assetId, wait until asset query finishes (success or error)
-    if (qAssetId && isPrefillAssetLoading) {
+    // If we have assetIds, wait until the query finishes (success or error)
+    if (prefillAssetIds.length > 0 && isPrefillAssetsLoading) {
       return;
     }
 
-    const imageAsset =
-      qAssetId && prefillAsset && prefillAsset.fileType === 'image'
-        ? {
-            id: prefillAsset.id,
-            url: prefillAsset.thumbnailUrl || prefillAsset.url,
-          }
-        : null;
+    const images =
+      prefillAssets
+        ?.filter((asset) => asset.fileType === 'image')
+        .map((asset) => ({
+          id: asset.id,
+          url: asset.thumbnailUrl || asset.url,
+        })) ?? [];
 
-    const videoAssetUrl =
-      qAssetId && prefillAsset && prefillAsset.fileType === 'video' ? prefillAsset.url : null;
+    const videos = prefillAssets?.filter((asset) => asset.fileType === 'video') ?? [];
 
     setFormData((prev) => ({
       ...prev,
       caption: qCaption ?? prev.caption,
       scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
-      ...(imageAsset
+      ...(images.length > 0
         ? {
-            carouselAssets: [imageAsset],
+            carouselAssets: images,
             mediaType: 'image' as InstagramMediaType,
             videoUrl: '',
           }
         : {}),
-      ...(videoAssetUrl
+      ...(images.length === 0 && videos.length > 0
         ? {
             carouselAssets: [],
             mediaType: 'video' as InstagramMediaType,
-            videoUrl: videoAssetUrl,
+            videoUrl: videos[0]?.url || '',
           }
         : {}),
     }));
@@ -494,9 +520,9 @@ export function PostSidebar({
     qCaption,
     qScheduledAt,
     qCampaignId,
-    qAssetId,
-    isPrefillAssetLoading,
-    prefillAsset,
+    prefillAssetIds,
+    isPrefillAssetsLoading,
+    prefillAssets,
   ]);
 
   // Fetch campaigns for the brand

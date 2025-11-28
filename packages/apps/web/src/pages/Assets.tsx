@@ -11,7 +11,7 @@ export function Assets() {
 
   if (!selectedBrand) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="mx-auto w-full">
         <PageHeader title="Asset Library" description="Manage your images and videos" />
         <AppEmptyState
           variant="minimal"
@@ -25,7 +25,7 @@ export function Assets() {
 
   if (error) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="mx-auto w-full">
         <PageHeader title="Asset Library" description="Manage your images and videos" />
         <Card>
           <CardContent className="p-6">
@@ -40,11 +40,8 @@ export function Assets() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <PageHeader
-        title="Asset Library"
-        description="Manage your images and videos for content creation"
-      />
+    <div className="mx-auto w-full">
+      <PageHeader title="Asset Library" />
       <AssetLibrary brandId={selectedBrand.id} />
     </div>
   );
