@@ -33,7 +33,8 @@ export function DeleteAssetsDialog({
             Delete {count} asset{count === 1 ? '' : 's'}?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. Assets will be permanently removed.
+            This action cannot be undone. Assets that are used in posts must be removed from those
+            posts before they can be deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

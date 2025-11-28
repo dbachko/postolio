@@ -76,12 +76,12 @@ export function AssetCard({ asset, selected, onToggle, onOpen, onCreatePost }: A
         />
       )}
 
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent px-3 pt-12 pb-3 text-white opacity-0 transition-opacity group-hover:opacity-100">
-        <div className="flex flex-col gap-1 text-left">
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/60 to-transparent px-3 pt-12 pb-3 text-white opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex min-w-0 flex-col gap-1 text-left">
           <div className="line-clamp-1 text-sm font-semibold">{asset.title || asset.fileName}</div>
           <div className="text-xs text-white/80">{formatBytes(asset.fileSize)}</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Button
             size="icon"
             variant="secondary"

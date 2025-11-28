@@ -155,6 +155,60 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // Check whether assets are used in posts (per brand)
+  fastify.post<{
+    Body: {
+      assetIds?: string[];
+      brandId?: string;
+    };
+  }>('/usage', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { assetIds, brandId } = request.body;
+
+      const normalizedIds = Array.isArray(assetIds)
+        ? Array.from(
+            new Set(
+              assetIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+            )
+          )
+        : [];
+
+      if (!brandId || normalizedIds.length === 0) {
+        return reply.code(400).send({ error: 'brandId and assetIds are required' });
+      }
+
+      const ownsBrand = await ensureBrandOwned(brandId, userId);
+      if (!ownsBrand) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const usage = await prisma.postMediaAsset.groupBy({
+        by: ['assetId'],
+        _count: { _all: true },
+        where: {
+          assetId: { in: normalizedIds },
+          content: { brandId },
+        },
+      });
+
+      const counts = new Map(usage.map((row) => [row.assetId, row._count._all ?? 0]));
+      const results = normalizedIds.map((assetId) => {
+        const postCount = counts.get(assetId) ?? 0;
+        return {
+          assetId,
+          usedInPosts: postCount > 0,
+          postCount,
+        };
+      });
+
+      return reply.send({ usage: results });
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to check asset usage');
+      return reply.code(500).send({ error: 'Failed to check asset usage' });
+    }
+  });
+
   // Get asset
   fastify.get('/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {

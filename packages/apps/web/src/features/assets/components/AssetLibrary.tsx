@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Loader2, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { assetsApi, type AssetType } from '@/features/assets/api/client';
+import { assetsApi, type AssetType, type AssetUsageEntry } from '@/features/assets/api/client';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { AppEmptyState } from '@/components/AppEmptyState';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
     [allAssets, sortField, sortDirection]
   );
   const groupedAssets = useMemo(() => groupByMonth(sortedAssets), [sortedAssets]);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const clearSelection = useCallback(() => {
     setSelected(new Map());
@@ -97,6 +98,55 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   );
 
   const selectedAssets = useMemo(() => Array.from(selected.values()), [selected]);
+  const selectedAssetIds = useMemo(() => selectedAssets.map((asset) => asset.id), [selectedAssets]);
+  const sortedSelectionIds = useMemo(
+    () => Array.from(new Set(selectedAssetIds)).sort(),
+    [selectedAssetIds]
+  );
+
+  type AssetUsageResponse = { usage: AssetUsageEntry[] };
+
+  const {
+    data: usageData,
+    isFetching: isCheckingUsage,
+    isError: isUsageError,
+  } = useQuery<AssetUsageResponse, Error>({
+    queryKey: ['asset-usage', brandId ?? '', sortedSelectionIds.join(',')],
+    queryFn: () => assetsApi.getUsage(sortedSelectionIds, brandId as string),
+    enabled: !!brandId && sortedSelectionIds.length > 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (isUsageError) {
+      toast.error('Unable to check if these assets are used in posts right now.');
+    }
+  }, [isUsageError]);
+
+  const usedAssetIds = useMemo(() => {
+    const usage = usageData?.usage ?? [];
+    const usedIds = usage.filter((entry) => entry.usedInPosts).map((entry) => entry.assetId);
+    return new Set(usedIds);
+  }, [usageData]);
+
+  const deleteBlockedReason =
+    selectedAssets.length === 0
+      ? null
+      : isUsageError
+        ? 'Unable to verify whether these assets are used in posts. Please try again before deleting.'
+        : usedAssetIds.size > 0
+          ? selectedAssets.length === 1 && usedAssetIds.has(selectedAssets[0].id)
+            ? 'This asset is used in one or more posts. Remove it from those posts before deleting it.'
+            : 'Some assets are used in posts. Deselect those assets before deleting.'
+          : null;
+
+  const deleteTooltip =
+    deleteBlockedReason ||
+    (isCheckingUsage && selectedAssets.length > 0
+      ? 'Checking whether selected assets are used in posts…'
+      : undefined);
 
   const deleteSelected = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -122,6 +172,10 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   const handleDeleteSelected = () => {
     if (selectedAssets.length === 0) return;
+    if (deleteBlockedReason) {
+      toast.info(deleteBlockedReason);
+      return;
+    }
     setShowDeleteDialog(true);
   };
 
@@ -129,6 +183,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
     if (selectedAssets.length === 0) return;
     const images = selectedAssets.filter((a) => a.fileType === 'image');
     const videos = selectedAssets.filter((a) => a.fileType === 'video');
+    const maxImages = 10;
 
     if (videos.length > 0 && images.length === 0) {
       if (videos.length > 1) {
@@ -140,7 +195,13 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
     }
 
     if (images.length > 0) {
-      const imageIds = images.map((a) => a.id);
+      const limitedImages = images.slice(0, maxImages);
+      if (images.length > maxImages) {
+        toast.info(
+          `Only the first ${maxImages} images were attached. Select fewer to include all.`
+        );
+      }
+      const imageIds = limitedImages.map((a) => a.id);
       if (videos.length > 0) {
         toast.info('Videos cannot be combined with images; only images were attached.');
       }
@@ -174,6 +235,30 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [clearSelection, selected.size]);
+
+  useEffect(() => {
+    if (showDeleteDialog && deleteBlockedReason) {
+      setShowDeleteDialog(false);
+    }
+  }, [deleteBlockedReason, showDeleteDialog]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '320px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, sortedAssets.length]);
 
   if (!brandId) {
     return (
@@ -285,22 +370,11 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
             </div>
           ))}
 
-          {hasNextPage && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-              >
-                {isFetchingNextPage ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading more…
-                  </>
-                ) : (
-                  'Load more'
-                )}
-              </Button>
+          <div ref={loadMoreRef} className="h-1" />
+          {isFetchingNextPage && (
+            <div className="text-muted-foreground flex justify-center py-4 text-sm">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading more assets…
             </div>
           )}
         </div>
@@ -312,6 +386,8 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
         onCreatePost={handleCreatePostFromSelection}
         onDelete={handleDeleteSelected}
         deletePending={deleteSelected.isPending}
+        deleteDisabled={!!deleteBlockedReason || isCheckingUsage}
+        deleteTooltip={deleteTooltip}
       />
 
       <DeleteAssetsDialog
@@ -319,7 +395,14 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
         onOpenChange={setShowDeleteDialog}
         count={selectedAssets.length}
         isPending={deleteSelected.isPending}
-        onConfirm={() => deleteSelected.mutate(selectedAssets.map((asset) => asset.id))}
+        onConfirm={() => {
+          if (deleteBlockedReason) {
+            toast.info(deleteBlockedReason);
+            setShowDeleteDialog(false);
+            return;
+          }
+          deleteSelected.mutate(selectedAssets.map((asset) => asset.id));
+        }}
       />
     </div>
   );

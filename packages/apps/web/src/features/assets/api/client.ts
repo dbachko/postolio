@@ -46,6 +46,12 @@ export interface UploadUrlResponse {
   message: string;
 }
 
+export interface AssetUsageEntry {
+  assetId: string;
+  usedInPosts: boolean;
+  postCount: number;
+}
+
 export const assetsApi = {
   // Get presigned upload URL
   async getUploadUrl(data: {
@@ -112,6 +118,10 @@ export const assetsApi = {
   // Get single asset
   async getAsset(id: string): Promise<{ asset: Asset }> {
     return httpGet(`${API_BASE_URL}/${id}`);
+  },
+
+  async getUsage(assetIds: string[], brandId: string): Promise<{ usage: AssetUsageEntry[] }> {
+    return httpPost(`${API_BASE_URL}/usage`, { assetIds, brandId });
   },
 
   // Update asset

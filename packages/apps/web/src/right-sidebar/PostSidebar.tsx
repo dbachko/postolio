@@ -1114,51 +1114,63 @@ export function PostSidebar({
         <AssetPicker
           brandId={brandIdForAssets}
           type={isCreating ? (formData.contentType === 'reel' ? 'video' : undefined) : 'image'}
-          onSelect={async (asset) => {
+          onSelectMany={(assets) => {
+            const videos = assets.filter((a) => a.fileType === 'video');
+            const images = assets.filter((a) => a.fileType === 'image');
+
             if (post && id) {
-              // Edit mode: update local media selection; actual attachment is saved via updateMedia on Save.
-              const imageUrl = asset.thumbnailUrl || asset.url;
-              setFormData((s) => ({
-                ...s,
-                imageUrl,
-                mediaType: 'image',
-                carouselAssets: [
-                  ...s.carouselAssets,
-                  {
-                    id: asset.id,
-                    url: imageUrl,
-                  },
-                ],
-              }));
+              // Edit mode: just stage the selection; save occurs via updateMedia
+              if (videos.length > 0) {
+                setFormData((s) => ({
+                  ...s,
+                  carouselAssets: [],
+                  mediaType: 'video' as InstagramMediaType,
+                  videoUrl: videos[0]?.url || '',
+                }));
+              } else if (images.length > 0) {
+                setFormData((s) => {
+                  const nextAssets = [
+                    ...s.carouselAssets,
+                    ...images.map((asset) => ({
+                      id: asset.id,
+                      url: asset.thumbnailUrl || asset.url,
+                    })),
+                  ];
+                  return {
+                    ...s,
+                    carouselAssets: nextAssets,
+                    imageUrl: nextAssets[0]?.url || '',
+                    mediaType: 'image',
+                    videoUrl: '',
+                  };
+                });
+              }
               setShowAssetPicker(false);
               return;
             }
 
-            // Creation mode: map selected asset into form data
-            setFormData((s) => {
-              if (asset.fileType === 'video') {
-                return {
-                  ...s,
-                  carouselAssets: [],
-                  mediaType: 'video' as InstagramMediaType,
-                  videoUrl: asset.url,
-                };
-              }
-
-              const imageUrl = asset.thumbnailUrl || asset.url;
-              return {
+            // Creation mode
+            if (videos.length > 0) {
+              setFormData((s) => ({
+                ...s,
+                carouselAssets: [],
+                mediaType: 'video' as InstagramMediaType,
+                videoUrl: videos[0]?.url || '',
+              }));
+            } else if (images.length > 0) {
+              setFormData((s) => ({
                 ...s,
                 carouselAssets: [
                   ...s.carouselAssets,
-                  {
+                  ...images.map((asset) => ({
                     id: asset.id,
-                    url: imageUrl,
-                  },
-                ],
+                    url: asset.thumbnailUrl || asset.url,
+                  })),
+                ].slice(0, 10),
                 mediaType: 'image' as InstagramMediaType,
                 videoUrl: '',
-              };
-            });
+              }));
+            }
             setShowAssetPicker(false);
           }}
           onClose={() => setShowAssetPicker(false)}
