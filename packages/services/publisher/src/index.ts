@@ -146,10 +146,14 @@ class InstagramAdapter implements PlatformAdapter {
     isVideo: boolean,
     opts?: { throwOnTimeout?: boolean; maxWaitMs?: number }
   ): Promise<boolean> {
+    // Tests should not wait for real media processing; allow skip via env or NODE_ENV.
+    if (process.env.IG_SKIP_MEDIA_WAIT === 'true' || process.env.NODE_ENV === 'test') {
+      return true;
+    }
+
     const statusUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
-    // Give videos significantly more time to process on Instagram than images,
-    // while staying comfortably under the Lambda's overall timeout.
-    const maxWaitMs = opts?.maxWaitMs ?? (isVideo ? 360_000 : 60_000);
+    // Allow ample time for Instagram to process all media types; align images with video waits.
+    const maxWaitMs = opts?.maxWaitMs ?? 360_000;
     const throwOnTimeout = opts?.throwOnTimeout ?? true;
     const started = Date.now();
     let attempt = 0;
@@ -328,10 +332,12 @@ class InstagramAdapter implements PlatformAdapter {
         };
       }
 
-      // Step 2: Wait for the media container to be ready when publishing videos.
-      if (isVideo) {
-        await this.waitForMediaReady(creationId, credentials.accessToken, isVideo);
-      }
+      // Step 2: Wait for the media container to be ready (for all media types).
+      await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
+        // Fail fast for videos; be more lenient for images/stories but still wait up to the full window
+        throwOnTimeout: isVideo,
+        maxWaitMs: 360_000,
+      });
 
       // Step 3: Publish the media (with a readiness-aware retry for images)
       const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
@@ -359,7 +365,7 @@ class InstagramAdapter implements PlatformAdapter {
 
       const notReady =
         publishAttempt.igMsg &&
-        /not ready|not\s+ready\s+for\s+publishing|finish processing|processing/i.test(
+        /not ready|not\s+ready\s+for\s+publishing|finish processing|processing|cannot\s+be\s+found/i.test(
           publishAttempt.igMsg
         );
 
@@ -370,8 +376,8 @@ class InstagramAdapter implements PlatformAdapter {
           message: publishAttempt.igMsg,
         });
         await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
-          throwOnTimeout: isVideo, // fail fast for video; be lenient for images
-          maxWaitMs: isVideo ? undefined : 90_000,
+          throwOnTimeout: isVideo, // fail fast for video; be lenient for images/stories
+          maxWaitMs: 360_000, // align image/story wait window with video
         });
         publishAttempt = await tryPublish();
       }
