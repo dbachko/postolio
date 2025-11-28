@@ -139,19 +139,13 @@ describe('Publisher Lambda', () => {
         json: async () => ({ id: 'creation-id-123' }),
       });
 
-      // 2. Container status check (ready)
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status_code: 'FINISHED', status: 'ready' }),
-      });
-
-      // 3. Publish container
+      // 2. Publish container
       fetchMock.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: 'media-id-789' }),
       });
 
-      // 4. Permalink fetch
+      // 3. Permalink fetch
       fetchMock.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ permalink: 'https://instagram.com/p/test123' }),

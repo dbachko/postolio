@@ -238,10 +238,12 @@ export class InstagramConnector implements Connector {
       // - VIDEO: feed video
       // - REELS: reel (short‑form video)
       // - STORIES: ephemeral story (image or video)
-      const mediaType = req.mediaType || 'IMAGE';
-      const isReel = mediaType === 'REELS';
-      const isStory = mediaType === 'STORIES';
-      const isVideo = mediaType === 'VIDEO' || mediaType === 'REELS' || mediaType === 'STORIES';
+      const requestedMediaType = req.mediaType || 'IMAGE';
+      // Meta deprecated VIDEO for feed publishing; treat VIDEO as REELS with share_to_feed=true
+      const normalizedMediaType = requestedMediaType === 'VIDEO' ? 'REELS' : requestedMediaType;
+      const isReel = normalizedMediaType === 'REELS';
+      const isStory = normalizedMediaType === 'STORIES';
+      const isVideo = normalizedMediaType === 'REELS' || normalizedMediaType === 'STORIES';
 
       // Step 1: create media container
       const caption = (req.caption || '').trim();
@@ -257,9 +259,10 @@ export class InstagramConnector implements Connector {
         containerData.video_url = req.mediaUrl || req.imageUrl || '';
         // For video containers, media_type controls whether this is a feed video,
         // reel, or story per Meta docs.
-        containerData.media_type = mediaType;
+        containerData.media_type = normalizedMediaType;
+        // For reels (including classic feed videos coerced to REELS),
+        // explicitly control whether it also appears in the feed.
         if (isReel) {
-          // For reels, explicitly control whether it also appears in the feed.
           containerData.share_to_feed = String(req.shareToFeed ?? true);
           // Optional: specify thumbnail offset (in milliseconds from start)
           if (req.thumbOffset !== undefined) {
@@ -310,7 +313,7 @@ export class InstagramConnector implements Connector {
         publishedAt: new Date().toISOString(),
         permalink,
         metadata: {
-          mediaType: req.mediaType,
+          mediaType: normalizedMediaType,
         },
       };
     } catch (error) {

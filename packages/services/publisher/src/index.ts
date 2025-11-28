@@ -143,14 +143,17 @@ class InstagramAdapter implements PlatformAdapter {
   private async waitForMediaReady(
     creationId: string,
     accessToken: string,
-    isVideo: boolean
-  ): Promise<void> {
+    isVideo: boolean,
+    opts?: { throwOnTimeout?: boolean; maxWaitMs?: number }
+  ): Promise<boolean> {
     const statusUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
     // Give videos significantly more time to process on Instagram than images,
     // while staying comfortably under the Lambda's overall timeout.
-    const maxWaitMs = isVideo ? 360_000 : 60_000;
+    const maxWaitMs = opts?.maxWaitMs ?? (isVideo ? 360_000 : 60_000);
+    const throwOnTimeout = opts?.throwOnTimeout ?? true;
     const started = Date.now();
     let attempt = 0;
+    let lastStatus: string | undefined;
 
     while (Date.now() - started < maxWaitMs) {
       try {
@@ -162,6 +165,7 @@ class InstagramAdapter implements PlatformAdapter {
         const body = resp.ok ? await resp.json() : undefined;
         const codeRaw = (body?.status_code || body?.status || '').toString();
         const code = codeRaw.toUpperCase();
+        lastStatus = code || lastStatus;
 
         logger.info('Instagram media status check', {
           creationId,
@@ -177,8 +181,8 @@ class InstagramAdapter implements PlatformAdapter {
           });
         }
 
-        if (code === 'FINISHED' || code === 'PUBLISHED') return; // Ready
-        if (code === 'ERROR') {
+        if (code === 'FINISHED' || code === 'PUBLISHED' || code === 'READY') return true; // Ready
+        if (code === 'ERROR' || code === 'EXPIRED') {
           logger.error('Instagram media processing error reported by API', {
             creationId,
             attempt,
@@ -208,7 +212,17 @@ class InstagramAdapter implements PlatformAdapter {
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    throw new Error('Media is not ready for publishing after waiting');
+    logger.warn('Timed out waiting for Instagram media readiness', {
+      creationId,
+      isVideo,
+      waitedMs: Date.now() - started,
+      lastStatus: lastStatus || 'UNKNOWN',
+    });
+
+    if (throwOnTimeout) {
+      throw new Error('Media is not ready for publishing after waiting');
+    }
+    return false;
   }
   async publish(
     schedule: Schedule,
@@ -252,7 +266,12 @@ class InstagramAdapter implements PlatformAdapter {
         } else if (isStory) {
           createMediaParams.set('media_type', 'STORIES');
         } else {
-          createMediaParams.set('media_type', 'VIDEO');
+          // Meta deprecated VIDEO for feed publishing; use REELS with share_to_feed
+          // to emulate classic feed videos.
+          const shareToFeed =
+            typeof schedule.shareToFeed === 'boolean' ? schedule.shareToFeed : true;
+          createMediaParams.set('media_type', 'REELS');
+          createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
         }
       } else {
         createMediaParams.set('image_url', mediaUrl);
@@ -309,29 +328,62 @@ class InstagramAdapter implements PlatformAdapter {
         };
       }
 
-      // Step 2: Wait for the media container to be ready (prevents "The media is not ready" errors)
-      await this.waitForMediaReady(creationId, credentials.accessToken, isVideo);
+      // Step 2: Wait for the media container to be ready when publishing videos.
+      if (isVideo) {
+        await this.waitForMediaReady(creationId, credentials.accessToken, isVideo);
+      }
 
-      // Step 3: Publish the media
+      // Step 3: Publish the media (with a readiness-aware retry for images)
       const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
       const publishParams = new URLSearchParams({
         creation_id: creationId,
         access_token: credentials.accessToken,
       });
 
-      logger.info('Publishing Instagram media', { creationId });
-
-      const publishResponse = await fetch(`${publishUrl}?${publishParams}`, {
-        method: 'POST',
-      });
-
-      if (!publishResponse.ok) {
-        const raw = await publishResponse.text();
+      const tryPublish = async () => {
+        logger.info('Publishing Instagram media', { creationId });
+        const resp = await fetch(`${publishUrl}?${publishParams}`, {
+          method: 'POST',
+        });
+        if (resp.ok) {
+          return { resp };
+        }
+        const raw = await resp.text();
         const parsed = asIGErrorPayload(safeParseJson(raw));
         const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
         const igTitle = parsed?.error?.error_user_title;
+        return { resp, raw, igMsg, igTitle };
+      };
+
+      let publishAttempt = await tryPublish();
+
+      const notReady =
+        publishAttempt.igMsg &&
+        /not ready|not\s+ready\s+for\s+publishing|finish processing|processing/i.test(
+          publishAttempt.igMsg
+        );
+
+      if (!publishAttempt.resp.ok && notReady) {
+        logger.warn('Instagram reported media not ready; waiting before retry', {
+          creationId,
+          isVideo,
+          message: publishAttempt.igMsg,
+        });
+        await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
+          throwOnTimeout: isVideo, // fail fast for video; be lenient for images
+          maxWaitMs: isVideo ? undefined : 90_000,
+        });
+        publishAttempt = await tryPublish();
+      }
+
+      if (!publishAttempt.resp.ok) {
+        const igMsg =
+          publishAttempt.igMsg ||
+          publishAttempt.raw ||
+          `HTTP ${publishAttempt.resp.status} from Instagram`;
+        const igTitle = publishAttempt.igTitle;
         logger.error('Failed to publish Instagram media', {
-          status: publishResponse.status,
+          status: publishAttempt.resp.status,
           error: igMsg,
           title: igTitle,
         });
@@ -339,11 +391,11 @@ class InstagramAdapter implements PlatformAdapter {
           success: false,
           error: `Failed to publish: ${igMsg}`,
           errorCode: 'IG_PUBLISH_FAILED',
-          httpStatus: publishResponse.status,
+          httpStatus: publishAttempt.resp.status,
         };
       }
 
-      const publishResult = await publishResponse.json();
+      const publishResult = await publishAttempt.resp.json();
       const postId = publishResult.id;
 
       // Step 4: Get the permalink
@@ -386,9 +438,12 @@ class InstagramAdapter implements PlatformAdapter {
   }
 
   formatContent(schedule: Schedule): unknown {
+    const mediaTypeRaw = (schedule.mediaType || schedule.contentType || '').toLowerCase();
+    const effectiveMediaType =
+      mediaTypeRaw === 'video' || mediaTypeRaw === 'reel' ? 'REELS' : 'IMAGE';
     return {
       caption: this.formatCaption(schedule.caption, schedule.hashtags),
-      mediaType: schedule.contentType === 'video' ? 'VIDEO' : 'IMAGE',
+      mediaType: effectiveMediaType,
     };
   }
 
