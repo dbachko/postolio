@@ -12,6 +12,8 @@ import { auth as authApi } from './api';
 export class AuthInterceptor {
   private static refreshPromise: Promise<void> | null = null;
   private static lastRefreshTime = 0;
+  private static readonly SHARED_REFRESH_KEY = 'postolio:lastRefreshTime';
+  private static readonly SHARED_REFRESH_GRACE_MS = 15_000; // Avoid double rotation when another tab just refreshed
   private static readonly REFRESH_INTERVAL = 12 * 60 * 1000; // 12 minutes
   private static refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -68,6 +70,54 @@ export class AuthInterceptor {
   }
 
   /**
+   * Public entrypoint to force a refresh with shared locking (used outside the HTTP layer)
+   */
+  static refreshNow(reason = 'manual'): Promise<void> {
+    return this.startRefresh(reason);
+  }
+
+  /**
+   * Read the most recent refresh timestamp shared across tabs (best-effort)
+   */
+  private static getSharedLastRefreshTime(): number {
+    if (typeof localStorage === 'undefined') return 0;
+    try {
+      const raw = localStorage.getItem(this.SHARED_REFRESH_KEY);
+      if (!raw) return 0;
+      const parsed = parseInt(raw, 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Persist the last refresh timestamp for other tabs to observe (best-effort)
+   */
+  private static setSharedLastRefreshTime(timestamp: number) {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(this.SHARED_REFRESH_KEY, String(timestamp));
+    } catch {
+      // Swallow storage errors (e.g., privacy mode)
+    }
+  }
+
+  /**
+   * Cross-tab lock to prevent simultaneous refresh calls that would trigger token reuse invalidation.
+   */
+  private static async withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+    const lockManager =
+      typeof navigator !== 'undefined' && (navigator as any)?.locks
+        ? (navigator as any).locks
+        : null;
+    if (lockManager?.request) {
+      return lockManager.request('auth-refresh', async () => fn());
+    }
+    return fn();
+  }
+
+  /**
    * Refresh token if needed (throttled)
    * Only refreshes if:
    * - More than 11 minutes since last refresh
@@ -75,7 +125,9 @@ export class AuthInterceptor {
    */
   private static async refreshIfNeeded(reason: string): Promise<void> {
     const now = Date.now();
-    const timeSinceLastRefresh = now - this.lastRefreshTime;
+    // Use the freshest timestamp across tabs to avoid double rotations
+    const effectiveLastRefresh = Math.max(this.lastRefreshTime, this.getSharedLastRefreshTime());
+    const timeSinceLastRefresh = now - effectiveLastRefresh;
 
     // Don't refresh if we just did (within last 11 minutes)
     if (timeSinceLastRefresh < 11 * 60 * 1000) {
@@ -90,18 +142,32 @@ export class AuthInterceptor {
    * Silently fails if user is not logged in
    */
   private static async performRefresh(trigger: string): Promise<void> {
-    try {
-      console.log(`[Auth] Refreshing token (trigger: ${trigger})...`);
-      await authApi.refreshToken();
-      this.lastRefreshTime = Date.now();
-      console.log(`[Auth] Token refreshed successfully (trigger: ${trigger})`);
-    } catch (error) {
-      // Update last refresh time to avoid tight retry loops if user is logged out
-      this.lastRefreshTime = Date.now();
-      // Don't throw - user will be logged out on next API request if refresh failed
-      console.warn(`[Auth] Token refresh failed (trigger: ${trigger}):`, error);
-      throw error;
-    }
+    await this.withRefreshLock(async () => {
+      const now = Date.now();
+      // If another tab refreshed very recently, skip to avoid double rotation
+      const sharedLast = Math.max(this.lastRefreshTime, this.getSharedLastRefreshTime());
+      if (now - sharedLast < this.SHARED_REFRESH_GRACE_MS) {
+        this.lastRefreshTime = sharedLast;
+        return;
+      }
+
+      try {
+        console.log(`[Auth] Refreshing token (trigger: ${trigger})...`);
+        await authApi.refreshToken();
+        const refreshedAt = Date.now();
+        this.lastRefreshTime = refreshedAt;
+        this.setSharedLastRefreshTime(refreshedAt);
+        console.log(`[Auth] Token refreshed successfully (trigger: ${trigger})`);
+      } catch (error) {
+        // Update last refresh time to avoid tight retry loops if user is logged out
+        const failedAt = Date.now();
+        this.lastRefreshTime = failedAt;
+        this.setSharedLastRefreshTime(failedAt);
+        // Don't throw - user will be logged out on next API request if refresh failed
+        console.warn(`[Auth] Token refresh failed (trigger: ${trigger}):`, error);
+        throw error;
+      }
+    });
   }
 
   /**

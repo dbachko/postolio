@@ -347,9 +347,9 @@ export function useSchedulingWebSocket({
         ) {
           try {
             isRefreshingRef.current = true;
-            const { auth } = await import('@/lib/api');
+            const { AuthInterceptor } = await import('@/lib/auth-interceptor');
             console.log('[Auth] Attempting refresh due to WebSocket auth error...');
-            await auth.refreshToken();
+            await AuthInterceptor.refreshNow('ws-auth-error');
             console.log('[Auth] Token refreshed; reconnecting WebSocket');
           } catch (e) {
             console.warn('[Auth] Refresh failed after WebSocket auth error', e);
