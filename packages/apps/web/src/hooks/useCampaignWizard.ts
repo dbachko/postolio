@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { useEffect } from 'react';
 import { useBrandStore } from '../stores/brandStore';
 import { formatLocalDate } from '../lib/timezone';
+import { addDays } from 'date-fns';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import type {
   CampaignWizardState,
   CampaignType,
@@ -15,7 +17,7 @@ type WizardActions = {
   nextStep: () => void;
   prevStep: () => void;
   setCampaignType: (type: CampaignType) => void;
-  loadDefaultsFromType: (cfg: CampaignTypeConfig) => void;
+  loadDefaultsFromType: (cfg: CampaignTypeConfig, opts?: { timezone?: string }) => void;
   updateField: <K extends keyof CampaignWizardState>(key: K, value: CampaignWizardState[K]) => void;
   updatePromotionDetails: (value: PromotionDetails | null) => void;
   setSkipUnsavedWarning: (value: boolean) => void;
@@ -55,18 +57,27 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()((
   prevStep: () => set({ currentStep: Math.max(1, get().currentStep - 1) }),
 
   setCampaignType: (type) => set({ campaignType: type }),
-  loadDefaultsFromType: (cfg) => {
+  loadDefaultsFromType: (cfg, opts) => {
     const { timeline } = get();
-    const now = new Date();
-    const end = new Date(now);
-    end.setDate(end.getDate() + cfg.defaultDuration.days);
+
+    // Prefer brand timezone for date math so "today" aligns with the brand, not the user.
+    const tz = opts?.timezone;
+    const formatDate = (date: Date) =>
+      tz ? formatInTimeZone(date, tz, 'yyyy-MM-dd') : formatLocalDate(date);
+
+    // Build a midnight anchor in the brand timezone (or local if no tz provided)
+    const todayMidnight = tz
+      ? fromZonedTime(`${formatInTimeZone(new Date(), tz, 'yyyy-MM-dd')}T00:00:00`, tz)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+    const end = addDays(todayMidnight, cfg.defaultDuration.days);
 
     set({
       campaignType: cfg.id,
       frequency: cfg.defaultFrequency,
       timeline: timeline || {
-        startDate: formatLocalDate(now),
-        endDate: formatLocalDate(end),
+        startDate: formatDate(todayMidnight),
+        endDate: formatDate(end),
       },
       // Do not preload static themes; we will fetch suggestions from API
       themes: [],

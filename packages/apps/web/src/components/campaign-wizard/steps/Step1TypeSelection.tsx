@@ -1,18 +1,17 @@
 import { campaignTypes } from '../../../constants/campaign-types';
 import { CampaignTypeCard } from '../shared/CampaignTypeCard';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
-import { Button } from '@/components/ui/button';
+import { useBrandTimezone } from '../../../hooks/useBrandTimezone';
 
 export function Step1TypeSelection() {
-  const { campaignType, setCampaignType, loadDefaultsFromType, nextStep } = useCampaignWizard();
+  const { campaignType, loadDefaultsFromType, nextStep } = useCampaignWizard();
+  const { brandTimezone } = useBrandTimezone();
 
   const onSelect = (id: string) => {
     const cfg = campaignTypes.find((c) => c.id === id)!;
-    setCampaignType(cfg.id);
-    loadDefaultsFromType(cfg);
+    loadDefaultsFromType(cfg, { timezone: brandTimezone });
+    nextStep();
   };
-
-  const selectedCfg = campaignTypes.find((c) => c.id === campaignType);
 
   return (
     <div className="space-y-6">
@@ -32,12 +31,6 @@ export function Step1TypeSelection() {
             onSelect={() => onSelect(t.id)}
           />
         ))}
-      </div>
-
-      <div className="flex justify-end">
-        <Button onClick={nextStep} disabled={!selectedCfg}>
-          Continue
-        </Button>
       </div>
     </div>
   );

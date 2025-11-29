@@ -37,15 +37,20 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
   const brandStyleOptions = allStyles.filter((s) => 'isBrandStyle' in s && s.isBrandStyle);
   const universalStyleOptions = allStyles.filter((s) => !('isBrandStyle' in s) || !s.isBrandStyle);
 
-  const splitTokens = (input: string | undefined | null): string[] => {
+  const splitTokens = (
+    input: string | undefined | null,
+    opts?: { preserveWhitespace?: boolean }
+  ): string[] => {
     if (!input) return [];
-    return input
-      .split(/[;\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const parts = input.split(/[;\n]/);
+    if (opts?.preserveWhitespace) {
+      return parts.filter((s) => s.length > 0);
+    }
+    return parts.map((s) => s.trim()).filter(Boolean);
   };
 
   const tokens = splitTokens(value);
+  const rawTokens = splitTokens(value, { preserveWhitespace: true });
 
   const isOptSelected = (opt: any): boolean => {
     const candidates = [opt.value, opt.label];
@@ -83,10 +88,10 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
     if ('fullDescription' in opt && typeof opt.fullDescription === 'string')
       recognizedSet.add(opt.fullDescription);
   }
-  const customText = tokens.filter((t) => !recognizedSet.has(t)).join('; ');
+  const customText = rawTokens.filter((t) => !recognizedSet.has(t.trim())).join('; ');
   const onCustomChange = (text: string) => {
     const recognized = tokens.filter((t) => recognizedSet.has(t));
-    const extras = splitTokens(text);
+    const extras = splitTokens(text, { preserveWhitespace: true });
     onChange([...recognized, ...extras].join('; '));
   };
 

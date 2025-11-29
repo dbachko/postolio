@@ -39,4 +39,15 @@ describe('makeCachedTimezoneGetter', () => {
     const updated = getTimezone();
     expect(updated).toBe(nextTimezone);
   });
+
+  it('returns unquoted timezone when value is JSON-stringified in storage', async () => {
+    const { makeCachedTimezoneGetter } = await import('./timezone');
+    const getTimezone = makeCachedTimezoneGetter(30_000);
+
+    // Simulate storage written via setLocalSetting (JSON stringified)
+    localStorage.setItem('userTimezone', '"America/New_York"');
+
+    const tz = getTimezone();
+    expect(tz).toBe('America/New_York');
+  });
 });
