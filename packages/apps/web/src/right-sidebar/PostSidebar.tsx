@@ -596,7 +596,8 @@ export function PostSidebar({
   const bodyClass =
     layout === 'sidebar' ? 'flex-1 overflow-y-auto px-4 py-3' : 'flex-1 overflow-y-auto px-4 py-4';
 
-  const allowMixedMedia = formData.contentType === 'post';
+  // Allow mixed media for all non-reel content; reels must remain video-only.
+  const allowMixedMedia = formData.contentType !== 'reel';
   const isVideoMedia = finalMediaType === 'video';
 
   return (
@@ -777,9 +778,10 @@ export function PostSidebar({
                             onChange={(assets) => {
                               setFormData((s) => {
                                 const nextMediaType = deriveMediaTypeFromAssets(assets, s.videoUrl);
-                                const shouldClearVideoUrl = allowMixedMedia
-                                  ? assets.length > 0
-                                  : assets.length > 0 && nextMediaType !== 'video';
+                                const shouldClearVideoUrl =
+                                  !allowMixedMedia &&
+                                  assets.length > 0 &&
+                                  nextMediaType !== 'video';
 
                                 return {
                                   ...s,
@@ -973,7 +975,7 @@ export function PostSidebar({
                           carouselAssets: assets,
                           imageUrl: assets[0]?.url || '',
                           mediaType: deriveMediaTypeFromAssets(assets, s.videoUrl),
-                          videoUrl: allowMixedMedia && assets.length > 0 ? '' : s.videoUrl,
+                          videoUrl: !allowMixedMedia && assets.length > 0 ? '' : s.videoUrl,
                         }));
                       }}
                       brandId={post.brand.id}
@@ -1177,13 +1179,19 @@ export function PostSidebar({
 
             const nextMediaType = deriveMediaTypeFromAssets(merged);
             const firstAsset = merged[0];
+            const firstVideo = merged.find((asset) => asset.type === 'video');
 
             setFormData((s) => ({
               ...s,
               carouselAssets: merged,
               imageUrl: firstAsset?.url || s.imageUrl,
               mediaType: nextMediaType,
-              videoUrl: merged.length === 1 && merged[0]?.type === 'video' ? merged[0].url : '',
+              videoUrl:
+                !allowMixing && merged.length === 1 && merged[0]?.type === 'video'
+                  ? merged[0].url
+                  : allowMixing
+                    ? firstVideo?.url || ''
+                    : '',
             }));
             setShowAssetPicker(false);
           }}

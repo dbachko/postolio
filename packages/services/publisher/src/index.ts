@@ -118,6 +118,16 @@ interface PublishResult {
   httpStatus?: number;
 }
 
+type PublishedMedia = {
+  postId: string;
+  permalink: string;
+};
+
+type ResolvedMedia = {
+  kind: 'image' | 'video';
+  url: string;
+};
+
 // Platform adapter factory
 class PlatformAdapterFactory {
   static getAdapter(platform: string): PlatformAdapter {
@@ -234,10 +244,6 @@ class InstagramAdapter implements PlatformAdapter {
     mediaUrl: string | null
   ): Promise<PublishResult> {
     try {
-      if (!mediaUrl) {
-        throw new Error('Media URL is required for Instagram publishing');
-      }
-
       const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
       // Derive media/product type semantics from schedule.
       const contentType = (schedule.contentType || '').toLowerCase();
@@ -247,194 +253,113 @@ class InstagramAdapter implements PlatformAdapter {
       const hasVideoAsset = !!schedule.videoUrl;
       const isVideo = rawMediaType === 'video' || isReel || (isStory && hasVideoAsset);
 
-      // Step 1: Create media container
-      const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
-      const createMediaParams = new URLSearchParams({
-        caption: formattedCaption,
-        access_token: credentials.accessToken,
-      });
-      if (isVideo) {
-        createMediaParams.set('video_url', mediaUrl);
-        // For video containers, media_type controls whether this is a feed video,
-        // reel, or story per Meta docs.
-        if (isReel) {
-          createMediaParams.set('media_type', 'REELS');
-          const shareToFeed =
-            schedule.contentType === 'reel'
-              ? typeof schedule.shareToFeed === 'boolean'
-                ? schedule.shareToFeed
-                : true
-              : true;
-          // Control whether the reel should also appear in the feed grid.
-          createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
-        } else if (isStory) {
-          createMediaParams.set('media_type', 'STORIES');
-        } else {
-          // Meta deprecated VIDEO for feed publishing; use REELS with share_to_feed
-          // to emulate classic feed videos.
-          const shareToFeed =
-            typeof schedule.shareToFeed === 'boolean' ? schedule.shareToFeed : true;
-          createMediaParams.set('media_type', 'REELS');
-          createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
-        }
-      } else {
-        createMediaParams.set('image_url', mediaUrl);
-        // For image stories, Instagram supports media_type=STORIES as well.
-        if (isStory) {
-          createMediaParams.set('media_type', 'STORIES');
-        }
+      // Resolve media assets (images + optional video) for publishing
+      const resolvedImages: string[] = (
+        await Promise.all(
+          (schedule.mediaKeys || [])
+            .filter((k): k is string => typeof k === 'string' && !!k.trim())
+            .map((k) => getSignedImageUrlFromKey(k))
+        )
+      ).filter(Boolean);
+
+      const resolvedVideoUrl = schedule.videoUrl
+        ? await getSignedVideoUrl(schedule.videoUrl)
+        : null;
+
+      // Backward compatibility: if no mediaKeys, try imageUrl fallback
+      if (!resolvedImages.length && schedule.imageUrl) {
+        const key = extractS3Key(schedule.imageUrl);
+        const fallbackImage = key ? await getSignedImageUrlFromKey(key) : schedule.imageUrl;
+        if (fallbackImage) resolvedImages.push(fallbackImage);
       }
 
-      logger.info('Creating Instagram media container', {
-        accountId: credentials.accountId,
-        hasMediaUrl: !!mediaUrl,
-        mediaKind: isReel
-          ? 'reel'
-          : isStory
-            ? isVideo
-              ? 'story_video'
-              : 'story_image'
-            : isVideo
-              ? 'video'
-              : 'image',
-        contentType: schedule.contentType,
-      });
+      const resolvedMedia: ResolvedMedia[] = [
+        ...resolvedImages.map((url) => ({ kind: 'image', url }) as ResolvedMedia),
+      ];
+      if (resolvedVideoUrl) {
+        resolvedMedia.push({ kind: 'video', url: resolvedVideoUrl });
+      } else if (mediaUrl && !resolvedMedia.length) {
+        // Legacy single-asset path
+        resolvedMedia.push({ kind: isVideo ? 'video' : 'image', url: mediaUrl });
+      }
 
-      const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
-        method: 'POST',
-      });
+      if (!resolvedMedia.length) {
+        throw new Error('Media URL is required for Instagram publishing');
+      }
 
-      if (!createResponse.ok) {
-        const raw = await createResponse.text();
-        const parsed = asIGErrorPayload(safeParseJson(raw));
-        const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
-        const igTitle = parsed?.error?.error_user_title;
-        logger.error('Failed to create Instagram media container', {
-          status: createResponse.status,
-          error: igMsg,
-          title: igTitle,
-        });
+      // Story flow: publish each asset as its own story frame (videos publish alone)
+      if (isStory) {
+        const storyMedia = hasVideoAsset
+          ? resolvedMedia.filter((m) => m.kind === 'video')
+          : resolvedMedia.filter((m) => m.kind === 'image');
+
+        if (!storyMedia.length) {
+          throw new Error('Media URL is required for Instagram publishing');
+        }
+
+        const published: PublishedMedia[] = [];
+        for (const asset of storyMedia.slice(0, 10)) {
+          const single = await this.createAndPublishMedia({
+            schedule,
+            credentials,
+            formattedCaption,
+            mediaUrl: asset.url,
+            isVideo: asset.kind === 'video',
+            isReel,
+            isStory,
+          });
+          published.push(single);
+        }
+        const first = published[0];
         return {
-          success: false,
-          error: `Failed to create media: ${igMsg}`,
-          errorCode: 'IG_MEDIA_CREATE_FAILED',
-          httpStatus: createResponse.status,
+          success: true,
+          platformPostId: first?.postId,
+          platformUrl: first?.permalink,
         };
       }
 
-      const createResult = await createResponse.json();
-      const creationId = createResult.id;
+      // Feed/Reel flow
+      const isCarousel = !isReel && resolvedMedia.length > 1 && resolvedMedia.length <= 10;
 
-      if (!creationId) {
+      if (isCarousel) {
+        const carousel = await this.createCarouselAndPublish({
+          schedule,
+          credentials,
+          formattedCaption,
+          media: resolvedMedia.slice(0, 10),
+        });
         return {
-          success: false,
-          error: 'No creation ID returned from Instagram',
+          success: true,
+          platformPostId: carousel.postId,
+          platformUrl: carousel.permalink,
         };
       }
 
-      // Step 2: Wait for the media container to be ready (for all media types).
-      await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
-        // Fail fast for videos; be more lenient for images/stories but still wait up to the full window
-        throwOnTimeout: isVideo,
-        maxWaitMs: 360_000,
-      });
-
-      // Step 3: Publish the media (with a readiness-aware retry for images)
-      const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
-      const publishParams = new URLSearchParams({
-        creation_id: creationId,
-        access_token: credentials.accessToken,
-      });
-
-      const tryPublish = async () => {
-        logger.info('Publishing Instagram media', { creationId });
-        const resp = await fetch(`${publishUrl}?${publishParams}`, {
-          method: 'POST',
-        });
-        if (resp.ok) {
-          return { resp };
-        }
-        const raw = await resp.text();
-        const parsed = asIGErrorPayload(safeParseJson(raw));
-        const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
-        const igTitle = parsed?.error?.error_user_title;
-        return { resp, raw, igMsg, igTitle };
-      };
-
-      let publishAttempt = await tryPublish();
-
-      const notReady =
-        publishAttempt.igMsg &&
-        /not ready|not\s+ready\s+for\s+publishing|finish processing|processing|cannot\s+be\s+found/i.test(
-          publishAttempt.igMsg
-        );
-
-      if (!publishAttempt.resp.ok && notReady) {
-        logger.warn('Instagram reported media not ready; waiting before retry', {
-          creationId,
-          isVideo,
-          message: publishAttempt.igMsg,
-        });
-        await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
-          throwOnTimeout: isVideo, // fail fast for video; be lenient for images/stories
-          maxWaitMs: 360_000, // align image/story wait window with video
-        });
-        publishAttempt = await tryPublish();
-      }
-
-      if (!publishAttempt.resp.ok) {
-        const igMsg =
-          publishAttempt.igMsg ||
-          publishAttempt.raw ||
-          `HTTP ${publishAttempt.resp.status} from Instagram`;
-        const igTitle = publishAttempt.igTitle;
-        logger.error('Failed to publish Instagram media', {
-          status: publishAttempt.resp.status,
-          error: igMsg,
-          title: igTitle,
-        });
-        return {
-          success: false,
-          error: `Failed to publish: ${igMsg}`,
-          errorCode: 'IG_PUBLISH_FAILED',
-          httpStatus: publishAttempt.resp.status,
-        };
-      }
-
-      const publishResult = await publishAttempt.resp.json();
-      const postId = publishResult.id;
-
-      // Step 4: Get the permalink
-      const permalinkUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${postId}`;
-      const permalinkParams = new URLSearchParams({
-        fields: 'permalink',
-        access_token: credentials.accessToken,
-      });
-
-      const permalinkResponse = await fetch(`${permalinkUrl}?${permalinkParams}`);
-      let permalink = '';
-
-      if (permalinkResponse.ok) {
-        const permalinkResult = await permalinkResponse.json();
-        permalink = permalinkResult.permalink || '';
-      }
-
-      logger.info('Instagram content published successfully', {
-        postId,
-        permalink,
+      // Single media (feed or reel)
+      const primary = resolvedMedia[0];
+      const single = await this.createAndPublishMedia({
+        schedule,
+        credentials,
+        formattedCaption,
+        mediaUrl: primary.url,
+        isVideo: primary.kind === 'video',
+        isReel,
+        isStory,
       });
 
       return {
         success: true,
-        platformPostId: postId,
-        platformUrl: permalink,
+        platformPostId: single.postId,
+        platformUrl: single.permalink,
       };
     } catch (error) {
+      const meta = (error as unknown as { meta?: Record<string, unknown> }).meta || {};
       logger.error('Instagram publishing failed', error as Error);
       return {
         success: false,
         error: (error as Error).message,
-        errorCode: 'IG_PUBLISH_RUNTIME_ERROR',
+        errorCode: (meta as { errorCode?: string }).errorCode || 'IG_PUBLISH_RUNTIME_ERROR',
+        httpStatus: (meta as { httpStatus?: number }).httpStatus,
       };
     }
   }
@@ -462,6 +387,424 @@ class InstagramAdapter implements PlatformAdapter {
       ? '\n\n' + hashtags.map((tag) => `#${tag}`).join(' ')
       : '';
     return `${safeCaption}${hashtagString}`.slice(0, PLATFORM_LIMITS.INSTAGRAM_CAPTION);
+  }
+
+  private async createAndPublishMedia(params: {
+    schedule: Schedule;
+    credentials: Credentials;
+    formattedCaption: string;
+    mediaUrl: string;
+    isVideo: boolean;
+    isReel: boolean;
+    isStory: boolean;
+  }): Promise<PublishedMedia> {
+    const { schedule, credentials, formattedCaption, mediaUrl, isVideo, isReel, isStory } = params;
+
+    // Step 1: Create media container
+    const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
+    const createMediaParams = new URLSearchParams({
+      caption: formattedCaption,
+      access_token: credentials.accessToken,
+    });
+    if (isVideo) {
+      createMediaParams.set('video_url', mediaUrl);
+      // For video containers, media_type controls whether this is a feed video,
+      // reel, or story per Meta docs.
+      if (isReel) {
+        createMediaParams.set('media_type', 'REELS');
+        const shareToFeed =
+          schedule.contentType === 'reel'
+            ? typeof schedule.shareToFeed === 'boolean'
+              ? schedule.shareToFeed
+              : true
+            : true;
+        // Control whether the reel should also appear in the feed grid.
+        createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
+      } else if (isStory) {
+        createMediaParams.set('media_type', 'STORIES');
+      } else {
+        // Meta deprecated VIDEO for feed publishing; use REELS with share_to_feed
+        // to emulate classic feed videos.
+        const shareToFeed = typeof schedule.shareToFeed === 'boolean' ? schedule.shareToFeed : true;
+        createMediaParams.set('media_type', 'REELS');
+        createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
+      }
+    } else {
+      createMediaParams.set('image_url', mediaUrl);
+      // For image stories, Instagram supports media_type=STORIES as well.
+      if (isStory) {
+        createMediaParams.set('media_type', 'STORIES');
+      }
+    }
+
+    logger.info('Creating Instagram media container', {
+      accountId: credentials.accountId,
+      hasMediaUrl: !!mediaUrl,
+      mediaKind: isReel
+        ? 'reel'
+        : isStory
+          ? isVideo
+            ? 'story_video'
+            : 'story_image'
+          : isVideo
+            ? 'video'
+            : 'image',
+      contentType: schedule.contentType,
+    });
+
+    const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
+      method: 'POST',
+    });
+
+    if (!createResponse.ok) {
+      const raw = await createResponse.text();
+      const parsed = asIGErrorPayload(safeParseJson(raw));
+      const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+      const igTitle = parsed?.error?.error_user_title;
+      logger.error('Failed to create Instagram media container', {
+        status: createResponse.status,
+        error: igMsg,
+        title: igTitle,
+      });
+      const err = new Error(`Failed to create media: ${igMsg}`);
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+        httpStatus: createResponse.status,
+      };
+      throw err;
+    }
+
+    const createResult = await createResponse.json();
+    const creationId = createResult.id;
+
+    if (!creationId) {
+      const err = new Error('No creation ID returned from Instagram');
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+      };
+      throw err;
+    }
+
+    // Step 2: Wait for the media container to be ready (for all media types).
+    await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
+      // Fail fast for videos; be more lenient for images/stories but still wait up to the full window
+      throwOnTimeout: isVideo,
+      maxWaitMs: 360_000,
+    });
+
+    // Step 3: Publish the media (with a readiness-aware retry for images)
+    const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
+    const publishParams = new URLSearchParams({
+      creation_id: creationId,
+      access_token: credentials.accessToken,
+    });
+
+    const tryPublish = async () => {
+      logger.info('Publishing Instagram media', { creationId });
+      const resp = await fetch(`${publishUrl}?${publishParams}`, {
+        method: 'POST',
+      });
+      if (resp.ok) {
+        return { resp };
+      }
+      const raw = await resp.text();
+      const parsed = asIGErrorPayload(safeParseJson(raw));
+      const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+      const igTitle = parsed?.error?.error_user_title;
+      return { resp, raw, igMsg, igTitle };
+    };
+
+    let publishAttempt = await tryPublish();
+
+    const notReady =
+      publishAttempt.igMsg &&
+      /not ready|not\s+ready\s+for\s+publishing|finish processing|processing|cannot\s+be\s+found/i.test(
+        publishAttempt.igMsg
+      );
+
+    if (!publishAttempt.resp.ok && notReady) {
+      logger.warn('Instagram reported media not ready; waiting before retry', {
+        creationId,
+        isVideo,
+        message: publishAttempt.igMsg,
+      });
+      await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
+        throwOnTimeout: isVideo, // fail fast for video; be lenient for images/stories
+        maxWaitMs: 360_000, // align image/story wait window with video
+      });
+      publishAttempt = await tryPublish();
+    }
+
+    if (!publishAttempt.resp.ok) {
+      const igMsg =
+        publishAttempt.igMsg ||
+        publishAttempt.raw ||
+        `HTTP ${publishAttempt.resp.status} from Instagram`;
+      const igTitle = publishAttempt.igTitle;
+      logger.error('Failed to publish Instagram media', {
+        status: publishAttempt.resp.status,
+        error: igMsg,
+        title: igTitle,
+      });
+      const err = new Error(`Failed to publish: ${igMsg}`);
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_PUBLISH_FAILED',
+        httpStatus: publishAttempt.resp.status,
+        title: igTitle,
+      };
+      throw err;
+    }
+
+    const publishResult = await publishAttempt.resp.json();
+    const postId = publishResult.id;
+
+    // Step 4: Get the permalink
+    const permalinkUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${postId}`;
+    const permalinkParams = new URLSearchParams({
+      fields: 'permalink',
+      access_token: credentials.accessToken,
+    });
+
+    const permalinkResponse = await fetch(`${permalinkUrl}?${permalinkParams}`);
+    let permalink = '';
+
+    if (permalinkResponse.ok) {
+      const permalinkResult = await permalinkResponse.json();
+      permalink = permalinkResult.permalink || '';
+    }
+
+    logger.info('Instagram content published successfully', {
+      postId,
+      permalink,
+    });
+
+    return { postId, permalink };
+  }
+
+  private async createCarouselAndPublish(params: {
+    credentials: Credentials;
+    formattedCaption: string;
+    media: ResolvedMedia[];
+  }): Promise<PublishedMedia> {
+    const { credentials, formattedCaption, media } = params;
+
+    // Step 1: Create child containers (image/video) with is_carousel_item=true
+    const childIds: string[] = [];
+    for (const asset of media) {
+      const creationId = await this.createChildContainer({
+        credentials,
+        mediaUrl: asset.url,
+        isVideo: asset.kind === 'video',
+      });
+      childIds.push(creationId);
+    }
+
+    if (!childIds.length) {
+      const err = new Error('No carousel children were created');
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+      };
+      throw err;
+    }
+
+    // Step 2: Create carousel container
+    const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
+    const createMediaParams = new URLSearchParams({
+      caption: formattedCaption,
+      media_type: 'CAROUSEL',
+      children: childIds.join(','),
+      access_token: credentials.accessToken,
+    });
+
+    logger.info('Creating Instagram carousel container', {
+      accountId: credentials.accountId,
+      childCount: childIds.length,
+    });
+
+    const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
+      method: 'POST',
+    });
+
+    if (!createResponse.ok) {
+      const raw = await createResponse.text();
+      const parsed = asIGErrorPayload(safeParseJson(raw));
+      const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+      const igTitle = parsed?.error?.error_user_title;
+      logger.error('Failed to create Instagram carousel container', {
+        status: createResponse.status,
+        error: igMsg,
+        title: igTitle,
+      });
+      const err = new Error(`Failed to create carousel: ${igMsg}`);
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+        httpStatus: createResponse.status,
+      };
+      throw err;
+    }
+
+    const createResult = await createResponse.json();
+    const creationId = createResult.id;
+
+    if (!creationId) {
+      const err = new Error('No creation ID returned from Instagram for carousel');
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+      };
+      throw err;
+    }
+
+    // Step 3: Wait for carousel readiness (treat as image for wait timing)
+    await this.waitForMediaReady(creationId, credentials.accessToken, false, {
+      throwOnTimeout: false,
+      maxWaitMs: 360_000,
+    });
+
+    // Step 4: Publish carousel
+    const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
+    const publishParams = new URLSearchParams({
+      creation_id: creationId,
+      access_token: credentials.accessToken,
+    });
+
+    const tryPublish = async () => {
+      logger.info('Publishing Instagram carousel', { creationId });
+      const resp = await fetch(`${publishUrl}?${publishParams}`, {
+        method: 'POST',
+      });
+      if (resp.ok) {
+        return { resp };
+      }
+      const raw = await resp.text();
+      const parsed = asIGErrorPayload(safeParseJson(raw));
+      const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+      const igTitle = parsed?.error?.error_user_title;
+      return { resp, raw, igMsg, igTitle };
+    };
+
+    let publishAttempt = await tryPublish();
+    const notReady =
+      publishAttempt.igMsg &&
+      /not ready|not\s+ready\s+for\s+publishing|finish processing|processing|cannot\s+be\s+found/i.test(
+        publishAttempt.igMsg
+      );
+
+    if (!publishAttempt.resp.ok && notReady) {
+      logger.warn('Carousel not ready; waiting before retry', {
+        creationId,
+        message: publishAttempt.igMsg,
+      });
+      await this.waitForMediaReady(creationId, credentials.accessToken, false, {
+        throwOnTimeout: false,
+        maxWaitMs: 360_000,
+      });
+      publishAttempt = await tryPublish();
+    }
+
+    if (!publishAttempt.resp.ok) {
+      const igMsg =
+        publishAttempt.igMsg ||
+        publishAttempt.raw ||
+        `HTTP ${publishAttempt.resp.status} from Instagram`;
+      const igTitle = publishAttempt.igTitle;
+      logger.error('Failed to publish Instagram carousel', {
+        status: publishAttempt.resp.status,
+        error: igMsg,
+        title: igTitle,
+      });
+      const err = new Error(`Failed to publish carousel: ${igMsg}`);
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_PUBLISH_FAILED',
+        httpStatus: publishAttempt.resp.status,
+        title: igTitle,
+      };
+      throw err;
+    }
+
+    const publishResult = await publishAttempt.resp.json();
+    const postId = publishResult.id;
+
+    // Step 5: Get permalink
+    const permalinkUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${postId}`;
+    const permalinkParams = new URLSearchParams({
+      fields: 'permalink',
+      access_token: credentials.accessToken,
+    });
+
+    const permalinkResponse = await fetch(`${permalinkUrl}?${permalinkParams}`);
+    let permalink = '';
+
+    if (permalinkResponse.ok) {
+      const permalinkResult = await permalinkResponse.json();
+      permalink = permalinkResult.permalink || '';
+    }
+
+    logger.info('Instagram carousel published successfully', {
+      postId,
+      permalink,
+    });
+
+    return { postId, permalink };
+  }
+
+  private async createChildContainer(params: {
+    credentials: Credentials;
+    mediaUrl: string;
+    isVideo: boolean;
+  }): Promise<string> {
+    const { credentials, mediaUrl, isVideo } = params;
+    const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
+    const createMediaParams = new URLSearchParams({
+      access_token: credentials.accessToken,
+      is_carousel_item: 'true',
+    });
+
+    if (isVideo) {
+      createMediaParams.set('video_url', mediaUrl);
+    } else {
+      createMediaParams.set('image_url', mediaUrl);
+    }
+
+    const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
+      method: 'POST',
+    });
+
+    if (!createResponse.ok) {
+      const raw = await createResponse.text();
+      const parsed = asIGErrorPayload(safeParseJson(raw));
+      const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+      const igTitle = parsed?.error?.error_user_title;
+      logger.error('Failed to create Instagram carousel child', {
+        status: createResponse.status,
+        error: igMsg,
+        title: igTitle,
+      });
+      const err = new Error(`Failed to create carousel child: ${igMsg}`);
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+        httpStatus: createResponse.status,
+      };
+      throw err;
+    }
+
+    const createResult = await createResponse.json();
+    const creationId = createResult.id;
+
+    if (!creationId) {
+      const err = new Error('No creation ID returned for carousel child');
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+      };
+      throw err;
+    }
+
+    // Wait for child readiness (videos especially)
+    await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
+      throwOnTimeout: isVideo,
+      maxWaitMs: 360_000,
+    });
+
+    return creationId;
   }
 }
 
