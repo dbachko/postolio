@@ -7,6 +7,7 @@ type Args = {
   count: number;
   uploadedBy: string;
   cdnBase?: string;
+  videoCount?: number;
 };
 
 function parseArgs(): Partial<Args> {
@@ -41,6 +42,9 @@ function parseArgs(): Partial<Args> {
       case '--cdnBase':
         out.cdnBase = value;
         break;
+      case '--videoCount':
+        out.videoCount = Number(value);
+        break;
       default:
         break;
     }
@@ -65,10 +69,14 @@ async function main() {
 
   const count =
     Number.isFinite(args.count) && (args.count as number) > 0 ? (args.count as number) : 12;
+  const videoCount =
+    Number.isFinite(args.videoCount) && (args.videoCount as number) >= 0
+      ? (args.videoCount as number)
+      : 3;
   const uploadedBy = args.uploadedBy || 'seed-user';
   const cdnBase = args.cdnBase;
 
-  console.log(`==> Seeding ${count} assets for brand ${brandId}`);
+  console.log(`==> Seeding ${count} images and ${videoCount} videos for brand ${brandId}`);
 
   const prisma = new AssetsPrismaClient({
     datasources: { db: { url: process.env.ASSETS_DATABASE_URL } },
@@ -92,7 +100,7 @@ async function main() {
     getOrCreateFolder('Brand Assets', 'brand_assets', '#3b82f6'),
   ]);
 
-  const assets = Array.from({ length: count }).map((_, i) => {
+  const imageAssets = Array.from({ length: count }).map((_, i) => {
     const imgW = 1200;
     const imgH = 800;
     const thumbW = 300;
@@ -129,6 +137,42 @@ async function main() {
       thumbnailLargeKey: undefined,
     };
   });
+
+  const videoAssets = Array.from({ length: videoCount }).map((_, i) => {
+    const width = 1080;
+    const height = 1920;
+    const baseName = `seed-video-${String(i + 1).padStart(3, '0')}.mp4`;
+    const normalizedCdn = cdnBase ? cdnBase.replace(/\/$/, '') : undefined;
+    const s3Key = normalizedCdn
+      ? `${normalizedCdn}/videos/${baseName}`
+      : `brands/${brandId}/uploads/videos/${Date.now()}_${i + 1}_${baseName}`;
+
+    return {
+      brandId,
+      uploadedBy,
+      fileName: baseName,
+      s3Key,
+      s3Bucket:
+        process.env.ASSETS_S3_BUCKET || process.env.S3_BUCKET || 'postolio-dev-assets-storage',
+      fileSize: Math.floor(2_000_000 + Math.random() * 6_000_000),
+      mimeType: 'video/mp4',
+      fileType: 'video' as const,
+      width,
+      height,
+      duration: 12 + i * 5,
+      title: `Seed Video ${i + 1}`,
+      altText: `Seed video ${i + 1}`,
+      description: 'Seeded video asset for local development',
+      tags: ['seed', 'demo', 'video'],
+      folderId: i % 2 === 0 ? brandFolder.id : general.id,
+      processingStatus: 'completed' as const,
+      thumbnailKey: undefined,
+      thumbnailSmallKey: undefined,
+      thumbnailLargeKey: undefined,
+    };
+  });
+
+  const assets = [...imageAssets, ...videoAssets];
 
   const created = await prisma.asset.createMany({ data: assets });
   console.log(`✅ Seeded ${created.count} assets`);

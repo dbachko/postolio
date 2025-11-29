@@ -86,6 +86,18 @@ const formatScheduledInput = (value?: string, timezone?: string) => {
   return formatInTimeZone(new Date(value), effectiveTimezone, "yyyy-MM-dd'T'HH:mm");
 };
 
+const deriveMediaTypeFromAssets = (
+  assets: AssetReference[],
+  fallbackVideoUrl?: string
+): InstagramMediaType => {
+  if (assets.length > 1) return 'image';
+  if (assets.length === 1) {
+    return assets[0]?.type === 'video' ? 'video' : 'image';
+  }
+  if (fallbackVideoUrl) return 'video';
+  return 'image';
+};
+
 type PostSidebarLayout = 'sidebar' | 'page';
 
 interface PostSidebarProps {
@@ -159,11 +171,9 @@ export function PostSidebar({
   const [showAssetPicker, setShowAssetPicker] = useState(false);
 
   const finalMediaType = useMemo<InstagramMediaType>(() => {
-    // For reels, always treat media format as video; for other content types
-    // rely on the explicit mediaType ('image' | 'video').
     if (formData.contentType === 'reel') return 'video';
-    return formData.mediaType === 'video' ? 'video' : 'image';
-  }, [formData.contentType, formData.mediaType]);
+    return deriveMediaTypeFromAssets(formData.carouselAssets, formData.videoUrl);
+  }, [formData.carouselAssets, formData.contentType, formData.videoUrl]);
 
   const validation = useMemo(() => {
     const isStory = formData.contentType === 'story';
@@ -205,14 +215,6 @@ export function PostSidebar({
     // Normalize mediaType from API/DB:
     // If missing, infer from contentType (reel => video, otherwise image).
     const normalizedContentType = (post.contentType as InstagramContentType) || 'post';
-    let normalizedMediaType: InstagramMediaType;
-    if (post.mediaType === 'video') {
-      normalizedMediaType = 'video';
-    } else if (post.mediaType === 'image') {
-      normalizedMediaType = 'image';
-    } else {
-      normalizedMediaType = normalizedContentType === 'reel' ? 'video' : 'image';
-    }
 
     setFormData({
       caption: post.caption || '',
@@ -220,7 +222,7 @@ export function PostSidebar({
       videoUrl: post.videoUrl || '',
       carouselAssets: carouselAssetsFromPost,
       contentType: normalizedContentType,
-      mediaType: normalizedMediaType,
+      mediaType: deriveMediaTypeFromAssets(carouselAssetsFromPost, post.videoUrl || undefined),
       scheduledAt: formatScheduledInput(post.scheduledAt, brandTimezone),
       shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
     });
@@ -366,6 +368,8 @@ export function PostSidebar({
 
     const formImage = formData.imageUrl || '';
     const postImage = post.imageUrl || '';
+    const formVideo = formData.videoUrl || '';
+    const postVideo = post.videoUrl || '';
     const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
     const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId || asset.cdnUrl);
     const formShareToFeed = formData.shareToFeed ?? true;
@@ -378,6 +382,7 @@ export function PostSidebar({
       trimmedCaption !== originalCaption ||
       scheduledValue !== originalScheduled ||
       formImage !== postImage ||
+      formVideo !== postVideo ||
       JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds) ||
       formShareToFeed !== postShareToFeed;
 
@@ -484,35 +489,35 @@ export function PostSidebar({
       return;
     }
 
-    const images =
-      prefillAssets
-        ?.filter((asset) => asset.fileType === 'image')
-        .map((asset) => ({
-          id: asset.id,
-          url: asset.thumbnailUrl || asset.url,
-        })) ?? [];
+    const normalizedAssets: AssetReference[] =
+      prefillAssets?.map((asset) => ({
+        id: asset.id,
+        url: asset.thumbnailUrl || asset.url,
+        type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
+      })) ?? [];
+    const nextAssets = normalizedAssets.slice(0, 10) as AssetReference[];
 
-    const videos = prefillAssets?.filter((asset) => asset.fileType === 'video') ?? [];
+    setFormData((prev) => {
+      const nextMediaType = nextAssets.length
+        ? deriveMediaTypeFromAssets(nextAssets)
+        : prev.mediaType;
+      const firstAsset = nextAssets[0];
 
-    setFormData((prev) => ({
-      ...prev,
-      caption: qCaption ?? prev.caption,
-      scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
-      ...(images.length > 0
-        ? {
-            carouselAssets: images,
-            mediaType: 'image' as InstagramMediaType,
-            videoUrl: '',
-          }
-        : {}),
-      ...(images.length === 0 && videos.length > 0
-        ? {
-            carouselAssets: [],
-            mediaType: 'video' as InstagramMediaType,
-            videoUrl: videos[0]?.url || '',
-          }
-        : {}),
-    }));
+      return {
+        ...prev,
+        caption: qCaption ?? prev.caption,
+        scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
+        ...(nextAssets.length
+          ? {
+              carouselAssets: nextAssets,
+              mediaType: nextMediaType,
+              videoUrl:
+                nextAssets.length === 1 && nextAssets[0]?.type === 'video' ? nextAssets[0].url : '',
+              imageUrl: firstAsset?.url || prev.imageUrl,
+            }
+          : {}),
+      };
+    });
     if (qCampaignId) setSelectedCampaign(qCampaignId);
     prefillAppliedRef.current = true;
   }, [
@@ -591,6 +596,7 @@ export function PostSidebar({
   const bodyClass =
     layout === 'sidebar' ? 'flex-1 overflow-y-auto px-4 py-3' : 'flex-1 overflow-y-auto px-4 py-4';
 
+  const allowMixedMedia = formData.contentType === 'post';
   const isVideoMedia = finalMediaType === 'video';
 
   return (
@@ -769,29 +775,40 @@ export function PostSidebar({
                           <MultiImageUploader
                             value={formData.carouselAssets}
                             onChange={(assets) => {
-                              setFormData((s) => ({
-                                ...s,
-                                carouselAssets: assets,
-                                mediaType: assets.length > 0 ? 'image' : s.mediaType,
-                                // Clear any video when switching to images
-                                videoUrl: assets.length > 0 ? '' : s.videoUrl,
-                              }));
+                              setFormData((s) => {
+                                const nextMediaType = deriveMediaTypeFromAssets(assets, s.videoUrl);
+                                const shouldClearVideoUrl = allowMixedMedia
+                                  ? assets.length > 0
+                                  : assets.length > 0 && nextMediaType !== 'video';
+
+                                return {
+                                  ...s,
+                                  carouselAssets: assets,
+                                  mediaType: nextMediaType,
+                                  videoUrl: shouldClearVideoUrl ? '' : s.videoUrl,
+                                };
+                              });
                             }}
                             brandId={selectedBrand.id}
                             maxImages={10}
                             maxSizeInMB={10}
-                            videoUrl={formData.videoUrl}
+                            videoUrl={allowMixedMedia ? undefined : formData.videoUrl}
                             onVideoChange={(url) => {
                               setFormData((s) => ({
                                 ...s,
                                 videoUrl: url,
-                                mediaType: url ? 'video' : s.mediaType,
-                                // Clear carousel assets when switching to video
-                                carouselAssets: url ? [] : s.carouselAssets,
+                                mediaType: deriveMediaTypeFromAssets(s.carouselAssets, url),
+                                // For non-mixed flows, clear images when switching to video
+                                carouselAssets: allowMixedMedia
+                                  ? s.carouselAssets
+                                  : url
+                                    ? []
+                                    : s.carouselAssets,
                               }));
                             }}
                             maxVideoSizeInMB={300}
                             acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                            allowMixedMedia={allowMixedMedia}
                             onChooseFromAssets={() => setShowAssetPicker(true)}
                           />
                         </>
@@ -955,13 +972,15 @@ export function PostSidebar({
                           ...s,
                           carouselAssets: assets,
                           imageUrl: assets[0]?.url || '',
-                          mediaType: assets.length > 0 ? 'image' : s.mediaType,
+                          mediaType: deriveMediaTypeFromAssets(assets, s.videoUrl),
+                          videoUrl: allowMixedMedia && assets.length > 0 ? '' : s.videoUrl,
                         }));
                       }}
                       brandId={post.brand.id}
                       maxImages={10}
                       maxSizeInMB={10}
                       enableUpload={false}
+                      allowMixedMedia={allowMixedMedia}
                     />
                   )}
                   {!formData.carouselAssets.length && (
@@ -971,11 +990,6 @@ export function PostSidebar({
               )}
               {!disabled && (
                 <div className="flex flex-col gap-2">
-                  <p className="text-muted-foreground text-xs">
-                    {isVideoMedia
-                      ? 'Change the video for this post by selecting an asset from your library.'
-                      : 'Change the images for this post by selecting assets from your library.'}
-                  </p>
                   {post?.brand?.id && (
                     <ChooseFromAssetsButton
                       onClick={() => setShowAssetPicker(true)}
@@ -1113,64 +1127,64 @@ export function PostSidebar({
       {showAssetPicker && brandIdForAssets && (
         <AssetPicker
           brandId={brandIdForAssets}
-          type={isCreating ? (formData.contentType === 'reel' ? 'video' : undefined) : 'image'}
+          type={formData.contentType === 'reel' ? 'video' : undefined}
           onSelectMany={(assets) => {
-            const videos = assets.filter((a) => a.fileType === 'video');
-            const images = assets.filter((a) => a.fileType === 'image');
+            const normalized: AssetReference[] = assets.map((asset) => ({
+              id: asset.id,
+              url: asset.thumbnailUrl || asset.url,
+              type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
+            }));
+            const allowMixing = formData.contentType === 'post';
 
-            if (post && id) {
-              // Edit mode: just stage the selection; save occurs via updateMedia
-              if (videos.length > 0) {
+            if (!allowMixing) {
+              const firstVideo = normalized.find((asset) => asset.type === 'video');
+              const imageAssets = normalized.filter((asset) => asset.type !== 'video');
+
+              if (firstVideo) {
                 setFormData((s) => ({
                   ...s,
                   carouselAssets: [],
-                  mediaType: 'video' as InstagramMediaType,
-                  videoUrl: videos[0]?.url || '',
+                  imageUrl: '',
+                  mediaType: 'video',
+                  videoUrl: firstVideo.url,
                 }));
-              } else if (images.length > 0) {
-                setFormData((s) => {
-                  const nextAssets = [
-                    ...s.carouselAssets,
-                    ...images.map((asset) => ({
-                      id: asset.id,
-                      url: asset.thumbnailUrl || asset.url,
-                    })),
-                  ];
-                  return {
-                    ...s,
-                    carouselAssets: nextAssets,
-                    imageUrl: nextAssets[0]?.url || '',
-                    mediaType: 'image',
-                    videoUrl: '',
-                  };
-                });
+              } else {
+                setFormData((s) => ({
+                  ...s,
+                  carouselAssets: imageAssets.slice(0, 10),
+                  imageUrl: imageAssets[0]?.url || '',
+                  mediaType: 'image',
+                  videoUrl: '',
+                }));
               }
               setShowAssetPicker(false);
               return;
             }
 
-            // Creation mode
-            if (videos.length > 0) {
-              setFormData((s) => ({
-                ...s,
-                carouselAssets: [],
-                mediaType: 'video' as InstagramMediaType,
-                videoUrl: videos[0]?.url || '',
-              }));
-            } else if (images.length > 0) {
-              setFormData((s) => ({
-                ...s,
-                carouselAssets: [
-                  ...s.carouselAssets,
-                  ...images.map((asset) => ({
-                    id: asset.id,
-                    url: asset.thumbnailUrl || asset.url,
-                  })),
-                ].slice(0, 10),
-                mediaType: 'image' as InstagramMediaType,
-                videoUrl: '',
-              }));
-            }
+            const merged = (() => {
+              const seen = new Set<string>();
+              const combined = [...formData.carouselAssets, ...normalized];
+              const result: AssetReference[] = [];
+              for (const item of combined) {
+                const key = item.id || item.url;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                result.push(item);
+                if (result.length >= 10) break;
+              }
+              return result;
+            })();
+
+            const nextMediaType = deriveMediaTypeFromAssets(merged);
+            const firstAsset = merged[0];
+
+            setFormData((s) => ({
+              ...s,
+              carouselAssets: merged,
+              imageUrl: firstAsset?.url || s.imageUrl,
+              mediaType: nextMediaType,
+              videoUrl: merged.length === 1 && merged[0]?.type === 'video' ? merged[0].url : '',
+            }));
             setShowAssetPicker(false);
           }}
           onClose={() => setShowAssetPicker(false)}

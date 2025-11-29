@@ -11,6 +11,7 @@ import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 export interface AssetReference {
   id: string; // Asset ID from Assets database
   url: string; // CDN URL
+  type?: 'image' | 'video'; // Optional media type (video enables carousels with mixed media)
 }
 
 interface MultiImageUploaderProps {
@@ -29,13 +30,17 @@ interface MultiImageUploaderProps {
   onVideoChange?: (url: string) => void;
   maxVideoSizeInMB?: number;
   acceptedVideoFormats?: string[];
+  /** Allow mixing images and videos in the carousel (Instagram carousel rules). */
+  allowMixedMedia?: boolean;
 }
 
-interface ImageItem {
+interface MediaItem {
   id?: string; // Asset ID (only set after successful upload)
   url: string;
   file?: File;
   uploading?: boolean;
+  type: 'image' | 'video';
+  progressPercent?: number;
 }
 
 export function MultiImageUploader({
@@ -51,8 +56,9 @@ export function MultiImageUploader({
   onVideoChange,
   maxVideoSizeInMB = 300,
   acceptedVideoFormats = ['video/mp4', 'video/quicktime', 'video/mpeg'],
+  allowMixedMedia = false,
 }: MultiImageUploaderProps) {
-  const [images, setImages] = useState<ImageItem[]>([]);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const draggedIndexRef = useRef<number | null>(null);
@@ -63,21 +69,39 @@ export function MultiImageUploader({
 
   // Keep internal images state in sync with parent value
   useEffect(() => {
-    setImages(value.map((asset) => ({ id: asset.id, url: asset.url })));
+    setMediaItems(
+      value.map((asset) => ({
+        id: asset.id,
+        url: asset.url,
+        type: asset.type || 'image',
+      }))
+    );
   }, [value]);
 
-  const hasImages = images.length > 0;
-  const hasVideo = Boolean(videoUrl);
-  const hasUploadingImages = images.some((i) => i.uploading);
-  const isUploadInProgress = isUploadingVideo || hasUploadingImages;
+  const hasImages = mediaItems.some((item) => item.type === 'image');
+  const hasVideoAsset = mediaItems.some((item) => item.type === 'video');
+  const hasVideo = allowMixedMedia ? hasVideoAsset : Boolean(videoUrl) || hasVideoAsset;
+  const hasUploadingMedia = mediaItems.some((i) => i.uploading);
+  const isUploadInProgress = isUploadingVideo || hasUploadingMedia;
 
   const resetError = () => setError(null);
 
-  const handleImageFiles = async (files: FileList | File[] | null) => {
+  const emitChange = (items: MediaItem[]) => {
+    onChange(
+      items
+        .filter((item) => item.id && !item.uploading)
+        .map((item) => ({ id: item.id!, url: item.url, type: item.type }))
+    );
+  };
+
+  const handleImageFiles = async (
+    files: FileList | File[] | null,
+    options?: { allowMixed?: boolean }
+  ) => {
     if (!files || files.length === 0) return;
 
     // Prevent mixing media types if a video is already selected
-    if (hasVideo) {
+    if (!options?.allowMixed && hasVideo) {
       setError('Mixed media is not allowed. Remove the video before adding images.');
       return;
     }
@@ -96,19 +120,21 @@ export function MultiImageUploader({
       return true;
     });
 
-    if (images.length + validFiles.length > maxImages) {
+    if (mediaItems.length + validFiles.length > maxImages) {
       window.alert(`Maximum ${maxImages} images allowed`);
       return;
     }
 
     // Add files with preview URLs
-    const newImages: ImageItem[] = validFiles.map((file) => ({
+    const startIndex = mediaItems.length;
+    const newImages: MediaItem[] = validFiles.map((file) => ({
       url: URL.createObjectURL(file),
       file,
       uploading: true,
+      type: 'image',
     }));
 
-    setImages([...images, ...newImages]);
+    setMediaItems([...mediaItems, ...newImages]);
 
     // Upload files
     const uploadPromises = validFiles.map(async (file, index) => {
@@ -139,11 +165,11 @@ export function MultiImageUploader({
         const cdnUrl = asset.asset.url;
 
         // Update the image with the asset ID and CDN URL
-        setImages((prev) => {
+        setMediaItems((prev) => {
           const updated = [...prev];
-          const imageIndex = images.length + index;
+          const imageIndex = startIndex + index;
           if (updated[imageIndex]) {
-            updated[imageIndex] = { id: assetId, url: cdnUrl, uploading: false };
+            updated[imageIndex] = { id: assetId, url: cdnUrl, uploading: false, type: 'image' };
           }
           return updated;
         });
@@ -152,7 +178,7 @@ export function MultiImageUploader({
       } catch (error) {
         console.error('Failed to upload image:', error);
         // Remove failed upload
-        setImages((prev) => prev.filter((_, i) => i !== images.length + index));
+        setMediaItems((prev) => prev.filter((_, i) => i !== startIndex + index));
         return null;
       }
     });
@@ -163,16 +189,15 @@ export function MultiImageUploader({
     );
 
     // Update parent with all asset references (existing + new)
-    const allAssets = [
-      ...images
-        .filter((img) => !img.uploading && img.id)
-        .map((img) => ({ id: img.id!, url: img.url })),
-      ...successfulAssets,
+    const allAssets: MediaItem[] = [
+      ...mediaItems.filter((img) => !img.uploading && img.id),
+      ...successfulAssets.map((asset) => ({ ...asset, type: 'image' as const })),
     ];
-    onChange(allAssets);
+    setMediaItems(allAssets);
+    emitChange(allAssets);
 
     // Clear any existing video when switching to images
-    if (successfulAssets.length > 0 && onVideoChange) {
+    if (!allowMixedMedia && successfulAssets.length > 0 && onVideoChange) {
       onVideoChange('');
     }
   };
@@ -198,6 +223,61 @@ export function MultiImageUploader({
         return;
       }
 
+      if (allowMixedMedia) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const previewUrl = URL.createObjectURL(file);
+
+        setMediaItems((prev) => [
+          ...prev,
+          { id: tempId, url: previewUrl, uploading: true, type: 'video' },
+        ]);
+        setIsUploadingVideo(true);
+        setVideoUploadProgress(null);
+
+        try {
+          const { cdnUrl, assetId } = await VideoUploadClient.uploadVideo(
+            file,
+            brandId,
+            (progress) => {
+              setVideoUploadProgress(progress);
+              setMediaItems((prev) =>
+                prev.map((item) =>
+                  item.id === tempId ? { ...item, progressPercent: progress.percentage } : item
+                )
+              );
+            }
+          );
+
+          setMediaItems((prev) => {
+            const next = prev.map(
+              (item): MediaItem =>
+                item.id === tempId
+                  ? {
+                      id: assetId || tempId,
+                      url: cdnUrl,
+                      uploading: false,
+                      type: 'video',
+                      progressPercent: undefined,
+                    }
+                  : item
+            );
+            emitChange(next);
+            return next;
+          });
+        } catch (err) {
+          console.error('Failed to upload video', err);
+          setError(
+            err instanceof Error ? err.message : 'Failed to upload video. Please try again later.'
+          );
+          setMediaItems((prev) => prev.filter((item) => item.id !== tempId));
+        } finally {
+          setIsUploadingVideo(false);
+          setVideoUploadProgress(null);
+          URL.revokeObjectURL(previewUrl);
+        }
+        return;
+      }
+
       if (!onVideoChange) {
         setError('Video upload is not enabled in this context.');
         return;
@@ -213,7 +293,7 @@ export function MultiImageUploader({
 
         onVideoChange(cdnUrl);
         // Clear images when switching to video
-        setImages([]);
+        setMediaItems([]);
         onChange([]);
       } catch (err) {
         console.error('Failed to upload video', err);
@@ -225,7 +305,15 @@ export function MultiImageUploader({
         setVideoUploadProgress(null);
       }
     },
-    [acceptedVideoFormats, brandId, hasImages, maxVideoSizeInMB, onChange, onVideoChange]
+    [
+      acceptedVideoFormats,
+      allowMixedMedia,
+      brandId,
+      hasImages,
+      maxVideoSizeInMB,
+      onChange,
+      onVideoChange,
+    ]
   );
 
   const handleFiles = async (files: FileList | File[] | null) => {
@@ -236,6 +324,23 @@ export function MultiImageUploader({
     const fileArray = Array.from(files);
     const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
     const videoFiles = fileArray.filter((f) => f.type.startsWith('video/'));
+
+    if (allowMixedMedia) {
+      if (mediaItems.length + fileArray.length > maxImages) {
+        window.alert(`Maximum ${maxImages} media items allowed`);
+        return;
+      }
+
+      if (imageFiles.length > 0) {
+        await handleImageFiles(imageFiles, { allowMixed: true });
+      }
+
+      for (const videoFile of videoFiles) {
+        await handleVideoFile(videoFile);
+      }
+
+      return;
+    }
 
     if (imageFiles.length > 0 && videoFiles.length > 0) {
       setError('Mixed media is not allowed. Please upload either images or a video.');
@@ -272,13 +377,9 @@ export function MultiImageUploader({
   };
 
   const handleRemove = (index: number) => {
-    const newImages = images.filter((_, i) => i !== index);
-    setImages(newImages);
-    onChange(
-      newImages
-        .filter((img) => !img.uploading && img.id)
-        .map((img) => ({ id: img.id!, url: img.url }))
-    );
+    const newMedia = mediaItems.filter((_, i) => i !== index);
+    setMediaItems(newMedia);
+    emitChange(newMedia);
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -296,7 +397,7 @@ export function MultiImageUploader({
     const currentIndex = draggedIndexRef.current;
     if (currentIndex === null || currentIndex === index) return;
 
-    setImages((prev) => {
+    setMediaItems((prev) => {
       const updated = [...prev];
       const draggedImage = updated[currentIndex];
       if (!draggedImage) return prev;
@@ -313,15 +414,13 @@ export function MultiImageUploader({
   const handleDragEnd = () => {
     setDraggedIndex(null);
     draggedIndexRef.current = null;
-    setImages((prev) => {
-      onChange(
-        prev.filter((img) => !img.uploading && img.id).map((img) => ({ id: img.id!, url: img.url }))
-      );
+    setMediaItems((prev) => {
+      emitChange(prev);
       return prev;
     });
   };
 
-  const isUploadDisabled = isUploadInProgress || hasVideo || !enableUpload;
+  const isUploadDisabled = isUploadInProgress || (!allowMixedMedia && hasVideo) || !enableUpload;
 
   const handleDropzoneClick = () => {
     if (isUploadDisabled) return;
@@ -389,7 +488,8 @@ export function MultiImageUploader({
                 <Upload className="text-muted-foreground h-8 w-8" />
                 <div>
                   <p className="text-foreground text-sm font-medium">
-                    Drop images or a video here, or click to browse
+                    Drop {allowMixedMedia ? 'images or videos' : 'images or a video'} here, or click
+                    to browse
                   </p>
                   <p className="text-muted-foreground mt-1 text-xs">
                     Images: up to {maxImages} (max {maxSizeInMB}MB each). Video: MP4/MOV/MPEG (max{' '}
@@ -421,7 +521,7 @@ export function MultiImageUploader({
         <Upload className="text-muted-foreground mb-1 h-6 w-6" />
         <span className="text-foreground font-medium">Add media</span>
         <span className="text-muted-foreground mt-0.5 text-[10px]">
-          Images only · {images.length}/{maxImages}
+          {allowMixedMedia ? 'Media items' : 'Images only'} · {mediaItems.length}/{maxImages}
         </span>
       </button>
     );
@@ -450,10 +550,37 @@ export function MultiImageUploader({
 
       {/* Media layout */}
       {/* Case 1: No media yet -> full-width dropzone */}
-      {!hasImages && !hasVideo && enableUpload && renderDropzone('full')}
+      {!mediaItems.length && !hasVideo && enableUpload && renderDropzone('full')}
 
-      {/* Case 2: Video selected -> single card with controls, upload disabled */}
-      {hasVideo && (
+      {/* Render media grid (images and/or videos) */}
+      {mediaItems.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {mediaItems.map((media, index) => (
+            <MediaCard
+              key={`${media.url}-${index}`}
+              type={media.type}
+              src={media.url}
+              index={index}
+              alt={`Upload ${index + 1}`}
+              draggable={!media.uploading}
+              onDragStart={(event) => handleDragStart(event, index)}
+              onDragOver={(event) => handleDragOver(event, index)}
+              onDragEnd={handleDragEnd}
+              onRemove={!media.uploading ? () => handleRemove(index) : undefined}
+              isUploading={media.uploading}
+              progressPercent={media.progressPercent}
+              showDragHandle={media.type === 'image'}
+              className={cn(draggedIndex === index && 'opacity-50')}
+            />
+          ))}
+
+          {/* Upload card as the last item when more media are allowed */}
+          {enableUpload && mediaItems.length < maxImages && renderDropzone('card')}
+        </div>
+      )}
+
+      {/* Fallback for single video in non-mixed mode */}
+      {!allowMixedMedia && !mediaItems.length && hasVideo && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           <MediaCard
             type="video"
@@ -473,31 +600,6 @@ export function MultiImageUploader({
             progressPercent={videoUploadProgress?.percentage}
             showDragHandle={false}
           />
-        </div>
-      )}
-
-      {/* Case 3: One or more images -> grid of images plus compact upload card */}
-      {hasImages && !hasVideo && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {images.map((image, index) => (
-            <MediaCard
-              key={`${image.url}-${index}`}
-              type="image"
-              src={image.url}
-              index={index}
-              alt={`Upload ${index + 1}`}
-              draggable={!image.uploading}
-              onDragStart={(event) => handleDragStart(event, index)}
-              onDragOver={(event) => handleDragOver(event, index)}
-              onDragEnd={handleDragEnd}
-              onRemove={!image.uploading ? () => handleRemove(index) : undefined}
-              isUploading={image.uploading}
-              className={cn(draggedIndex === index && 'opacity-50')}
-            />
-          ))}
-
-          {/* Upload card as the last item when more images are allowed */}
-          {enableUpload && images.length < maxImages && renderDropzone('card')}
         </div>
       )}
 
