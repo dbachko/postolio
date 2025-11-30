@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
-import { X, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { brand as brandApi } from '../../../lib/api';
 import { useBrandStore } from '../../../stores/brandStore';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
@@ -24,7 +24,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
       string,
       {
         score: number;
-        source: 'profile' | 'heuristic' | 'fallback';
+        source: 'profile' | 'heuristic' | 'fallback' | 'user';
         perfDelta?: number;
         reasons?: string[];
       }
@@ -75,7 +75,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
             string,
             {
               score: number;
-              source: 'profile' | 'heuristic' | 'fallback';
+              source: 'profile' | 'heuristic' | 'fallback' | 'user';
               perfDelta?: number;
               reasons?: string[];
             }
@@ -109,11 +109,16 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
   }, [brandId, campaignType, goals, reloadNonce, themes.length, onChange]);
 
   const chips = useMemo(() => suggested, [suggested]);
+  const customSelected = useMemo(() => themes.filter((t) => !chips.includes(t)), [themes, chips]);
+  const displayThemes = useMemo(
+    () => Array.from(new Set([...chips, ...customSelected])),
+    [chips, customSelected]
+  );
 
   const onRefresh = () => setReloadNonce((n) => n + 1);
   const onAcceptTop = () => {
-    const toAdd = chips.filter((t) => !themes.includes(t)).slice(0, 5);
-    if (toAdd.length) onChange([...themes, ...toAdd]);
+    const toSelect = displayThemes.filter((t) => !themes.includes(t));
+    if (toSelect.length) onChange([...themes, ...toSelect]);
   };
   const onClearAndRoll = () => {
     // Clear only; do not refresh suggestions
@@ -124,7 +129,9 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
     <div className="space-y-3">
       <div>
         <p className="text-muted-foreground mb-2 text-sm">
-          {isLoading ? 'Loading suggested themes…' : 'Suggested themes for your brand:'}
+          {isLoading
+            ? 'Loading suggested themes…'
+            : 'Suggested themes for your brand (selected ones are highlighted):'}
         </p>
         <div className="mb-2 flex items-center gap-2">
           <Button
@@ -141,7 +148,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
             variant="secondary"
             size="sm"
             onClick={onAcceptTop}
-            disabled={isLoading || chips.length === 0}
+            disabled={isLoading || displayThemes.length === 0}
           >
             Accept Top
           </Button>
@@ -161,27 +168,34 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
         </div>
         {error && <p className="text-destructive mb-2 text-xs">{error}</p>}
         <div className="flex flex-wrap gap-2">
-          {(chips.length > 0 ? chips : []).map((theme) => {
+          {(displayThemes.length > 0 ? displayThemes : []).map((theme) => {
             const d = details[theme];
             const perf = typeof d?.perfDelta === 'number' ? d.perfDelta : 0;
             const perfPositive = perf > 0.01; // small threshold
+            const sourceLabel = d?.source === 'user' ? 'Saved for your brand' : d?.source || '—';
             const titleParts = [
-              `Suggested (${d?.source || '—'})`,
+              `Suggested (${sourceLabel})`,
               `score ${Number(d?.score ?? 0).toFixed(2)}`,
               perfPositive ? `performance +${Math.round(perf * 100)}%` : undefined,
             ].filter(Boolean);
             const reasonLines =
               Array.isArray(d?.reasons) && d!.reasons!.length > 0 ? d!.reasons! : [];
+            const isSelected = themes.includes(theme);
+            const icon = themeMeta[theme]?.icon || '🏷️';
             return (
               <Popover key={theme}>
                 <PopoverTrigger asChild>
                   <Badge
-                    variant={themes.includes(theme) ? 'default' : 'secondary'}
-                    className="hover:bg-primary/80 inline-flex cursor-pointer items-center gap-1"
+                    variant={isSelected ? 'default' : 'secondary'}
+                    className="hover:bg-primary/80 inline-flex cursor-pointer items-center gap-1 text-sm"
                     title={titleParts.join(' • ')}
-                    onClick={() => addTheme(theme)}
+                    onClick={() => {
+                      if (isSelected) removeTheme(theme);
+                      else addTheme(theme);
+                    }}
                     onAuxClick={(e) => e.preventDefault()}
                   >
+                    <span className="mr-1">{icon}</span>
                     {theme}
                     {perfPositive && <TrendingUp className="h-3 w-3 opacity-80" />}
                   </Badge>
@@ -202,7 +216,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
               </Popover>
             );
           })}
-          {!isLoading && chips.length === 0 && (
+          {!isLoading && displayThemes.length === 0 && (
             <span className="text-muted-foreground text-xs">
               No suggestions yet. Add your own below.
             </span>
@@ -230,30 +244,6 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
           </Button>
         </div>
       </div>
-
-      {themes.length > 0 && (
-        <div>
-          <p className="text-muted-foreground mb-2 text-sm">Selected themes:</p>
-          <div className="flex flex-wrap gap-2">
-            {themes.map((theme) => (
-              <Badge key={theme} variant="default" className="group" title={themeMeta[theme]?.help}>
-                {themeMeta[theme]?.icon && <span className="mr-1">{themeMeta[theme]!.icon}</span>}
-                {theme}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeTheme(theme)}
-                  className="ml-1 h-auto p-0 text-current hover:bg-transparent"
-                  title="Remove"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

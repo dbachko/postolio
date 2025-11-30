@@ -119,6 +119,39 @@ async function main() {
       postingTimezone: 'UTC',
     },
   });
+  const notificationTypes: Array<{ title: string; body: string; type: string; category: string }> =
+    [
+      {
+        title: 'Welcome to Postolio',
+        body: 'Start by creating your first campaign or importing content.',
+        type: 'system.welcome',
+        category: 'system',
+      },
+      {
+        title: 'AI drafts ready',
+        body: 'Your AI-generated drafts are ready for review.',
+        type: 'content.draft_ready',
+        category: 'publishing',
+      },
+      {
+        title: 'Campaign scheduled',
+        body: 'Launch Momentum is scheduled with 12 posts this week.',
+        type: 'campaign.scheduled',
+        category: 'publishing',
+      },
+      {
+        title: 'Instagram connection missing',
+        body: 'Connect Instagram to unlock reach and engagement forecasts.',
+        type: 'accounts.missing_connection',
+        category: 'accounts',
+      },
+      {
+        title: 'Best time to post updated',
+        body: 'We recalculated your posting windows based on recent performance.',
+        type: 'analytics.best_time_updated',
+        category: 'analytics',
+      },
+    ];
 
   // Create SocialAccount for Instagram
   const instagramSocialAccount = await prisma.socialAccount.create({
@@ -328,6 +361,22 @@ async function main() {
     });
     createdCampaigns.push(created);
   }
+
+  console.log('==> Seeding notifications');
+  const notifications = await prisma.notification.createMany({
+    data: notificationTypes.map((n, idx) => ({
+      userId: user.id,
+      brandId: brand.id,
+      type: n.type,
+      category: n.category,
+      severity: 'info',
+      title: n.title,
+      body: n.body,
+      linkUrl: 'https://postolio.example/notifications',
+      createdAt: new Date(Date.now() - idx * hours(6)),
+    })),
+  });
+  console.log(`Seeded ${notifications.count} notifications`);
 
   // Generate a richer set of content covering all statuses across campaigns
   console.log('==> Generating content across all statuses (campaign-associated)');

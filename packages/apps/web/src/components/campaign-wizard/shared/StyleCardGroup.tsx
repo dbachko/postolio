@@ -88,11 +88,14 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
     if ('fullDescription' in opt && typeof opt.fullDescription === 'string')
       recognizedSet.add(opt.fullDescription);
   }
-  const customText = rawTokens.filter((t) => !recognizedSet.has(t.trim())).join('; ');
+  const customParts = rawTokens
+    .map((t) => (t.trim().length ? t : ''))
+    .filter((t) => t && !recognizedSet.has(t));
+  const customText = customParts.join('; ');
   const onCustomChange = (text: string) => {
-    const recognized = tokens.filter((t) => recognizedSet.has(t));
-    const extras = splitTokens(text, { preserveWhitespace: true });
-    onChange([...recognized, ...extras].join('; '));
+    const recognized = rawTokens.filter((t) => recognizedSet.has(t.trim()));
+    const extras = text ? [text] : [];
+    onChange([...recognized, ...extras].filter(Boolean).join('; '));
   };
 
   return (

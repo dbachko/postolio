@@ -7,16 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../../stores/brandStore';
-import { campaign as campaignApi, brand as brandApi } from '../../../lib/api';
+import { campaign as campaignApi } from '../../../lib/api';
 import { Lightbulb } from 'lucide-react';
 import { WizardHelpDialog } from '../shared/WizardHelpDialog';
 import { GeneratingStrategyLoader } from '../shared/GeneratingStrategyLoader';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { useNavigate } from 'react-router-dom';
 
 export function Step5StrategyReview() {
-  const navigate = useNavigate();
   const { prevStep, nextStep, contentPillars, updateField } = useCampaignWizard();
   const brand = useBrandStore((s) => s.selectedBrand);
   const wizard = useCampaignWizard();
@@ -353,47 +351,6 @@ export function Step5StrategyReview() {
                         posts.
                       </div>
                     )}
-
-                    {/* Improve accuracy checklist */}
-                    <div className="mt-3 space-y-2">
-                      <div className="text-foreground text-xs font-medium">Improve accuracy</div>
-                      <ul className="text-foreground list-disc space-y-1 pl-5 text-xs">
-                        <li>
-                          Connect Instagram for analytics{' '}
-                          <Button variant="link" type="button" onClick={() => navigate('/brands')}>
-                            Connect now
-                          </Button>
-                        </li>
-                        <li>
-                          Run brand analysis to enrich context{' '}
-                          <Button
-                            variant="link"
-                            type="button"
-                            onClick={async () => {
-                              if (!brand) return;
-                              try {
-                                await brandApi.startBrandAnalysis(brand.id, {
-                                  force: true,
-                                  maxPosts: 30,
-                                });
-                                toast.success('Brand analysis started');
-                              } catch (e) {
-                                console.error(e);
-                                toast.error('Failed to start brand analysis');
-                              }
-                            }}
-                          >
-                            Start
-                          </Button>
-                        </li>
-                        <li>
-                          Schedule & publish a few posts to unlock data{' '}
-                          <Button variant="link" type="button" onClick={() => navigate('/content')}>
-                            Go to content
-                          </Button>
-                        </li>
-                      </ul>
-                    </div>
                   </div>
                 )}
               </CardContent>

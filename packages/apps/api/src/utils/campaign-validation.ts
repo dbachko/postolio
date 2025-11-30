@@ -12,7 +12,7 @@ export interface CampaignUpdateRequest {
   endDate?: string;
   status?: string;
   priority?: number;
-  goals?: string;
+  goals?: string | string[];
   seasonalityAssist?: boolean;
 }
 
@@ -210,12 +210,24 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Validate goals (optional)
   if (obj.goals !== undefined) {
-    if (typeof obj.goals !== 'string') {
-      errors.push({ field: 'goals', message: 'Goals must be a string', value: obj.goals });
-    } else if (obj.goals.length > 2000) {
-      errors.push({ field: 'goals', message: 'Goals must be under 2000 characters' });
+    if (typeof obj.goals === 'string') {
+      if (obj.goals.length > 2000) {
+        errors.push({ field: 'goals', message: 'Goals must be under 2000 characters' });
+      } else {
+        sanitizedData.goals = obj.goals.trim();
+      }
+    } else if (Array.isArray(obj.goals)) {
+      const cleaned = obj.goals
+        .filter((g): g is string => typeof g === 'string')
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0);
+      if (cleaned.some((g) => g.length > 200)) {
+        errors.push({ field: 'goals', message: 'Each goal must be under 200 characters' });
+      } else {
+        sanitizedData.goals = cleaned;
+      }
     } else {
-      sanitizedData.goals = obj.goals.trim();
+      errors.push({ field: 'goals', message: 'Goals must be a string or array', value: obj.goals });
     }
   }
 

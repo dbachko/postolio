@@ -12,7 +12,7 @@ export type CampaignType =
 export interface ThemeSuggestion {
   value: string;
   score: number; // 0..1
-  source: 'profile' | 'heuristic' | 'fallback';
+  source: 'profile' | 'heuristic' | 'fallback' | 'user';
   perfDelta?: number; // relative delta vs mean (negative..positive)
   reasons?: string[];
 }
@@ -75,6 +75,55 @@ const BOOST_TERMS: Record<Exclude<CampaignType, 'custom'>, string[]> = {
 
 function normalize(str: string): string {
   return str.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 64);
+}
+
+const MAX_SAVED_THEMES = 40;
+
+function normalizeThemeList(themes: unknown): string[] {
+  if (!Array.isArray(themes)) return [];
+  return Array.from(
+    new Set(
+      themes
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+    )
+  ).slice(0, MAX_SAVED_THEMES);
+}
+
+function extractStoredThemes(preferences: unknown): string[] {
+  if (!preferences || typeof preferences !== 'object') return [];
+  const pref = preferences as Record<string, unknown>;
+  const custom = normalizeThemeList((pref as any).customThemes);
+  const saved = normalizeThemeList((pref as any).savedThemes);
+  return Array.from(new Set([...custom, ...saved])).slice(0, MAX_SAVED_THEMES);
+}
+
+export async function storeUserThemes(brandId: string, themes: string[]): Promise<void> {
+  const normalized = normalizeThemeList(themes);
+  if (!normalized.length) return;
+
+  const prisma = getDatabaseClient();
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    select: { preferences: true },
+  });
+  if (!brand) return;
+
+  const existing = extractStoredThemes(brand.preferences);
+  const merged = Array.from(new Set([...normalized, ...existing])).slice(0, MAX_SAVED_THEMES);
+  const existingPrefs = (brand.preferences as Record<string, unknown> | null) || {};
+
+  try {
+    await prisma.brand.update({
+      where: { id: brandId },
+      data: {
+        preferences: { ...existingPrefs, customThemes: merged },
+      },
+    });
+  } catch (error) {
+    console.error('Failed to store user themes on brand', { brandId, error });
+  }
 }
 
 function boostScoreByCampaignType(value: string, type?: CampaignType): number {
@@ -166,9 +215,30 @@ export async function suggestThemes(params: {
     // non-fatal
   }
   const out: ThemeSuggestion[] = [];
+  let userThemeCount = 0;
 
   // 1) Primary: derive from brand profile topics -> canonical themes
   const topics = Array.isArray(ctx?.topicsTop) ? ctx!.topicsTop! : [];
+  // 0) User-saved themes (highest priority)
+  try {
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { preferences: true },
+    });
+    const storedThemes = extractStoredThemes(brand?.preferences);
+    userThemeCount = storedThemes.length;
+    storedThemes.forEach((value, index) => {
+      out.push({
+        value: normalize(value),
+        score: 1 - index * 0.01,
+        source: 'user',
+        reasons: ['Saved from your previous campaigns'],
+      });
+    });
+  } catch (err) {
+    console.error('Failed to load stored themes', { brandId, err });
+  }
+
   // Track contributions: which raw topics map to each canonical theme
   const topicContribution = new Map<string, Map<string, number>>();
   if (topics.length > 0) {
@@ -273,10 +343,11 @@ export async function suggestThemes(params: {
     for (const f of fb) if (!seen.has(f.value)) suggestions.push(f);
   }
 
-  // limit and return
+  // limit and return (ensure user themes are always included)
+  const maxResults = Math.max(limit, userThemeCount);
   suggestions = suggestions
     .filter((s) => s.value && s.value.length >= 2)
-    .slice(0, Math.max(1, Math.min(16, limit)));
+    .slice(0, Math.max(1, Math.min(16, maxResults || limit)));
 
   return { suggestions };
 }

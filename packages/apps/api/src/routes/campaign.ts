@@ -15,7 +15,8 @@ import {
   analyzeGoal as analyzeGoalSvc,
   generateStrategy as generateStrategySvc,
 } from '../services/campaign-strategy.js';
-import { suggestGoals, ensureGoals } from '../services/goal-suggester.js';
+import { suggestGoals, ensureGoals, storeUserGoals } from '../services/goal-suggester.js';
+import { storeUserThemes } from '../services/theme-suggester.js';
 import type { CampaignType } from '../services/goal-templates.js';
 
 import { getDatabaseClient } from '../config/database.js';
@@ -42,6 +43,36 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return t.length ? t : undefined;
     }
     return undefined;
+  };
+  const toGoalArray = (val: unknown): string[] => {
+    if (Array.isArray(val)) {
+      return (val as unknown[])
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
+    if (typeof val === 'string') {
+      return val
+        .split(/[\n;]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
+    return [];
+  };
+  const toThemeArray = (val: unknown): string[] => {
+    if (Array.isArray(val)) {
+      return (val as unknown[])
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
+    if (typeof val === 'string') {
+      return val
+        .split(/[\n;,]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
+    return [];
   };
   const ConfigureSchema = z.object({
     name: z
@@ -114,6 +145,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
         const body = request.body;
+        const userProvidedGoals = toGoalArray(body.goals);
 
         // Gate campaign creation until Instagram is connected
         // 1) Verify brand ownership
@@ -249,6 +281,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Create campaign, passing the detected timezone
         const campaign = await campaignService.configureCampaign(config, userId, brandTimezone);
+
+        if (userProvidedGoals.length) {
+          await storeUserGoals(body.brandId, userProvidedGoals);
+        }
+        if (Array.isArray(body.themes) && body.themes.length) {
+          await storeUserThemes(body.brandId, toThemeArray(body.themes));
+        }
 
         return reply.code(201).send({
           success: true,
@@ -618,6 +657,33 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         const updates = validation.sanitizedData!;
 
+        const campaignMeta = await prisma.campaign.findFirst({
+          where: { id, brand: { userId } },
+          select: { brandId: true },
+        });
+
+        if (!campaignMeta) {
+          return reply.code(404).send({ error: 'Campaign not found or access denied' });
+        }
+
+        const updatedGoalList = toGoalArray(updates.goals);
+        const normalizedGoals: string | undefined =
+          updatedGoalList.length > 0 ? updatedGoalList.join('; ') : undefined;
+        if (normalizedGoals) {
+          updates.goals = normalizedGoals;
+          await storeUserGoals(campaignMeta.brandId, updatedGoalList);
+        } else if (updates.goals !== undefined) {
+          delete updates.goals;
+        }
+
+        const updatedThemes = toThemeArray(updates.themes as unknown);
+        if (updatedThemes.length > 0) {
+          updates.themes = updatedThemes;
+          await storeUserThemes(campaignMeta.brandId, updatedThemes);
+        } else if (updates.themes !== undefined) {
+          updates.themes = undefined;
+        }
+
         // Apply rate limiting for pause/resume operations
         if (updates.status && ['paused', 'active'].includes(updates.status)) {
           const rateLimitCheck = await pauseResumeRateLimiter.checkRateLimit(userId);
@@ -669,14 +735,23 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           message?: string;
         };
         let rawResult: UpdateResult | RegenResult;
-        const statusVal = updates.status as CampaignStatus | undefined;
+        const { goals: rawGoals, ...restUpdates } = updates as typeof updates & {
+          goals?: string | string[];
+        };
+        const goalsField = typeof rawGoals === 'string' ? rawGoals : undefined;
+        const updatesForService: typeof restUpdates & { goals?: string } = {
+          ...restUpdates,
+          ...(goalsField ? { goals: goalsField } : {}),
+        };
+
+        const statusVal = updatesForService.status as CampaignStatus | undefined;
         if (statusVal && ['paused', 'active'].includes(statusVal)) {
           rawResult = await campaignService.updateCampaign(id, userId, {
-            ...updates,
+            ...updatesForService,
             status: statusVal,
           });
         } else {
-          const { status: _ignoredStatus, ...rest } = updates; // status handled only by direct update path
+          const { status: _ignoredStatus, ...rest } = updatesForService; // status handled only by direct update path
           void _ignoredStatus;
           rawResult = await campaignService.updateCampaignWithRegeneration(id, rest, userId);
         }

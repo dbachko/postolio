@@ -12,6 +12,7 @@ export enum JobType {
   TOKEN_INTEGRITY_CHECK = 'token-integrity-check',
   AUDIT_LOG_CLEANUP = 'audit-log-cleanup',
   CAMPAIGN_WINDOW_MAINTENANCE = 'campaign-window-maintenance',
+  NOTIFICATION_RETENTION = 'notification-retention',
 }
 
 interface JobData {
@@ -79,6 +80,10 @@ export class BackgroundJobQueue {
 
     this.queue.process(JobType.CAMPAIGN_WINDOW_MAINTENANCE, async () => {
       return await this.processCampaignWindowMaintenance();
+    });
+
+    this.queue.process(JobType.NOTIFICATION_RETENTION, async () => {
+      return await this.processNotificationRetention();
     });
   }
 
@@ -397,7 +402,26 @@ export class BackgroundJobQueue {
       }
     );
 
+    // Notification retention cleanup - daily at 2:30 AM
+    await this.queue.add(
+      JobType.NOTIFICATION_RETENTION,
+      { type: JobType.NOTIFICATION_RETENTION },
+      {
+        repeat: {
+          cron: '30 2 * * *',
+        },
+      }
+    );
+
     this.logger.info('Recurring background jobs scheduled');
+  }
+
+  private async processNotificationRetention(): Promise<CleanupResult> {
+    const start = Date.now();
+    const maxAgeDays = Number(process.env.NOTIFICATION_RETENTION_DAYS || 90);
+    const { notificationsService } = await import('./notifications.js');
+    const res = await notificationsService.purgeOld(maxAgeDays);
+    return { deletedCount: res.deleted, duration: Date.now() - start };
   }
 
   private async processCampaignWindowMaintenance(): Promise<{

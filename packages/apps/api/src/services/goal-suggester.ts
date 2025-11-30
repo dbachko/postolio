@@ -17,12 +17,66 @@ import {
 export interface GoalSuggestion {
   value: string;
   score: number; // 0..1
-  source: 'template' | 'fallback';
-  badge?: 'Best for your business' | 'Tailored for your brand' | 'Recommended';
+  source: 'template' | 'fallback' | 'user';
+  badge?:
+    | 'Best for your business'
+    | 'Tailored for your brand'
+    | 'Recommended'
+    | 'Saved for your brand';
   reasons?: string[];
 }
 
 const MAX_GOALS = 8; // Maximum goals to return
+const MAX_SAVED_GOALS = 20; // Cap how many user-saved goals we store per brand to avoid unbounded JSON growth
+
+function normalizeGoalList(goals: unknown): string[] {
+  if (!Array.isArray(goals)) return [];
+  return Array.from(
+    new Set(
+      goals
+        .filter((g): g is string => typeof g === 'string')
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0)
+    )
+  ).slice(0, MAX_SAVED_GOALS);
+}
+
+function extractStoredGoals(preferences: unknown): string[] {
+  if (!preferences || typeof preferences !== 'object') return [];
+  const pref = preferences as Record<string, unknown>;
+  // Support both current and legacy keys just in case
+  const fromCustom = normalizeGoalList((pref as any).customGoals);
+  const fromSaved = normalizeGoalList((pref as any).savedGoals);
+  // Prefer explicit custom goals, fall back to savedGoals, and merge uniquely
+  return Array.from(new Set([...fromCustom, ...fromSaved])).slice(0, MAX_SAVED_GOALS);
+}
+
+export async function storeUserGoals(brandId: string, goals: string[]): Promise<void> {
+  const normalized = normalizeGoalList(goals);
+  if (!normalized.length) return;
+
+  const prisma = getDatabaseClient();
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    select: { preferences: true },
+  });
+  if (!brand) return;
+
+  const existing = extractStoredGoals(brand.preferences);
+  const merged = Array.from(new Set([...normalized, ...existing])).slice(0, MAX_SAVED_GOALS);
+  const existingPrefs = (brand.preferences as Record<string, unknown> | null) || {};
+
+  try {
+    await prisma.brand.update({
+      where: { id: brandId },
+      data: {
+        preferences: { ...existingPrefs, customGoals: merged },
+      },
+    });
+  } catch (error) {
+    console.error('Failed to store user goals on brand', { brandId, error });
+  }
+}
 
 /**
  * Suggest campaign goals using 2-tier algorithm
@@ -36,6 +90,7 @@ export async function suggestGoals(params: {
   const prisma = getDatabaseClient();
 
   const suggestions: GoalSuggestion[] = [];
+  let userGoalCount = 0;
 
   try {
     // Fetch brand to get styleProfile for Tier 1
@@ -43,8 +98,20 @@ export async function suggestGoals(params: {
       where: { id: brandId },
       select: {
         styleProfile: true,
+        preferences: true,
       },
     });
+
+    const storedUserGoals = extractStoredGoals(brand?.preferences);
+    userGoalCount = storedUserGoals.length;
+    const userGoalSuggestions: GoalSuggestion[] = storedUserGoals.map((goal, index) => ({
+      value: goal,
+      score: 1 - index * 0.01, // highest priority, stable ordering
+      source: 'user',
+      badge: 'Saved for your brand',
+      reasons: ['Saved from your previous campaign goals'],
+    }));
+    suggestions.push(...userGoalSuggestions);
 
     // ============================================
     // Tier 1: Tag-based template matching
@@ -142,10 +209,10 @@ export async function suggestGoals(params: {
     }
   }
 
-  // Sort by score and limit
-  return Array.from(uniqueGoals.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  const maxResults = Math.max(limit, typeof userGoalCount === 'number' ? userGoalCount : 0);
+  // Sort by score and limit (always keep user goals, even if over requested limit)
+  const sorted = Array.from(uniqueGoals.values()).sort((a, b) => b.score - a.score);
+  return sorted.slice(0, maxResults);
 }
 
 /**

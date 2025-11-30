@@ -13,8 +13,8 @@ import type { CampaignType } from '@/types/campaign-wizard';
 interface GoalSuggestion {
   value: string;
   score: number;
-  source: 'cached' | 'template' | 'fallback';
-  badge?: 'Best for your business' | 'Tailored for your brand' | 'Recommended';
+  source: 'cached' | 'template' | 'fallback' | 'user';
+  badge?: string;
   reasons?: string[];
 }
 

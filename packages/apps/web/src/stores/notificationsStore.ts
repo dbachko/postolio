@@ -37,11 +37,16 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   },
 
   markRead: async (id: string) => {
-    // optimistic
-    set((state) => ({
-      items: state.items.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
-      unreadCount: Math.max(0, state.unreadCount - 1),
-    }));
+    // optimistic: remove from unread view and sidebar; keep list fetch authoritative
+    set((state) => {
+      const updated = state.items.map((n) =>
+        n.id === id ? { ...n, readAt: new Date().toISOString() } : n
+      );
+      return {
+        items: updated,
+        unreadCount: Math.max(0, state.unreadCount - 1),
+      };
+    });
     await notificationsApi.mark(id, { read: true });
   },
 

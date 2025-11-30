@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pause, Play, Edit, Calendar } from 'lucide-react';
+import { Pause, Play, Edit, Calendar, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CampaignAnalytics } from '@/components/CampaignAnalytics';
 import PreferredPostingTime from '@/components/PreferredPostingTime';
@@ -25,6 +25,8 @@ interface Props {
   fillWindowLoading?: boolean;
   limits?: { tier: string; maxAllowed: number; currentCount: number };
   onUpdated?: () => void; // called after saving edits
+  startCampaignLoading?: boolean;
+  startCampaignLoadingId?: string | null;
 }
 
 export function CampaignDetails({
@@ -36,6 +38,8 @@ export function CampaignDetails({
   fillWindowLoading,
   limits,
   onUpdated,
+  startCampaignLoading = false,
+  startCampaignLoadingId = null,
 }: Props) {
   const { timezone: userTz, getBrandTimezone } = useTimezone();
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
@@ -118,6 +122,7 @@ export function CampaignDetails({
     );
   }
   if (!campaign) return null;
+  const isLaunching = startCampaignLoading && startCampaignLoadingId === campaign.id;
   const capacityFull =
     !!limits && Number.isFinite(limits.maxAllowed) && limits.currentCount >= limits.maxAllowed;
   const isGenerating =
@@ -154,9 +159,23 @@ export function CampaignDetails({
                 Edit
               </Button>
               {campaign.status === 'preview' && (
-                <Button size="sm" className="gap-2" onClick={onStartCampaign}>
-                  <Play className="h-4 w-4" />
-                  Launch
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  onClick={onStartCampaign}
+                  disabled={startCampaignLoading}
+                >
+                  {isLaunching ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Launching…
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4" />
+                      Launch
+                    </>
+                  )}
                 </Button>
               )}
               {campaign.status === 'active' && (

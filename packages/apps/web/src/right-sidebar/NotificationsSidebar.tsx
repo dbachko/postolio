@@ -22,6 +22,8 @@ export function NotificationsSidebar() {
     void fetchLatest();
   }, [fetchLatest]);
 
+  const unreadItems = items.filter((n) => !n.readAt);
+
   return (
     <div className="flex h-full flex-col">
       <div className="bg-card sticky top-0 z-10 flex h-14 items-center justify-between border-b px-4">
@@ -54,31 +56,33 @@ export function NotificationsSidebar() {
           <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
             Loading...
           </div>
-        ) : items.length === 0 ? (
+        ) : unreadItems.length === 0 ? (
           <div className="flex h-full min-h-full items-center justify-center">
             <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
               <span className="text-muted-foreground/70">
                 <BellIcon className="h-8 w-8" />
               </span>
               <div>
-                <p className="text-foreground text-base font-semibold">No Notifications</p>
+                <p className="text-foreground text-base font-semibold">Nothing to see here</p>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  You&apos;re all caught up. New notifications will appear here.
+                  You’re all caught up. New notifications will appear here.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => fetchLatest()}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                Refresh
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => fetchLatest()}>
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  Refresh
+                </Button>
+                <Button asChild size="sm" variant="secondary">
+                  <Link to="/notifications">Open all</Link>
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
           <ul className="space-y-1">
-            {items.map((n) => (
-              <li
-                key={n.id}
-                className={`hover:bg-accent rounded-md p-2 ${!n.readAt ? 'bg-accent/40' : ''}`}
-              >
+            {unreadItems.map((n) => (
+              <li key={n.id} className="hover:bg-accent bg-accent/40 rounded-md p-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-sm font-medium">{n.title}</div>
@@ -87,11 +91,9 @@ export function NotificationsSidebar() {
                       {new Date(n.createdAt).toLocaleString()}
                     </div>
                   </div>
-                  {!n.readAt && (
-                    <Button size="sm" variant="secondary" onClick={() => markRead(n.id)}>
-                      Mark read
-                    </Button>
-                  )}
+                  <Button size="sm" variant="secondary" onClick={() => markRead(n.id)}>
+                    Mark read
+                  </Button>
                 </div>
               </li>
             ))}

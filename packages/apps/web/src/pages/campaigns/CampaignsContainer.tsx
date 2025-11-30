@@ -74,7 +74,15 @@ export default function CampaignsContainer() {
     <CampaignDetails
       campaign={campaignDetailsQuery.data?.campaign}
       isLoading={campaignDetailsQuery.isLoading}
-      onStartCampaign={() => selectedCampaignId && startCampaignMutation.mutate(selectedCampaignId)}
+      onStartCampaign={async () => {
+        if (!selectedCampaignId) return;
+        try {
+          await startCampaignMutation.mutateAsync(selectedCampaignId);
+          await campaignDetailsQuery.refetch();
+        } catch {
+          // toast is handled in the mutation hook
+        }
+      }}
       onPauseCampaign={() => selectedCampaignId && pauseCampaignMutation.mutate(selectedCampaignId)}
       limits={limitsQuery.data?.data}
       onUpdated={() => campaignDetailsQuery.refetch()}
@@ -84,6 +92,8 @@ export default function CampaignsContainer() {
         await campaignDetailsQuery.refetch();
       }}
       fillWindowLoading={fillWindowMutation.isPending}
+      startCampaignLoading={startCampaignMutation.isPending}
+      startCampaignLoadingId={(startCampaignMutation.variables as string | undefined) || null}
     />
   );
 

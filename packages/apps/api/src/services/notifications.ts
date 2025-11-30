@@ -189,6 +189,8 @@ class NotificationsServiceImpl {
       where.archivedAt = null;
     } else if (filters.filter === 'archived') {
       where.archivedAt = { not: null };
+    } else if (filters.filter === 'all') {
+      // show everything, no additional constraint
     }
 
     const cursor = filters.cursor ? { id: filters.cursor } : undefined;
@@ -245,6 +247,16 @@ class NotificationsServiceImpl {
     const b = this.getBroadcaster();
     if (b) await b.broadcastUnreadCount(userId, count);
     return { success: true, marked: res.count };
+  }
+
+  async purgeOld(maxAgeDays: number) {
+    const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+    const res = await prisma.notification.deleteMany({
+      where: {
+        createdAt: { lt: cutoff },
+      },
+    });
+    return { deleted: res.count, cutoff };
   }
 
   async getPreferences(userId: string, brandId?: string) {

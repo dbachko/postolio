@@ -69,8 +69,6 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
   const errors: ValidationErrorItem[] = [];
   const contentType = data.contentType || 'post';
   const mediaType = data.mediaType || 'image';
-  const mediaCount = (data.mediaKeys?.length || 0) + (data.videoUrl ? 1 : 0);
-
   const isReel = contentType === 'reel';
   const isImageLike = mediaType === 'image' && !isReel;
   const isVideoLike = mediaType === 'video' || isReel;
