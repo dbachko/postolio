@@ -59,7 +59,13 @@ interface PostDetailData {
   postedAt?: string;
   brandId?: string;
   brand: { id: string; name: string };
-  mediaAssets?: { cdnUrl: string; usageContext: string; displayOrder: number; assetId?: string }[];
+  mediaAssets?: {
+    cdnUrl: string;
+    usageContext: string;
+    displayOrder: number;
+    assetId?: string;
+    fileType?: 'image' | 'video';
+  }[];
   schedulingError?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -95,6 +101,13 @@ const deriveMediaTypeFromAssets = (
     return assets[0]?.type === 'video' ? 'video' : 'image';
   }
   if (fallbackVideoUrl) return 'video';
+  return 'image';
+};
+
+const inferAssetTypeFromUrl = (url?: string | null): 'image' | 'video' => {
+  if (!url) return 'image';
+  const lower = url.toLowerCase();
+  if (/\.(mp4|mov|m4v|webm|mpeg|mpg|avi|qt)/.test(lower)) return 'video';
   return 'image';
 };
 
@@ -207,22 +220,33 @@ export function PostSidebar({
   useEffect(() => {
     if (!post || !brandTimezone) return;
     const mediaAssets = post.mediaAssets || [];
-    const carouselAssetsFromPost: AssetReference[] = mediaAssets.map((asset) => ({
-      id: asset.assetId || asset.cdnUrl,
-      url: asset.cdnUrl,
-    }));
+    const carouselAssetsFromPost: AssetReference[] = mediaAssets.map((asset) => {
+      const type =
+        asset.fileType === 'video'
+          ? ('video' as const)
+          : asset.fileType === 'image'
+            ? ('image' as const)
+            : inferAssetTypeFromUrl(asset.cdnUrl);
+      return {
+        id: asset.assetId || asset.cdnUrl,
+        url: asset.cdnUrl,
+        type,
+      };
+    });
+    const videoAsset = carouselAssetsFromPost.find((a) => a.type === 'video');
 
     // Normalize mediaType from API/DB:
     // If missing, infer from contentType (reel => video, otherwise image).
     const normalizedContentType = (post.contentType as InstagramContentType) || 'post';
+    const normalizedVideoUrl = post.videoUrl || videoAsset?.url || '';
 
     setFormData({
       caption: post.caption || '',
       imageUrl: post.imageUrl || '',
-      videoUrl: post.videoUrl || '',
+      videoUrl: normalizedVideoUrl,
       carouselAssets: carouselAssetsFromPost,
       contentType: normalizedContentType,
-      mediaType: deriveMediaTypeFromAssets(carouselAssetsFromPost, post.videoUrl || undefined),
+      mediaType: deriveMediaTypeFromAssets(carouselAssetsFromPost, normalizedVideoUrl || undefined),
       scheduledAt: formatScheduledInput(post.scheduledAt, brandTimezone),
       shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
     });
@@ -369,7 +393,8 @@ export function PostSidebar({
     const formImage = formData.imageUrl || '';
     const postImage = post.imageUrl || '';
     const formVideo = formData.videoUrl || '';
-    const postVideo = post.videoUrl || '';
+    const postVideo =
+      post.videoUrl || post.mediaAssets?.find((asset) => asset.fileType === 'video')?.cdnUrl || '';
     const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
     const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId || asset.cdnUrl);
     const formShareToFeed = formData.shareToFeed ?? true;

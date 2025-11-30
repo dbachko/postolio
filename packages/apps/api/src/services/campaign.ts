@@ -1165,6 +1165,8 @@ class CampaignService {
           );
         }
 
+        const previousStatus = campaign.status;
+
         // Update campaign status to paused
         const updatedCampaign = await tx.campaign.update({
           where: { id: campaignId },
@@ -1199,9 +1201,24 @@ class CampaignService {
         return {
           campaign: updatedCampaign,
           cancelledCount: skippedContent.count,
+          oldStatus: previousStatus,
           message: 'Campaign paused. No content will be published until resumed.',
         };
       });
+
+      // Notify downstream systems (Dynamo sync, scheduler) about the pause
+      if (result?.campaign && result.oldStatus) {
+        eventEmitter.emitCampaignStatusChanged(
+          campaignId,
+          result.campaign.brandId as string,
+          result.oldStatus,
+          'paused',
+          {
+            userId,
+            operation: 'campaign.pause',
+          }
+        );
+      }
 
       return result;
     } catch (error) {
@@ -1236,6 +1253,7 @@ class CampaignService {
         }
 
         const now = new Date();
+        const previousStatus = campaign.status;
         const rawConfig = campaign.config as unknown;
         const config =
           rawConfig && typeof rawConfig === 'object'
@@ -1256,6 +1274,7 @@ class CampaignService {
           return {
             campaign: completedCampaign,
             skippedCount: 0,
+            oldStatus: previousStatus,
             message: 'Campaign auto-completed (end date has passed)',
           };
         }
@@ -1310,6 +1329,7 @@ class CampaignService {
           campaign: updatedCampaign,
           restoredCount: restoredContent.count,
           permanentlySkippedCount: permanentlySkipped.count,
+          oldStatus: previousStatus,
           message:
             restoredContent.count > 0
               ? `Campaign resumed. ${restoredContent.count} posts restored to schedule.${permanentlySkipped.count > 0 ? ` ${permanentlySkipped.count} posts permanently skipped.` : ''}`
@@ -1318,6 +1338,20 @@ class CampaignService {
                 : 'Campaign resumed successfully!',
         };
       });
+
+      // Notify downstream systems (Dynamo sync, scheduler) about the resume/complete transition
+      if (result?.campaign && result.oldStatus) {
+        eventEmitter.emitCampaignStatusChanged(
+          campaignId,
+          result.campaign.brandId as string,
+          result.oldStatus,
+          result.campaign.status as string,
+          {
+            userId,
+            operation: 'campaign.resume',
+          }
+        );
+      }
 
       return result;
     } catch (error) {

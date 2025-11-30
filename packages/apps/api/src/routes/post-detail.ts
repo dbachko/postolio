@@ -9,12 +9,24 @@ import {
 import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js';
 import crypto from 'crypto';
 import { getRedisClient } from '../services/redis.js';
+import { getAssetsClient } from '../services/assets-media.js';
 
 const prisma = getDatabaseClient();
 
 interface PostDetailParams {
   postId: string;
 }
+
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.mpeg', '.mpg', '.avi', '.qt'];
+
+const inferFileTypeFromUrl = (url?: string | null): 'image' | 'video' => {
+  if (!url) return 'image';
+  const lower = url.toLowerCase();
+  if (VIDEO_EXTENSIONS.some((ext) => lower.includes(ext))) {
+    return 'video';
+  }
+  return 'image';
+};
 
 const postDetailRoutes: FastifyPluginAsync = async (app) => {
   // Add authentication middleware to all routes
@@ -96,6 +108,40 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       const mediaAssets = (post as any).mediaAssets as
         | { cdnUrl: string; usageContext: string; displayOrder: number }[]
         | undefined;
+      let mediaAssetsWithType = mediaAssets ?? [];
+      const assetIds = (mediaAssets || [])
+        .map((asset: any) => asset?.assetId)
+        .filter((id: string | null | undefined): id is string => Boolean(id));
+
+      if (assetIds.length > 0) {
+        try {
+          const assetsClient = getAssetsClient();
+          const fetchedAssets = await assetsClient.getBatchAssets(assetIds);
+          const typeById = new Map<string, 'image' | 'video'>();
+          fetchedAssets.forEach((asset) => {
+            if (asset?.id) {
+              typeById.set(asset.id, asset.fileType === 'video' ? 'video' : 'image');
+            }
+          });
+
+          mediaAssetsWithType = (mediaAssets || []).map((asset: any) => ({
+            ...asset,
+            fileType: typeById.get(asset.assetId) || inferFileTypeFromUrl(asset.cdnUrl),
+          }));
+        } catch (err) {
+          request.log.warn(
+            { err, postId, assetCount: mediaAssets?.length },
+            'Failed to enrich media asset types; continuing without type metadata'
+          );
+          mediaAssetsWithType = mediaAssets || [];
+        }
+      } else if (mediaAssets?.length) {
+        mediaAssetsWithType = mediaAssets.map((asset: any) => ({
+          ...asset,
+          fileType: inferFileTypeFromUrl(asset.cdnUrl),
+        }));
+      }
+
       const primaryAssetUrl =
         post.primaryAssetCdnUrl ||
         mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
@@ -126,7 +172,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         schedulingError: post.schedulingError,
         brand: post.brand,
         campaign: post.campaign,
-        mediaAssets: mediaAssets ?? [],
+        mediaAssets: mediaAssetsWithType ?? [],
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
       };
