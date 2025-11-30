@@ -154,7 +154,7 @@ class InstagramAdapter implements PlatformAdapter {
     creationId: string,
     accessToken: string,
     isVideo: boolean,
-    opts?: { throwOnTimeout?: boolean; maxWaitMs?: number }
+    opts?: { throwOnTimeout?: boolean; maxWaitMs?: number; pollIntervalMs?: number }
   ): Promise<boolean> {
     // Tests should not wait for real media processing; allow skip via env or NODE_ENV.
     if (process.env.IG_SKIP_MEDIA_WAIT === 'true' || process.env.NODE_ENV === 'test') {
@@ -162,8 +162,8 @@ class InstagramAdapter implements PlatformAdapter {
     }
 
     const statusUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
-    // Allow ample time for Instagram to process all media types; align images with video waits.
-    const maxWaitMs = opts?.maxWaitMs ?? 360_000;
+    const maxWaitMs = opts?.maxWaitMs ?? 300_000;
+    const pollIntervalMs = opts?.pollIntervalMs ?? 60_000;
     const throwOnTimeout = opts?.throwOnTimeout ?? true;
     const started = Date.now();
     let attempt = 0;
@@ -172,27 +172,68 @@ class InstagramAdapter implements PlatformAdapter {
     while (Date.now() - started < maxWaitMs) {
       try {
         const params = new URLSearchParams({
-          fields: 'status_code,status',
+          fields: 'status_code',
           access_token: accessToken,
         });
         const resp = await fetch(`${statusUrl}?${params}`);
-        const body = resp.ok ? await resp.json() : undefined;
-        const codeRaw = (body?.status_code || body?.status || '').toString();
-        const code = codeRaw.toUpperCase();
+        let body: unknown;
+        try {
+          body = await resp.json();
+        } catch {
+          body = undefined;
+        }
+        const statusCodeValue =
+          body && typeof body === 'object' && 'status_code' in body
+            ? String(
+                (body as { status_code?: string | number | null | undefined }).status_code ?? ''
+              )
+            : '';
+        const code = statusCodeValue.toUpperCase();
         lastStatus = code || lastStatus;
 
-        logger.info('Instagram media status check', {
-          creationId,
-          attempt,
-          status_code: code || 'UNKNOWN',
-        });
+        if (attempt === 0 || attempt % 5 === 0) {
+          logger.info('Instagram media status check', {
+            creationId,
+            attempt,
+            status_code: code || 'UNKNOWN',
+            httpStatus: resp.status,
+          });
+        }
+
+        if (!resp.ok) {
+          const errorPayload =
+            body && typeof body === 'object' && 'error' in body
+              ? (
+                  body as {
+                    error?: { error_user_msg?: string; message?: string };
+                  }
+                ).error
+              : undefined;
+          const message =
+            errorPayload?.error_user_msg || errorPayload?.message || `HTTP ${resp.status}`;
+          logger.warn('Instagram media status check returned HTTP error', {
+            creationId,
+            attempt,
+            httpStatus: resp.status,
+            error: message,
+          });
+          if (resp.status >= 400 && resp.status < 500 && resp.status !== 429) {
+            throw new Error(`Instagram status endpoint returned ${resp.status}`);
+          }
+        }
 
         if (!code) {
-          logger.warn('Instagram media status response had no status code', {
+          const logPayload = {
             creationId,
             attempt,
             raw_body: body,
-          });
+            httpStatus: resp.status,
+          };
+          if (attempt === 0) {
+            logger.warn('Instagram media status response had no status code', logPayload);
+          } else {
+            logger.debug('Instagram media status response had no status code', logPayload);
+          }
         }
 
         if (code === 'FINISHED' || code === 'PUBLISHED' || code === 'READY') return true; // Ready
@@ -219,11 +260,8 @@ class InstagramAdapter implements PlatformAdapter {
         });
       }
 
-      // Backoff: start small for images, longer for videos
-      const base = isVideo ? 1200 : 400;
-      const delay = Math.min(base * Math.pow(1.6, attempt), isVideo ? 5000 : 1500);
       attempt += 1;
-      await new Promise((r) => setTimeout(r, delay));
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
     }
 
     logger.warn('Timed out waiting for Instagram media readiness', {
@@ -320,6 +358,7 @@ class InstagramAdapter implements PlatformAdapter {
 
       // Feed/Reel flow
       const isCarousel = !isReel && resolvedMedia.length > 1 && resolvedMedia.length <= 10;
+      const hasVideoMedia = resolvedMedia.some((m) => m.kind === 'video');
 
       if (isCarousel) {
         const carousel = await this.createCarouselAndPublish({
@@ -327,6 +366,7 @@ class InstagramAdapter implements PlatformAdapter {
           credentials,
           formattedCaption,
           media: resolvedMedia.slice(0, 10),
+          hasVideoMedia,
         });
         return {
           success: true,
@@ -485,12 +525,12 @@ class InstagramAdapter implements PlatformAdapter {
       throw err;
     }
 
-    // Step 2: Wait for the media container to be ready (for all media types).
-    await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
-      // Fail fast for videos; be more lenient for images/stories but still wait up to the full window
-      throwOnTimeout: isVideo,
-      maxWaitMs: 360_000,
-    });
+    if (isVideo) {
+      await this.waitForMediaReady(creationId, credentials.accessToken, true, {
+        throwOnTimeout: true,
+        maxWaitMs: 300_000,
+      });
+    }
 
     // Step 3: Publish the media (with a readiness-aware retry for images)
     const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
@@ -521,17 +561,20 @@ class InstagramAdapter implements PlatformAdapter {
       /not ready|not\s+ready\s+for\s+publishing|finish processing|processing|cannot\s+be\s+found/i.test(
         publishAttempt.igMsg
       );
-
     if (!publishAttempt.resp.ok && notReady) {
       logger.warn('Instagram reported media not ready; waiting before retry', {
         creationId,
         isVideo,
         message: publishAttempt.igMsg,
       });
-      await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
-        throwOnTimeout: isVideo, // fail fast for video; be lenient for images/stories
-        maxWaitMs: 360_000, // align image/story wait window with video
-      });
+      if (isVideo) {
+        await this.waitForMediaReady(creationId, credentials.accessToken, true, {
+          throwOnTimeout: true,
+          maxWaitMs: 300_000,
+        });
+      } else {
+        await new Promise((r) => setTimeout(r, 60_000));
+      }
       publishAttempt = await tryPublish();
     }
 
@@ -585,10 +628,10 @@ class InstagramAdapter implements PlatformAdapter {
     credentials: Credentials;
     formattedCaption: string;
     media: ResolvedMedia[];
+    hasVideoMedia: boolean;
   }): Promise<PublishedMedia> {
-    const { credentials, formattedCaption, media } = params;
+    const { credentials, formattedCaption, media, hasVideoMedia } = params;
 
-    // Step 1: Create child containers (image/video) with is_carousel_item=true
     const childIds: string[] = [];
     for (const asset of media) {
       const creationId = await this.createChildContainer({
@@ -654,11 +697,12 @@ class InstagramAdapter implements PlatformAdapter {
       throw err;
     }
 
-    // Step 3: Wait for carousel readiness (treat as image for wait timing)
-    await this.waitForMediaReady(creationId, credentials.accessToken, false, {
-      throwOnTimeout: false,
-      maxWaitMs: 360_000,
-    });
+    if (hasVideoMedia) {
+      await this.waitForMediaReady(creationId, credentials.accessToken, true, {
+        throwOnTimeout: true,
+        maxWaitMs: 300_000,
+      });
+    }
 
     // Step 4: Publish carousel
     const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
@@ -694,10 +738,14 @@ class InstagramAdapter implements PlatformAdapter {
         creationId,
         message: publishAttempt.igMsg,
       });
-      await this.waitForMediaReady(creationId, credentials.accessToken, false, {
-        throwOnTimeout: false,
-        maxWaitMs: 360_000,
-      });
+      if (hasVideoMedia) {
+        await this.waitForMediaReady(creationId, credentials.accessToken, true, {
+          throwOnTimeout: true,
+          maxWaitMs: 300_000,
+        });
+      } else {
+        await new Promise((r) => setTimeout(r, 60_000));
+      }
       publishAttempt = await tryPublish();
     }
 
@@ -797,12 +845,6 @@ class InstagramAdapter implements PlatformAdapter {
       };
       throw err;
     }
-
-    // Wait for child readiness (videos especially)
-    await this.waitForMediaReady(creationId, credentials.accessToken, isVideo, {
-      throwOnTimeout: isVideo,
-      maxWaitMs: 360_000,
-    });
 
     return creationId;
   }
