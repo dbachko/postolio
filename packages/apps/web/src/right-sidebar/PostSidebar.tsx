@@ -24,7 +24,17 @@ import { toUTCFromInput, getUserTimezone } from '@/lib/timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { X, Clock, Save, Upload, Calendar, Image as ImageIcon, Film, Zap } from 'lucide-react';
+import {
+  X,
+  Clock,
+  Save,
+  Upload,
+  Calendar,
+  Image as ImageIcon,
+  Film,
+  Zap,
+  AlertTriangle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
 import {
@@ -45,6 +55,20 @@ import {
 import AssetPicker from '@/features/assets/components/AssetPicker';
 import { Switch } from '@/components/ui/switch';
 import { assetsApi } from '@/features/assets/api/client';
+
+function getScheduleBlockerMessage(params: {
+  atCapacity: boolean;
+  limitMessage: string;
+  validationOk: boolean;
+  validationError: string | null;
+  hasScheduleTime: boolean;
+}): string | null {
+  const { atCapacity, limitMessage, validationOk, validationError, hasScheduleTime } = params;
+  if (atCapacity) return limitMessage || 'You have reached your scheduling limit.';
+  if (!validationOk) return validationError || 'Please fix validation errors before continuing.';
+  if (!hasScheduleTime) return 'Pick a time before scheduling.';
+  return null;
+}
 
 interface PostDetailData {
   id: string;
@@ -216,6 +240,21 @@ export function PostSidebar({
 
   const brandIdForAssets = post?.brand?.id ?? selectedBrand?.id ?? null;
 
+  // Scheduling capacity (plan limits)
+  const limitsQuery = useQuery({
+    queryKey: ['limits', 'schedule-ahead'],
+    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    staleTime: 60 * 1000,
+  });
+  const limits = limitsQuery.data?.data as
+    | { tier: string; maxAllowed: number; currentCount: number }
+    | undefined;
+  const atCapacity =
+    !!limits && Number.isFinite(limits.maxAllowed) && limits.currentCount >= limits.maxAllowed;
+  const limitMessage = atCapacity
+    ? `Scheduling limit reached (${limits?.currentCount}/${limits?.maxAllowed}). Upgrade to add more.`
+    : '';
+
   // Initialize form from post (wait for brandTimezone to be loaded)
   useEffect(() => {
     if (!post || !brandTimezone) return;
@@ -313,11 +352,17 @@ export function PostSidebar({
         return {
           ...oldData,
           ...response.content,
-          status: 'scheduled',
+          status: response.content?.status || oldData.status,
         } as PostDetailData;
       });
     },
-    onError: () => toast.error('Failed to schedule post'),
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.error ||
+        error?.message ||
+        'Failed to schedule post. Please try again.';
+      toast.error(message);
+    },
   });
 
   // Create post mutation (for creation mode)
@@ -375,6 +420,16 @@ export function PostSidebar({
       toast.error(error.message || 'Failed to create post. Please try again.');
     },
   });
+
+  const scheduleBlocker = getScheduleBlockerMessage({
+    atCapacity,
+    limitMessage,
+    validationOk: validation.ok,
+    validationError,
+    hasScheduleTime,
+  });
+  const createScheduleDisabled = isCreatingPost || Boolean(scheduleBlocker);
+  const editScheduleDisabled = isScheduling || Boolean(scheduleBlocker);
 
   useEffect(() => {
     if (!id || !post || !formInitializedRef.current) {
@@ -906,6 +961,27 @@ export function PostSidebar({
 
                 {/* Action Buttons */}
                 <div className="space-y-3 pt-4">
+                  {atCapacity && (
+                    <div className="bg-muted border-border text-foreground flex items-start gap-2 rounded-md border p-3 text-xs">
+                      <AlertTriangle className="text-destructive mt-0.5 h-4 w-4 flex-shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-medium">
+                          You&apos;ve reached your plan&apos;s scheduling limit.
+                        </p>
+                        <p className="text-muted-foreground">
+                          You can still save drafts, but new scheduled posts will fail until you
+                          free up slots or upgrade your plan.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => (window.location.href = '/limits')}
+                          className="text-xs font-medium underline underline-offset-2"
+                        >
+                          View scheduling limits
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <Separator />
                   <TooltipProvider>
                     <div className="flex justify-end gap-2">
@@ -928,28 +1004,30 @@ export function PostSidebar({
                       </Button>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            onClick={() => createPost('schedule')}
-                            disabled={isCreatingPost || !validation.ok || !hasScheduleTime}
-                          >
-                            {isCreatingPost ? (
-                              <>
-                                <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                                Creating...
-                              </>
-                            ) : (
-                              <>
-                                <Clock className="mr-2 h-4 w-4" />
-                                Schedule Post
-                              </>
-                            )}
-                          </Button>
+                          <div className="inline-flex">
+                            <Button
+                              onClick={() => createPost('schedule')}
+                              disabled={createScheduleDisabled}
+                              aria-disabled={createScheduleDisabled}
+                              className={cn(createScheduleDisabled && 'cursor-not-allowed')}
+                            >
+                              {isCreatingPost ? (
+                                <>
+                                  <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                                  Creating...
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="mr-2 h-4 w-4" />
+                                  Schedule Post
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </TooltipTrigger>
-                        {!validation.ok && (
+                        {scheduleBlocker && (
                           <TooltipContent>
-                            <p className="text-sm">
-                              {validationError || 'Please fix validation errors before continuing.'}
-                            </p>
+                            <p className="text-sm">{scheduleBlocker}</p>
                           </TooltipContent>
                         )}
                       </Tooltip>
@@ -1118,28 +1196,30 @@ export function PostSidebar({
                     {canScheduleExisting && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            onClick={() => schedulePost()}
-                            disabled={isScheduling || !validation.ok || !hasScheduleTime}
-                          >
-                            {isScheduling ? (
-                              <>
-                                <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                                Scheduling...
-                              </>
-                            ) : (
-                              <>
-                                <Clock className="mr-2 h-4 w-4" />
-                                Schedule Post
-                              </>
-                            )}
-                          </Button>
+                          <div className="inline-flex">
+                            <Button
+                              onClick={() => schedulePost()}
+                              disabled={editScheduleDisabled}
+                              aria-disabled={editScheduleDisabled}
+                              className={cn(editScheduleDisabled && 'cursor-not-allowed')}
+                            >
+                              {isScheduling ? (
+                                <>
+                                  <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                                  Scheduling...
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="mr-2 h-4 w-4" />
+                                  Schedule Post
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </TooltipTrigger>
-                        {!validation.ok && (
+                        {scheduleBlocker && (
                           <TooltipContent>
-                            <p className="text-sm">
-                              {validationError || 'Please fix validation errors before continuing.'}
-                            </p>
+                            <p className="text-sm">{scheduleBlocker}</p>
                           </TooltipContent>
                         )}
                       </Tooltip>

@@ -580,7 +580,7 @@ async function handleScheduleFailed(detail: EventDetail) {
   await client.content.update({
     where: { id: contentId },
     data: {
-      status: 'draft' as ContentStatus, // Revert from 'scheduled' back to 'draft' when scheduling fails
+      status: 'failed' as ContentStatus, // Surface scheduling failure instead of silently reverting to draft
       scheduledAt: null, // Clear the scheduled time since scheduling failed
       schedulingError: error?.slice(0, 500) || 'Scheduling failed',
       generationParams: {

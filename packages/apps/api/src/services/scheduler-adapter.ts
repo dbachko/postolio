@@ -327,6 +327,29 @@ export class SchedulerAdapter {
           if (futureCountExcludingThis + 1 > maxAhead) {
             const message = `Upgrade required: your plan allows up to ${maxAhead} scheduled posts ahead`;
             await emitScheduleFailure(message);
+            try {
+              // Persist a failed state so the UI can surface the limit issue
+              const existingParams = (content as any).generationParams ?? {};
+              await prisma.content.update({
+                where: { id: content.id },
+                data: {
+                  status: 'failed',
+                  scheduledAt: null,
+                  schedulingError: message,
+                  generationParams: {
+                    ...existingParams,
+                    processing: null,
+                    awsScheduleCreated: false,
+                    failedAt: new Date().toISOString(),
+                  },
+                },
+              });
+            } catch (persistErr) {
+              logger.warn('Failed to persist scheduling limit failure state', {
+                contentId: content.id,
+                error: persistErr,
+              });
+            }
             return {
               success: false,
               error: message,
