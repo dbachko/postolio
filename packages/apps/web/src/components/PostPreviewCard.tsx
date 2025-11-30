@@ -28,6 +28,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Button } from '@/components/ui/button';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTrigger,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PostPreviewCardProps {
   item: CalendarItem;
@@ -116,6 +127,20 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
       queryClient.invalidateQueries({ queryKey: ['content'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to delete post'),
+  });
+
+  const unscheduleMutation = useMutation({
+    mutationFn: (id: string) =>
+      contentApi.updateContent({
+        contentId: id,
+        scheduledAt: null,
+      }),
+    onSuccess: () => {
+      toast.success('Post unscheduled and moved to Drafts');
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to unschedule post'),
   });
 
   // Reschedule dialog moved up to parent to avoid React portal bubbling to card
@@ -279,6 +304,36 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                 <CalendarClock className="h-4 w-4" />
                 Reschedule
               </DropdownMenuItem>
+            )}
+            {item.type !== 'placeholder' && (item as any)?.status === 'scheduled' && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem className="gap-2">
+                    <Clock className="h-4 w-4" />
+                    Unschedule to Draft
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      We’ll cancel the scheduled publish time and move this post back to Drafts. It
+                      will no longer publish automatically.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={unscheduleMutation.isPending}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => unscheduleMutation.mutate((item as any).id)}
+                      disabled={unscheduleMutation.isPending}
+                    >
+                      Unschedule and move to Drafts
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
             {item.type !== 'placeholder' && (
               <DropdownMenuItem onClick={handleDuplicate} className="gap-2">

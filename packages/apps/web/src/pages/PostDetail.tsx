@@ -38,6 +38,17 @@ import { PostSaveIndicator, type SaveStatus } from '../components/PostSaveIndica
 import { PostLearningFeedback } from '../components/PostLearningFeedback';
 import { ImageUploader } from '../components/ImageUploader';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTrigger,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PostDetailData {
   id: string;
@@ -356,7 +367,7 @@ export default function PostDetail() {
       caption?: string;
       hashtags?: string[];
       imageUrl?: string;
-      scheduledAt?: string;
+      scheduledAt?: string | null;
     }) => {
       if (!data.caption || data.caption.trim().length === 0) {
         throw new Error('Cannot update content with empty caption');
@@ -517,18 +528,35 @@ export default function PostDetail() {
       return;
     }
 
-    // CRITICAL: Interpret datetime-local input as being in brand timezone
-    // datetime-local gives us "2025-01-15T09:00" which we interpret AS IF it's in brand timezone
-    const scheduledAtPayload = formData.scheduledAt
-      ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
-      : undefined;
+    const hadScheduled = Boolean(post.scheduledAt);
+    const hasScheduledInput = Boolean(formData.scheduledAt);
 
-    mutateContent({
+    let scheduledAtPayload: string | null | undefined;
+    if (hadScheduled && !hasScheduledInput) {
+      scheduledAtPayload = null;
+    } else if (hasScheduledInput) {
+      // Interpret datetime-local input as being in brand timezone
+      scheduledAtPayload = toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString();
+    } else {
+      scheduledAtPayload = undefined;
+    }
+
+    const payload: {
+      contentId: string;
+      caption: string;
+      imageUrl?: string;
+      scheduledAt?: string | null;
+    } = {
       contentId: postId,
       caption: trimmedCaption,
       imageUrl: formData.imageUrl || undefined,
-      ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
-    });
+    };
+
+    if (scheduledAtPayload !== undefined) {
+      payload.scheduledAt = scheduledAtPayload;
+    }
+
+    mutateContent(payload);
   };
 
   const handleEdit = () => {
@@ -617,6 +645,40 @@ export default function PostDetail() {
     },
     onError: () => {
       toast.error('Failed to delete post');
+    },
+  });
+
+  const unschedulePostMutation = useMutation({
+    mutationFn: async () => {
+      return contentApi.updateContent({
+        contentId: postId!,
+        scheduledAt: null,
+      });
+    },
+    onSuccess: (response) => {
+      toast.success('Post unscheduled and moved to Drafts');
+      queryClient.setQueryData(['post', postId], (oldData: PostDetailData | undefined) => {
+        if (!oldData) return oldData;
+        const nextContent = (response as any)?.content || {};
+        return {
+          ...oldData,
+          ...nextContent,
+          status: nextContent.status || 'draft',
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      const brandId = (response as any)?.content?.brandId || post?.brandId;
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
+      }
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.error ||
+        error?.message ||
+        'Failed to unschedule post. Please try again.';
+      toast.error(message);
     },
   });
 
@@ -742,6 +804,40 @@ export default function PostDetail() {
                     <X className="mr-2 h-4 w-4" />
                     Cancel
                   </Button>
+                  {post.status === 'scheduled' && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={unschedulePostMutation.isPending}
+                        >
+                          <Clock className="mr-2 h-4 w-4" />
+                          Unschedule to Draft
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            We’ll cancel the scheduled publish time and move this post back to
+                            Drafts. It will no longer publish automatically.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={unschedulePostMutation.isPending}>
+                            Cancel
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => unschedulePostMutation.mutate()}
+                            disabled={unschedulePostMutation.isPending}
+                          >
+                            Unschedule and move to Drafts
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                   <Button size="sm" onClick={handleSaveChanges} disabled={!hasChanges || isSaving}>
                     Save Changes
                   </Button>

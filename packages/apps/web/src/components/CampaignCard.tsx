@@ -327,6 +327,11 @@ const CampaignCard = memo(
                 <span className="font-medium">{totalCount ?? '—'}</span> posts
               </div>
             </div>
+            {campaign.status === 'paused' && (
+              <p className="text-muted-foreground mt-2 text-xs">
+                Paused campaigns don&apos;t generate or schedule new posts until resumed.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

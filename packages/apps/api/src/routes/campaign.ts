@@ -553,10 +553,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         // Verify ownership
         const campaign = await prisma.campaign.findFirst({
           where: { id: campaignId, brand: { userId } },
-          select: { id: true },
+          select: { id: true, status: true },
         });
         if (!campaign)
           return reply.code(404).send({ error: 'Campaign not found or access denied' });
+
+        if (campaign.status !== 'active') {
+          return reply
+            .code(400)
+            .send({ error: 'Only active campaigns can fill the scheduling window.' });
+        }
 
         const res = await campaignSlidingWindowService.maintainWindow(campaignId, 3);
         return reply.send({ success: res.success, generated: res.generated, message: res.message });

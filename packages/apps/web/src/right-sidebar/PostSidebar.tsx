@@ -55,6 +55,18 @@ import {
 import AssetPicker from '@/features/assets/components/AssetPicker';
 import { Switch } from '@/components/ui/switch';
 import { assetsApi } from '@/features/assets/api/client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTrigger,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import type { Campaign } from '@/lib/api';
 
 function getScheduleBlockerMessage(params: {
   atCapacity: boolean;
@@ -62,8 +74,19 @@ function getScheduleBlockerMessage(params: {
   validationOk: boolean;
   validationError: string | null;
   hasScheduleTime: boolean;
+  pausedCampaign: boolean;
 }): string | null {
-  const { atCapacity, limitMessage, validationOk, validationError, hasScheduleTime } = params;
+  const {
+    atCapacity,
+    limitMessage,
+    validationOk,
+    validationError,
+    hasScheduleTime,
+    pausedCampaign,
+  } = params;
+  if (pausedCampaign) {
+    return 'This campaign is paused. Resume it before scheduling new posts.';
+  }
   if (atCapacity) return limitMessage || 'You have reached your scheduling limit.';
   if (!validationOk) return validationError || 'Please fix validation errors before continuing.';
   if (!hasScheduleTime) return 'Pick a time before scheduling.';
@@ -305,13 +328,14 @@ export function PostSidebar({
   }, []);
 
   const disabled = post?.status === 'published';
-  const canScheduleExisting = Boolean(!disabled && post && post.status !== 'scheduled');
+  const isScheduled = post?.status === 'scheduled';
+  const canScheduleExisting = Boolean(!disabled && post && !isScheduled);
 
   const { mutate: mutateContent, isPending: isSaving } = useMutation({
     mutationFn: async (data: {
       contentId: string;
       caption?: string;
-      scheduledAt?: string;
+      scheduledAt?: string | null;
       campaignId?: string | null;
     }) => contentApi.updateContent(data),
     onSuccess: (response) => {
@@ -361,6 +385,40 @@ export function PostSidebar({
         error?.response?.data?.error ||
         error?.message ||
         'Failed to schedule post. Please try again.';
+      toast.error(message);
+    },
+  });
+
+  const { mutate: unschedulePost, isPending: isUnscheduling } = useMutation({
+    mutationFn: async (contentId: string) => {
+      return contentApi.updateContent({
+        contentId,
+        scheduledAt: null,
+      });
+    },
+    onSuccess: (response, contentId) => {
+      toast.success('Post unscheduled and moved to Drafts');
+      queryClient.setQueryData(['post', contentId], (oldData: PostDetailData | undefined) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          ...response.content,
+          status: response.content?.status || 'draft',
+        } as PostDetailData;
+      });
+
+      const brandId = response.content?.brandId || post?.brand?.id;
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
+      }
+      setHasChanges(false);
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.error ||
+        error?.message ||
+        'Failed to unschedule post. Please try again.';
       toast.error(message);
     },
   });
@@ -420,16 +478,6 @@ export function PostSidebar({
       toast.error(error.message || 'Failed to create post. Please try again.');
     },
   });
-
-  const scheduleBlocker = getScheduleBlockerMessage({
-    atCapacity,
-    limitMessage,
-    validationOk: validation.ok,
-    validationError,
-    hasScheduleTime,
-  });
-  const createScheduleDisabled = isCreatingPost || Boolean(scheduleBlocker);
-  const editScheduleDisabled = isScheduling || Boolean(scheduleBlocker);
 
   useEffect(() => {
     if (!id || !post || !formInitializedRef.current) {
@@ -494,21 +542,39 @@ export function PostSidebar({
       }
     }
 
-    const scheduledAtPayload = formData.scheduledAt
-      ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
-      : undefined;
+    const hadScheduled = Boolean(post?.scheduledAt);
+    const hasScheduledInput = Boolean(formData.scheduledAt);
 
-    mutateContent({
+    let scheduledAtPayload: string | null | undefined;
+    if (hadScheduled && !hasScheduledInput) {
+      scheduledAtPayload = null;
+    } else if (hasScheduledInput) {
+      scheduledAtPayload = toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString();
+    } else {
+      scheduledAtPayload = undefined;
+    }
+
+    const payload: {
+      contentId: string;
+      caption?: string;
+      scheduledAt?: string | null;
+      campaignId?: string | null;
+    } = {
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
       campaignId: selectedCampaign || null,
-      ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
-    });
+    };
+
+    if (scheduledAtPayload !== undefined) {
+      payload.scheduledAt = scheduledAtPayload;
+    }
+
+    mutateContent(payload);
   };
 
   // Campaign selection state
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
-  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
 
   // Parse query params for prefill
@@ -619,7 +685,7 @@ export function PostSidebar({
       setIsLoadingCampaigns(true);
       try {
         const res = await campaignApi.listCampaigns(brandId);
-        if (mounted) setCampaigns(res.campaigns || []);
+        if (mounted) setCampaigns((res.campaigns || []) as Campaign[]);
       } catch (_error) {
         if (mounted) toast.error('Failed to load campaigns');
       } finally {
@@ -631,6 +697,23 @@ export function PostSidebar({
       mounted = false;
     };
   }, [isCreating, selectedBrand?.id, post?.brand?.id]);
+
+  const selectedCampaignData = useMemo(
+    () => campaigns.find((c) => c.id === selectedCampaign) || null,
+    [campaigns, selectedCampaign]
+  );
+  const selectedCampaignPaused = selectedCampaignData?.status === 'paused';
+
+  const scheduleBlocker = getScheduleBlockerMessage({
+    atCapacity,
+    limitMessage,
+    validationOk: validation.ok,
+    validationError,
+    hasScheduleTime,
+    pausedCampaign: Boolean(selectedCampaignPaused),
+  });
+  const createScheduleDisabled = isCreatingPost || Boolean(scheduleBlocker);
+  const editScheduleDisabled = isScheduling || Boolean(scheduleBlocker);
 
   // Navigate to campaign create/edit page
   const handleCampaignEdit = (campaignId?: string) => {
@@ -946,6 +1029,7 @@ export function PostSidebar({
                         campaigns.map((campaign) => (
                           <SelectItem key={campaign.id} value={campaign.id}>
                             {campaign.name}
+                            {campaign.status === 'paused' ? ' (paused)' : ''}
                           </SelectItem>
                         ))
                       )}
@@ -954,6 +1038,12 @@ export function PostSidebar({
                   <p className="text-muted-foreground text-sm">
                     Optional: assign this post to a campaign
                   </p>
+                  {selectedCampaignPaused && (
+                    <p className="text-muted-foreground text-xs">
+                      This campaign is paused. You can still save this post as a draft, but you
+                      can&apos;t schedule it until the campaign is resumed.
+                    </p>
+                  )}
                   <Button variant="outline" onClick={() => handleCampaignEdit()} className="w-full">
                     Create/Edit Campaign
                   </Button>
@@ -1153,6 +1243,7 @@ export function PostSidebar({
                     campaigns.map((campaign) => (
                       <SelectItem key={campaign.id} value={campaign.id}>
                         {campaign.name}
+                        {campaign.status === 'paused' ? ' (paused)' : ''}
                       </SelectItem>
                     ))
                   )}
@@ -1161,6 +1252,12 @@ export function PostSidebar({
               <p className="text-muted-foreground text-sm">
                 Optional: assign this post to a campaign
               </p>
+              {selectedCampaignPaused && (
+                <p className="text-muted-foreground text-xs">
+                  This campaign is paused. You can still save this post as a draft, but you
+                  can&apos;t schedule it until the campaign is resumed.
+                </p>
+              )}
               <Button
                 variant="outline"
                 onClick={() => handleCampaignEdit()}
@@ -1177,6 +1274,34 @@ export function PostSidebar({
                 <Separator />
                 <TooltipProvider>
                   <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+                    {isScheduled && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" disabled={isUnscheduling}>
+                            <Clock className="mr-2 h-4 w-4" />
+                            Unschedule to Draft
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              We’ll cancel the scheduled publish time and move this post back to
+                              Drafts. It will no longer publish automatically.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isUnscheduling}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => id && unschedulePost(id)}
+                              disabled={isUnscheduling}
+                            >
+                              Unschedule and move to Drafts
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                     <Button
                       onClick={handleSaveChanges}
                       disabled={!hasChanges || isSaving || !validation.ok}

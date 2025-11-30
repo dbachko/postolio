@@ -266,17 +266,17 @@ export class SchedulerAdapter {
           };
         }
 
-        // Only allow scheduling for active campaigns, UNLESS this is a draft/skipped/failed post
-        // (draft indicates auto-recovery from a failed campaign start; skipped/failed are user overrides)
-        if (
-          content.campaign.status !== 'active' &&
-          !['draft', 'skipped', 'failed'].includes(content.status as ContentStatus)
-        ) {
-          logger.warn('Scheduling blocked: campaign not active', {
+        const campaignStatus = content.campaign.status;
+        const contentStatus = content.status as ContentStatus;
+        const isDraftLike = ['draft', 'skipped', 'failed'].includes(contentStatus);
+
+        // Paused campaigns: never schedule new content until resumed
+        if (campaignStatus === 'paused') {
+          logger.warn('Scheduling blocked: campaign is paused', {
             campaignId: content.campaignId,
-            status: content.campaign.status,
+            contentId,
           });
-          const msg = `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`;
+          const msg = 'Cannot schedule content for paused campaign. Please resume the campaign.';
           await emitScheduleFailure(msg);
           return {
             success: false,
@@ -284,24 +284,50 @@ export class SchedulerAdapter {
           };
         }
 
-        // Auto-activate campaign if scheduling a draft post from a non-active campaign
-        // This handles auto-recovery when a campaign failed to start properly
-        if (content.campaign.status !== 'active' && content.status === 'draft') {
-          logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', {
-            campaignId: content.campaignId,
-            contentId,
-          });
-          try {
-            await prisma.campaign.update({
-              where: { id: content.campaignId },
-              data: { status: 'active' },
+        // For other non-active statuses, only allow draft-like posts in limited auto-recovery cases
+        if (campaignStatus !== 'active') {
+          if (!isDraftLike) {
+            logger.warn('Scheduling blocked: campaign not active', {
+              campaignId: content.campaignId,
+              status: campaignStatus,
             });
-            logger.info('Campaign activated for auto-recovery', { campaignId: content.campaignId });
-          } catch (campaignUpdateError) {
-            logger.error('Failed to activate campaign during auto-recovery', {
-              error: campaignUpdateError,
+            const msg = `Cannot schedule content for ${campaignStatus.toLowerCase()} campaign`;
+            await emitScheduleFailure(msg);
+            return {
+              success: false,
+              error: msg,
+            };
+          }
+
+          // Auto-activate campaign only for draft posts from recoverable non-active states
+          const recoverableStatuses: string[] = ['creating', 'preview', 'failed'];
+          if (contentStatus === 'draft' && recoverableStatuses.includes(campaignStatus)) {
+            logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', {
+              campaignId: content.campaignId,
+              contentId,
             });
-            // Don't fail the scheduling - continue with scheduling anyway
+            try {
+              await prisma.campaign.update({
+                where: { id: content.campaignId },
+                data: { status: 'active' },
+              });
+              logger.info('Campaign activated for auto-recovery', {
+                campaignId: content.campaignId,
+              });
+            } catch (campaignUpdateError) {
+              logger.error('Failed to activate campaign during auto-recovery', {
+                error: campaignUpdateError,
+              });
+              // Don't fail the scheduling - continue with scheduling anyway
+            }
+          } else {
+            // Non-recoverable non-active statuses (e.g., completed) should not schedule new content
+            const msg = `Cannot schedule content for ${campaignStatus.toLowerCase()} campaign`;
+            await emitScheduleFailure(msg);
+            return {
+              success: false,
+              error: msg,
+            };
           }
         }
       }

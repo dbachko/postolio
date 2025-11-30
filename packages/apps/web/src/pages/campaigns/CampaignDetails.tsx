@@ -194,6 +194,14 @@ export function CampaignDetails({
           </div>
         </CardHeader>
         <CardContent>
+          {campaign.status === 'paused' && (
+            <Alert variant="warning" className="mb-3">
+              <AlertDescription>
+                This campaign is paused. No new posts will be generated or scheduled until you
+                resume it.
+              </AlertDescription>
+            </Alert>
+          )}
           {capacityFull && (!campaign.content || campaign.content.length === 0) && (
             <Alert>
               <AlertDescription>
