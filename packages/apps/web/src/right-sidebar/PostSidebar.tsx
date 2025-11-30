@@ -237,10 +237,12 @@ export function PostSidebar({
 
   const validation = useMemo(() => {
     const isStory = formData.contentType === 'story';
-    const mediaKeys: string[] = [];
-    if (formData.carouselAssets?.length)
-      mediaKeys.push(...formData.carouselAssets.map((a) => a.url));
-    if (formData.imageUrl) mediaKeys.push(formData.imageUrl);
+    const mediaKeys: string[] =
+      formData.carouselAssets && formData.carouselAssets.length > 0
+        ? formData.carouselAssets.map((a) => a.url)
+        : formData.imageUrl
+          ? [formData.imageUrl]
+          : [];
 
     return validateContentPayload({
       platform: 'instagram',

@@ -118,10 +118,15 @@
 }
 
 .pc-day-header {
+  position: absolute;
+  top: var(--pc-day-pad);
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 6px;
+  pointer-events: none;
 }
 
 .pc-day-label {
@@ -151,6 +156,7 @@
   flex-direction: column;
   gap: var(--pc-events-gap);
   padding: var(--pc-events-pad-top) 0 var(--pc-events-pad-bottom);
+  margin-top: var(--pc-pill-h);
   min-width: 0;
   overflow: hidden;
 }

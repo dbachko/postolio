@@ -809,6 +809,9 @@ class InstagramAdapter implements PlatformAdapter {
 
     if (isVideo) {
       createMediaParams.set('video_url', mediaUrl);
+      // Explicitly mark child as video; otherwise Instagram may treat it as an image
+      // and return "(#100) The parameter image_url is required".
+      createMediaParams.set('media_type', 'VIDEO');
     } else {
       createMediaParams.set('image_url', mediaUrl);
     }

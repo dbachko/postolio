@@ -79,14 +79,14 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
     if (count < 1) {
       errors.push({
         field: 'mediaKeys',
-        message: 'Image content requires at least one image asset',
+        message: 'Media content requires at least one media asset',
         code: 'MEDIA_REQUIRED',
       });
     }
     if (count > 10) {
       errors.push({
         field: 'mediaKeys',
-        message: 'Image content allows up to 10 images',
+        message: 'Media content allows up to 10 media items',
         code: 'MEDIA_LIMIT',
       });
     }

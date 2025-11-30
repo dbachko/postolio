@@ -83,7 +83,15 @@ export default function CampaignsContainer() {
           // toast is handled in the mutation hook
         }
       }}
-      onPauseCampaign={() => selectedCampaignId && pauseCampaignMutation.mutate(selectedCampaignId)}
+      onPauseCampaign={async () => {
+        if (!selectedCampaignId) return;
+        try {
+          await pauseCampaignMutation.mutateAsync(selectedCampaignId);
+          await campaignDetailsQuery.refetch();
+        } catch {
+          // toast is handled in the mutation hook
+        }
+      }}
       limits={limitsQuery.data?.data}
       onUpdated={() => campaignDetailsQuery.refetch()}
       onFillWindow={async () => {
