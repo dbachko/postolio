@@ -576,6 +576,10 @@ export class SchedulerAdapter {
             // Store content details in scheduler's DynamoDB
             // When content is edited, EventBridge events will update this
             caption: content.caption || '',
+            ...(typeof (content as any).firstComment === 'string' &&
+            (content as any).firstComment.trim().length
+              ? { firstComment: (content as any).firstComment.trim() }
+              : {}),
             videoUrl: content.videoUrl || undefined, // Video CDN URL for video content
             metadata: {
               timezone: brandTimezone,

@@ -92,6 +92,7 @@ describe('HttpHandler', () => {
           mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
           mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
+          firstComment: 'First comment from API',
         }),
         headers: {
           Authorization: 'Bearer test-jwt-token',
@@ -131,6 +132,7 @@ describe('HttpHandler', () => {
         mediaType: 'image',
         scheduledAt: expect.any(String),
         mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        firstComment: 'First comment from API',
       });
     });
 

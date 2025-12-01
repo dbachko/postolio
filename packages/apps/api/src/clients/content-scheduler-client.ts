@@ -43,6 +43,7 @@ const CreateScheduleInputSchema = z.object({
   mediaType: MediaTypeSchema.optional(), // Media format: image/video
   videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
+  firstComment: z.string().max(2200, 'firstComment must be at most 2200 characters').optional(),
   mediaKeys: z.array(z.string()).optional(),
   metadata: MetadataSchema.optional(),
   shareToFeed: z.boolean().optional(),
@@ -88,6 +89,7 @@ const ScheduleSchema = z.object({
   mediaType: MediaTypeSchema.optional(), // Media format: image/video
   videoUrl: z.string().url().nullish(),
   caption: z.string().nullish(),
+  firstComment: z.string().nullish(),
   mediaKeys: z.array(z.string()).nullish(),
   shareToFeed: z.boolean().nullish(),
   status: ScheduleStatusSchema,

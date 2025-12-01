@@ -86,6 +86,7 @@ export interface ScheduleRequest {
   mediaType?: string; // Media format: image/video/reel/carousel
   videoUrl?: string; // Video CDN URL for video content
   caption?: string;
+  firstComment?: string;
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
@@ -112,6 +113,7 @@ export interface Schedule {
   mediaType?: string; // Media format: image/video/reel/carousel
   videoUrl?: string; // Video CDN URL for video content
   caption?: string;
+  firstComment?: string;
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
@@ -193,6 +195,7 @@ export class ScheduleService {
         mediaType: request.mediaType,
         videoUrl: request.videoUrl,
         caption: request.caption,
+        firstComment: request.firstComment,
         hashtags: request.hashtags || [],
         mediaKeys: request.mediaKeys || [],
         metadata: request.metadata,

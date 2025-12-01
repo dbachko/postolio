@@ -22,6 +22,7 @@ export interface ScheduleRequest {
   // Media format: image/video/carousel/reel
   mediaType?: string;
   caption?: string;
+  firstComment?: string;
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
@@ -81,6 +82,14 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
 
   if (request.caption !== undefined && typeof request.caption !== 'string') {
     errors.push('caption must be a string if provided');
+  }
+
+  if (request.firstComment !== undefined) {
+    if (typeof request.firstComment !== 'string') {
+      errors.push('firstComment must be a string if provided');
+    } else if (request.firstComment.length > 2200) {
+      errors.push('firstComment must be at most 2200 characters');
+    }
   }
 
   if (request.hashtags !== undefined) {
@@ -204,6 +213,14 @@ export function validateScheduleUpdateRequest(request: Record<string, unknown>):
 
   if (request.caption !== undefined && typeof request.caption !== 'string') {
     errors.push('caption must be a string if provided');
+  }
+
+  if (request.firstComment !== undefined) {
+    if (typeof request.firstComment !== 'string') {
+      errors.push('firstComment must be a string if provided');
+    } else if (request.firstComment.length > 2200) {
+      errors.push('firstComment must be at most 2200 characters');
+    }
   }
 
   if (request.hashtags !== undefined) {

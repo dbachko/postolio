@@ -807,50 +807,128 @@ class InstagramAdapter implements PlatformAdapter {
     isVideo: boolean;
   }): Promise<string> {
     const { credentials, mediaUrl, isVideo } = params;
-    const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
-    const createMediaParams = new URLSearchParams({
-      access_token: credentials.accessToken,
-      is_carousel_item: 'true',
-    });
+    const graphBase = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}`;
 
-    if (isVideo) {
-      createMediaParams.set('video_url', mediaUrl);
-      // Explicitly mark child as video; otherwise Instagram may treat it as an image
-      // and return "(#100) The parameter image_url is required".
-      createMediaParams.set('media_type', 'VIDEO');
-    } else {
-      createMediaParams.set('image_url', mediaUrl);
+    // Image children still use standard image_url + is_carousel_item flow.
+    if (!isVideo) {
+      const createMediaUrl = `${graphBase}/${credentials.accountId}/media`;
+      const createMediaParams = new URLSearchParams({
+        access_token: credentials.accessToken,
+        is_carousel_item: 'true',
+        image_url: mediaUrl,
+      });
+
+      const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
+        method: 'POST',
+      });
+
+      if (!createResponse.ok) {
+        const raw = await createResponse.text();
+        const parsed = asIGErrorPayload(safeParseJson(raw));
+        const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+        const igTitle = parsed?.error?.error_user_title;
+        logger.error('Failed to create Instagram carousel child', {
+          status: createResponse.status,
+          error: igMsg,
+          title: igTitle,
+        });
+        const err = new Error(`Failed to create carousel child: ${igMsg}`);
+        (err as unknown as { meta?: Record<string, unknown> }).meta = {
+          errorCode: 'IG_MEDIA_CREATE_FAILED',
+          httpStatus: createResponse.status,
+        };
+        throw err;
+      }
+
+      const createResult = await createResponse.json();
+      const creationId = createResult.id;
+
+      if (!creationId) {
+        const err = new Error('No creation ID returned for carousel child');
+        (err as unknown as { meta?: Record<string, unknown> }).meta = {
+          errorCode: 'IG_MEDIA_CREATE_FAILED',
+        };
+        throw err;
+      }
+
+      return creationId;
     }
 
-    const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
-      method: 'POST',
+    // Video carousel children use the documented resumable upload flow.
+    // Step 1: Start a resumable upload session for a VIDEO carousel item.
+    const sessionParams = new URLSearchParams({
+      media_type: 'VIDEO',
+      is_carousel_item: 'true',
+      upload_type: 'resumable',
+      access_token: credentials.accessToken,
     });
+    const sessionUrl = `${graphBase}/${credentials.accountId}/media?${sessionParams.toString()}`;
 
-    if (!createResponse.ok) {
-      const raw = await createResponse.text();
+    const sessionResponse = await fetch(sessionUrl, { method: 'POST' });
+    if (!sessionResponse.ok) {
+      const raw = await sessionResponse.text();
       const parsed = asIGErrorPayload(safeParseJson(raw));
       const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
       const igTitle = parsed?.error?.error_user_title;
-      logger.error('Failed to create Instagram carousel child', {
-        status: createResponse.status,
+      logger.error('Failed to start resumable upload session for carousel video child', {
+        status: sessionResponse.status,
         error: igMsg,
         title: igTitle,
       });
       const err = new Error(`Failed to create carousel child: ${igMsg}`);
       (err as unknown as { meta?: Record<string, unknown> }).meta = {
         errorCode: 'IG_MEDIA_CREATE_FAILED',
-        httpStatus: createResponse.status,
+        httpStatus: sessionResponse.status,
       };
       throw err;
     }
 
-    const createResult = await createResponse.json();
-    const creationId = createResult.id;
-
+    const sessionResult: { id?: string; upload_url?: string; uri?: string } =
+      await sessionResponse.json();
+    const creationId = sessionResult.id;
     if (!creationId) {
-      const err = new Error('No creation ID returned for carousel child');
+      const err = new Error('No creation ID returned for carousel child resumable session');
       (err as unknown as { meta?: Record<string, unknown> }).meta = {
         errorCode: 'IG_MEDIA_CREATE_FAILED',
+      };
+      throw err;
+    }
+
+    // Prefer upload_url/uri from the response; fall back to documented rupload path.
+    const uploadUrl =
+      sessionResult.upload_url ||
+      sessionResult.uri ||
+      `https://rupload.facebook.com/ig-api-upload/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
+
+    // Step 2: Ask rupload service to fetch video from our hosted URL.
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `OAuth ${credentials.accessToken}`,
+        // Meta docs: upload via hosted URL
+        // curl -X POST https://rupload.facebook.com/ig-api-upload/v24.0/<IG_CONTAINER_ID> \
+        //   -H "Authorization: OAuth <USER_ACCESS_TOKEN>" \
+        //   -H "file_url: <VIDEO_URL>"
+        file_url: mediaUrl,
+      },
+    });
+
+    if (!uploadResponse.ok) {
+      const raw = await uploadResponse.text();
+      // Rupload responses are not always Graph-style errors, so fall back to raw text when needed.
+      const parsed = safeParseJson(raw);
+      const igMsg =
+        parsed && typeof parsed === 'object' && 'error' in parsed
+          ? String((parsed as { error?: { message?: string } }).error?.message || raw)
+          : raw;
+      logger.error('Failed to upload carousel video to Instagram via resumable endpoint', {
+        status: uploadResponse.status,
+        error: igMsg,
+      });
+      const err = new Error(`Failed to create carousel child: ${igMsg}`);
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_CREATE_FAILED',
+        httpStatus: uploadResponse.status,
       };
       throw err;
     }

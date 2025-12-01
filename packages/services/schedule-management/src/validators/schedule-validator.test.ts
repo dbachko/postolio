@@ -143,6 +143,52 @@ describe('Schedule Validator', () => {
       expect(result.errors).toEqual([]);
     });
 
+    it('should accept a valid firstComment within length limits', () => {
+      const request = {
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'post',
+        mediaType: 'image',
+        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        firstComment: 'This is a first comment with hashtags #one #two',
+      };
+
+      const result = validateScheduleRequest(request);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('should reject non-string or overly long firstComment', () => {
+      const tooLong = 'x'.repeat(2201);
+      const nonStringRequest = {
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'post',
+        mediaType: 'image',
+        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        // @ts-expect-error intentional invalid type for test
+        firstComment: 123,
+      };
+
+      const nonStringResult = validateScheduleRequest(nonStringRequest);
+      expect(nonStringResult.valid).toBe(false);
+      expect(nonStringResult.errors.some((e) => e.includes('firstComment'))).toBe(true);
+
+      const tooLongRequest = {
+        ...nonStringRequest,
+        firstComment: tooLong,
+      };
+      const tooLongResult = validateScheduleRequest(tooLongRequest);
+      expect(tooLongResult.valid).toBe(false);
+      expect(tooLongResult.errors.some((e) => e.includes('firstComment'))).toBe(true);
+    });
+
     it('should reject empty strings for required fields', () => {
       const invalidRequest = {
         contentId: '',
