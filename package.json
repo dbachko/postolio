@@ -15,7 +15,7 @@
     "prepare": "husky",
     "format": "prettier --write \"**/*.{css,scss,js,jsx,ts,tsx,md,mdx,json,yml,yaml,html,graphql}\"",
     "format:check": "prettier --check \"**/*.{css,scss,js,jsx,ts,tsx,md,mdx,json,yml,yaml,html,graphql}\"",
-    "ci:validate-migration": "echo \"ci:validate-migration has been inlined into prisma/schema + code review; no external script required.\""
+    "ci:validate-migration": "bash scripts/validate-prisma-migrations.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

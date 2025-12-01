@@ -31,4 +31,11 @@ if [ "$PREPUSH_TYPECHECK" = "1" ]; then
   fi
 fi
 
+echo "[pre-push] Running Prisma schema/migration validation..."
+scripts/validate-prisma-migrations.sh
+if [ $? -ne 0 ]; then
+  echo "[pre-push] Prisma migration validation failed."
+  exit 1
+fi
+
 echo "[pre-push] All checks passed. Proceeding with push."
