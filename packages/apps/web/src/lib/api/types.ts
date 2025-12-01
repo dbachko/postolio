@@ -31,6 +31,10 @@ export interface Content {
   contentType?: string | null;
   videoUrl?: string | null;
   shareToFeed?: boolean | null;
+  firstComment?: string | null;
+  firstCommentStatus?: 'pending' | 'posted' | 'failed' | 'retrying' | null;
+  firstCommentPostedAt?: string | null;
+  firstCommentError?: string | null;
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
   scheduledAt: string | null;
   postedAt: string | null;

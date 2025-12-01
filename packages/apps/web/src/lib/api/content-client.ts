@@ -17,6 +17,7 @@ export class ContentClient {
     campaignId?: string;
     scheduledAt?: string;
     shareToFeed?: boolean;
+    firstComment?: string;
   }) {
     const body: Record<string, unknown> = {
       brandId: data.brandId,
@@ -29,6 +30,7 @@ export class ContentClient {
     if (data.videoUrl) body.videoUrl = data.videoUrl;
     if (data.assetIds) body.assetIds = data.assetIds;
     if (data.shareToFeed !== undefined) body.shareToFeed = data.shareToFeed;
+    if (data.firstComment) body.firstComment = data.firstComment;
     if (data.imageFile) {
       const uploadInfo = await assetsApi.getUploadUrl({
         brandId: data.brandId,

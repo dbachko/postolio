@@ -857,6 +857,74 @@ class InstagramAdapter implements PlatformAdapter {
 
     return creationId;
   }
+
+  /**
+   * Post a comment on an Instagram media object
+   */
+  async postComment(
+    mediaId: string,
+    commentText: string,
+    credentials: Credentials,
+    account: { externalAccountId: string }
+  ): Promise<{ success: boolean; commentId?: string; error?: string }> {
+    void account; // Not used in this implementation
+    try {
+      // Validate comment text
+      if (!commentText || commentText.trim().length === 0) {
+        return { success: false, error: 'Comment text is required' };
+      }
+
+      // Truncate if too long
+      let validatedText = commentText;
+      if (commentText.length > 2200) {
+        validatedText = commentText.slice(0, 2200);
+      }
+
+      // Check hashtag count (Instagram limit: 4 hashtags per comment)
+      const hashtagCount = (validatedText.match(/#/g) || []).length;
+      if (hashtagCount > 4) {
+        return { success: false, error: 'Comments cannot contain more than 4 hashtags' };
+      }
+
+      // Check URL count (Instagram limit: 1 URL per comment)
+      const urlPattern = /https?:\/\//gi;
+      const urlMatches = validatedText.match(urlPattern) || [];
+      if (urlMatches.length > 1) {
+        return { success: false, error: 'Comments cannot contain more than 1 URL' };
+      }
+
+      // Post comment using Graph API
+      const commentUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${mediaId}/comments`;
+      const params = new URLSearchParams({
+        message: validatedText,
+        access_token: credentials.accessToken,
+      });
+
+      const response = await fetch(commentUrl, {
+        method: 'POST',
+        body: params,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Instagram comment API error: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      const commentId = data?.id;
+
+      if (!commentId || typeof commentId !== 'string') {
+        throw new Error('Failed to post Instagram comment - no comment ID returned');
+      }
+
+      return { success: true, commentId };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as Error).message || 'Failed to post comment',
+      };
+    }
+  }
 }
 
 // Facebook adapter (placeholder)
@@ -1257,6 +1325,21 @@ export const handler = async (
       publishResult.platformPostId,
       publishResult.platformUrl
     );
+
+    // Post first comment if provided (Instagram only)
+    if (
+      publishableSchedule.firstComment &&
+      publishResult.platformPostId &&
+      schedule.platform === 'instagram'
+    ) {
+      await postFirstComment(
+        publishResult.platformPostId,
+        publishableSchedule.firstComment as string,
+        credentials,
+        { externalAccountId: credentials.accountId || '' },
+        event.scheduleId
+      );
+    }
 
     // 🔥 CRITICAL: Delete EventBridge schedule after successful publishing
     try {
@@ -1835,6 +1918,126 @@ async function updateScheduleStatus(
     });
   }
 }
+
+/**
+ * Post first comment to Instagram media after successful publishing
+ */
+async function postFirstComment(
+  mediaId: string,
+  commentText: string,
+  credentials: Credentials,
+  account: { externalAccountId: string },
+  scheduleId: string
+): Promise<void> {
+  try {
+    // Use Instagram connector to post comment
+    const connector = new InstagramAdapter();
+    const result = await connector.postComment(mediaId, commentText, credentials, account);
+
+    if (result.success) {
+      logger.info('First comment posted successfully', {
+        scheduleId,
+        mediaId,
+        commentId: result.commentId,
+      });
+
+      metrics.addMetric('FirstCommentPosted', MetricUnit.Count, 1);
+      await updateFirstCommentStatus(scheduleId, 'posted', result.commentId);
+    } else {
+      logger.warn('First comment failed, will retry', {
+        scheduleId,
+        error: result.error,
+      });
+
+      // Set status to retrying
+      await updateFirstCommentStatus(scheduleId, 'retrying');
+
+      // Basic retry: 3 attempts with 2 second delay
+      const maxAttempts = 3;
+      const delay = 2000;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        logger.info('Retrying first comment', { scheduleId, attempt });
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        const retryResult = await connector.postComment(mediaId, commentText, credentials, account);
+
+        if (retryResult.success) {
+          metrics.addMetric('FirstCommentRetrySuccess', MetricUnit.Count, 1);
+          await updateFirstCommentStatus(scheduleId, 'posted', retryResult.commentId);
+          return;
+        }
+      }
+
+      // All retries failed
+      metrics.addMetric('FirstCommentRetryExhausted', MetricUnit.Count, 1);
+      await updateFirstCommentStatus(scheduleId, 'failed', undefined, result.error);
+    }
+  } catch (error) {
+    logger.error('Failed to post first comment', {
+      scheduleId,
+      error: (error as Error).message,
+    });
+    metrics.addMetric('FirstCommentError', MetricUnit.Count, 1);
+    await updateFirstCommentStatus(scheduleId, 'failed', undefined, (error as Error).message);
+  }
+}
+
+/**
+ * Update first comment status in DynamoDB schedule table
+ */
+async function updateFirstCommentStatus(
+  scheduleId: string,
+  status: string,
+  commentId?: string,
+  error?: string
+): Promise<void> {
+  try {
+    const schedule = await getSchedule(scheduleId);
+    if (!schedule || !('pk' in schedule) || !('sk' in schedule)) {
+      logger.warn('Cannot update first comment status; schedule not found', {
+        scheduleId,
+        status,
+      });
+      return;
+    }
+
+    const setParts: string[] = ['#firstCommentStatus = :status'];
+    const values: Record<string, string> = { ':status': status };
+
+    if (status === 'posted' && commentId) {
+      setParts.push('#firstCommentPostedAt = :postedAt');
+      values[':postedAt'] = new Date().toISOString();
+    }
+    if (error) {
+      setParts.push('#firstCommentError = :error');
+      values[':error'] = error;
+    }
+
+    await docClient.send(
+      new UpdateCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        Key: { pk: schedule.pk, sk: schedule.sk },
+        UpdateExpression: `SET ${setParts.join(', ')}`,
+        ExpressionAttributeNames: {
+          '#firstCommentStatus': 'firstCommentStatus',
+          '#firstCommentPostedAt': 'firstCommentPostedAt',
+          '#firstCommentError': 'firstCommentError',
+        },
+        ExpressionAttributeValues: values,
+      })
+    );
+
+    logger.info('Updated first comment status', { scheduleId, status });
+  } catch (e) {
+    logger.warn('Failed to update first comment status', {
+      scheduleId,
+      status,
+      error: (e as Error).message,
+    });
+  }
+}
+
 // Idempotency helpers using RetryQueueTable (attemptNumber=0 as published marker)
 type PublishMarker = { platformPostId?: string; permalink?: string };
 

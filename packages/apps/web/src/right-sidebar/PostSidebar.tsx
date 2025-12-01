@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
 import { VideoUploader } from '@/components/VideoUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
@@ -34,6 +36,7 @@ import {
   Film,
   Zap,
   AlertTriangle,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
@@ -101,6 +104,10 @@ interface PostDetailData {
   mediaType?: string;
   contentType?: string;
   shareToFeed?: boolean | null;
+  firstComment?: string | null;
+  firstCommentStatus?: 'pending' | 'posted' | 'failed' | 'retrying' | null;
+  firstCommentPostedAt?: string | null;
+  firstCommentError?: string | null;
   status: string; // 'draft' | 'scheduled' | 'published' | ...
   scheduledAt?: string;
   postedAt?: string;
@@ -224,11 +231,13 @@ export function PostSidebar({
     mediaType: 'image' as InstagramMediaType,
     scheduledAt: '',
     shareToFeed: true,
+    firstComment: '',
   });
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
   const hasScheduleTime = Boolean(formData.scheduledAt);
   const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [firstCommentOpen, setFirstCommentOpen] = useState(false);
 
   const finalMediaType = useMemo<InstagramMediaType>(() => {
     if (formData.contentType === 'reel') return 'video';
@@ -313,6 +322,7 @@ export function PostSidebar({
       mediaType: deriveMediaTypeFromAssets(carouselAssetsFromPost, normalizedVideoUrl || undefined),
       scheduledAt: formatScheduledInput(post.scheduledAt, brandTimezone),
       shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
+      firstComment: (post as any).firstComment || '',
     });
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
     setHasChanges(false);
@@ -339,6 +349,7 @@ export function PostSidebar({
       caption?: string;
       scheduledAt?: string | null;
       campaignId?: string | null;
+      firstComment?: string;
     }) => contentApi.updateContent(data),
     onSuccess: (response) => {
       queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
@@ -368,6 +379,7 @@ export function PostSidebar({
         contentId: id,
         caption: isStory ? '' : formData.caption.trim(),
         campaignId: selectedCampaign || null,
+        firstComment: formData.firstComment?.trim() || undefined,
         scheduledAt: scheduledUtc,
       });
     },
@@ -443,6 +455,7 @@ export function PostSidebar({
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
         shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : undefined,
+        firstComment: formData.firstComment?.trim() || undefined,
         scheduledAt:
           mode === 'schedule' && formData.scheduledAt
             ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
@@ -508,13 +521,17 @@ export function PostSidebar({
         ? (post.shareToFeed ?? true)
         : true;
 
+    const formFirstComment = (formData.firstComment || '').trim();
+    const postFirstComment = ((post as any).firstComment || '').trim();
+
     const changed =
       trimmedCaption !== originalCaption ||
       scheduledValue !== originalScheduled ||
       formImage !== postImage ||
       formVideo !== postVideo ||
       JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds) ||
-      formShareToFeed !== postShareToFeed;
+      formShareToFeed !== postShareToFeed ||
+      formFirstComment !== postFirstComment;
 
     setHasChanges(changed);
   }, [formData, id, post]);
@@ -561,10 +578,12 @@ export function PostSidebar({
       caption?: string;
       scheduledAt?: string | null;
       campaignId?: string | null;
+      firstComment?: string;
     } = {
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
       campaignId: selectedCampaign || null,
+      firstComment: formData.firstComment?.trim() || undefined,
     };
 
     if (scheduledAtPayload !== undefined) {
@@ -994,6 +1013,45 @@ export function PostSidebar({
                       disabled={false}
                       showIcon={true}
                     />
+
+                    {/* First Comment (Optional) */}
+                    <Collapsible
+                      open={firstCommentOpen}
+                      onOpenChange={setFirstCommentOpen}
+                      className="space-y-2"
+                    >
+                      <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 transition-transform duration-200',
+                            firstCommentOpen && 'rotate-180'
+                          )}
+                        />
+                        Add First Comment (Optional)
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 pt-2">
+                        <Label htmlFor="firstComment" className="text-sm font-medium">
+                          First Comment
+                        </Label>
+                        <Textarea
+                          id="firstComment"
+                          placeholder="Add hashtags, links, or CTAs..."
+                          value={formData.firstComment || ''}
+                          onChange={(e) =>
+                            setFormData((s) => ({ ...s, firstComment: e.target.value }))
+                          }
+                          rows={4}
+                          maxLength={2200}
+                          className="resize-none"
+                        />
+                        <div className="text-muted-foreground flex justify-between text-xs">
+                          <span className="italic">
+                            Posts automatically when your content goes live
+                          </span>
+                          <span>{(formData.firstComment || '').length}/2200 characters</span>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
                 )}
 
@@ -1208,6 +1266,44 @@ export function PostSidebar({
                   disabled={disabled}
                   showIcon={true}
                 />
+
+                {/* First Comment (Optional) */}
+                <Collapsible
+                  open={firstCommentOpen}
+                  onOpenChange={setFirstCommentOpen}
+                  className="space-y-2"
+                >
+                  <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform duration-200',
+                        firstCommentOpen && 'rotate-180'
+                      )}
+                    />
+                    Add First Comment (Optional)
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 pt-2">
+                    <Label htmlFor="firstComment-edit" className="text-sm font-medium">
+                      First Comment
+                    </Label>
+                    <Textarea
+                      id="firstComment-edit"
+                      placeholder="Add hashtags, links, or CTAs..."
+                      value={formData.firstComment || ''}
+                      onChange={(e) => setFormData((s) => ({ ...s, firstComment: e.target.value }))}
+                      rows={4}
+                      maxLength={2200}
+                      className="resize-none"
+                      disabled={disabled}
+                    />
+                    <div className="text-muted-foreground flex justify-between text-xs">
+                      <span className="italic">
+                        Posts automatically when your content goes live
+                      </span>
+                      <span>{(formData.firstComment || '').length}/2200 characters</span>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </>
             )}
 

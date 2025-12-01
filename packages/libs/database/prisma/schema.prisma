@@ -115,6 +115,10 @@ model Content {
   aspectRatio        String?       // e.g., "9:16", "16:9", "1:1", "4:5"
   shareToFeed        Boolean?      // For reels: show in both feed and Reels tab
   thumbOffset        Int?          // Optional thumbnail offset in milliseconds
+  firstComment       String?       // Optional first comment text (max 2200 chars)
+  firstCommentStatus String?       // 'pending' | 'posted' | 'failed' | 'retrying'
+  firstCommentPostedAt DateTime?   // ISO timestamp of successful comment
+  firstCommentError  String?       // Error message if comment failed
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
   mediaAssets        PostMediaAsset[]

@@ -387,4 +387,76 @@ export class InstagramConnector implements Connector {
       throw mapInstagramError(error);
     }
   }
+
+  /**
+   * Post a comment on an Instagram media object.
+   * Used for "first comment" feature to add hashtags/CTAs automatically.
+   *
+   * @param mediaId - The Instagram media ID to comment on
+   * @param commentText - The comment text (max 2200 chars, max 4 hashtags, max 1 URL)
+   * @param creds - Instagram credentials
+   * @param account - Instagram account identity
+   * @returns Result with success status, comment ID if successful, or error message
+   */
+  async postComment(
+    mediaId: string,
+    commentText: string,
+    creds: Credentials,
+    account: AccountIdentity
+  ): Promise<{ success: boolean; commentId?: string; error?: string }> {
+    void account; // not used in this method
+    try {
+      // Validate comment text
+      if (!commentText || commentText.trim().length === 0) {
+        return { success: false, error: 'Comment text is required' };
+      }
+
+      // Truncate if too long
+      let validatedText = commentText;
+      if (commentText.length > 2200) {
+        validatedText = commentText.slice(0, 2200);
+      }
+
+      // Check hashtag count (Instagram limit: 4 hashtags per comment)
+      const hashtagCount = (validatedText.match(/#/g) || []).length;
+      if (hashtagCount > 4) {
+        return { success: false, error: 'Comments cannot contain more than 4 hashtags' };
+      }
+
+      // Check URL count (Instagram limit: 1 URL per comment)
+      const urlPattern = /https?:\/\//gi;
+      const urlMatches = validatedText.match(urlPattern) || [];
+      if (urlMatches.length > 1) {
+        return { success: false, error: 'Comments cannot contain more than 1 URL' };
+      }
+
+      // Check for all caps (Instagram restriction)
+      const hasLowerCase = /[a-z]/.test(validatedText);
+      if (!hasLowerCase && validatedText.length > 0) {
+        return { success: false, error: 'Comments cannot be all capital letters' };
+      }
+
+      // Post comment using Graph API
+      const commentUrl = fbGraph(`${mediaId}/comments`);
+      const commentData = {
+        message: validatedText,
+        access_token: creds.accessToken,
+      };
+
+      const commentResponse = await axios.post(commentUrl, commentData);
+      const commentId = commentResponse.data?.id;
+
+      if (!commentId || typeof commentId !== 'string') {
+        throw new Error('Failed to post Instagram comment - no comment ID returned');
+      }
+
+      return { success: true, commentId };
+    } catch (error) {
+      const mappedError = mapInstagramError(error);
+      return {
+        success: false,
+        error: mappedError.message || 'Failed to post comment',
+      };
+    }
+  }
 }
