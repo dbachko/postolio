@@ -56,10 +56,34 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = 'right', className, children, ...props }, ref) => (
+>(({ side = 'right', className, children, onInteractOutside, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+    <SheetPrimitive.Content
+      ref={ref}
+      className={cn(sheetVariants({ side }), className)}
+      onInteractOutside={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target) {
+          const portalSelectors = [
+            '[role="menu"]',
+            '[role="listbox"]',
+            '[data-radix-popper-content-wrapper]',
+            '[data-radix-portal]',
+          ];
+
+          for (const selector of portalSelectors) {
+            if (target.closest(selector)) {
+              event.preventDefault();
+              return;
+            }
+          }
+        }
+
+        onInteractOutside?.(event);
+      }}
+      {...props}
+    >
       {children}
       <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none">
         <X className="h-4 w-4" />
