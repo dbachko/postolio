@@ -1061,13 +1061,14 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Get publication(s) for this content/platform
+        // Get publication(s) for this content/platform, including latest metrics
         const publications = (await prisma.contentPublication.findMany({
           where: {
             contentId,
             platform: platform as any,
           },
           include: {
+            metricsLatest: true,
             socialAccount: {
               include: { brand: true },
             },
@@ -1083,10 +1084,49 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Get connector
+        const latest = (publication as any).metricsLatest as
+          | {
+              impressions?: number | null;
+              reach?: number | null;
+              engagement?: number | null;
+              likes?: number | null;
+              comments?: number | null;
+              saves?: number | null;
+              shares?: number | null;
+              videoViews?: number | null;
+              lastUpdated?: Date | null;
+              engagementRate?: unknown;
+            }
+          | null
+          | undefined;
+
+        if (latest) {
+          const insights = {
+            impressions: latest.impressions || 0,
+            reach: latest.reach || 0,
+            engagement: latest.engagement || 0,
+            likes: latest.likes || 0,
+            comments: latest.comments || 0,
+            saves: latest.saves || 0,
+            shares: latest.shares || 0,
+            videoViews: latest.videoViews || 0,
+            engagementRate:
+              latest.engagementRate != null ? Number(latest.engagementRate) : undefined,
+          };
+
+          return reply.send({
+            success: true,
+            platform,
+            contentId,
+            externalPostId: publication.externalPostId,
+            insights,
+            asOf: latest.lastUpdated ?? null,
+          });
+        }
+
+        // Fallback: live fetch via connector when no ingested metrics exist yet.
         const connector = ConnectorFactory.get(platform as PlatformName);
 
-        // Get credentials (use content.brand, tests do not populate brand on socialAccount)
         const tokens = await fetchTokensFromService(
           content.brand.userId,
           content.brandId,
@@ -1100,7 +1140,6 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Fetch insights
         const rawInsights = await connector.getMediaInsights(
           {
             accessToken: tokens.accessToken,

@@ -35,6 +35,7 @@ const ACCOUNT_METRICS_MIN_INTERVAL_MS = Number(
   process.env.ACCOUNT_METRICS_MIN_INTERVAL_MS || 24 * 60 * 60 * 1000
 );
 const IDLE_BACKOFF_MS = Number(process.env.IDLE_BACKOFF_MS || 5 * 60 * 1000);
+const MIN_INGESTOR_LOOP_MS = Number(process.env.INGESTOR_LOOP_MIN_MS || 60 * 1000);
 
 const redis = new Redis(
   process.env.REDIS_URL || process.env.REDIS_URI || 'redis://localhost:6379',
@@ -209,9 +210,15 @@ function computeRefreshThresholdMs(publishedAt?: Date | null): number {
 }
 
 async function checkAndConsumeRate(platform: string, socialAccountId: string, limit = 200) {
-  const configured = Number(process.env.RATE_LIMIT_PER_HOUR || NaN);
-  if (!Number.isNaN(configured) && configured > 0) {
-    limit = configured;
+  const envLimitRaw = process.env.RATE_LIMIT_PER_HOUR;
+  if (envLimitRaw) {
+    const configured = Number(envLimitRaw);
+    if (!Number.isNaN(configured) && configured > 0) {
+      limit = configured;
+    }
+  } else {
+    // No explicit override configured; apply a safer default cap
+    limit = Math.min(limit, 60);
   }
   const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
   const key = `rate:${platform}:${socialAccountId}:${hourBucket}`;
@@ -237,6 +244,15 @@ async function ingestPublication(publicationId: string) {
     },
   });
   if (!pub) return;
+  const externalPostId = (pub.externalPostId || '').trim();
+  if (!externalPostId || /^invalid/i.test(externalPostId)) {
+    console.warn('[Ingestor] Skipping publication with invalid externalPostId', {
+      publicationId,
+      platform: pub.platform,
+      externalPostId: pub.externalPostId,
+    });
+    return;
+  }
   const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
   if (!allowed) {
     if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
@@ -250,11 +266,10 @@ async function ingestPublication(publicationId: string) {
     externalAccountId: pub.externalAccountId || pub.socialAccount?.externalAccountId || '',
     externalPageId: pub.externalPageId || pub.socialAccount?.externalPageId || undefined,
   } as any;
-  if (wantDebug)
-    console.debug('[Ingestor] Fetching media insights', { mediaId: pub.externalPostId });
-  const insights = await connector.getMediaInsights(creds, account, pub.externalPostId);
+  if (wantDebug) console.debug('[Ingestor] Fetching media insights', { mediaId: externalPostId });
+  const insights = await connector.getMediaInsights(creds, account, externalPostId);
   const fields = connector.getMediaFields
-    ? await connector.getMediaFields(creds, account, pub.externalPostId)
+    ? await connector.getMediaFields(creds, account, externalPostId)
     : {};
   const merged: Record<string, number> = { ...(insights.metrics as any), ...(fields as any) };
   await recordMetricSamples({ id: pub.id, platform: pub.platform }, merged);
@@ -617,7 +632,8 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const loopMs = Number(process.env.INGESTOR_LOOP_MS || '0');
+  const loopMsRaw = Number(process.env.INGESTOR_LOOP_MS || '0');
+  const loopMs = loopMsRaw > 0 ? Math.max(loopMsRaw, MIN_INGESTOR_LOOP_MS) : 0;
   if (loopMs > 0) {
     (async () => {
       // simple loop; do not exit

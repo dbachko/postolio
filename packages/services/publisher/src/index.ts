@@ -1976,13 +1976,38 @@ async function updateScheduleStatus(
     const expressionAttributeNames: Record<string, string> = {
       '#status': 'status',
       '#updatedAt': 'updatedAt',
-      '#error': 'schedulingError',
-      '#errorType': 'errorType',
-      // Include names used in SET/REMOVE clauses when status === 'published'
-      '#publishedAt': 'publishedAt',
-      '#platformPostId': 'platformPostId',
-      '#platformUrl': 'platformUrl',
     };
+
+    if (
+      setParts.some((p) => p.includes('#error')) ||
+      removeParts.some((p) => p.includes('#error'))
+    ) {
+      expressionAttributeNames['#error'] = 'schedulingError';
+    }
+    if (
+      setParts.some((p) => p.includes('#errorType')) ||
+      removeParts.some((p) => p.includes('#errorType'))
+    ) {
+      expressionAttributeNames['#errorType'] = 'errorType';
+    }
+    if (
+      setParts.some((p) => p.includes('#publishedAt')) ||
+      removeParts.some((p) => p.includes('#publishedAt'))
+    ) {
+      expressionAttributeNames['#publishedAt'] = 'publishedAt';
+    }
+    if (
+      setParts.some((p) => p.includes('#platformPostId')) ||
+      removeParts.some((p) => p.includes('#platformPostId'))
+    ) {
+      expressionAttributeNames['#platformPostId'] = 'platformPostId';
+    }
+    if (
+      setParts.some((p) => p.includes('#platformUrl')) ||
+      removeParts.some((p) => p.includes('#platformUrl'))
+    ) {
+      expressionAttributeNames['#platformUrl'] = 'platformUrl';
+    }
 
     const expressionAttributeValues: Record<string, string> = {
       ':status': status,
