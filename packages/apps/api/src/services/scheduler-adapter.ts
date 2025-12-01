@@ -511,17 +511,34 @@ export class SchedulerAdapter {
             normalizedMediaType = normalizedContentType === 'reel' ? 'video' : 'image';
           }
           const mediaAssets = (content as any).mediaAssets as
-            | { cdnUrl: string; usageContext: string }[]
+            | { cdnUrl: string; usageContext?: string }[]
             | undefined;
           const primaryAssetUrl =
             content.primaryAssetCdnUrl ||
             mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
             mediaAssets?.[0]?.cdnUrl ||
             null;
+
+          const allAssetUrls: string[] = [];
+          if (primaryAssetUrl) {
+            allAssetUrls.push(primaryAssetUrl);
+          }
+          if (mediaAssets && mediaAssets.length > 0) {
+            for (const asset of mediaAssets) {
+              if (asset.cdnUrl && !allAssetUrls.includes(asset.cdnUrl)) {
+                allAssetUrls.push(asset.cdnUrl);
+              }
+            }
+          }
+
+          const mediaKeys = allAssetUrls
+            .map((url) => normalizeMediaKey(url))
+            .filter((key): key is string => !!key);
+
           // Enforce presence of media key for image content (non-reel)
           const requiresImageAsset =
             normalizedMediaType === 'image' && normalizedContentType !== 'reel';
-          if (requiresImageAsset && (!primaryAssetUrl || primaryAssetUrl.length === 0)) {
+          if (requiresImageAsset && mediaKeys.length === 0) {
             const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
             await emitScheduleFailure(msg);
             return {
@@ -530,13 +547,12 @@ export class SchedulerAdapter {
             };
           }
 
-          const mediaKey = normalizeMediaKey(primaryAssetUrl || undefined);
           const validation = validateContentPayload({
             platform: 'instagram',
             contentType: normalizedContentType,
             mediaType: normalizedMediaType,
             caption: normalizedContentType === 'story' ? '' : content.caption,
-            mediaKeys: mediaKey ? [mediaKey] : [],
+            mediaKeys,
             videoUrl: content.videoUrl || undefined,
           });
 
@@ -572,8 +588,8 @@ export class SchedulerAdapter {
               : {}),
             ...(content.campaignId ? { campaignId: content.campaignId } : {}),
           };
-          if (mediaKey) {
-            schedulePayload.mediaKeys = [mediaKey];
+          if (mediaKeys.length > 0) {
+            schedulePayload.mediaKeys = mediaKeys;
           }
 
           const schedule = await (await this.client).createSchedule(schedulePayload);
@@ -1082,15 +1098,31 @@ export class SchedulerAdapter {
           caption: content.caption || '',
           // No metadata fallback for mediaKeys; upstream must supply keys
         };
+        const mediaAssets = (content as any).mediaAssets as
+          | { cdnUrl: string; usageContext?: string }[]
+          | undefined;
         const primaryAssetUrl =
           content.primaryAssetCdnUrl ||
-          (content as any).mediaAssets?.find((asset: any) => asset.usageContext === 'primary')
-            ?.cdnUrl ||
-          (content as any).mediaAssets?.[0]?.cdnUrl ||
+          mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
+          mediaAssets?.[0]?.cdnUrl ||
           null;
-        const mediaKey = normalizeMediaKey(primaryAssetUrl || undefined);
-        if (mediaKey) {
-          updatePayload.mediaKeys = [mediaKey];
+
+        const allAssetUrls: string[] = [];
+        if (primaryAssetUrl) {
+          allAssetUrls.push(primaryAssetUrl);
+        }
+        if (mediaAssets && mediaAssets.length > 0) {
+          for (const asset of mediaAssets) {
+            if (asset.cdnUrl && !allAssetUrls.includes(asset.cdnUrl)) {
+              allAssetUrls.push(asset.cdnUrl);
+            }
+          }
+        }
+        const mediaKeys = allAssetUrls
+          .map((url) => normalizeMediaKey(url))
+          .filter((key): key is string => !!key);
+        if (mediaKeys.length > 0) {
+          updatePayload.mediaKeys = mediaKeys;
         }
         await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;

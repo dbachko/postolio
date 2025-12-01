@@ -393,11 +393,17 @@ class InstagramAdapter implements PlatformAdapter {
         platformUrl: single.permalink,
       };
     } catch (error) {
+      const err = error as Error;
       const meta = (error as unknown as { meta?: Record<string, unknown> }).meta || {};
-      logger.error('Instagram publishing failed', error as Error);
+      logger.error('Instagram publishing failed', {
+        errorName: err.name,
+        errorMessage: err.message,
+        stack: err.stack,
+        meta,
+      });
       return {
         success: false,
-        error: (error as Error).message,
+        error: err.message,
         errorCode: (meta as { errorCode?: string }).errorCode || 'IG_PUBLISH_RUNTIME_ERROR',
         httpStatus: (meta as { httpStatus?: number }).httpStatus,
       };
@@ -1305,11 +1311,16 @@ export const handler = async (
       platform: schedule.platform,
     });
   } catch (error) {
-    logger.error('Failed to publish content', error as Error);
+    const err = error as Error;
+    logger.error('Failed to publish content', {
+      errorName: err.name,
+      errorMessage: err.message,
+      stack: err.stack,
+    });
     metrics.addMetric('PublishingError', MetricUnit.Count, 1);
 
     // Update schedule status to failed
-    await updateScheduleStatus(event.scheduleId, 'failed', (error as Error).message);
+    await updateScheduleStatus(event.scheduleId, 'failed', err.message);
 
     // Emit EventBridge post.failed event for downstream sync
     try {
