@@ -24,7 +24,6 @@ import {
   type InstagramContentType,
   type InstagramMediaType,
 } from '@postolio/content-validation';
-// We now pass S3 object keys directly to Scheduler; CDN URLs no longer required
 
 const prisma = getDatabaseClient();
 
@@ -43,6 +42,40 @@ function normalizeMediaKey(reference?: string | null): string | null {
   } catch {
     return trimmed.replace(/^\/+/, '');
   }
+}
+
+/**
+ * Determine media type from content and file information
+ * Priority: content.mediaType > content.contentType > file extension
+ */
+function determineMediaType(
+  cdnUrl: string,
+  contentType: string,
+  contentMediaType?: string | null
+): 'image' | 'video' {
+  // Explicit mediaType from content
+  if (contentMediaType === 'video') return 'video';
+  if (contentMediaType === 'image') return 'image';
+
+  // Infer from contentType
+  if (contentType === 'reel') return 'video';
+
+  // Check file extension
+  const lower = cdnUrl.toLowerCase();
+  const withoutQuery = lower.split('?')[0];
+  if (
+    withoutQuery.endsWith('.mp4') ||
+    withoutQuery.endsWith('.mov') ||
+    withoutQuery.endsWith('.m4v') ||
+    withoutQuery.endsWith('.webm') ||
+    withoutQuery.includes('/uploads/videos/') ||
+    withoutQuery.includes('/videos/')
+  ) {
+    return 'video';
+  }
+
+  // Default to image
+  return 'image';
 }
 
 export class SchedulerAdapter {
@@ -510,35 +543,79 @@ export class SchedulerAdapter {
           } else {
             normalizedMediaType = normalizedContentType === 'reel' ? 'video' : 'image';
           }
-          const mediaAssets = (content as any).mediaAssets as
-            | { cdnUrl: string; usageContext?: string }[]
+          // Extract structured media asset information from PostMediaAsset records
+          const dbMediaAssets = (content as any).mediaAssets as
+            | {
+                cdnUrl: string;
+                usageContext?: string;
+                displayOrder: number;
+                width?: number;
+                height?: number;
+                assetId: string;
+              }[]
             | undefined;
-          const primaryAssetUrl =
-            content.primaryAssetCdnUrl ||
-            mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
-            mediaAssets?.[0]?.cdnUrl ||
-            null;
 
-          const allAssetUrls: string[] = [];
-          if (primaryAssetUrl) {
-            allAssetUrls.push(primaryAssetUrl);
-          }
-          if (mediaAssets && mediaAssets.length > 0) {
-            for (const asset of mediaAssets) {
-              if (asset.cdnUrl && !allAssetUrls.includes(asset.cdnUrl)) {
-                allAssetUrls.push(asset.cdnUrl);
+          // Build structured media assets array with explicit types
+          const structuredMediaAssets: Array<{
+            key: string;
+            type: 'image' | 'video';
+            order: number;
+            width?: number;
+            height?: number;
+            assetId?: string;
+            duration?: number;
+          }> = [];
+
+          if (dbMediaAssets && dbMediaAssets.length > 0) {
+            for (const asset of dbMediaAssets) {
+              const normalizedKey = normalizeMediaKey(asset.cdnUrl);
+              if (normalizedKey) {
+                const mediaType = determineMediaType(
+                  asset.cdnUrl,
+                  normalizedContentType,
+                  content.mediaType
+                );
+                structuredMediaAssets.push({
+                  key: normalizedKey,
+                  type: mediaType,
+                  order: asset.displayOrder,
+                  width: asset.width ?? undefined,
+                  height: asset.height ?? undefined,
+                  assetId: asset.assetId,
+                  duration:
+                    mediaType === 'video' ? (content.videoDuration ?? undefined) : undefined,
+                });
               }
             }
           }
 
-          const mediaKeys = allAssetUrls
-            .map((url) => normalizeMediaKey(url))
-            .filter((key): key is string => !!key);
+          // Fallback: If no mediaAssets but we have primaryAssetCdnUrl, add it
+          if (structuredMediaAssets.length === 0 && content.primaryAssetCdnUrl) {
+            const normalizedKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+            if (normalizedKey) {
+              const mediaType = determineMediaType(
+                content.primaryAssetCdnUrl,
+                normalizedContentType,
+                content.mediaType
+              );
+              structuredMediaAssets.push({
+                key: normalizedKey,
+                type: mediaType,
+                order: 0,
+                width: content.primaryAssetWidth ?? undefined,
+                height: content.primaryAssetHeight ?? undefined,
+                duration: mediaType === 'video' ? (content.videoDuration ?? undefined) : undefined,
+              });
+            }
+          }
 
-          // Enforce presence of media key for image content (non-reel)
+          // Sort by display order
+          structuredMediaAssets.sort((a, b) => a.order - b.order);
+
+          // Enforce presence of media asset for image content (non-reel)
           const requiresImageAsset =
             normalizedMediaType === 'image' && normalizedContentType !== 'reel';
-          if (requiresImageAsset && mediaKeys.length === 0) {
+          if (requiresImageAsset && structuredMediaAssets.length === 0) {
             const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
             await emitScheduleFailure(msg);
             return {
@@ -552,7 +629,7 @@ export class SchedulerAdapter {
             contentType: normalizedContentType,
             mediaType: normalizedMediaType,
             caption: normalizedContentType === 'story' ? '' : content.caption,
-            mediaKeys,
+            mediaKeys: structuredMediaAssets.map((asset) => asset.key),
             videoUrl: content.videoUrl || undefined,
           });
 
@@ -569,32 +646,31 @@ export class SchedulerAdapter {
             contentId: content.id,
             brandId: content.brandId,
             userId: userId || content.brand.userId,
-            platform: 'instagram', // Default for now, could expand to other platforms
-            scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
-            contentType: normalizedContentType, // User-facing type: post/reel/story
-            mediaType: normalizedMediaType, // Media format: image/video/reel
-            // Store content details in scheduler's DynamoDB
-            // When content is edited, EventBridge events will update this
+            platform: 'instagram',
+            scheduledAt: scheduledTimeUTC.toISOString(),
+            contentType: normalizedContentType,
+            mediaType: normalizedMediaType,
             caption: content.caption || '',
             ...(typeof (content as any).firstComment === 'string' &&
             (content as any).firstComment.trim().length
               ? { firstComment: (content as any).firstComment.trim() }
               : {}),
-            videoUrl: content.videoUrl || undefined, // Video CDN URL for video content
+            videoUrl: content.videoUrl || undefined,
             metadata: {
               timezone: brandTimezone,
               localTime: customTime ? customTime.toISOString() : undefined,
-              campaignName: content.campaign?.name, // Include campaign context for debugging
+              campaignName: content.campaign?.name,
             },
             ...(normalizedContentType === 'reel' &&
             typeof (content as any).shareToFeed === 'boolean'
               ? { shareToFeed: Boolean((content as any).shareToFeed) }
               : {}),
             ...(content.campaignId ? { campaignId: content.campaignId } : {}),
+            ...(typeof content.thumbOffset === 'number' && content.thumbOffset >= 0
+              ? { thumbOffset: content.thumbOffset }
+              : {}),
+            mediaAssets: structuredMediaAssets,
           };
-          if (mediaKeys.length > 0) {
-            schedulePayload.mediaKeys = mediaKeys;
-          }
 
           const schedule = await (await this.client).createSchedule(schedulePayload);
 
@@ -1093,40 +1169,83 @@ export class SchedulerAdapter {
       try {
         const updatePayload: UpdateScheduleInput = {
           scheduledAt: newTimeUTC.toISOString(),
-          // Include required fields for API Gateway validation
           brandId: content.brandId,
           contentId: content.id,
-          userId: content.brand.userId, // Include userId for token retrieval
-          platform: 'instagram', // Default to instagram for now
-          // Include content details in case they were edited
+          userId: content.brand.userId,
+          platform: 'instagram',
           caption: content.caption || '',
-          // No metadata fallback for mediaKeys; upstream must supply keys
         };
-        const mediaAssets = (content as any).mediaAssets as
-          | { cdnUrl: string; usageContext?: string }[]
+        // Extract structured media asset information (same as in scheduleContent)
+        const dbMediaAssets = (content as any).mediaAssets as
+          | {
+              cdnUrl: string;
+              usageContext?: string;
+              displayOrder: number;
+              width?: number;
+              height?: number;
+              assetId: string;
+            }[]
           | undefined;
-        const primaryAssetUrl =
-          content.primaryAssetCdnUrl ||
-          mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
-          mediaAssets?.[0]?.cdnUrl ||
-          null;
 
-        const allAssetUrls: string[] = [];
-        if (primaryAssetUrl) {
-          allAssetUrls.push(primaryAssetUrl);
-        }
-        if (mediaAssets && mediaAssets.length > 0) {
-          for (const asset of mediaAssets) {
-            if (asset.cdnUrl && !allAssetUrls.includes(asset.cdnUrl)) {
-              allAssetUrls.push(asset.cdnUrl);
+        const normalizedContentType = (content.contentType || 'post') as InstagramContentType;
+        const structuredMediaAssets: Array<{
+          key: string;
+          type: 'image' | 'video';
+          order: number;
+          width?: number;
+          height?: number;
+          assetId?: string;
+          duration?: number;
+        }> = [];
+
+        if (dbMediaAssets && dbMediaAssets.length > 0) {
+          for (const asset of dbMediaAssets) {
+            const normalizedKey = normalizeMediaKey(asset.cdnUrl);
+            if (normalizedKey) {
+              const mediaType = determineMediaType(
+                asset.cdnUrl,
+                normalizedContentType,
+                content.mediaType
+              );
+              structuredMediaAssets.push({
+                key: normalizedKey,
+                type: mediaType,
+                order: asset.displayOrder,
+                width: asset.width ?? undefined,
+                height: asset.height ?? undefined,
+                assetId: asset.assetId,
+                duration: mediaType === 'video' ? (content.videoDuration ?? undefined) : undefined,
+              });
             }
           }
         }
-        const mediaKeys = allAssetUrls
-          .map((url) => normalizeMediaKey(url))
-          .filter((key): key is string => !!key);
-        if (mediaKeys.length > 0) {
-          updatePayload.mediaKeys = mediaKeys;
+
+        // Fallback: If no mediaAssets but we have primaryAssetCdnUrl, add it
+        if (structuredMediaAssets.length === 0 && content.primaryAssetCdnUrl) {
+          const normalizedKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+          if (normalizedKey) {
+            const mediaType = determineMediaType(
+              content.primaryAssetCdnUrl,
+              normalizedContentType,
+              content.mediaType
+            );
+            structuredMediaAssets.push({
+              key: normalizedKey,
+              type: mediaType,
+              order: 0,
+              width: content.primaryAssetWidth ?? undefined,
+              height: content.primaryAssetHeight ?? undefined,
+              duration: mediaType === 'video' ? (content.videoDuration ?? undefined) : undefined,
+            });
+          }
+        }
+
+        // Sort by display order
+        structuredMediaAssets.sort((a, b) => a.order - b.order);
+
+        // Send structured media assets
+        if (structuredMediaAssets.length > 0) {
+          updatePayload.mediaAssets = structuredMediaAssets;
         }
         await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;

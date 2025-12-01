@@ -117,6 +117,13 @@ describe('Publisher Lambda', () => {
             contentType: 'post',
             mediaType: 'image',
             mediaKeys: ['images/test-image.jpg'],
+            mediaAssets: [
+              {
+                key: 'images/test-image.jpg',
+                type: 'image',
+                order: 0,
+              },
+            ],
           },
         ],
       });

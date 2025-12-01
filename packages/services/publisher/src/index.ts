@@ -81,9 +81,10 @@ interface Schedule {
   contentType?: 'post' | 'reel' | 'story' | string; // User-facing type
   mediaType?: 'image' | 'video' | 'reel' | 'carousel' | string; // Media format
   imageUrl?: string;
-  mediaKeys?: string[];
+  mediaAssets?: MediaAsset[];
   videoUrl?: string;
   shareToFeed?: boolean;
+  thumbOffset?: number; // Video thumbnail offset in milliseconds
   platform: PlatformName;
   [key: string]: unknown; // allow additional persisted attributes
 }
@@ -126,7 +127,23 @@ type PublishedMedia = {
 type ResolvedMedia = {
   kind: 'image' | 'video';
   url: string;
+  duration?: number; // Video duration in seconds
+  thumbOffset?: number; // Thumbnail offset in milliseconds (for Instagram API)
 };
+
+/**
+ * Structured media asset information
+ * Eliminates need for file extension parsing
+ */
+interface MediaAsset {
+  key: string;
+  type: 'image' | 'video';
+  order: number;
+  width?: number;
+  height?: number;
+  assetId?: string;
+  duration?: number;
+}
 
 // Platform adapter factory
 class PlatformAdapterFactory {
@@ -162,8 +179,10 @@ class InstagramAdapter implements PlatformAdapter {
     }
 
     const statusUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
-    const maxWaitMs = opts?.maxWaitMs ?? 300_000;
-    const pollIntervalMs = opts?.pollIntervalMs ?? 60_000;
+    // Videos can take 10-15 minutes to process, images are much faster
+    const defaultMaxWait = isVideo ? 900_000 : 300_000; // 15 min for video, 5 min for images
+    const maxWaitMs = opts?.maxWaitMs ?? defaultMaxWait;
+    const pollIntervalMs = opts?.pollIntervalMs ?? 60_000; // Check every 60s
     const throwOnTimeout = opts?.throwOnTimeout ?? true;
     const started = Date.now();
     let attempt = 0;
@@ -279,61 +298,40 @@ class InstagramAdapter implements PlatformAdapter {
   async publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _mediaUrl: string | null
   ): Promise<PublishResult> {
     try {
       const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
       // Derive media/product type semantics from schedule.
       const contentType = (schedule.contentType || '').toLowerCase();
-      const rawMediaType = (schedule.mediaType || '').toLowerCase();
-      const isReel = contentType === 'reel' || rawMediaType === 'reel';
+      const isReel = contentType === 'reel';
       const isStory = contentType === 'story';
-      const hasVideoAsset = !!schedule.videoUrl;
-      const isVideo = rawMediaType === 'video' || isReel || (isStory && hasVideoAsset);
 
-      // Resolve media assets (images + optional video) for publishing
-      const mediaKeys = (schedule.mediaKeys || []).filter(
-        (k): k is string => typeof k === 'string' && !!k.trim()
-      );
+      // Resolve media assets from structured mediaAssets
+      const resolvedMedia: ResolvedMedia[] = [];
 
-      // Treat obviously-video keys as videos, not images, so that
-      // single-video posts do not get misclassified as carousels.
-      const imageKeys = mediaKeys.filter((k) => {
-        const lower = k.trim().toLowerCase();
-        const withoutQuery = lower.split('?')[0];
-        return !(
-          withoutQuery.endsWith('.mp4') ||
-          withoutQuery.endsWith('.mov') ||
-          withoutQuery.endsWith('.m4v') ||
-          withoutQuery.endsWith('.webm') ||
-          withoutQuery.includes('/uploads/videos/') ||
-          withoutQuery.includes('/videos/')
-        );
-      });
-
-      const resolvedImages: string[] = (
-        await Promise.all(imageKeys.map((k) => getSignedImageUrlFromKey(k)))
-      ).filter(Boolean);
-
-      const resolvedVideoUrl = schedule.videoUrl
-        ? await getSignedVideoUrl(schedule.videoUrl)
-        : null;
-
-      // Backward compatibility: if no mediaKeys, try imageUrl fallback
-      if (!resolvedImages.length && schedule.imageUrl) {
-        const key = extractS3Key(schedule.imageUrl);
-        const fallbackImage = key ? await getSignedImageUrlFromKey(key) : schedule.imageUrl;
-        if (fallbackImage) resolvedImages.push(fallbackImage);
+      if (!schedule.mediaAssets || schedule.mediaAssets.length === 0) {
+        throw new Error('Media assets are required for Instagram publishing');
       }
 
-      const resolvedMedia: ResolvedMedia[] = [
-        ...resolvedImages.map((url) => ({ kind: 'image', url }) as ResolvedMedia),
-      ];
-      if (resolvedVideoUrl) {
-        resolvedMedia.push({ kind: 'video', url: resolvedVideoUrl });
-      } else if (mediaUrl && !resolvedMedia.length) {
-        // Legacy single-asset path
-        resolvedMedia.push({ kind: isVideo ? 'video' : 'image', url: mediaUrl });
+      logger.info('Resolving structured mediaAssets for publishing', {
+        assetCount: schedule.mediaAssets.length,
+        types: schedule.mediaAssets.map((a) => a.type).join(','),
+      });
+
+      for (const asset of schedule.mediaAssets) {
+        const signedUrl =
+          asset.type === 'video'
+            ? await getSignedVideoUrl(asset.key)
+            : await getSignedImageUrlFromKey(asset.key);
+
+        if (signedUrl) {
+          resolvedMedia.push({
+            kind: asset.type,
+            url: signedUrl,
+          });
+        }
       }
 
       if (!resolvedMedia.length) {
@@ -360,6 +358,7 @@ class InstagramAdapter implements PlatformAdapter {
             isVideo: asset.kind === 'video',
             isReel,
             isStory,
+            thumbOffset: asset.kind === 'video' ? schedule.thumbOffset : undefined,
           });
           published.push(single);
         }
@@ -400,6 +399,7 @@ class InstagramAdapter implements PlatformAdapter {
         isVideo: primary.kind === 'video',
         isReel,
         isStory,
+        thumbOffset: schedule.thumbOffset,
       });
 
       return {
@@ -458,8 +458,18 @@ class InstagramAdapter implements PlatformAdapter {
     isVideo: boolean;
     isReel: boolean;
     isStory: boolean;
+    thumbOffset?: number;
   }): Promise<PublishedMedia> {
-    const { schedule, credentials, formattedCaption, mediaUrl, isVideo, isReel, isStory } = params;
+    const {
+      schedule,
+      credentials,
+      formattedCaption,
+      mediaUrl,
+      isVideo,
+      isReel,
+      isStory,
+      thumbOffset,
+    } = params;
 
     // Step 1: Create media container
     const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
@@ -481,6 +491,11 @@ class InstagramAdapter implements PlatformAdapter {
             : true;
         // Control whether the reel should also appear in the feed grid.
         createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
+
+        // Set video thumbnail offset if provided (milliseconds from start)
+        if (thumbOffset !== undefined && thumbOffset >= 0) {
+          createMediaParams.set('thumb_offset', thumbOffset.toString());
+        }
       } else if (isStory) {
         createMediaParams.set('media_type', 'STORIES');
       } else {
@@ -489,6 +504,11 @@ class InstagramAdapter implements PlatformAdapter {
         const shareToFeed = typeof schedule.shareToFeed === 'boolean' ? schedule.shareToFeed : true;
         createMediaParams.set('media_type', 'REELS');
         createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
+
+        // Set video thumbnail offset if provided
+        if (thumbOffset !== undefined && thumbOffset >= 0) {
+          createMediaParams.set('thumb_offset', thumbOffset.toString());
+        }
       }
     } else {
       createMediaParams.set('image_url', mediaUrl);
@@ -549,7 +569,6 @@ class InstagramAdapter implements PlatformAdapter {
     if (isVideo) {
       await this.waitForMediaReady(creationId, credentials.accessToken, true, {
         throwOnTimeout: true,
-        maxWaitMs: 300_000,
       });
     }
 
@@ -591,7 +610,6 @@ class InstagramAdapter implements PlatformAdapter {
       if (isVideo) {
         await this.waitForMediaReady(creationId, credentials.accessToken, true, {
           throwOnTimeout: true,
-          maxWaitMs: 300_000,
         });
       } else {
         await new Promise((r) => setTimeout(r, 60_000));
@@ -721,7 +739,6 @@ class InstagramAdapter implements PlatformAdapter {
     if (hasVideoMedia) {
       await this.waitForMediaReady(creationId, credentials.accessToken, true, {
         throwOnTimeout: true,
-        maxWaitMs: 300_000,
       });
     }
 
@@ -762,7 +779,6 @@ class InstagramAdapter implements PlatformAdapter {
       if (hasVideoMedia) {
         await this.waitForMediaReady(creationId, credentials.accessToken, true, {
           throwOnTimeout: true,
-          maxWaitMs: 300_000,
         });
       } else {
         await new Promise((r) => setTimeout(r, 60_000));

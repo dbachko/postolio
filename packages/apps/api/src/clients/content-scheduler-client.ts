@@ -32,6 +32,17 @@ const MediaTypeSchema = z.enum(['image', 'video']); // Media format
 // Schema that matches Lambda's expected format
 const MetadataSchema = z.record(z.string(), z.unknown());
 
+// Structured media asset schema (kept in sync with schedule-management + publisher)
+const MediaAssetSchema = z.object({
+  key: z.string(), // S3 key or CDN URL
+  type: z.enum(['image', 'video']), // Explicit media type
+  order: z.number(), // Display order
+  width: z.number().optional(), // Asset width in pixels
+  height: z.number().optional(), // Asset height in pixels
+  assetId: z.string().optional(), // Asset service identifier
+  duration: z.number().optional(), // Video duration in seconds
+});
+
 const CreateScheduleInputSchema = z.object({
   contentId: z.string(),
   brandId: z.string(),
@@ -45,6 +56,9 @@ const CreateScheduleInputSchema = z.object({
   caption: z.string().optional(),
   firstComment: z.string().max(2200, 'firstComment must be at most 2200 characters').optional(),
   mediaKeys: z.array(z.string()).optional(),
+  mediaAssets: z.array(MediaAssetSchema).optional(),
+  hashtags: z.array(z.string()).optional(),
+  thumbOffset: z.number().optional(), // Video thumbnail offset in milliseconds
   metadata: MetadataSchema.optional(),
   shareToFeed: z.boolean().optional(),
 });
@@ -54,6 +68,9 @@ const UpdateScheduleInputSchema = z
     scheduledAt: z.string().datetime().optional(), // Changed from scheduledTime
     caption: z.string().optional(),
     mediaKeys: z.array(z.string()).optional(),
+    mediaAssets: z.array(MediaAssetSchema).optional(),
+    hashtags: z.array(z.string()).optional(),
+    thumbOffset: z.number().optional(),
     status: ScheduleStatusSchema.optional(),
     metadata: MetadataSchema.optional(),
     // API Gateway validation fields (required when performing reschedule)
@@ -91,7 +108,10 @@ const ScheduleSchema = z.object({
   caption: z.string().nullish(),
   firstComment: z.string().nullish(),
   mediaKeys: z.array(z.string()).nullish(),
+  mediaAssets: z.array(MediaAssetSchema).nullish(),
+  hashtags: z.array(z.string()).nullish(),
   shareToFeed: z.boolean().nullish(),
+  thumbOffset: z.number().nullish(),
   status: ScheduleStatusSchema,
   retryCount: z.number().default(0),
   metadata: MetadataSchema.nullish(),
@@ -123,6 +143,7 @@ const ListSchedulesParamsSchema = z.object({
 export type Platform = z.infer<typeof PlatformSchema>;
 export type ScheduleStatus = z.infer<typeof ScheduleStatusSchema>;
 export type ContentType = z.infer<typeof ContentTypeSchema>;
+export type MediaAsset = z.infer<typeof MediaAssetSchema>;
 export type Schedule = z.infer<typeof ScheduleSchema>;
 export type ScheduleList = z.infer<typeof ScheduleListSchema>;
 export type CreateScheduleInput = z.infer<typeof CreateScheduleInputSchema>;

@@ -51,6 +51,20 @@ import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from '../config';
 
 const logger = new Logger({ serviceName: 'schedule-service' });
+
+/**
+ * Structured media asset information for publishing
+ * Eliminates need for file extension parsing in publisher
+ */
+export interface MediaAsset {
+  key: string; // S3 key or CDN URL
+  type: 'image' | 'video'; // Explicit media type
+  order: number; // Display order for carousels
+  width?: number; // Asset width in pixels
+  height?: number; // Asset height in pixels
+  assetId?: string; // Asset service identifier
+  duration?: number; // Video duration in seconds
+}
 const tracer = new Tracer({ serviceName: 'schedule-service' });
 const metrics = new Metrics({
   namespace: 'ContentScheduler',
@@ -88,9 +102,10 @@ export interface ScheduleRequest {
   caption?: string;
   firstComment?: string;
   hashtags?: string[];
-  mediaKeys?: string[];
+  mediaAssets?: MediaAsset[]; // Structured media asset information
   metadata?: Record<string, unknown>;
   shareToFeed?: boolean;
+  thumbOffset?: number; // Video thumbnail offset in milliseconds
   // RELIABILITY: Idempotency token to prevent duplicate schedules
   idempotencyToken?: string;
 }
@@ -115,9 +130,10 @@ export interface Schedule {
   caption?: string;
   firstComment?: string;
   hashtags?: string[];
-  mediaKeys?: string[];
+  mediaAssets?: MediaAsset[]; // Structured media asset information
   metadata?: Record<string, unknown>;
   shareToFeed?: boolean;
+  thumbOffset?: number; // Video thumbnail offset in milliseconds
   createdAt: string;
   updatedAt: string;
   ttl?: number;
@@ -197,9 +213,10 @@ export class ScheduleService {
         caption: request.caption,
         firstComment: request.firstComment,
         hashtags: request.hashtags || [],
-        mediaKeys: request.mediaKeys || [],
+        mediaAssets: request.mediaAssets,
         metadata: request.metadata,
         shareToFeed: request.shareToFeed,
+        thumbOffset: request.thumbOffset,
         createdAt: now,
         updatedAt: now,
         // Set TTL for 30 days after scheduled time for cleanup
@@ -703,9 +720,9 @@ export class ScheduleService {
         expressionAttributeValues[':hashtags'] = updateRequest.hashtags;
       }
 
-      if (updateRequest.mediaKeys !== undefined) {
-        updateExpressions.push('mediaKeys = :mediaKeys');
-        expressionAttributeValues[':mediaKeys'] = updateRequest.mediaKeys || [];
+      if (updateRequest.mediaAssets !== undefined) {
+        updateExpressions.push('mediaAssets = :mediaAssets');
+        expressionAttributeValues[':mediaAssets'] = updateRequest.mediaAssets;
       }
 
       if (updateRequest.metadata !== undefined) {
