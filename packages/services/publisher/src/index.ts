@@ -292,12 +292,27 @@ class InstagramAdapter implements PlatformAdapter {
       const isVideo = rawMediaType === 'video' || isReel || (isStory && hasVideoAsset);
 
       // Resolve media assets (images + optional video) for publishing
+      const mediaKeys = (schedule.mediaKeys || []).filter(
+        (k): k is string => typeof k === 'string' && !!k.trim()
+      );
+
+      // Treat obviously-video keys as videos, not images, so that
+      // single-video posts do not get misclassified as carousels.
+      const imageKeys = mediaKeys.filter((k) => {
+        const lower = k.trim().toLowerCase();
+        const withoutQuery = lower.split('?')[0];
+        return !(
+          withoutQuery.endsWith('.mp4') ||
+          withoutQuery.endsWith('.mov') ||
+          withoutQuery.endsWith('.m4v') ||
+          withoutQuery.endsWith('.webm') ||
+          withoutQuery.includes('/uploads/videos/') ||
+          withoutQuery.includes('/videos/')
+        );
+      });
+
       const resolvedImages: string[] = (
-        await Promise.all(
-          (schedule.mediaKeys || [])
-            .filter((k): k is string => typeof k === 'string' && !!k.trim())
-            .map((k) => getSignedImageUrlFromKey(k))
-        )
+        await Promise.all(imageKeys.map((k) => getSignedImageUrlFromKey(k)))
       ).filter(Boolean);
 
       const resolvedVideoUrl = schedule.videoUrl
