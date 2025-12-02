@@ -4,7 +4,7 @@ import { HashtagAnalysis } from '../analytics/HashtagAnalysis';
 import { ActivityHeatmap } from '../analytics/ActivityHeatmap';
 import { AudienceInsights } from '../analytics/AudienceInsights';
 import { PostsPerformanceTable } from '../analytics/PostsPerformanceTable';
-import { Eye, Heart, Users } from 'lucide-react';
+import { Eye, Users } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type {
   InstagramHashtag,
@@ -16,7 +16,6 @@ interface AnalyticsInstagramTabProps {
   igLoading: boolean;
   igOverview: {
     followers?: number;
-    impressions?: number;
     reach?: number;
     profile_views?: number;
   } | null;
@@ -44,10 +43,7 @@ export function AnalyticsInstagramTab({
   onPostsPageChange,
 }: AnalyticsInstagramTabProps) {
   const hasPosts = igPostsDetailed.length > 0;
-  const allOverviewZero =
-    (igOverview?.reach ?? 0) === 0 &&
-    (igOverview?.impressions ?? 0) === 0 &&
-    (igOverview?.profile_views ?? 0) === 0;
+  const allOverviewZero = (igOverview?.reach ?? 0) === 0 && (igOverview?.profile_views ?? 0) === 0;
   const allPostMetricsZero =
     hasPosts &&
     igPostsDetailed.every(
@@ -77,14 +73,9 @@ export function AnalyticsInstagramTab({
               icon={<Users className="h-4 w-4" />}
             />
             <MetricsCard
-              title="Views (30d)"
-              value={igOverview?.impressions || 0}
-              icon={<Eye className="h-4 w-4" />}
-            />
-            <MetricsCard
-              title="Profile Views"
+              title="Profile Views (30d)"
               value={igOverview?.profile_views || 0}
-              icon={<Heart className="h-4 w-4" />}
+              icon={<Eye className="h-4 w-4" />}
             />
           </div>
 
@@ -123,19 +114,15 @@ export function AnalyticsInstagramTab({
           {/* Time Series Charts */}
           {igSeries && igSeries.length > 0 ? (
             <MultiMetricTimeSeriesChart
-              title="Reach & Views (Daily)"
+              title="Reach (Daily)"
               series={igSeries.map((d) => ({
                 date: d.date,
                 metrics: {
                   reach: d.reach,
-                  impressions: d.impressions,
                 },
               }))}
-              metrics={[
-                { key: 'reach', label: 'Reach' },
-                { key: 'impressions', label: 'Views' },
-              ]}
-              label="Daily reach and impressions"
+              metrics={[{ key: 'reach', label: 'Reach' }]}
+              label="Daily reach"
             />
           ) : null}
 

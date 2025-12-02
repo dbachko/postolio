@@ -175,15 +175,14 @@ export class InstagramConnector implements Connector {
       return totals;
     };
 
-    // impressions + reach (time series)
     let impressionsTotal = 0;
     let reachTotal = 0;
     try {
-      const res = await fetchSeries('impressions,reach');
+      const res = await fetchSeries('reach');
       const arr = Array.isArray(res.data?.data) ? (res.data.data as any[]) : [];
       const totals = aggregateSeries(arr);
-      impressionsTotal = totals.impressions || 0;
       reachTotal = totals.reach || 0;
+      impressionsTotal = reachTotal;
     } catch (err) {
       throw mapInstagramError(err);
     }

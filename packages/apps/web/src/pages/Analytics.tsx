@@ -59,7 +59,6 @@ export default function Analytics() {
   // Instagram analytics state
   const [igOverview, setIgOverview] = useState<{
     followers?: number;
-    impressions?: number;
     reach?: number;
     profile_views?: number;
   } | null>(null);
@@ -289,7 +288,6 @@ export default function Analytics() {
       setIgOverview(
         ig || last
           ? {
-              impressions: ig?.impressions || last?.impressions || 0,
               reach: ig?.reach || last?.reach || 0,
               // profile_views is best-effort (may be undefined)
               profile_views: last?.profile_views,

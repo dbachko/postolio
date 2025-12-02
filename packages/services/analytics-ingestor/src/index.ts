@@ -228,6 +228,107 @@ async function checkAndConsumeRate(platform: string, socialAccountId: string, li
   return count <= limit;
 }
 
+function getPublicationRefreshKey(publicationId: string): string {
+  return `ingest:last:publication:${publicationId}`;
+}
+
+async function getLastPublicationRefresh(publicationId: string): Promise<number | null> {
+  if (!redis) return null;
+  try {
+    const raw = await redis.get(getPublicationRefreshKey(publicationId));
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function markPublicationRefreshed(
+  publicationId: string,
+  publishedAt?: Date | null
+): Promise<void> {
+  if (!redis) return;
+  try {
+    const thresholdMs = computeRefreshThresholdMs(publishedAt);
+    const ttlSeconds = Math.max(Math.ceil(thresholdMs / 1000), 60);
+    await redis.set(
+      getPublicationRefreshKey(publicationId),
+      Date.now().toString(),
+      'EX',
+      ttlSeconds
+    );
+  } catch {}
+}
+
+async function isPublicationRefreshDue(pub: {
+  id: string;
+  publishedAt?: Date | null;
+  metricsLatest?: { lastUpdated?: Date | string | null } | null;
+}): Promise<boolean> {
+  const thresholdMs = computeRefreshThresholdMs(pub.publishedAt ?? null);
+  const now = Date.now();
+
+  let lastTs: number | null = null;
+  const lastUpdated = pub.metricsLatest?.lastUpdated;
+
+  if (lastUpdated instanceof Date) {
+    lastTs = lastUpdated.getTime();
+  } else if (typeof lastUpdated === 'string') {
+    const parsed = Date.parse(lastUpdated);
+    if (!Number.isNaN(parsed)) lastTs = parsed;
+  }
+
+  if (!lastTs) {
+    const redisTs = await getLastPublicationRefresh(pub.id);
+    if (typeof redisTs === 'number') lastTs = redisTs;
+  }
+
+  if (!lastTs) return true;
+
+  const ageMs = now - lastTs;
+  return ageMs >= thresholdMs;
+}
+
+function emitIngestionMetrics(
+  ingestedPublications: number,
+  dueCount: number,
+  candidateCount: number,
+  accountUpdated: number
+): void {
+  const timestamp = Date.now();
+  const emfPayload = {
+    _aws: {
+      Timestamp: timestamp,
+      CloudWatchMetrics: [
+        {
+          Namespace: 'Postolio/AnalyticsIngestor',
+          Dimensions: [['service']],
+          Metrics: [
+            { Name: 'PublicationsIngested', Unit: 'Count' },
+            { Name: 'PublicationsDue', Unit: 'Count' },
+            { Name: 'CandidatesScanned', Unit: 'Count' },
+            { Name: 'AccountsUpdated', Unit: 'Count' },
+          ],
+        },
+      ],
+    },
+    service: 'analytics-ingestor',
+    PublicationsIngested: ingestedPublications,
+    PublicationsDue: dueCount,
+    CandidatesScanned: candidateCount,
+    AccountsUpdated: accountUpdated,
+  };
+
+  console.log(JSON.stringify(emfPayload));
+  console.log('[Ingestor] Run metrics', {
+    ingestedPublications,
+    dueCount,
+    candidateCount,
+    accountUpdated,
+  });
+}
+
 async function ingestPublication(publicationId: string) {
   if (wantInfo) console.log('[Ingestor] Ingesting publication', { publicationId });
   const pub = await prisma.contentPublication.findUnique({
@@ -379,6 +480,9 @@ async function ingestAccountMetrics(socialAccountId: string) {
   const am = await connector.getAccountInsights(creds, account, '7d');
   const asOf = new Date();
   const metrics = am.metrics as Record<string, number>;
+  if (typeof metrics.reach === 'number' && typeof metrics.impressions !== 'number') {
+    metrics.impressions = metrics.reach;
+  }
   for (const [name, value] of Object.entries(metrics)) {
     try {
       await prisma.accountMetricSample.create({
@@ -467,14 +571,23 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
   });
 
   const due: typeof candidates = [] as any;
-  for (const c of candidates) {
-    const thresholdMs = computeRefreshThresholdMs(c.publishedAt);
-    const last = c.metricsLatest?.lastUpdated ? new Date(c.metricsLatest.lastUpdated) : null;
-    const ageMs = last ? Date.now() - last.getTime() : Infinity;
-    if (ageMs >= thresholdMs) due.push(c);
-    if (due.length >= 10) break;
+  const dueChecks = await Promise.all(
+    candidates.map((c) =>
+      isPublicationRefreshDue({
+        id: c.id,
+        publishedAt: c.publishedAt,
+        metricsLatest: c.metricsLatest,
+      })
+    )
+  );
+
+  for (let i = 0; i < candidates.length && due.length < 10; i += 1) {
+    if (dueChecks[i]) {
+      due.push(candidates[i]);
+    }
   }
 
+  let ingestedPublications = 0;
   for (const pub of due) {
     try {
       const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
@@ -483,6 +596,8 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
         continue;
       }
       await ingestPublication(pub.id);
+      await markPublicationRefreshed(pub.id, pub.publishedAt);
+      ingestedPublications += 1;
       await new Promise((r) => setTimeout(r, 250));
     } catch (e) {
       const status = (e as any)?.response?.status;
@@ -613,6 +728,7 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
         );
       }
     }
+    emitIngestionMetrics(ingestedPublications, due.length, candidates.length, accountUpdated);
     const hadWork = drainedPubs > 0 || drainedAccts > 0 || due.length > 0 || accountUpdated > 0;
     return { hadWork };
   } catch (e) {
@@ -626,6 +742,7 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
         subcode ? `, subcode: ${subcode}` : ''
       })`
     );
+    emitIngestionMetrics(ingestedPublications, due.length, candidates.length, 0);
     const hadWork = drainedPubs > 0 || drainedAccts > 0 || due.length > 0;
     return { hadWork };
   }
