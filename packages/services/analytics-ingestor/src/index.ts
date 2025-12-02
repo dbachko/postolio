@@ -36,6 +36,9 @@ const ACCOUNT_METRICS_MIN_INTERVAL_MS = Number(
 );
 const IDLE_BACKOFF_MS = Number(process.env.IDLE_BACKOFF_MS || 5 * 60 * 1000);
 const MIN_INGESTOR_LOOP_MS = Number(process.env.INGESTOR_LOOP_MIN_MS || 60 * 1000);
+const RATE_LIMIT_BACKOFF_BASE_MS = Number(process.env.RATE_LIMIT_BACKOFF_BASE_MS || 60 * 1000);
+const RATE_LIMIT_BACKOFF_MAX_MS = Number(process.env.RATE_LIMIT_BACKOFF_MAX_MS || 60 * 60 * 1000);
+const RATE_LIMIT_BACKOFF_JITTER = Number(process.env.RATE_LIMIT_BACKOFF_JITTER || 0.2);
 
 const redis = new Redis(
   process.env.REDIS_URL || process.env.REDIS_URI || 'redis://localhost:6379',
@@ -228,6 +231,113 @@ async function checkAndConsumeRate(platform: string, socialAccountId: string, li
   return count <= limit;
 }
 
+function applyJitter(delayMs: number): number {
+  const jitterPortion = RATE_LIMIT_BACKOFF_JITTER * delayMs;
+  const min = Math.max(0, delayMs - jitterPortion);
+  const max = delayMs + jitterPortion;
+  return Math.floor(min + Math.random() * (max - min));
+}
+
+function getBackoffKey(platform: string, socialAccountId: string): string {
+  return `ingest:backoff:${platform}:${socialAccountId}`;
+}
+
+function getBackoffCountKey(platform: string, socialAccountId: string): string {
+  return `ingest:backoff:count:${platform}:${socialAccountId}`;
+}
+
+async function isBackoffActive(platform: string, socialAccountId: string): Promise<boolean> {
+  if (!redis) return false;
+  const raw = await redis.get(getBackoffKey(platform, socialAccountId));
+  if (!raw) return false;
+  const until = Number(raw);
+  if (Number.isNaN(until)) return false;
+  return until > Date.now();
+}
+
+async function clearBackoff(platform: string, socialAccountId: string): Promise<void> {
+  if (!redis) return;
+  await redis.del(getBackoffKey(platform, socialAccountId));
+  await redis.del(getBackoffCountKey(platform, socialAccountId));
+}
+
+async function scheduleBackoff(
+  platform: string,
+  socialAccountId: string,
+  retryAfterMs?: number
+): Promise<number> {
+  if (!redis) return RATE_LIMIT_BACKOFF_BASE_MS;
+  const countKey = getBackoffCountKey(platform, socialAccountId);
+  const count = await redis.incr(countKey);
+  if (count === 1) {
+    await redis.expire(countKey, 3600);
+  }
+  const base = retryAfterMs && retryAfterMs > 0 ? retryAfterMs : RATE_LIMIT_BACKOFF_BASE_MS;
+  const exponent = Math.max(0, count - 1);
+  const unclampedDelay = base * Math.pow(2, exponent);
+  const clamped = Math.min(unclampedDelay, RATE_LIMIT_BACKOFF_MAX_MS);
+  const jittered = applyJitter(clamped);
+  const until = Date.now() + jittered;
+  await redis.set(
+    getBackoffKey(platform, socialAccountId),
+    until.toString(),
+    'PX',
+    Math.max(1000, Math.floor(jittered))
+  );
+  return jittered;
+}
+
+function parseUsageHeader(raw: any): number | null {
+  // Meta returns JSON-ish strings like '{"call_count":42,"total_cputime":16,"total_time":22}'
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (typeof parsed?.call_count === 'number') return parsed.call_count;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function detectRateLimit(err: any): { isRateLimit: boolean; retryAfterMs?: number } {
+  const res = err?.response;
+  const status = res?.status;
+  const headers = res?.headers || {};
+  const retryAfterHeader = headers['retry-after'];
+  const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : undefined;
+
+  const igError = res?.data?.error;
+  const igCode = igError?.code ? Number(igError.code) : undefined;
+  const igSubcode = igError?.error_subcode ? Number(igError.error_subcode) : undefined;
+  const msg = (igError?.message || err?.message || '').toString().toLowerCase();
+
+  // Doc-aligned rate limit codes
+  const igRateCodes = [4, 17, 32, 613, 80001, 80002, 80003, 80004, 80005, 80006, 80007, 80008];
+  const isRateCode = igCode ? igRateCodes.includes(igCode) : false;
+  const isRateSubcode = igSubcode ? igRateCodes.includes(igSubcode) : false;
+  const is429 = status === 429;
+  const isMessageRate = msg.includes('rate limit') || msg.includes('too many requests');
+
+  // Proactive backoff if usage headers indicate >90% utilization
+  const usageHeaders = [
+    'x-app-usage',
+    'x-page-usage',
+    'x-ad-account-usage',
+    'x-business-use-case-usage',
+  ];
+  let nearingLimit = false;
+  for (const h of usageHeaders) {
+    const callCount = parseUsageHeader(headers[h]);
+    if (typeof callCount === 'number' && callCount >= 90) {
+      nearingLimit = true;
+      break;
+    }
+  }
+
+  const isRateLimit = is429 || isRateCode || isRateSubcode || isMessageRate || nearingLimit;
+  return { isRateLimit, retryAfterMs };
+}
+
 function getPublicationRefreshKey(publicationId: string): string {
   return `ingest:last:publication:${publicationId}`;
 }
@@ -359,6 +469,10 @@ async function ingestPublication(publicationId: string) {
     if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
     return;
   }
+  if (await isBackoffActive(pub.platform, pub.socialAccountId)) {
+    if (wantDebug) console.debug('Backoff active; skipping publication', pub.id);
+    return;
+  }
   const connector = getConnector(pub.platform);
   if (wantDebug) console.log('[Ingestor] Connector resolved', { platform: pub.platform });
   const creds = await getCredentialsForSocialAccount(pub.socialAccountId, pub.platform);
@@ -368,13 +482,27 @@ async function ingestPublication(publicationId: string) {
     externalPageId: pub.externalPageId || pub.socialAccount?.externalPageId || undefined,
   } as any;
   if (wantDebug) console.debug('[Ingestor] Fetching media insights', { mediaId: externalPostId });
-  const insights = await connector.getMediaInsights(creds, account, externalPostId);
-  const fields = connector.getMediaFields
-    ? await connector.getMediaFields(creds, account, externalPostId)
-    : {};
-  const merged: Record<string, number> = { ...(insights.metrics as any), ...(fields as any) };
-  await recordMetricSamples({ id: pub.id, platform: pub.platform }, merged);
-  await upsertPublicationLatest({ id: pub.id, platform: pub.platform }, merged);
+  try {
+    const insights = await connector.getMediaInsights(creds, account, externalPostId);
+    const fields = connector.getMediaFields
+      ? await connector.getMediaFields(creds, account, externalPostId)
+      : {};
+    const merged: Record<string, number> = { ...(insights.metrics as any), ...(fields as any) };
+    await recordMetricSamples({ id: pub.id, platform: pub.platform }, merged);
+    await upsertPublicationLatest({ id: pub.id, platform: pub.platform }, merged);
+    await clearBackoff(pub.platform, pub.socialAccountId);
+  } catch (e) {
+    const { isRateLimit, retryAfterMs } = detectRateLimit(e);
+    if (isRateLimit) {
+      const delay = await scheduleBackoff(pub.platform, pub.socialAccountId, retryAfterMs);
+      console.warn('[Ingestor] Rate limited on publication; applying backoff', {
+        publicationId,
+        socialAccountId: pub.socialAccountId,
+        backoffMs: delay,
+      });
+    }
+    throw e;
+  }
 }
 
 async function drainQueue(max = 20) {
@@ -469,6 +597,10 @@ async function ingestAccountMetrics(socialAccountId: string) {
     if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
     return;
   }
+  if (await isBackoffActive(sa.platform, sa.id)) {
+    if (wantDebug) console.debug('Backoff active; skipping account metrics', sa.id);
+    return;
+  }
   const connector = getConnector(sa.platform);
   if (!connector.getAccountInsights) return;
   const creds = await getCredentialsForSocialAccount(sa.id, sa.platform);
@@ -477,48 +609,61 @@ async function ingestAccountMetrics(socialAccountId: string) {
     externalAccountId: sa.externalAccountId,
     externalPageId: sa.externalPageId || undefined,
   } as any;
-  const am = await connector.getAccountInsights(creds, account, '7d');
-  const asOf = new Date();
-  const metrics = am.metrics as Record<string, number>;
-  if (typeof metrics.reach === 'number' && typeof metrics.impressions !== 'number') {
-    metrics.impressions = metrics.reach;
-  }
-  for (const [name, value] of Object.entries(metrics)) {
-    try {
-      await prisma.accountMetricSample.create({
-        data: {
-          socialAccountId: sa.id,
-          platform: sa.platform as any,
-          metricName: name as any,
-          value: new Prisma.Decimal((value as number).toString()),
-          period: 'day' as any,
-          asOf,
-        },
-      });
-    } catch {
-      // ignore
+  try {
+    const am = await connector.getAccountInsights(creds, account, '7d');
+    const asOf = new Date();
+    const metrics = am.metrics as Record<string, number>;
+    if (typeof metrics.reach === 'number' && typeof metrics.impressions !== 'number') {
+      metrics.impressions = metrics.reach;
     }
+    for (const [name, value] of Object.entries(metrics)) {
+      try {
+        await prisma.accountMetricSample.create({
+          data: {
+            socialAccountId: sa.id,
+            platform: sa.platform as any,
+            metricName: name as any,
+            value: new Prisma.Decimal((value as number).toString()),
+            period: 'day' as any,
+            asOf,
+          },
+        });
+      } catch {
+        // ignore
+      }
+    }
+    await prisma.accountMetricsLatest.upsert({
+      where: { socialAccountId: sa.id },
+      update: {
+        platform: sa.platform as any,
+        followers: Math.floor(metrics.followers || 0),
+        impressions: Math.floor(metrics.impressions || 0),
+        reach: Math.floor(metrics.reach || 0),
+        profileViews: Math.floor((metrics as any).profile_views || 0),
+        lastUpdated: asOf,
+      },
+      create: {
+        socialAccountId: sa.id,
+        platform: sa.platform as any,
+        followers: Math.floor(metrics.followers || 0),
+        impressions: Math.floor(metrics.impressions || 0),
+        reach: Math.floor(metrics.reach || 0),
+        profileViews: Math.floor((metrics as any).profile_views || 0),
+        lastUpdated: asOf,
+      },
+    });
+    await clearBackoff(sa.platform, sa.id);
+  } catch (e) {
+    const { isRateLimit, retryAfterMs } = detectRateLimit(e);
+    if (isRateLimit) {
+      const delay = await scheduleBackoff(sa.platform, sa.id, retryAfterMs);
+      console.warn('[Ingestor] Rate limited on account metrics; applying backoff', {
+        socialAccountId: sa.id,
+        backoffMs: delay,
+      });
+    }
+    throw e;
   }
-  await prisma.accountMetricsLatest.upsert({
-    where: { socialAccountId: sa.id },
-    update: {
-      platform: sa.platform as any,
-      followers: Math.floor(metrics.followers || 0),
-      impressions: Math.floor(metrics.impressions || 0),
-      reach: Math.floor(metrics.reach || 0),
-      profileViews: Math.floor((metrics as any).profile_views || 0),
-      lastUpdated: asOf,
-    },
-    create: {
-      socialAccountId: sa.id,
-      platform: sa.platform as any,
-      followers: Math.floor(metrics.followers || 0),
-      impressions: Math.floor(metrics.impressions || 0),
-      reach: Math.floor(metrics.reach || 0),
-      profileViews: Math.floor((metrics as any).profile_views || 0),
-      lastUpdated: asOf,
-    },
-  });
 }
 
 async function drainAccountQueue(max = 10) {
@@ -588,11 +733,20 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
   }
 
   let ingestedPublications = 0;
+  let skippedByBackoff = 0;
   for (const pub of due) {
     try {
       const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
       if (!allowed) {
         if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
+        continue;
+      }
+      if (await isBackoffActive(pub.platform, pub.socialAccountId)) {
+        skippedByBackoff += 1;
+        if (wantDebug)
+          console.debug('Backoff active; skipping publication ingestion', {
+            publicationId: pub.id,
+          });
         continue;
       }
       await ingestPublication(pub.id);
@@ -631,6 +785,7 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
     // Limit to 10 accounts per pass
     const accountBatch = accountIds.slice(0, 10);
     let accountUpdated = 0;
+    let accountsSkippedByBackoff = 0;
     for (const socialAccountId of accountBatch) {
       try {
         const sa = await prisma.socialAccount.findUnique({
@@ -656,6 +811,15 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
         const allowed = await checkAndConsumeRate(sa.platform, sa.id, 200);
         if (!allowed) {
           if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
+          continue;
+        }
+
+        if (await isBackoffActive(sa.platform, sa.id)) {
+          accountsSkippedByBackoff += 1;
+          if (wantDebug)
+            console.debug('Backoff active; skipping account metrics batch', {
+              socialAccountId: sa.id,
+            });
           continue;
         }
 
@@ -729,7 +893,13 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
       }
     }
     emitIngestionMetrics(ingestedPublications, due.length, candidates.length, accountUpdated);
-    const hadWork = drainedPubs > 0 || drainedAccts > 0 || due.length > 0 || accountUpdated > 0;
+    const hadWork =
+      drainedPubs > 0 ||
+      drainedAccts > 0 ||
+      ingestedPublications > 0 ||
+      accountUpdated > 0 ||
+      accountsSkippedByBackoff > 0 ||
+      skippedByBackoff > 0;
     return { hadWork };
   } catch (e) {
     const status = (e as any)?.response?.status;
