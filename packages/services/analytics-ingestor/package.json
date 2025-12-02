@@ -11,6 +11,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-eventbridge": "^3.932.0",
     "@postolio/aws": "workspace:*",
     "@postolio/connectors": "workspace:*",
     "@postolio/database": "workspace:*",

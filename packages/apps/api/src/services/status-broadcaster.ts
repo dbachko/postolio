@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 
-export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
+export type ContentStatus =
+  | 'draft'
+  | 'scheduled'
+  | 'published'
+  | 'failed'
+  | 'skipped'
+  | 'unavailable';
 export type CampaignStatus =
   | 'draft'
   | 'preview'

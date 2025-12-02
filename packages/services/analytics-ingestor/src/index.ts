@@ -1,3 +1,4 @@
+import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { PrismaClient, Prisma } from '@postolio/database';
 import Redis from 'ioredis';
 import { InstagramConnector, type AccountIdentity, type Credentials } from '@postolio/connectors';
@@ -36,9 +37,13 @@ const ACCOUNT_METRICS_MIN_INTERVAL_MS = Number(
 );
 const IDLE_BACKOFF_MS = Number(process.env.IDLE_BACKOFF_MS || 5 * 60 * 1000);
 const MIN_INGESTOR_LOOP_MS = Number(process.env.INGESTOR_LOOP_MIN_MS || 60 * 1000);
+const NONRETRYABLE_PUBLICATION_BACKOFF_MS = Number(
+  process.env.NONRETRYABLE_PUBLICATION_BACKOFF_MS || 24 * 60 * 60 * 1000
+);
 const RATE_LIMIT_BACKOFF_BASE_MS = Number(process.env.RATE_LIMIT_BACKOFF_BASE_MS || 60 * 1000);
 const RATE_LIMIT_BACKOFF_MAX_MS = Number(process.env.RATE_LIMIT_BACKOFF_MAX_MS || 60 * 60 * 1000);
 const RATE_LIMIT_BACKOFF_JITTER = Number(process.env.RATE_LIMIT_BACKOFF_JITTER || 0.2);
+const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
 
 const redis = new Redis(
   process.env.REDIS_URL || process.env.REDIS_URI || 'redis://localhost:6379',
@@ -360,11 +365,13 @@ async function getLastPublicationRefresh(publicationId: string): Promise<number 
 
 async function markPublicationRefreshed(
   publicationId: string,
-  publishedAt?: Date | null
+  publishedAt?: Date | null,
+  overrideMs?: number
 ): Promise<void> {
   if (!redis) return;
   try {
-    const thresholdMs = computeRefreshThresholdMs(publishedAt);
+    const thresholdMs =
+      overrideMs && overrideMs > 0 ? overrideMs : computeRefreshThresholdMs(publishedAt);
     const ttlSeconds = Math.max(Math.ceil(thresholdMs / 1000), 60);
     await redis.set(
       getPublicationRefreshKey(publicationId),
@@ -443,11 +450,168 @@ function emitIngestionMetrics(
   });
 }
 
+function classifyNonRetryablePublicationError(err: any): {
+  nonRetryable: boolean;
+  reason?: string;
+  status?: number;
+  code?: number;
+  subcode?: number;
+  message?: string;
+} {
+  const ig = err?.response?.data?.error;
+  const status = err?.response?.status;
+  const codeRaw = ig?.code;
+  const subcodeRaw = ig?.error_subcode;
+  const code = typeof codeRaw === 'number' ? codeRaw : Number(codeRaw);
+  const subcode = typeof subcodeRaw === 'number' ? subcodeRaw : Number(subcodeRaw);
+  const message = (ig?.message || err?.message || '').toString();
+  const lower = message.toLowerCase();
+
+  const unsupported = lower.includes('unsupported get request');
+  const doesNotExist =
+    lower.includes('does not exist') ||
+    lower.includes('cannot be loaded') ||
+    lower.includes('not exist');
+  const permissionMissing = lower.includes('missing permissions');
+  const notFoundCode = code === 100 && (subcode === 33 || subcode === 803);
+  const permissionCodes = code === 10 || code === 200;
+
+  if (unsupported || doesNotExist || notFoundCode) {
+    return {
+      nonRetryable: true,
+      reason: 'not_found',
+      status,
+      code,
+      subcode,
+      message,
+    };
+  }
+
+  if (permissionMissing || permissionCodes) {
+    return {
+      nonRetryable: true,
+      reason: 'permissions',
+      status,
+      code,
+      subcode,
+      message,
+    };
+  }
+
+  return { nonRetryable: false };
+}
+
+async function recordPublicationErrorMetadata(
+  pub: { id: string; metadata?: Prisma.JsonValue | null },
+  details: {
+    reason?: string;
+    message?: string;
+    status?: number;
+    code?: number;
+    subcode?: number;
+  }
+): Promise<void> {
+  try {
+    const base =
+      pub.metadata && typeof pub.metadata === 'object' && !Array.isArray(pub.metadata)
+        ? { ...(pub.metadata as Record<string, any>) }
+        : {};
+    base.analyticsError = {
+      reason: details.reason,
+      message: details.message,
+      status: details.status,
+      code: details.code,
+      subcode: details.subcode,
+      recordedAt: new Date().toISOString(),
+    };
+    await prisma.contentPublication.update({
+      where: { id: pub.id },
+      data: { metadata: base as Prisma.JsonObject },
+    });
+  } catch (error) {
+    console.warn('Failed to persist publication analytics error metadata', {
+      publicationId: pub.id,
+      error: (error as Error).message,
+    });
+  }
+}
+
+const eventBridge = new EventBridge({ region: process.env.AWS_REGION || 'us-east-1' });
+
+async function emitPublicationUnavailableEvent(detail: {
+  publicationId: string;
+  contentId?: string | null;
+  socialAccountId?: string | null;
+  platform?: string | null;
+  reason?: string;
+}): Promise<void> {
+  try {
+    const payload = {
+      ...detail,
+      occurredAt: new Date().toISOString(),
+    };
+    await eventBridge.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'postolio.analytics',
+            DetailType: 'post.unavailable',
+            Detail: JSON.stringify(payload),
+            EventBusName: EVENT_BUS_NAME,
+          },
+        ],
+      })
+    );
+    if (wantDebug) console.debug('[Ingestor] Emitted post.unavailable event', payload);
+  } catch (error) {
+    console.warn('Failed to emit post.unavailable event', {
+      publicationId: detail.publicationId,
+      error: (error as Error).message,
+    });
+  }
+}
+
+async function markPublicationUnavailable(
+  pub: { id: string; publishedAt?: Date | null; metadata?: Prisma.JsonValue | null },
+  reason: string
+): Promise<void> {
+  try {
+    const base =
+      pub.metadata && typeof pub.metadata === 'object' && !Array.isArray(pub.metadata)
+        ? { ...(pub.metadata as Record<string, any>) }
+        : {};
+    base.analyticsUnavailable = {
+      reason,
+      recordedAt: new Date().toISOString(),
+    };
+
+    await prisma.contentPublication.update({
+      where: { id: pub.id },
+      data: {
+        status: 'unavailable',
+        metadata: base as Prisma.JsonObject,
+      },
+    });
+  } catch (error) {
+    console.warn('Failed to mark publication unavailable', {
+      publicationId: pub.id,
+      error: (error as Error).message,
+    });
+  }
+
+  await markPublicationRefreshed(
+    pub.id,
+    pub.publishedAt,
+    Math.max(NONRETRYABLE_PUBLICATION_BACKOFF_MS, computeRefreshThresholdMs(pub.publishedAt))
+  );
+}
+
 async function ingestPublication(publicationId: string) {
   if (wantInfo) console.log('[Ingestor] Ingesting publication', { publicationId });
   const pub = await prisma.contentPublication.findUnique({
     where: { id: publicationId },
     select: {
+      contentId: true,
       id: true,
       platform: true,
       socialAccountId: true,
@@ -455,6 +619,7 @@ async function ingestPublication(publicationId: string) {
       externalAccountId: true,
       externalPageId: true,
       publishedAt: true,
+      metadata: true,
       socialAccount: { select: { externalAccountId: true, externalPageId: true } },
     },
   });
@@ -503,6 +668,26 @@ async function ingestPublication(publicationId: string) {
     await clearBackoff(pub.platform, pub.socialAccountId);
   } catch (e) {
     const { isRateLimit, retryAfterMs } = detectRateLimit(e);
+    const nonRetryable = classifyNonRetryablePublicationError(e);
+    if (nonRetryable.nonRetryable) {
+      console.warn('[Ingestor] Non-retryable publication error; suppressing retries', {
+        publicationId,
+        reason: nonRetryable.reason,
+        status: nonRetryable.status ?? 'n/a',
+        code: nonRetryable.code ?? 'n/a',
+        subcode: nonRetryable.subcode ?? 'n/a',
+      });
+      await recordPublicationErrorMetadata(pub, nonRetryable);
+      await emitPublicationUnavailableEvent({
+        publicationId: pub.id,
+        contentId: pub.contentId,
+        socialAccountId: pub.socialAccountId,
+        platform: pub.platform,
+        reason: nonRetryable.reason,
+      });
+      await markPublicationUnavailable(pub, nonRetryable.reason || 'not_found');
+      return;
+    }
     if (isRateLimit) {
       const delay = await scheduleBackoff(pub.platform, pub.socialAccountId, retryAfterMs);
       console.warn('[Ingestor] Rate limited on publication; applying backoff', {
@@ -719,6 +904,9 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
   // Load recent publications with latest metrics for staleness calculation
   const candidates = await prisma.contentPublication.findMany({
     take: 100,
+    where: {
+      NOT: [{ status: 'unavailable' }],
+    },
     orderBy: { publishedAt: 'desc' },
     select: {
       id: true,

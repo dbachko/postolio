@@ -24,6 +24,7 @@ const metrics = new Metrics({
 interface EventDetail {
   scheduleId?: string;
   contentId?: string;
+  publicationId?: string;
   brandId?: string;
   platform?: string;
   platformPostId?: string;
@@ -683,6 +684,68 @@ async function handleScheduleCanceled(detail: EventDetail) {
   });
 }
 
+const UNAVAILABLE_STATUS: ContentStatus = 'unavailable' as ContentStatus;
+
+async function handlePostUnavailable(detail: EventDetail) {
+  const { contentId, publicationId, reason } = detail;
+  const client = await getClient();
+  const sanitizedReason = reason?.slice(0, 500) || 'Post unavailable on platform';
+  let resolvedContentId = contentId || null;
+
+  if (publicationId) {
+    const pub = await client.contentPublication.findUnique({
+      where: { id: publicationId },
+      select: { id: true, contentId: true, metadata: true },
+    });
+    if (pub) {
+      resolvedContentId = resolvedContentId || pub.contentId;
+      const base =
+        pub.metadata && typeof pub.metadata === 'object' && !Array.isArray(pub.metadata)
+          ? { ...(pub.metadata as Record<string, unknown>) }
+          : {};
+      const updatedMeta = {
+        ...base,
+        analyticsUnavailable: {
+          reason: sanitizedReason,
+          recordedAt: new Date().toISOString(),
+        },
+      };
+      await client.contentPublication.update({
+        where: { id: pub.id },
+        data: {
+          status: 'unavailable',
+          metadata: updatedMeta as Prisma.JsonObject,
+        },
+      });
+    }
+  }
+
+  if (!resolvedContentId) {
+    logger.warn('post.unavailable missing contentId', { publicationId });
+    return;
+  }
+
+  const currentContent = await client.content.findUnique({
+    where: { id: resolvedContentId },
+    select: { generationParams: true },
+  });
+
+  const existingParams = (currentContent?.generationParams as Record<string, unknown>) || {};
+
+  await client.content.update({
+    where: { id: resolvedContentId },
+    data: {
+      status: UNAVAILABLE_STATUS,
+      schedulingError: sanitizedReason,
+      generationParams: {
+        ...existingParams,
+        unavailableAt: new Date().toISOString(),
+        unavailableReason: sanitizedReason,
+      },
+    },
+  });
+}
+
 export async function handler(event: EventBridgeEvent<string, EventDetail>, context: Context) {
   context.callbackWaitsForEmptyEventLoop = false;
 
@@ -732,6 +795,10 @@ export async function handler(event: EventBridgeEvent<string, EventDetail>, cont
       case 'schedule.failed':
         await handleScheduleFailed(detail);
         metrics.addMetric('ScheduleFailed', MetricUnit.Count, 1);
+        break;
+      case 'post.unavailable':
+        await handlePostUnavailable(detail);
+        metrics.addMetric('PostUnavailable', MetricUnit.Count, 1);
         break;
       default:
         logger.warn('Unhandled event type', { eventType });
