@@ -41,7 +41,11 @@ export function validateRequestBody(body: CreateManualContentBody) {
   const normalizedContentType: ValidationContentType = body.contentType ?? 'post';
   const normalizedMediaType: ValidationMediaType = body.mediaType ?? 'image';
 
-  const mediaKeys: string[] = body.assetIds || [];
+  const mediaAssets =
+    body.assetIds?.map((id) => ({
+      key: id,
+      type: (normalizedMediaType === 'video' ? 'video' : 'image') as ValidationMediaType,
+    })) || [];
 
   const validation = validateContentPayload({
     platform: 'instagram',
@@ -49,7 +53,7 @@ export function validateRequestBody(body: CreateManualContentBody) {
     mediaType: normalizedMediaType,
     caption: body.caption,
     videoUrl: body.videoUrl,
-    mediaKeys,
+    mediaAssets,
   });
 
   if (!validation.ok) {

@@ -91,7 +91,9 @@ describe('HttpHandler', () => {
           contentType: 'post',
           mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-          mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
+          mediaAssets: [
+            { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+          ],
           firstComment: 'First comment from API',
         }),
         headers: {
@@ -131,7 +133,9 @@ describe('HttpHandler', () => {
         contentType: 'post',
         mediaType: 'image',
         scheduledAt: expect.any(String),
-        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
         firstComment: 'First comment from API',
       });
     });

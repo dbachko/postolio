@@ -55,7 +55,6 @@ const CreateScheduleInputSchema = z.object({
   videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
   firstComment: z.string().max(2200, 'firstComment must be at most 2200 characters').optional(),
-  mediaKeys: z.array(z.string()).optional(),
   mediaAssets: z.array(MediaAssetSchema).optional(),
   hashtags: z.array(z.string()).optional(),
   thumbOffset: z.number().optional(), // Video thumbnail offset in milliseconds
@@ -67,7 +66,6 @@ const UpdateScheduleInputSchema = z
   .object({
     scheduledAt: z.string().datetime().optional(), // Changed from scheduledTime
     caption: z.string().optional(),
-    mediaKeys: z.array(z.string()).optional(),
     mediaAssets: z.array(MediaAssetSchema).optional(),
     hashtags: z.array(z.string()).optional(),
     thumbOffset: z.number().optional(),
@@ -107,7 +105,6 @@ const ScheduleSchema = z.object({
   videoUrl: z.string().url().nullish(),
   caption: z.string().nullish(),
   firstComment: z.string().nullish(),
-  mediaKeys: z.array(z.string()).nullish(),
   mediaAssets: z.array(MediaAssetSchema).nullish(),
   hashtags: z.array(z.string()).nullish(),
   shareToFeed: z.boolean().nullish(),

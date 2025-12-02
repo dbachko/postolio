@@ -513,6 +513,7 @@ export class SchedulerAdapter {
       // 6. Create schedule in AWS microservice first (primary system)
       let scheduleId: string | undefined;
       let awsScheduleCreated = false;
+      let scheduleCreationError: unknown = null;
 
       // Skip AWS scheduling if scheduler is not enabled
       if (!this.schedulerEnabled) {
@@ -629,7 +630,10 @@ export class SchedulerAdapter {
             contentType: normalizedContentType,
             mediaType: normalizedMediaType,
             caption: normalizedContentType === 'story' ? '' : content.caption,
-            mediaKeys: structuredMediaAssets.map((asset) => asset.key),
+            mediaAssets: structuredMediaAssets.map((asset) => ({
+              key: asset.key,
+              type: asset.type,
+            })),
             videoUrl: content.videoUrl || undefined,
           });
 
@@ -677,6 +681,7 @@ export class SchedulerAdapter {
           scheduleId = schedule?.scheduleId;
           awsScheduleCreated = true;
         } catch (awsError: unknown) {
+          scheduleCreationError = awsError;
           // Handle circuit breaker and network errors gracefully
           const code =
             typeof awsError === 'object' && awsError && 'code' in awsError
@@ -697,14 +702,31 @@ export class SchedulerAdapter {
 
       // 7. Persist schedule metadata if AWS succeeded; otherwise clear processing
       if (!awsScheduleCreated) {
-        // AWS scheduling failed - clear processing state and set error
+        // AWS scheduling failed - capture a user-facing reason and keep the attempted time visible
+        const validationErrors =
+          typeof (scheduleCreationError as { details?: { errors?: unknown[] } }).details?.errors ===
+          'object'
+            ? ((scheduleCreationError as { details?: { errors?: unknown[] } }).details
+                ?.errors as unknown[])
+            : undefined;
+        const firstValidationError =
+          Array.isArray(validationErrors) && validationErrors.length
+            ? String(validationErrors[0])
+            : null;
+        const fallbackMessage =
+          scheduleCreationError instanceof Error && scheduleCreationError.message
+            ? scheduleCreationError.message
+            : 'AWS Scheduler unavailable - content not scheduled';
+        const schedulingError = firstValidationError || fallbackMessage;
+
         try {
           await prisma.content.update({
             where: { id: contentId },
             data: {
-              status: originalStatus, // Keep original status
-              scheduledAt: originalScheduledAt, // Keep original time
-              schedulingError: `AWS Scheduler unavailable - content not scheduled`,
+              // Surface as failed so calendars keep it visible with error context
+              status: 'failed',
+              scheduledAt: scheduledTimeUTC,
+              schedulingError,
               generationParams: {
                 ...currentParams,
                 processing: null, // Clear processing flag

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi, campaign as campaignApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -253,19 +253,31 @@ export function PostSidebar({
 
   const validation = useMemo(() => {
     const isStory = formData.contentType === 'story';
-    const mediaKeys: string[] =
+    const mediaAssets: { key: string; type: InstagramMediaType }[] =
       formData.carouselAssets && formData.carouselAssets.length > 0
-        ? formData.carouselAssets.map((a) => a.url)
-        : formData.imageUrl
-          ? [formData.imageUrl]
-          : [];
+        ? formData.carouselAssets.map((a) => ({
+            key: a.url,
+            type:
+              a.type === 'video'
+                ? ('video' as InstagramMediaType)
+                : ('image' as InstagramMediaType),
+          }))
+        : (() => {
+            const assets: { key: string; type: InstagramMediaType }[] = [];
+            if (formData.videoUrl) {
+              assets.push({ key: formData.videoUrl, type: 'video' });
+            } else if (formData.imageUrl) {
+              assets.push({ key: formData.imageUrl, type: 'image' });
+            }
+            return assets;
+          })();
 
     return validateContentPayload({
       platform: 'instagram',
       contentType: formData.contentType,
       mediaType: finalMediaType,
       caption: isStory ? '' : formData.caption,
-      mediaKeys,
+      mediaAssets,
       videoUrl: formData.videoUrl || undefined,
     });
   }, [
@@ -379,6 +391,10 @@ export function PostSidebar({
       if (!id) throw new Error('No post ID');
       if (!formData.scheduledAt) throw new Error('No scheduled time set');
 
+      if (mediaChanged) {
+        await persistMediaChanges();
+      }
+
       const scheduledUtc = toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString();
       const isStory = formData.contentType === 'story';
 
@@ -388,6 +404,10 @@ export function PostSidebar({
         campaignId: selectedCampaign || null,
         firstComment: formData.firstComment?.trim() || undefined,
         scheduledAt: scheduledUtc,
+        mediaType: finalMediaType,
+        contentType: formData.contentType,
+        ...(finalMediaType === 'video' ? { videoUrl: formData.videoUrl || undefined } : {}),
+        ...(formData.contentType === 'reel' ? { shareToFeed: formData.shareToFeed } : {}),
       });
     },
     onSuccess: (response) => {
@@ -543,7 +563,45 @@ export function PostSidebar({
     setHasChanges(changed);
   }, [formData, id, post]);
 
-  const handleSaveChanges = () => {
+  const mediaChanged = useMemo(() => {
+    if (!post) return false;
+    const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
+    const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId || asset.cdnUrl);
+    const formVideo = formData.videoUrl || '';
+    const postVideo =
+      post.videoUrl || post.mediaAssets?.find((asset) => asset.fileType === 'video')?.cdnUrl || '';
+    const formImage = formData.imageUrl || '';
+    const postImage = post.imageUrl || '';
+
+    return (
+      JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds) ||
+      formVideo !== postVideo ||
+      formImage !== postImage
+    );
+  }, [formData.carouselAssets, formData.imageUrl, formData.videoUrl, post]);
+
+  const persistMediaChanges = useCallback(async () => {
+    if (!id || !mediaChanged) return;
+    const assetIds = formData.carouselAssets.map((a) => a.id).filter(Boolean);
+    const validAssetIds = assetIds.filter(
+      (assetId) => typeof assetId === 'string' && !assetId.startsWith('http')
+    );
+    if (!validAssetIds.length) {
+      toast.error('Media is missing asset IDs. Please re-select it from the Assets library.');
+      throw new Error('Missing asset IDs for media update');
+    }
+
+    try {
+      await contentApi.updateMedia(id, validAssetIds);
+      await queryClient.invalidateQueries({ queryKey: ['post', id] });
+    } catch (error) {
+      console.error('Failed to update post media', error);
+      toast.error('Failed to update post media. Please try again.');
+      throw error;
+    }
+  }, [formData.carouselAssets, id, mediaChanged, queryClient]);
+
+  const handleSaveChanges = async () => {
     if (!id || !hasChanges) return;
 
     if (!validation.ok) {
@@ -551,21 +609,10 @@ export function PostSidebar({
       return;
     }
 
-    // Persist media changes first when in image mode with carousel assets
-    if (finalMediaType === 'image') {
-      const assetIds = formData.carouselAssets.map((a) => a.id).filter(Boolean);
-      if (assetIds.length > 0) {
-        contentApi
-          .updateMedia(id, assetIds)
-          .catch((error) => {
-            console.error('Failed to update post media', error);
-            toast.error('Failed to update post images. Please try again.');
-          })
-          .then(() => {
-            // Invalidate post detail so mediaAssets/imageUrl stay in sync
-            queryClient.invalidateQueries({ queryKey: ['post', id] });
-          });
-      }
+    try {
+      await persistMediaChanges();
+    } catch {
+      return;
     }
 
     const hadScheduled = Boolean(post?.scheduledAt);
@@ -586,6 +633,10 @@ export function PostSidebar({
       scheduledAt?: string | null;
       campaignId?: string | null;
       firstComment?: string;
+      mediaType?: InstagramMediaType;
+      contentType?: InstagramContentType;
+      videoUrl?: string;
+      shareToFeed?: boolean;
     } = {
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
@@ -595,6 +646,17 @@ export function PostSidebar({
 
     if (scheduledAtPayload !== undefined) {
       payload.scheduledAt = scheduledAtPayload;
+    }
+
+    payload.mediaType = finalMediaType;
+    payload.contentType = formData.contentType;
+
+    if (finalMediaType === 'video') {
+      payload.videoUrl = formData.videoUrl || undefined;
+    }
+
+    if (formData.contentType === 'reel') {
+      payload.shareToFeed = formData.shareToFeed;
     }
 
     mutateContent(payload);
@@ -910,7 +972,22 @@ export function PostSidebar({
                         <>
                           <VideoUploader
                             value={formData.videoUrl}
-                            onChange={(url) => setFormData((s) => ({ ...s, videoUrl: url }))}
+                            onChange={(url, meta) =>
+                              setFormData((s) => ({
+                                ...s,
+                                videoUrl: url,
+                                carouselAssets: url
+                                  ? [
+                                      {
+                                        id: meta?.assetId || url,
+                                        url,
+                                        type: 'video',
+                                      },
+                                    ]
+                                  : [],
+                                mediaType: url ? 'video' : s.mediaType,
+                              }))
+                            }
                             brandId={selectedBrand.id}
                             maxSizeInMB={300}
                             acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
@@ -1484,7 +1561,13 @@ export function PostSidebar({
               if (firstVideo) {
                 setFormData((s) => ({
                   ...s,
-                  carouselAssets: [],
+                  carouselAssets: [
+                    {
+                      id: firstVideo.id || firstVideo.url,
+                      url: firstVideo.url,
+                      type: 'video',
+                    },
+                  ],
                   imageUrl: '',
                   mediaType: 'video',
                   videoUrl: firstVideo.url,

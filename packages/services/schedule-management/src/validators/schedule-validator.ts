@@ -24,7 +24,6 @@ export interface ScheduleRequest {
   caption?: string;
   firstComment?: string;
   hashtags?: string[];
-  mediaKeys?: string[];
   metadata?: Record<string, unknown>;
   shareToFeed?: boolean;
 }
@@ -103,17 +102,6 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     }
   }
 
-  if (request.mediaKeys !== undefined) {
-    if (!Array.isArray(request.mediaKeys)) {
-      errors.push('mediaKeys must be an array if provided');
-    } else {
-      const invalidKeys = request.mediaKeys.filter((k: unknown) => typeof k !== 'string');
-      if (invalidKeys.length > 0) {
-        errors.push('all mediaKeys must be strings');
-      }
-    }
-  }
-
   if (request.metadata !== undefined && typeof request.metadata !== 'object') {
     errors.push('metadata must be an object if provided');
   }
@@ -143,16 +131,25 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     errors.push(`mediaType must be one of: ${validMediaTypes.join(', ')}`);
   }
 
-  // Strict requirement: for image media, mediaKeys must be non-empty
+  // Strict requirement: for image media, mediaAssets must be non-empty
   const mt = (request.mediaType as string | undefined)?.toLowerCase();
   if (mt === 'image') {
-    const mk = request.mediaKeys as unknown;
-    if (
-      !Array.isArray(mk) ||
-      mk.length === 0 ||
-      mk.some((k) => typeof k !== 'string' || k.length === 0)
-    ) {
-      errors.push('mediaKeys must be a non-empty array of strings for image content');
+    const mediaAssets = (request as { mediaAssets?: unknown }).mediaAssets;
+    const hasMediaAssets = Array.isArray(mediaAssets) && mediaAssets.length > 0;
+    const hasInvalidMediaAssets =
+      Array.isArray(mediaAssets) &&
+      mediaAssets.some(
+        (asset) =>
+          !asset ||
+          typeof asset !== 'object' ||
+          typeof (asset as { key?: unknown }).key !== 'string' ||
+          !(asset as { key: string }).key
+      );
+
+    if (!hasMediaAssets) {
+      errors.push('mediaAssets must include at least one item for image content');
+    } else if (hasInvalidMediaAssets) {
+      errors.push('mediaAssets must contain valid asset objects with non-empty keys');
     }
   }
 

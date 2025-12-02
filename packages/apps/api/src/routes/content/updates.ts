@@ -115,14 +115,19 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
       const effectiveImage = content.primaryAssetCdnUrl || '';
       const effectiveVideo = videoUrl !== undefined ? videoUrl : content.videoUrl || undefined;
-      const mediaKeys = [effectiveImage].filter(Boolean);
+      const mediaAssets: { key: string; type: 'image' | 'video' }[] = [];
+      if (effectiveVideo) {
+        mediaAssets.push({ key: effectiveVideo, type: 'video' });
+      } else if (effectiveImage) {
+        mediaAssets.push({ key: effectiveImage, type: 'image' });
+      }
 
       const validation = validateContentPayload({
         platform: 'instagram',
         contentType: effectiveContentType,
         mediaType: effectiveMediaType,
         caption: effectiveCaption,
-        mediaKeys,
+        mediaAssets,
         videoUrl: effectiveVideo || undefined,
       });
 

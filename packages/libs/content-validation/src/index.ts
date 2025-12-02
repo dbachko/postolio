@@ -22,8 +22,15 @@ export interface ValidateContentPayload<
   contentType?: CT;
   mediaType?: MT;
   caption?: string | null;
-  mediaKeys?: string[] | null; // S3 keys or asset identifiers
   videoUrl?: string | null;
+  mediaAssets?: Array<
+    | {
+        key?: string | null;
+        type?: MediaType | null | undefined;
+      }
+    | null
+    | undefined
+  > | null; // Structured media assets (preferred)
 }
 
 export interface ValidationErrorItem {
@@ -43,14 +50,59 @@ const optionalCaption = z
   .optional()
   .nullable();
 
-const optionalMediaKeys = z.array(z.string()).optional().nullable();
+const optionalMediaAssets = z
+  .array(
+    z
+      .object({
+        key: z.string().optional().nullable(),
+        type: z.enum(['image', 'video']).optional().nullable(),
+      })
+      .optional()
+      .nullable()
+  )
+  .optional()
+  .nullable();
+
+type MediaAssetInput =
+  | {
+      key?: string | null;
+      type?: MediaType | null | undefined;
+    }
+  | null
+  | undefined;
+
+function getMediaCounts(
+  mediaAssets: MediaAssetInput[] | null | undefined,
+  mediaTypeHint?: string | null | undefined
+): { total: number; images: number; videos: number } {
+  const assets = Array.isArray(mediaAssets)
+    ? (mediaAssets.filter((a) => a && typeof a === 'object') as { type?: string | null }[])
+    : [];
+
+  if (assets.length > 0) {
+    const typeHint = (mediaTypeHint || '').toLowerCase();
+    const explicitImages = assets.filter((a) => (a.type || '').toLowerCase() === 'image').length;
+    const explicitVideos = assets.filter((a) => (a.type || '').toLowerCase() === 'video').length;
+    const inferredVideos = explicitVideos || (typeHint === 'video' ? assets.length : 0);
+    const inferredImages =
+      explicitImages ||
+      (typeHint === 'image' ? assets.length : Math.max(assets.length - inferredVideos, 0));
+    return {
+      total: assets.length,
+      images: inferredImages,
+      videos: inferredVideos,
+    };
+  }
+
+  return { total: 0, images: 0, videos: 0 };
+}
 
 const instagramBase = z.object({
   platform: z.literal('instagram'),
   contentType: z.enum(['post', 'reel', 'story']).optional().nullable(),
   mediaType: z.enum(['image', 'video']).optional().nullable(),
   caption: optionalCaption,
-  mediaKeys: optionalMediaKeys,
+  mediaAssets: optionalMediaAssets,
   videoUrl: z.string().url().optional().nullable(),
 });
 
@@ -72,27 +124,27 @@ function validateInstagram(payload: ValidateContentPayload): ValidationResult {
   const isReel = contentType === 'reel';
   const isImageLike = mediaType === 'image' && !isReel;
   const isVideoLike = mediaType === 'video' || isReel;
+  const counts = getMediaCounts(data.mediaAssets, mediaType);
 
   // Media requirements
   if (isImageLike) {
-    const count = data.mediaKeys?.length || 0;
-    if (count < 1) {
+    if (counts.images < 1) {
       errors.push({
-        field: 'mediaKeys',
+        field: 'mediaAssets',
         message: 'Media content requires at least one media asset',
         code: 'MEDIA_REQUIRED',
       });
     }
-    if (count > 10) {
+    if (counts.images > 10) {
       errors.push({
-        field: 'mediaKeys',
+        field: 'mediaAssets',
         message: 'Media content allows up to 10 media items',
         code: 'MEDIA_LIMIT',
       });
     }
   }
 
-  if (isVideoLike && !data.videoUrl && !data.mediaKeys?.length) {
+  if (isVideoLike && !data.videoUrl && counts.videos < 1) {
     errors.push({
       field: 'videoUrl',
       message: 'Video/Reel requires a video asset',
@@ -125,7 +177,7 @@ const facebookBase = z.object({
     .max(63206, { message: 'Caption exceeds Facebook limit (~63k characters)' })
     .optional()
     .nullable(),
-  mediaKeys: optionalMediaKeys,
+  mediaAssets: optionalMediaAssets,
   videoUrl: z.string().url().optional().nullable(),
 });
 
@@ -145,25 +197,25 @@ function validateFacebook(payload: ValidateContentPayload): ValidationResult {
   const data = parsed.data;
   const errors: ValidationErrorItem[] = [];
   const mediaType = data.mediaType || 'image';
-  const mediaCount = data.mediaKeys?.length || 0;
+  const counts = getMediaCounts(data.mediaAssets, mediaType);
   const hasText = !!(data.caption && data.caption.trim().length > 0);
 
-  if (mediaType === 'image' && mediaCount < 1) {
+  if (mediaType === 'image' && counts.images < 1) {
     errors.push({
-      field: 'mediaKeys',
+      field: 'mediaAssets',
       message: 'A photo/album post needs at least one image',
       code: 'MEDIA_REQUIRED',
     });
   }
   // For Facebook, treat multiple images as an album/carousel implicitly; require at least 1 image.
-  if (mediaType === 'video' && !data.videoUrl && mediaCount === 0) {
+  if (mediaType === 'video' && !data.videoUrl && counts.videos < 1) {
     errors.push({
       field: 'videoUrl',
       message: 'Video post requires a video asset',
       code: 'MEDIA_REQUIRED',
     });
   }
-  if (!hasText && mediaCount === 0 && !data.videoUrl) {
+  if (!hasText && counts.total === 0 && !data.videoUrl) {
     errors.push({
       field: 'caption',
       message: 'Provide text or media for a Facebook post',
@@ -183,7 +235,7 @@ const twitterBase = z.object({
     .string()
     .min(1, { message: 'Tweet text is required' })
     .max(280, { message: 'Tweet exceeds 280 characters' }),
-  mediaKeys: optionalMediaKeys,
+  mediaAssets: optionalMediaAssets,
   videoUrl: z.string().url().optional().nullable(),
 });
 
@@ -202,7 +254,9 @@ function validateTwitter(payload: ValidateContentPayload): ValidationResult {
   const data = parsed.data;
   const errors: ValidationErrorItem[] = [];
   const mediaType = data.mediaType || 'image';
-  if (mediaType === 'video' && !data.videoUrl && !data.mediaKeys?.length) {
+  const counts = getMediaCounts(data.mediaAssets, mediaType);
+
+  if (mediaType === 'video' && !data.videoUrl && counts.videos < 1) {
     errors.push({
       field: 'videoUrl',
       message: 'Tweet with video must include a video asset',
@@ -223,7 +277,7 @@ const linkedinBase = z.object({
     .max(3000, { message: 'Caption exceeds LinkedIn limit (~3000 characters)' })
     .optional()
     .nullable(),
-  mediaKeys: optionalMediaKeys,
+  mediaAssets: optionalMediaAssets,
   videoUrl: z.string().url().optional().nullable(),
 });
 
@@ -242,16 +296,16 @@ function validateLinkedIn(payload: ValidateContentPayload): ValidationResult {
   const data = parsed.data;
   const errors: ValidationErrorItem[] = [];
   const hasText = !!(data.caption && data.caption.trim().length > 0);
-  const mediaCount = data.mediaKeys?.length || 0;
+  const counts = getMediaCounts(data.mediaAssets, data.mediaType);
 
-  if (!hasText && mediaCount === 0 && !data.videoUrl) {
+  if (!hasText && counts.total === 0 && !data.videoUrl) {
     errors.push({
       field: 'caption',
       message: 'Provide text or media for a LinkedIn post',
       code: 'CONTENT_REQUIRED',
     });
   }
-  if (data.mediaType === 'video' && !data.videoUrl && mediaCount === 0) {
+  if ((data.mediaType || 'image') === 'video' && !data.videoUrl && counts.videos < 1) {
     errors.push({
       field: 'videoUrl',
       message: 'Video post requires a video asset',
@@ -268,7 +322,7 @@ const youtubeBase = z.object({
   contentType: z.enum(['post']).optional().nullable(),
   mediaType: z.enum(['video']).optional().nullable(),
   caption: z.string().optional().nullable(),
-  mediaKeys: optionalMediaKeys,
+  mediaAssets: optionalMediaAssets,
   videoUrl: z.string().url().optional().nullable(),
 });
 
@@ -286,7 +340,8 @@ function validateYouTube(payload: ValidateContentPayload): ValidationResult {
   }
   const data = parsed.data;
   const errors: ValidationErrorItem[] = [];
-  if (!data.videoUrl && !data.mediaKeys?.length) {
+  const counts = getMediaCounts(data.mediaAssets, data.mediaType);
+  if (!data.videoUrl && counts.total === 0) {
     errors.push({
       field: 'videoUrl',
       message: 'YouTube upload requires a video asset',

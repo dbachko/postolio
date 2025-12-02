@@ -116,7 +116,6 @@ describe('Publisher Lambda', () => {
             caption: 'Test post caption',
             contentType: 'post',
             mediaType: 'image',
-            mediaKeys: ['images/test-image.jpg'],
             mediaAssets: [
               {
                 key: 'images/test-image.jpg',
@@ -289,7 +288,7 @@ describe('Publisher Lambda', () => {
             caption: 'Test post',
             contentType: 'post',
             mediaType: 'image',
-            mediaKeys: ['images/test.jpg'],
+            mediaAssets: [{ key: 'images/test.jpg', type: 'image', order: 0 }],
           },
         ],
       });

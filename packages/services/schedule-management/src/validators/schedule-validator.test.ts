@@ -15,7 +15,9 @@ describe('Schedule Validator', () => {
         scheduledAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
         caption: 'Test content',
         hashtags: ['test', 'content'],
-        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
       };
 
       const result = validateScheduleRequest(validRequest);
@@ -32,7 +34,9 @@ describe('Schedule Validator', () => {
         contentType: 'post',
         mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ], // Required for image content
       };
 
       const result = validateScheduleRequest(minimalRequest);
@@ -116,7 +120,9 @@ describe('Schedule Validator', () => {
           contentType: 'post',
           mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-          mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
+          mediaAssets: [
+            { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+          ], // Required for image content
         };
 
         const result = validateScheduleRequest(request);
@@ -135,7 +141,10 @@ describe('Schedule Validator', () => {
         mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         hashtags: ['tag1', 'tag2', 'tag3'],
-        mediaKeys: ['images/2025-01-01/brand/img1.jpg', 'images/2025-01-01/brand/img2.jpg'],
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/img1.jpg', type: 'image', order: 0 },
+          { key: 'images/2025-01-01/brand/img2.jpg', type: 'image', order: 1 },
+        ],
       };
 
       const result = validateScheduleRequest(requestWithArrays);
@@ -152,7 +161,9 @@ describe('Schedule Validator', () => {
         contentType: 'post',
         mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
         firstComment: 'This is a first comment with hashtags #one #two',
       };
 
@@ -171,7 +182,9 @@ describe('Schedule Validator', () => {
         contentType: 'post',
         mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
         // @ts-expect-error intentional invalid type for test
         firstComment: 123,
       };
@@ -219,7 +232,9 @@ describe('Schedule Validator', () => {
           contentType,
           mediaType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-          mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image media
+          mediaAssets: [
+            { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+          ], // Required for image media
         };
 
         const result = validateScheduleRequest(request);
@@ -254,13 +269,13 @@ describe('Schedule Validator', () => {
         mediaType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         hashtags: ['valid', 123, 'another-valid'], // 123 is not a string
-        mediaKeys: ['images/2025-01-01/brand/img.jpg', null], // null is not a string
+        mediaAssets: [{ key: 'images/2025-01-01/brand/img.jpg', type: 'image', order: 0 }, null], // null is not a string
       };
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
       expect(result.errors.some((error) => error.includes('hashtags'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('mediaKeys'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('mediaAssets'))).toBe(true);
     });
   });
 });

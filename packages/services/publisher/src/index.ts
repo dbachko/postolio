@@ -1287,7 +1287,6 @@ export const handler = async (
     // Prepare content with proper media URL
     const publishableSchedule: Schedule = {
       ...schedule,
-      mediaKeys: schedule.mediaKeys,
     };
 
     // Get user and brand IDs for token retrieval - prefer schedule data over event
@@ -1327,15 +1326,21 @@ export const handler = async (
     const isVideoFormat = mediaFormat === 'video' || mediaFormat === 'reel';
 
     let mediaUrl = null;
-    if (isVideoFormat && publishableSchedule.videoUrl) {
+    if (publishableSchedule.mediaAssets && publishableSchedule.mediaAssets.length > 0) {
+      const primary = publishableSchedule.mediaAssets[0];
+      mediaUrl =
+        primary.type === 'video'
+          ? await getSignedVideoUrl(primary.key)
+          : await getSignedImageUrlFromKey(primary.key);
+    }
+
+    if (!mediaUrl && isVideoFormat && publishableSchedule.videoUrl) {
       mediaUrl = await getSignedVideoUrl(publishableSchedule.videoUrl);
-    } else if (publishableSchedule.mediaKeys?.[0]) {
-      mediaUrl = await getSignedImageUrlFromKey(publishableSchedule.mediaKeys[0]);
-    } else if (publishableSchedule.imageUrl) {
+    } else if (!mediaUrl && publishableSchedule.imageUrl) {
       // Backward compatibility: derive key from URL
       const key = extractS3Key(publishableSchedule.imageUrl);
       mediaUrl = key ? await getSignedImageUrlFromKey(key) : publishableSchedule.imageUrl;
-    } else if (publishableSchedule.videoUrl) {
+    } else if (!mediaUrl && publishableSchedule.videoUrl) {
       // Fallback: if we have a video URL but mediaType was missing, still attempt to publish
       mediaUrl = await getSignedVideoUrl(publishableSchedule.videoUrl);
     }
@@ -1347,7 +1352,7 @@ export const handler = async (
         mediaType: publishableSchedule.mediaType,
         contentType: publishableSchedule.contentType,
         hasVideoUrl: !!publishableSchedule.videoUrl,
-        mediaKeysCount: publishableSchedule.mediaKeys?.length || 0,
+        mediaAssetsCount: publishableSchedule.mediaAssets?.length || 0,
         imageUrlPresent: !!publishableSchedule.imageUrl,
       });
       throw new Error('Media URL is required for Instagram publishing');

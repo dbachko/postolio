@@ -9,7 +9,7 @@ import { validateMediaKind } from '@/lib/media-kind-validator';
 
 interface VideoUploaderProps {
   value?: string;
-  onChange: (url: string) => void;
+  onChange: (url: string, meta?: { assetId?: string; key?: string }) => void;
   brandId: string;
   className?: string;
   maxSizeInMB?: number;
@@ -190,12 +190,16 @@ export function VideoUploader({
       // Upload the video using multipart upload
       setIsUploading(true);
       try {
-        const { cdnUrl } = await VideoUploadClient.uploadVideo(file, brandId, (progress) => {
-          setUploadProgress(progress);
-        });
+        const { cdnUrl, key, assetId } = await VideoUploadClient.uploadVideo(
+          file,
+          brandId,
+          (progress) => {
+            setUploadProgress(progress);
+          }
+        );
 
-        // Pass the CDN URL back to parent
-        onChange(cdnUrl);
+        // Pass the CDN URL back to parent (include asset metadata for downstream persistence)
+        onChange(cdnUrl, { assetId, key });
         setPreviewUrl(cdnUrl); // Update preview to use CDN URL
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to upload video');
