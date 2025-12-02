@@ -171,7 +171,11 @@ class InstagramAdapter implements PlatformAdapter {
     creationId: string,
     accessToken: string,
     isVideo: boolean,
-    opts?: { throwOnTimeout?: boolean; maxWaitMs?: number; pollIntervalMs?: number }
+    opts?: {
+      throwOnTimeout?: boolean;
+      maxWaitMs?: number;
+      pollIntervalMs?: number;
+    }
   ): Promise<boolean> {
     // Tests should not wait for real media processing; allow skip via env or NODE_ENV.
     if (process.env.IG_SKIP_MEDIA_WAIT === 'true' || process.env.NODE_ENV === 'test') {
@@ -192,37 +196,41 @@ class InstagramAdapter implements PlatformAdapter {
       try {
         const params = new URLSearchParams({
           // Instagram Graph API container status fields per docs:
-          // https://developers.facebook.com/docs/instagram-api/reference/ig-media#fields
-          fields: 'status,status_code,video_status',
+          // https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-container#fields
+          // Only status and status_code are documented; video_status was removed.
+          fields: 'status,status_code',
           access_token: accessToken,
         });
         const resp = await fetch(`${statusUrl}?${params}`);
+        let rawBody = '';
         let body: unknown;
         try {
-          body = await resp.json();
+          rawBody = await resp.text();
+          body = rawBody ? safeParseJson(rawBody) : null;
         } catch {
-          body = undefined;
+          rawBody = '';
+          body = null;
         }
+        const structuredBody =
+          body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
         const statusValue =
-          body && typeof body === 'object' && 'status' in body
-            ? String((body as { status?: string | number | null | undefined }).status ?? '')
+          structuredBody && 'status' in structuredBody
+            ? String(
+                (structuredBody as { status?: string | number | null | undefined }).status ?? ''
+              )
             : '';
         const statusCodeValue =
-          body && typeof body === 'object' && 'status_code' in body
+          structuredBody && 'status_code' in structuredBody
             ? String(
-                (body as { status_code?: string | number | null | undefined }).status_code ?? ''
+                (structuredBody as { status_code?: string | number | null | undefined })
+                  .status_code ?? ''
               )
             : '';
         const errorMessageValue =
-          body && typeof body === 'object' && 'error_message' in body
+          structuredBody && 'error_message' in structuredBody
             ? String(
-                (body as { error_message?: string | number | null | undefined }).error_message ?? ''
-              )
-            : '';
-        const videoStatusValue =
-          body && typeof body === 'object' && 'video_status' in body
-            ? String(
-                (body as { video_status?: string | number | null | undefined }).video_status ?? ''
+                (structuredBody as { error_message?: string | number | null | undefined })
+                  .error_message ?? ''
               )
             : '';
         const code = statusCodeValue.toUpperCase();
@@ -234,7 +242,6 @@ class InstagramAdapter implements PlatformAdapter {
             attempt,
             status_code: code || 'UNKNOWN',
             status: statusValue || undefined,
-            video_status: videoStatusValue || undefined,
             error_message: errorMessageValue || undefined,
             httpStatus: resp.status,
           });
@@ -242,9 +249,9 @@ class InstagramAdapter implements PlatformAdapter {
 
         if (!resp.ok) {
           const errorPayload =
-            body && typeof body === 'object' && 'error' in body
+            structuredBody && 'error' in structuredBody
               ? (
-                  body as {
+                  structuredBody as {
                     error?: {
                       error_user_msg?: string;
                       error_user_title?: string;
@@ -264,6 +271,7 @@ class InstagramAdapter implements PlatformAdapter {
             attempt,
             httpStatus: resp.status,
             error: message,
+            raw_body: rawBody || undefined,
             error_user_title: errorPayload?.error_user_title,
             error_user_msg: errorPayload?.error_user_msg,
             error_type: errorPayload?.type,
@@ -272,7 +280,19 @@ class InstagramAdapter implements PlatformAdapter {
             fbtrace_id: errorPayload?.fbtrace_id,
           });
           if (resp.status >= 400 && resp.status < 500 && resp.status !== 429) {
-            throw new Error(`Instagram status endpoint returned ${resp.status}`);
+            const err = new Error(`Instagram status endpoint returned ${resp.status}: ${message}`);
+            (err as unknown as { meta?: Record<string, unknown> }).meta = {
+              errorCode: 'IG_MEDIA_STATUS_HTTP_ERROR',
+              httpStatus: resp.status,
+              error_user_msg: errorPayload?.error_user_msg,
+              error_user_title: errorPayload?.error_user_title,
+              error_type: errorPayload?.type,
+              error_code: errorPayload?.code,
+              error_subcode: errorPayload?.error_subcode,
+              fbtrace_id: errorPayload?.fbtrace_id,
+              raw_body: rawBody || undefined,
+            };
+            throw err;
           }
         }
 
@@ -280,10 +300,9 @@ class InstagramAdapter implements PlatformAdapter {
           const logPayload = {
             creationId,
             attempt,
-            raw_body: body,
+            raw_body: rawBody || structuredBody || undefined,
             httpStatus: resp.status,
             status: statusValue || undefined,
-            video_status: videoStatusValue || undefined,
             error_message: errorMessageValue || undefined,
           };
           if (attempt === 0) {
@@ -297,17 +316,16 @@ class InstagramAdapter implements PlatformAdapter {
         if (code === 'ERROR' || code === 'EXPIRED') {
           const reason =
             errorMessageValue ||
-            videoStatusValue ||
             statusValue ||
-            (body && typeof body === 'object' ? JSON.stringify(body) : 'unknown');
+            rawBody ||
+            (structuredBody ? JSON.stringify(structuredBody) : 'unknown');
           logger.error('Instagram media processing error reported by API', {
             creationId,
             attempt,
             status_code: code || 'UNKNOWN',
             status: statusValue || undefined,
-            video_status: videoStatusValue || undefined,
             error_message: errorMessageValue || undefined,
-            raw_body: body,
+            raw_body: rawBody || structuredBody || undefined,
           });
           // Non-retryable: Instagram explicitly reported a processing error
           const err = new Error(`Instagram media processing error: ${reason}`);
@@ -315,9 +333,9 @@ class InstagramAdapter implements PlatformAdapter {
             errorCode: 'IG_MEDIA_PROCESSING_ERROR',
             igStatusCode: code || undefined,
             igStatus: statusValue || undefined,
-            igVideoStatus: videoStatusValue || undefined,
             igErrorMessage: errorMessageValue || undefined,
             httpStatus: resp.status,
+            raw_body: rawBody || undefined,
           };
           throw err;
         }
@@ -338,15 +356,23 @@ class InstagramAdapter implements PlatformAdapter {
       await new Promise((r) => setTimeout(r, pollIntervalMs));
     }
 
+    const waitedMs = Date.now() - started;
     logger.warn('Timed out waiting for Instagram media readiness', {
       creationId,
       isVideo,
-      waitedMs: Date.now() - started,
+      waitedMs,
       lastStatus: lastStatus || 'UNKNOWN',
     });
 
     if (throwOnTimeout) {
-      throw new Error('Media is not ready for publishing after waiting');
+      const err = new Error('Media is not ready for publishing after waiting');
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: 'IG_MEDIA_READY_TIMEOUT',
+        waitedMs,
+        lastStatus: lastStatus || 'UNKNOWN',
+        isVideo,
+      };
+      throw err;
     }
     return false;
   }
@@ -941,6 +967,7 @@ class InstagramAdapter implements PlatformAdapter {
     }
 
     // Video carousel children use the documented resumable upload flow.
+    // Carousel videos still use media_type=VIDEO (reels are not supported in carousels).
     // Step 1: Start a resumable upload session for a VIDEO carousel item.
     const sessionParams = new URLSearchParams({
       media_type: 'VIDEO',
