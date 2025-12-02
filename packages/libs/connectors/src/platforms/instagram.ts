@@ -155,9 +155,12 @@ export class InstagramConnector implements Connector {
       throw mapInstagramError(error);
     }
 
-    const fetchSeries = async (metricList: string) => {
+    const fetchSeries = async (
+      metricList: string,
+      metricType: 'time_series' | 'total_value' = 'time_series'
+    ) => {
       const url = fbGraph(
-        `${account.externalAccountId}/insights?metric=${metricList}&period=day&since=${sinceUnix}&until=${untilUnix}&access_token=${creds.accessToken}`
+        `${account.externalAccountId}/insights?metric=${metricList}&metric_type=${metricType}&period=day&since=${sinceUnix}&until=${untilUnix}&access_token=${creds.accessToken}`
       );
       return axios.get(url);
     };
@@ -178,7 +181,7 @@ export class InstagramConnector implements Connector {
     let impressionsTotal = 0;
     let reachTotal = 0;
     try {
-      const res = await fetchSeries('reach');
+      const res = await fetchSeries('reach', 'time_series');
       const arr = Array.isArray(res.data?.data) ? (res.data.data as any[]) : [];
       const totals = aggregateSeries(arr);
       reachTotal = totals.reach || 0;
@@ -190,7 +193,8 @@ export class InstagramConnector implements Connector {
     // profile_views (total_value)
     let profileViews = 0;
     try {
-      const res = await fetchSeries('profile_views');
+      // Graph API v24 requires profile_views to be requested with metric_type=total_value
+      const res = await fetchSeries('profile_views', 'total_value');
       const arr = Array.isArray(res.data?.data) ? (res.data.data as any[]) : [];
       const totals = aggregateSeries(arr);
       profileViews = totals.profile_views || 0;
