@@ -191,8 +191,9 @@ class InstagramAdapter implements PlatformAdapter {
     while (Date.now() - started < maxWaitMs) {
       try {
         const params = new URLSearchParams({
-          // Request extra fields so we can surface an actionable error reason.
-          fields: 'status,status_code,error_message,video_status',
+          // Instagram Graph API container status fields per docs:
+          // https://developers.facebook.com/docs/instagram-api/reference/ig-media#fields
+          fields: 'status,status_code,video_status',
           access_token: accessToken,
         });
         const resp = await fetch(`${statusUrl}?${params}`);
@@ -244,7 +245,15 @@ class InstagramAdapter implements PlatformAdapter {
             body && typeof body === 'object' && 'error' in body
               ? (
                   body as {
-                    error?: { error_user_msg?: string; message?: string };
+                    error?: {
+                      error_user_msg?: string;
+                      error_user_title?: string;
+                      message?: string;
+                      type?: string;
+                      code?: number;
+                      error_subcode?: number;
+                      fbtrace_id?: string;
+                    };
                   }
                 ).error
               : undefined;
@@ -255,6 +264,12 @@ class InstagramAdapter implements PlatformAdapter {
             attempt,
             httpStatus: resp.status,
             error: message,
+            error_user_title: errorPayload?.error_user_title,
+            error_user_msg: errorPayload?.error_user_msg,
+            error_type: errorPayload?.type,
+            error_code: errorPayload?.code,
+            error_subcode: errorPayload?.error_subcode,
+            fbtrace_id: errorPayload?.fbtrace_id,
           });
           if (resp.status >= 400 && resp.status < 500 && resp.status !== 429) {
             throw new Error(`Instagram status endpoint returned ${resp.status}`);
