@@ -246,13 +246,17 @@ function getBackoffCountKey(platform: string, socialAccountId: string): string {
   return `ingest:backoff:count:${platform}:${socialAccountId}`;
 }
 
-async function isBackoffActive(platform: string, socialAccountId: string): Promise<boolean> {
-  if (!redis) return false;
+async function getBackoffRemainingMs(
+  platform: string,
+  socialAccountId: string
+): Promise<number | null> {
+  if (!redis) return null;
   const raw = await redis.get(getBackoffKey(platform, socialAccountId));
-  if (!raw) return false;
+  if (!raw) return null;
   const until = Number(raw);
-  if (Number.isNaN(until)) return false;
-  return until > Date.now();
+  if (Number.isNaN(until)) return null;
+  const remaining = until - Date.now();
+  return remaining > 0 ? remaining : null;
 }
 
 async function clearBackoff(platform: string, socialAccountId: string): Promise<void> {
@@ -469,8 +473,14 @@ async function ingestPublication(publicationId: string) {
     if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
     return;
   }
-  if (await isBackoffActive(pub.platform, pub.socialAccountId)) {
-    if (wantDebug) console.debug('Backoff active; skipping publication', pub.id);
+  const backoffRemaining = await getBackoffRemainingMs(pub.platform, pub.socialAccountId);
+  if (backoffRemaining && backoffRemaining > 0) {
+    if (wantInfo)
+      console.log('[Ingestor] Backoff active; skipping publication', {
+        publicationId: pub.id,
+        backoffMsRemaining: backoffRemaining,
+        nextAttemptAt: new Date(Date.now() + backoffRemaining).toISOString(),
+      });
     return;
   }
   const connector = getConnector(pub.platform);
@@ -499,6 +509,7 @@ async function ingestPublication(publicationId: string) {
         publicationId,
         socialAccountId: pub.socialAccountId,
         backoffMs: delay,
+        nextAttemptAt: new Date(Date.now() + delay).toISOString(),
       });
     }
     throw e;
@@ -597,8 +608,14 @@ async function ingestAccountMetrics(socialAccountId: string) {
     if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
     return;
   }
-  if (await isBackoffActive(sa.platform, sa.id)) {
-    if (wantDebug) console.debug('Backoff active; skipping account metrics', sa.id);
+  const acctBackoffRemaining = await getBackoffRemainingMs(sa.platform, sa.id);
+  if (acctBackoffRemaining && acctBackoffRemaining > 0) {
+    if (wantInfo)
+      console.log('[Ingestor] Backoff active; skipping account metrics', {
+        socialAccountId: sa.id,
+        backoffMsRemaining: acctBackoffRemaining,
+        nextAttemptAt: new Date(Date.now() + acctBackoffRemaining).toISOString(),
+      });
     return;
   }
   const connector = getConnector(sa.platform);
@@ -660,6 +677,7 @@ async function ingestAccountMetrics(socialAccountId: string) {
       console.warn('[Ingestor] Rate limited on account metrics; applying backoff', {
         socialAccountId: sa.id,
         backoffMs: delay,
+        nextAttemptAt: new Date(Date.now() + delay).toISOString(),
       });
     }
     throw e;
@@ -741,11 +759,14 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
         if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
         continue;
       }
-      if (await isBackoffActive(pub.platform, pub.socialAccountId)) {
+      const loopBackoffRemaining = await getBackoffRemainingMs(pub.platform, pub.socialAccountId);
+      if (loopBackoffRemaining && loopBackoffRemaining > 0) {
         skippedByBackoff += 1;
-        if (wantDebug)
-          console.debug('Backoff active; skipping publication ingestion', {
+        if (wantInfo)
+          console.log('Backoff active; skipping publication ingestion', {
             publicationId: pub.id,
+            backoffMsRemaining: loopBackoffRemaining,
+            nextAttemptAt: new Date(Date.now() + loopBackoffRemaining).toISOString(),
           });
         continue;
       }
@@ -814,11 +835,14 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
           continue;
         }
 
-        if (await isBackoffActive(sa.platform, sa.id)) {
+        const batchBackoffRemaining = await getBackoffRemainingMs(sa.platform, sa.id);
+        if (batchBackoffRemaining && batchBackoffRemaining > 0) {
           accountsSkippedByBackoff += 1;
-          if (wantDebug)
-            console.debug('Backoff active; skipping account metrics batch', {
+          if (wantInfo)
+            console.log('Backoff active; skipping account metrics batch', {
               socialAccountId: sa.id,
+              backoffMsRemaining: batchBackoffRemaining,
+              nextAttemptAt: new Date(Date.now() + batchBackoffRemaining).toISOString(),
             });
           continue;
         }
