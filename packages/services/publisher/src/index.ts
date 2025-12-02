@@ -191,7 +191,8 @@ class InstagramAdapter implements PlatformAdapter {
     while (Date.now() - started < maxWaitMs) {
       try {
         const params = new URLSearchParams({
-          fields: 'status_code',
+          // Request extra fields so we can surface an actionable error reason.
+          fields: 'status,status_code,error_message,video_status',
           access_token: accessToken,
         });
         const resp = await fetch(`${statusUrl}?${params}`);
@@ -201,10 +202,26 @@ class InstagramAdapter implements PlatformAdapter {
         } catch {
           body = undefined;
         }
+        const statusValue =
+          body && typeof body === 'object' && 'status' in body
+            ? String((body as { status?: string | number | null | undefined }).status ?? '')
+            : '';
         const statusCodeValue =
           body && typeof body === 'object' && 'status_code' in body
             ? String(
                 (body as { status_code?: string | number | null | undefined }).status_code ?? ''
+              )
+            : '';
+        const errorMessageValue =
+          body && typeof body === 'object' && 'error_message' in body
+            ? String(
+                (body as { error_message?: string | number | null | undefined }).error_message ?? ''
+              )
+            : '';
+        const videoStatusValue =
+          body && typeof body === 'object' && 'video_status' in body
+            ? String(
+                (body as { video_status?: string | number | null | undefined }).video_status ?? ''
               )
             : '';
         const code = statusCodeValue.toUpperCase();
@@ -215,6 +232,9 @@ class InstagramAdapter implements PlatformAdapter {
             creationId,
             attempt,
             status_code: code || 'UNKNOWN',
+            status: statusValue || undefined,
+            video_status: videoStatusValue || undefined,
+            error_message: errorMessageValue || undefined,
             httpStatus: resp.status,
           });
         }
@@ -247,6 +267,9 @@ class InstagramAdapter implements PlatformAdapter {
             attempt,
             raw_body: body,
             httpStatus: resp.status,
+            status: statusValue || undefined,
+            video_status: videoStatusValue || undefined,
+            error_message: errorMessageValue || undefined,
           };
           if (attempt === 0) {
             logger.warn('Instagram media status response had no status code', logPayload);
@@ -257,18 +280,35 @@ class InstagramAdapter implements PlatformAdapter {
 
         if (code === 'FINISHED' || code === 'PUBLISHED' || code === 'READY') return true; // Ready
         if (code === 'ERROR' || code === 'EXPIRED') {
+          const reason =
+            errorMessageValue ||
+            videoStatusValue ||
+            statusValue ||
+            (body && typeof body === 'object' ? JSON.stringify(body) : 'unknown');
           logger.error('Instagram media processing error reported by API', {
             creationId,
             attempt,
             status_code: code || 'UNKNOWN',
+            status: statusValue || undefined,
+            video_status: videoStatusValue || undefined,
+            error_message: errorMessageValue || undefined,
             raw_body: body,
           });
           // Non-retryable: Instagram explicitly reported a processing error
-          throw new Error('Instagram media processing error');
+          const err = new Error(`Instagram media processing error: ${reason}`);
+          (err as unknown as { meta?: Record<string, unknown> }).meta = {
+            errorCode: 'IG_MEDIA_PROCESSING_ERROR',
+            igStatusCode: code || undefined,
+            igStatus: statusValue || undefined,
+            igVideoStatus: videoStatusValue || undefined,
+            igErrorMessage: errorMessageValue || undefined,
+            httpStatus: resp.status,
+          };
+          throw err;
         }
       } catch (e) {
         // Treat explicit processing errors as terminal and bubble them up
-        if ((e as Error)?.message === 'Instagram media processing error') {
+        if ((e as Error)?.message?.startsWith('Instagram media processing error')) {
           throw e;
         }
         // Log and continue until timeout; transient errors are common
