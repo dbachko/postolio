@@ -829,11 +829,12 @@ export class InstagramAdapter implements PlatformAdapter {
       return creationId;
     }
 
-    // Instagram infers video type from video_url. Don't set media_type='VIDEO' (deprecated, causes error 2207082).
+    // Instagram requires explicit media_type for carousel video children per API docs.
     const createMediaUrl = `${graphBase}/${credentials.accountId}/media`;
     const createMediaParams = new URLSearchParams({
       access_token: credentials.accessToken,
       is_carousel_item: 'true',
+      media_type: 'VIDEO',
       video_url: mediaUrl,
     });
 
