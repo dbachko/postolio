@@ -48,31 +48,30 @@ function normalizeMediaKey(reference?: string | null): string | null {
  * Determine media type from content and file information
  * Priority: content.mediaType > content.contentType > file extension
  */
-function determineMediaType(
+export function determineMediaType(
   cdnUrl: string,
   contentType: string,
   contentMediaType?: string | null
 ): 'image' | 'video' {
-  // Explicit mediaType from content
-  if (contentMediaType === 'video') return 'video';
-  if (contentMediaType === 'image') return 'image';
+  const normalizedMediaType = (contentMediaType || '').toLowerCase();
 
-  // Infer from contentType
-  if (contentType === 'reel') return 'video';
+  // Explicit mediaType from content overrides everything else when marked as video
+  if (normalizedMediaType === 'video') return 'video';
 
-  // Check file extension
+  // Detect by file extension/path so mixed carousels (images + videos) keep per-asset types
   const lower = cdnUrl.toLowerCase();
   const withoutQuery = lower.split('?')[0];
-  if (
+  const isVideoByPath =
     withoutQuery.endsWith('.mp4') ||
     withoutQuery.endsWith('.mov') ||
     withoutQuery.endsWith('.m4v') ||
     withoutQuery.endsWith('.webm') ||
     withoutQuery.includes('/uploads/videos/') ||
-    withoutQuery.includes('/videos/')
-  ) {
-    return 'video';
-  }
+    withoutQuery.includes('/videos/');
+  if (isVideoByPath) return 'video';
+
+  // Explicit image type from content (e.g., single image posts)
+  if (normalizedMediaType === 'image') return 'image';
 
   // Default to image
   return 'image';
