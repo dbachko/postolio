@@ -54,7 +54,6 @@ After deployment, a `.env.scheduler` file is created with:
 ```env
 SCHEDULER_API_ENDPOINT=https://xxx.execute-api.region.amazonaws.com/dev
 SCHEDULER_SCHEDULES_TABLE=postolio-scheduler-dev-schedules
-SCHEDULER_VIDEO_BUCKET=postolio-scheduler-dev-videos
 SCHEDULER_ENVIRONMENT=dev
 ```
 

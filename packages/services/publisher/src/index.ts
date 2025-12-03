@@ -9,8 +9,6 @@ import {
   QueryCommand,
   GetCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { signRequest } from '@postolio/aws';
 import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
 import {
@@ -50,7 +48,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
     removeUndefinedValues: true,
   },
 });
-const s3Client = tracer.captureAWSv3Client(new S3Client({}));
+// No direct S3 access needed for images/videos; assets are served via CDN
 const eventBridge = new EventBridge({});
 const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
@@ -198,6 +196,8 @@ class InstagramAdapter implements PlatformAdapter {
           // Instagram Graph API container status fields per docs:
           // https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-container#fields
           // Only status and status_code are documented; video_status was removed.
+          // Docs only allow status and status_code; error_message is not a valid field
+          // (v24.0: https://developers.facebook.com/docs/instagram-api/reference/ig-container/#fields)
           fields: 'status,status_code',
           access_token: accessToken,
         });
@@ -319,24 +319,44 @@ class InstagramAdapter implements PlatformAdapter {
             statusValue ||
             rawBody ||
             (structuredBody ? JSON.stringify(structuredBody) : 'unknown');
+          const processingErrorCodeMatch =
+            typeof reason === 'string'
+              ? reason.match(/(?:code|error\s+code)\s+(\d{7})/i)
+              : undefined;
+          const processingErrorCode = processingErrorCodeMatch?.[1];
+          const isUnsupportedVideoSpec =
+            processingErrorCode && ['2207026', '2207076'].includes(processingErrorCode);
           logger.error('Instagram media processing error reported by API', {
             creationId,
             attempt,
             status_code: code || 'UNKNOWN',
             status: statusValue || undefined,
             error_message: errorMessageValue || undefined,
+            processing_error_code: processingErrorCode || undefined,
             raw_body: rawBody || structuredBody || undefined,
           });
           // Non-retryable: Instagram explicitly reported a processing error
-          const err = new Error(`Instagram media processing error: ${reason}`);
-          (err as unknown as { meta?: Record<string, unknown> }).meta = {
-            errorCode: 'IG_MEDIA_PROCESSING_ERROR',
+          const err = new Error(
+            isUnsupportedVideoSpec
+              ? `Instagram rejected the video format/spec (code ${processingErrorCode}). Re-encode to MP4 (H.264/AAC) with supported aspect ratio and duration.`
+              : `Instagram media processing error: ${reason}`
+          );
+          const meta: Record<string, unknown> = {
+            errorCode: isUnsupportedVideoSpec
+              ? 'IG_VIDEO_UNSUPPORTED_SPEC'
+              : 'IG_MEDIA_PROCESSING_ERROR',
             igStatusCode: code || undefined,
             igStatus: statusValue || undefined,
             igErrorMessage: errorMessageValue || undefined,
+            igProcessingCode: processingErrorCode || undefined,
             httpStatus: resp.status,
             raw_body: rawBody || undefined,
           };
+          if (isUnsupportedVideoSpec) {
+            meta.action =
+              'Re-encode video to MP4 (H.264/AAC), keep duration within Instagram limits (3-90s for Reels) and use supported aspect ratios (9:16 for Reels, 1.91:1 to 4:5 for feed).';
+          }
+          (err as unknown as { meta?: Record<string, unknown> }).meta = meta;
           throw err;
         }
       } catch (e) {
@@ -1922,17 +1942,19 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
   // In the current architecture, content.videoUrl is a public CDN URL,
   // not a raw S3 key. For backward compatibility:
   // - If given an absolute URL, return it as-is for Instagram's video_url.
-  // - If given a key, sign it against VIDEO_BUCKET.
+  // - If given a key, prefer building a CDN URL (same flow as images).
   if (/^https?:\/\//i.test(candidate)) {
     return candidate;
   }
 
-  const command = new GetObjectCommand({
-    Bucket: process.env.VIDEO_BUCKET!,
-    Key: candidate,
-  });
+  const cdnDomain = process.env.ASSETS_CDN_DOMAIN;
+  if (cdnDomain) {
+    const normalized = candidate.replace(/^\/+/, '');
+    const cdn = cdnDomain.startsWith('http') ? cdnDomain : `https://${cdnDomain}`;
+    return `${cdn.replace(/\/+$/, '')}/${normalized}`;
+  }
 
-  return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+  throw new Error('ASSETS_CDN_DOMAIN not configured for publisher video URLs');
 }
 
 // Build a CDN URL for an image by key (no auth)

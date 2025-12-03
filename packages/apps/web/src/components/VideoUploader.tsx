@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
 import { MediaCard } from '@/components/MediaCard';
 import { validateMediaKind } from '@/lib/media-kind-validator';
+import { validateInstagramVideo } from '@/lib/instagram-video-validator';
+import { toast } from 'sonner';
 
 interface VideoUploaderProps {
   value?: string;
@@ -182,6 +184,35 @@ export function VideoUploader({
         return;
       }
 
+      const aspectSpecs = allowedAspectRatios?.map((r) => ({
+        label: r.label,
+        ratio: r.width / r.height,
+      }));
+      const validation = await validateInstagramVideo(file, {
+        allowedMimeTypes: acceptedFormats,
+        minDurationSeconds,
+        maxDurationSeconds,
+        minWidth,
+        minHeight,
+        maxWidth,
+        maxHeight,
+        recommendedAspectRatios: aspectSpecs,
+      });
+
+      if (validation.errors.length > 0) {
+        setError(validation.errors.join(' '));
+        return;
+      }
+
+      if (validation.warnings.length > 0) {
+        toast.warning(validation.warnings.join(' '));
+      }
+
+      const roundedDuration =
+        typeof validation.durationSeconds === 'number'
+          ? Math.round(validation.durationSeconds)
+          : undefined;
+
       // Create preview URL
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
@@ -195,7 +226,8 @@ export function VideoUploader({
           brandId,
           (progress) => {
             setUploadProgress(progress);
-          }
+          },
+          { durationSeconds: roundedDuration }
         );
 
         // Pass the CDN URL back to parent (include asset metadata for downstream persistence)

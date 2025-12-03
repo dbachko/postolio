@@ -7,6 +7,8 @@ import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MediaCard } from '@/components/MediaCard';
 import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
+import { toast } from 'sonner';
+import { validateInstagramVideo } from '@/lib/instagram-video-validator';
 
 export interface AssetReference {
   id: string; // Asset ID from Assets database
@@ -223,6 +225,32 @@ export function MultiImageUploader({
         return;
       }
 
+      const validation = await validateInstagramVideo(file, {
+        minDurationSeconds: 3,
+        maxDurationSeconds: 90,
+        minWidth: 540,
+        minHeight: 960,
+        recommendedAspectRatios: [
+          { label: '9:16', ratio: 9 / 16 },
+          { label: '4:5', ratio: 4 / 5 },
+        ],
+        allowedMimeTypes: acceptedVideoFormats,
+      });
+
+      if (validation.errors.length > 0) {
+        setError(validation.errors.join(' '));
+        return;
+      }
+
+      if (validation.warnings.length > 0) {
+        toast.warning(validation.warnings.join(' '));
+      }
+
+      const roundedDuration =
+        typeof validation.durationSeconds === 'number'
+          ? Math.round(validation.durationSeconds)
+          : undefined;
+
       if (allowMixedMedia) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const previewUrl = URL.createObjectURL(file);
@@ -245,7 +273,8 @@ export function MultiImageUploader({
                   item.id === tempId ? { ...item, progressPercent: progress.percentage } : item
                 )
               );
-            }
+            },
+            { durationSeconds: roundedDuration }
           );
 
           setMediaItems((prev) => {
@@ -287,9 +316,14 @@ export function MultiImageUploader({
       setVideoUploadProgress(null);
 
       try {
-        const { cdnUrl } = await VideoUploadClient.uploadVideo(file, brandId, (progress) => {
-          setVideoUploadProgress(progress);
-        });
+        const { cdnUrl } = await VideoUploadClient.uploadVideo(
+          file,
+          brandId,
+          (progress) => {
+            setVideoUploadProgress(progress);
+          },
+          { durationSeconds: roundedDuration }
+        );
 
         onVideoChange(cdnUrl);
         // Clear images when switching to video

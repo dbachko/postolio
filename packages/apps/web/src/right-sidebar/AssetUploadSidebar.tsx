@@ -5,6 +5,7 @@ import AwsS3 from '@uppy/aws-s3';
 import '@uppy/core/css/style.css';
 import '@uppy/dashboard/css/style.css';
 import { assetsApi } from '@/features/assets/api/client';
+import { validateInstagramVideo } from '@/lib/instagram-video-validator';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
@@ -13,6 +14,10 @@ import { toast } from 'sonner';
 
 const IMAGE_UPLOAD_LIMIT = 10 * 1024 * 1024; // 10MB
 const VIDEO_UPLOAD_LIMIT = 500 * 1024 * 1024; // 500MB
+const VIDEO_MIN_DURATION = 3; // seconds
+const VIDEO_MAX_DURATION = 90; // seconds
+const VIDEO_MIN_WIDTH = 540;
+const VIDEO_MIN_HEIGHT = 960;
 
 interface AssetUploadSidebarProps {
   id?: string; // brandId passed via sidebar router
@@ -24,12 +29,29 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const s3KeyById = useRef<Map<string, string>>(new Map());
+  const videoMetaById = useRef<
+    Map<
+      string,
+      {
+        durationSeconds?: number;
+        width?: number;
+        height?: number;
+        aspectRatio?: number;
+        warnings?: string[];
+      }
+    >
+  >(new Map());
   const dashboardContainerRef = useRef<HTMLDivElement | null>(null);
   const dashboardPluginRef = useRef<any>(null);
+  const closeRef = useRef(close);
+  useEffect(() => {
+    closeRef.current = close;
+  }, [close]);
 
   const dropCopy = 'Drop files here or %{browseFiles}';
   const browseCopy = 'click to browse';
-  const restrictionCopy = 'Supports: JPEG, PNG, WebP, GIF (max 10MB) • Video up to 500MB';
+  const restrictionCopy =
+    'Supports: JPEG, PNG, WebP, GIF (max 10MB) • Video MP4/MOV up to 500MB (3–90s recommended)';
   const pluralize = (count: number) => (count === 1 ? 0 : 1);
 
   const uppy = useMemo(() => {
@@ -60,6 +82,31 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
           const message = `Please upload ${friendlyType} smaller than ${limitMb}MB.`;
           setError(message);
           throw new Error(message);
+        }
+
+        if (fileType === 'video') {
+          const validation = await validateInstagramVideo(file.data as File, {
+            minDurationSeconds: VIDEO_MIN_DURATION,
+            maxDurationSeconds: VIDEO_MAX_DURATION,
+            minWidth: VIDEO_MIN_WIDTH,
+            minHeight: VIDEO_MIN_HEIGHT,
+            recommendedAspectRatios: [
+              { label: '9:16', ratio: 9 / 16 },
+              { label: '4:5', ratio: 4 / 5 },
+            ],
+          });
+
+          videoMetaById.current.set(file.id, validation);
+
+          if (validation.errors.length > 0) {
+            const message = validation.errors.join(' ');
+            setError(message);
+            throw new Error(message);
+          }
+
+          if (validation.warnings.length > 0) {
+            toast.warning(validation.warnings.join(' '));
+          }
         }
         const res = await assetsApi.getUploadUrl({
           brandId,
@@ -150,6 +197,7 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
         (file?.uploadURL ? inferS3KeyFromUploadURL(file.uploadURL) : undefined);
       if (!s3Key) return;
       const dims = await probeDimensions(file);
+      const videoMeta = videoMetaById.current.get(file.id);
       try {
         await assetsApi.createAsset({
           brandId,
@@ -158,9 +206,11 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
           fileSize: file.size,
           mimeType: file.type,
           fileType: file.type?.startsWith('image/') ? 'image' : 'video',
-          width: dims.width,
-          height: dims.height,
+          width: videoMeta?.width ?? dims.width,
+          height: videoMeta?.height ?? dims.height,
+          duration: videoMeta?.durationSeconds,
         });
+        videoMetaById.current.delete(file.id);
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Failed to finalize asset';
         setError(message);
@@ -172,7 +222,7 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
       if (result?.successful?.length > 0) {
         toast.success('Assets uploaded');
         await queryClient.invalidateQueries({ queryKey: ['assets'] });
-        close();
+        closeRef.current();
       }
     };
 
@@ -195,7 +245,7 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
         uppy.destroy();
       } catch {}
     };
-  }, [uppy, brandId, close, queryClient]);
+  }, [uppy, brandId, queryClient]);
 
   if (!brandId) {
     return (

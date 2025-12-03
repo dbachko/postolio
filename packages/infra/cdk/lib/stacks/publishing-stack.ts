@@ -248,11 +248,6 @@ export class PublishingStack extends cdk.Stack {
       this,
       `/postolio/${environment}/assets/cdn-domain`
     );
-    // Import video bucket name for presigning video URLs
-    const videoBucketName = ssm.StringParameter.valueForStringParameter(
-      this,
-      `/postolio/${environment}/scheduling/video-bucket-name`
-    );
     // Import Auth stack Audit Logs table name for audit logging
     const auditTableName = ssm.StringParameter.valueForStringParameter(
       this,
@@ -494,8 +489,6 @@ export class PublishingStack extends cdk.Stack {
         EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
-        // Buckets for generating pre-signed URLs
-        VIDEO_BUCKET: videoBucketName,
         // Public CDN domain used for image URLs (no auth)
         ASSETS_CDN_DOMAIN: assetsCdnDomain,
         ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),

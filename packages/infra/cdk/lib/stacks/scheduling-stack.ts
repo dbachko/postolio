@@ -516,7 +516,6 @@ export class SchedulingStack extends cdk.Stack {
           SCHEDULES_TABLE_STATUS_INDEX: 'StatusIndex',
           SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
           SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
-          VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           EVENT_BUS_NAME: this.eventBus.eventBusName,
           SCHEDULING_EVENT_BUS_ARN: this.eventBus.eventBusArn,
           PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
@@ -560,7 +559,6 @@ export class SchedulingStack extends cdk.Stack {
           // AWS_REGION is automatically provided by Lambda runtime
           SCHEDULES_TABLE: this.schedulesTable.tableName,
           SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
-          VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           KMS_KEY_ID: encryptionKey.keyId,
           SCHEDULER_GROUP_NAME: 'default',
         },
