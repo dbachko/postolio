@@ -17,6 +17,17 @@ export class AuthInterceptor {
   private static readonly REFRESH_INTERVAL = 12 * 60 * 1000; // 12 minutes
   private static refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+  private static isNetworkError(error: unknown): boolean {
+    if (!error) return false;
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      error instanceof TypeError ||
+      message.includes('Failed to fetch') ||
+      message.includes('NetworkError') ||
+      message.includes('ERR_NETWORK_CHANGED')
+    );
+  }
+
   /**
    * Start automatic token refresh
    * Call this once when the app initializes
@@ -179,7 +190,7 @@ export class AuthInterceptor {
    */
   static async handleUnauthorized<T>(
     retryRequest: () => Promise<T>
-  ): Promise<{ shouldRetry: boolean; result?: T }> {
+  ): Promise<{ shouldRetry: boolean; result?: T; isOffline?: boolean }> {
     try {
       // Attempt to refresh the token (shared promise prevents concurrent refreshes)
       await this.startRefresh('401');
@@ -191,7 +202,12 @@ export class AuthInterceptor {
         // Request still failing after successful refresh
         return { shouldRetry: false };
       }
-    } catch (_error) {
+    } catch (error) {
+      if (this.isNetworkError(error)) {
+        console.warn('[Auth] Refresh failed due to network issues, treating as offline');
+        return { shouldRetry: false, isOffline: true };
+      }
+
       console.error('[Auth] Could not refresh token, logging out');
       return { shouldRetry: false };
     }

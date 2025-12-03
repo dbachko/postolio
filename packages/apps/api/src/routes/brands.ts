@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { importImageFromExternalUrl } from '../services/assets-media.js';
+import { getAssetsClient, importImageFromExternalUrl } from '../services/assets-media.js';
 import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
@@ -475,6 +475,45 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           placeholders = [];
         }
 
+        const assetIds = Array.from(
+          new Set(
+            content
+              .map((item) => item.primaryAssetId)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0)
+          )
+        );
+
+        const assetPreviewMap = new Map<
+          string,
+          { thumbnailUrl: string | null; url: string | null; fileType: string | null }
+        >();
+
+        if (assetIds.length > 0) {
+          try {
+            const assetsClient = getAssetsClient();
+            const chunkSize = 50;
+            for (let i = 0; i < assetIds.length; i += chunkSize) {
+              const chunk = assetIds.slice(i, i + chunkSize);
+              const assets = await assetsClient.getBatchAssets(chunk);
+              assets.forEach((asset) => {
+                if (!asset) return;
+                const fileType = (asset as any)?.fileType || (asset as any)?.file_type || null;
+                const thumb = (asset as any)?.thumbnailUrl || null;
+                assetPreviewMap.set(asset.id, {
+                  thumbnailUrl: thumb,
+                  url: (asset as any)?.url || null,
+                  fileType,
+                });
+              });
+            }
+          } catch (e) {
+            request.log.warn(
+              { err: e, assetCount: assetIds.length },
+              'Failed to load asset previews for calendar'
+            );
+          }
+        }
+
         // Map to response format with CDN URLs and campaign colors
         const contentWithUrls = content.map((item) => {
           const pubs = hasPublications ? item.publications || [] : [];
@@ -482,17 +521,31 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           const primaryPermalink = hasPublications
             ? ig?.permalink || pubs[0]?.permalink || null
             : null;
+          const assetPreview = item.primaryAssetId
+            ? assetPreviewMap.get(item.primaryAssetId) || null
+            : null;
+          const mediaType = (item.mediaType || '').toLowerCase();
+          const assetType = (assetPreview?.fileType || '').toLowerCase();
+          const isVideo = mediaType === 'video' || assetType === 'video';
+          const previewImage =
+            assetPreview?.thumbnailUrl ||
+            (!isVideo ? assetPreview?.url : null) ||
+            (isVideo ? null : item.primaryAssetCdnUrl) ||
+            null;
+
           return {
             id: item.id,
             caption: item.caption,
             hashtags: item.hashtags,
-            imageUrl: item.primaryAssetCdnUrl,
+            imageUrl: previewImage,
             status: item.status,
             scheduledAt: item.scheduledAt,
             postedAt: item.postedAt,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
             brandId: item.brandId,
+            primaryAssetId: item.primaryAssetId,
+            mediaType: item.mediaType,
             campaignId: item.campaignId,
             campaignName: item.campaign?.name,
             campaignColor: item.campaign?.color,

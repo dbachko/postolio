@@ -14,6 +14,7 @@ interface PostSchedulerProps {
   showClearButton?: boolean;
   showFormattedDate?: boolean;
   showIcon?: boolean;
+  min?: string;
 }
 
 export function PostScheduler({
@@ -24,6 +25,7 @@ export function PostScheduler({
   showClearButton = true,
   showFormattedDate = true,
   showIcon = false,
+  min,
 }: PostSchedulerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -130,6 +132,7 @@ export function PostScheduler({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         disabled={disabled}
+        min={min}
       />
       {showFormattedDate && displayValue && (
         <div className="text-muted-foreground text-xs">

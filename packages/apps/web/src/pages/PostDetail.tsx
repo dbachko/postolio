@@ -590,16 +590,30 @@ export default function PostDetail() {
   // Quick action mutations
   const schedulePostMutation = useMutation({
     mutationFn: async (scheduledAt: string) => {
-      let payload = scheduledAt;
-      if (scheduledAt && !scheduledAt.endsWith('Z')) {
-        // Normalize space-separated input to ISO-like then convert from brand timezone to UTC
-        const normalized = scheduledAt.includes('T') ? scheduledAt : scheduledAt.replace(' ', 'T');
-        payload = toUTCFromInput(normalized, brandTimezone).toISOString();
+      let utcDate: Date | null = null;
+      if (scheduledAt) {
+        if (scheduledAt.endsWith('Z')) {
+          utcDate = new Date(scheduledAt);
+        } else {
+          // Normalize space-separated input to ISO-like then convert from brand timezone to UTC
+          const normalized = scheduledAt.includes('T')
+            ? scheduledAt
+            : scheduledAt.replace(' ', 'T');
+          utcDate = toUTCFromInput(normalized, brandTimezone);
+        }
       }
-      return contentApi.schedulePost(postId!, payload);
+
+      if (!utcDate) throw new Error('Scheduled time required');
+      if (utcDate.getTime() <= Date.now()) {
+        throw new Error('Scheduled time must be in the future');
+      }
+
+      return contentApi.schedulePost(postId!, utcDate.toISOString());
     },
     onSuccess: (resp) => {
-      toast.success('Post scheduling started');
+      toast.success('Scheduling started', {
+        description: 'We will update the status once the scheduler confirms it.',
+      });
       // Optimistically mark as processing until scheduler confirms status
       queryClient.setQueryData(['post', postId], (oldData: PostDetailData | undefined) => {
         if (!oldData) return oldData;
@@ -617,8 +631,13 @@ export default function PostDetail() {
         };
       });
     },
-    onError: () => {
-      toast.error('Failed to schedule post');
+    onError: (error: any) => {
+      const message =
+        (error?.data?.errors && Array.isArray(error.data.errors) && error.data.errors[0]) ||
+        error?.data?.error ||
+        error?.message ||
+        'Failed to schedule post';
+      toast.error(message);
     },
   });
 

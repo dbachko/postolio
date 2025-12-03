@@ -96,6 +96,14 @@ export function createHttp(): HttpRequest {
           });
         }
         if (retryResult.shouldRetry && retryResult.result) return retryResult.result;
+
+        // If refresh failed due to network issues, surface an offline error instead of forcing logout
+        if (retryResult.isOffline) {
+          const offlineError = new Error('Network unavailable during auth refresh');
+          (offlineError as any).code = 'NETWORK_OFFLINE';
+          (offlineError as any).status = 0;
+          throw offlineError;
+        }
         if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
           console.debug('[AuthDebug] /api/auth/me refresh failed, redirecting to /login');
         }
@@ -105,7 +113,12 @@ export function createHttp(): HttpRequest {
       if (response.status === 413)
         throw new Error('Image too large. Please optimize your image to be under 10MB.');
       if (errorData) {
-        const err = new Error(errorData.error || errorData.message || 'Request failed');
+        const primaryMessage =
+          errorData.error ||
+          errorData.message ||
+          (Array.isArray(errorData.errors) ? errorData.errors[0] : undefined) ||
+          'Request failed';
+        const err = new Error(primaryMessage);
         // Attach status and data for richer client error handling (e.g., 429 throttling)
         (err as any).status = response.status;
         (err as any).data = errorData;

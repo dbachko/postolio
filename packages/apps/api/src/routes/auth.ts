@@ -368,6 +368,17 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const refreshToken = request.cookies?.refresh_token;
 
     if (!refreshToken) {
+      request.log.warn(
+        {
+          type: 'refresh_missing_cookie',
+          ip: getClientIp(request),
+          userAgent: getUserAgent(request),
+          cookiesPresent: Object.keys(request.cookies || {}),
+          referer: request.headers.referer,
+          origin: request.headers.origin,
+        },
+        'Refresh attempt without refresh_token cookie'
+      );
       return reply.code(401).send({ error: 'Refresh token required' });
     }
 

@@ -362,6 +362,23 @@ export function PostSidebar({
   const isScheduled = post?.status === 'scheduled';
   const canScheduleExisting = Boolean(!disabled && post && !isScheduled);
 
+  const minScheduleInput = useMemo(
+    () => formatInTimeZone(new Date(), brandTimezone, "yyyy-MM-dd'T'HH:mm"),
+    [brandTimezone]
+  );
+
+  const getScheduleErrorMessage = (
+    error: any,
+    fallback: string = 'Failed to schedule post. Please try again.'
+  ): string => {
+    if (error?.data?.errors && Array.isArray(error.data.errors) && error.data.errors[0]) {
+      return error.data.errors[0];
+    }
+    if (error?.data?.error) return error.data.error;
+    if (typeof error?.message === 'string' && error.message) return error.message;
+    return fallback;
+  };
+
   const { mutate: mutateContent, isPending: isSaving } = useMutation({
     mutationFn: async (data: {
       contentId: string;
@@ -395,7 +412,11 @@ export function PostSidebar({
         await persistMediaChanges();
       }
 
-      const scheduledUtc = toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString();
+      const scheduledUtcDate = toUTCFromInput(formData.scheduledAt, brandTimezone);
+      if (scheduledUtcDate.getTime() <= Date.now()) {
+        throw new Error('Scheduled time must be in the future');
+      }
+      const scheduledUtc = scheduledUtcDate.toISOString();
       const isStory = formData.contentType === 'story';
 
       return contentApi.updateContent({
@@ -411,7 +432,9 @@ export function PostSidebar({
       });
     },
     onSuccess: (response) => {
-      toast.success('Post scheduled successfully');
+      toast.success('Scheduling started', {
+        description: "We'll update the status once the scheduler confirms it.",
+      });
       queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
         if (!oldData) return oldData;
         return {
@@ -422,11 +445,7 @@ export function PostSidebar({
       });
     },
     onError: (error: any) => {
-      const message =
-        error?.response?.data?.error ||
-        error?.message ||
-        'Failed to schedule post. Please try again.';
-      toast.error(message);
+      toast.error(getScheduleErrorMessage(error));
     },
   });
 
@@ -473,6 +492,18 @@ export function PostSidebar({
       // Stories don't support captions or hashtags per Instagram API
       const isStory = formData.contentType === 'story';
 
+      const scheduledUtc =
+        mode === 'schedule' && formData.scheduledAt
+          ? toUTCFromInput(formData.scheduledAt, brandTimezone)
+          : null;
+
+      if (mode === 'schedule') {
+        if (!scheduledUtc) throw new Error('Scheduled time required');
+        if (scheduledUtc.getTime() <= Date.now()) {
+          throw new Error('Scheduled time must be in the future');
+        }
+      }
+
       return contentApi.createManualContent({
         brandId: selectedBrand.id,
         caption: isStory ? '' : formData.caption.trim(),
@@ -483,10 +514,7 @@ export function PostSidebar({
         campaignId: selectedCampaign || undefined,
         shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : undefined,
         firstComment: formData.firstComment?.trim() || undefined,
-        scheduledAt:
-          mode === 'schedule' && formData.scheduledAt
-            ? toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString()
-            : undefined,
+        scheduledAt: scheduledUtc ? scheduledUtc.toISOString() : undefined,
       });
     },
     onSuccess: (_response, mode) => {
@@ -498,16 +526,16 @@ export function PostSidebar({
 
       let message = 'Post created successfully!';
       if (isScheduled && hasCampaign) {
-        message = 'Post scheduled and added to campaign!';
+        message = 'Scheduling started and added to campaign';
       } else if (isScheduled) {
-        message = 'Post created and scheduled!';
+        message = 'Scheduling started';
       } else if (hasCampaign) {
         message = 'Post created and added to campaign!';
       }
 
       toast.success(message, {
         description: isScheduled
-          ? 'You can view it in the content calendar'
+          ? 'We will move it to Scheduled once the scheduler confirms it.'
           : 'You can find it in the content calendar as a draft',
       });
 
@@ -517,7 +545,7 @@ export function PostSidebar({
     },
     onError: (error: Error) => {
       console.error('Failed to create post:', error);
-      toast.error(error.message || 'Failed to create post. Please try again.');
+      toast.error(getScheduleErrorMessage(error, 'Failed to create post. Please try again.'));
     },
   });
 
@@ -622,7 +650,12 @@ export function PostSidebar({
     if (hadScheduled && !hasScheduledInput) {
       scheduledAtPayload = null;
     } else if (hasScheduledInput) {
-      scheduledAtPayload = toUTCFromInput(formData.scheduledAt, brandTimezone).toISOString();
+      const utcDate = toUTCFromInput(formData.scheduledAt, brandTimezone);
+      if (utcDate.getTime() <= Date.now()) {
+        toast.error('Scheduled time must be in the future');
+        return;
+      }
+      scheduledAtPayload = utcDate.toISOString();
     } else {
       scheduledAtPayload = undefined;
     }
@@ -1206,6 +1239,7 @@ export function PostSidebar({
                             onChange={(e) =>
                               setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
                             }
+                            min={minScheduleInput}
                             className="h-9 max-w-[220px]"
                           />
                           {brandTimezone && (
@@ -1449,6 +1483,7 @@ export function PostSidebar({
                           onChange={(e) =>
                             setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
                           }
+                          min={minScheduleInput}
                           className="h-9 max-w-[220px]"
                         />
                         {brandTimezone && (

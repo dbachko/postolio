@@ -33,6 +33,7 @@
   overflow: hidden;
   --pc-card-h: 112px;
   --pc-hour-h: 112px;
+  --pc-today-pill-clearance: 22px;
 }
 .pc-weekdays {
   display: grid;
@@ -116,7 +117,7 @@
   box-shadow: none;
 }
 .pc-day--today .pc-day-events {
-  margin-top: 6px;
+  margin-top: var(--pc-today-pill-clearance);
 }
 .pc-day-events {
   display: flex;

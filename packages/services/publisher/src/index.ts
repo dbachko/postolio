@@ -143,6 +143,33 @@ interface MediaAsset {
   duration?: number;
 }
 
+function sanitizeUrlForLog(url: string): {
+  host?: string;
+  path?: string;
+  hasQuery?: boolean;
+  extension?: string;
+  scheme?: string;
+} {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname;
+    const extMatch = path.match(/\.([A-Za-z0-9]+)$/);
+    return {
+      host: parsed.host,
+      path,
+      hasQuery: !!parsed.search,
+      extension: extMatch ? extMatch[1].toLowerCase() : undefined,
+      scheme: parsed.protocol.replace(':', ''),
+    };
+  } catch {
+    const extMatch = url.match(/\.([A-Za-z0-9]+)(?:\?|$)/);
+    return {
+      path: url.slice(0, 120),
+      extension: extMatch ? extMatch[1].toLowerCase() : undefined,
+    };
+  }
+}
+
 // Platform adapter factory
 class PlatformAdapterFactory {
   static getAdapter(platform: string): PlatformAdapter {
@@ -435,6 +462,14 @@ class InstagramAdapter implements PlatformAdapter {
         }
       }
 
+      logger.info('Resolved media URLs for Instagram publish', {
+        assets: resolvedMedia.map((m, idx) => ({
+          idx,
+          kind: m.kind,
+          ...sanitizeUrlForLog(m.url),
+        })),
+      });
+
       if (!resolvedMedia.length) {
         throw new Error('Media URL is required for Instagram publishing');
       }
@@ -622,6 +657,7 @@ class InstagramAdapter implements PlatformAdapter {
     logger.info('Creating Instagram media container', {
       accountId: credentials.accountId,
       hasMediaUrl: !!mediaUrl,
+      mediaUrl: sanitizeUrlForLog(mediaUrl),
       mediaKind: isReel
         ? 'reel'
         : isStory
@@ -954,6 +990,11 @@ class InstagramAdapter implements PlatformAdapter {
         method: 'POST',
       });
 
+      logger.info('Creating Instagram carousel child (image)', {
+        accountId: credentials.accountId,
+        media: sanitizeUrlForLog(mediaUrl),
+      });
+
       if (!createResponse.ok) {
         const raw = await createResponse.text();
         const parsed = asIGErrorPayload(safeParseJson(raw));
@@ -995,6 +1036,11 @@ class InstagramAdapter implements PlatformAdapter {
       is_carousel_item: 'true',
       media_type: 'VIDEO',
       video_url: mediaUrl,
+    });
+
+    logger.info('Creating Instagram carousel child (video)', {
+      accountId: credentials.accountId,
+      media: sanitizeUrlForLog(mediaUrl),
     });
 
     const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
@@ -1428,6 +1474,14 @@ export const handler = async (
       });
       throw new Error('Media URL is required for Instagram publishing');
     }
+
+    logger.info('Primary media resolved for publishing', {
+      scheduleId: event.scheduleId,
+      media: sanitizeUrlForLog(mediaUrl),
+      hasMediaAssets: !!publishableSchedule.mediaAssets?.length,
+      mediaType: publishableSchedule.mediaType,
+      contentType: publishableSchedule.contentType,
+    });
 
     // Get platform adapter
     const adapter = PlatformAdapterFactory.getAdapter(schedule.platform);
@@ -1913,7 +1967,13 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
   // - If given an absolute URL, return it as-is for Instagram's video_url.
   // - If given a key, prefer building a CDN URL (same flow as images).
   if (/^https?:\/\//i.test(candidate)) {
-    return candidate;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === 'http:') url.protocol = 'https:';
+      return url.toString();
+    } catch {
+      return candidate;
+    }
   }
 
   const cdnDomain = process.env.ASSETS_CDN_DOMAIN;
@@ -1934,7 +1994,13 @@ async function getSignedImageUrlFromKey(key: string): Promise<string> {
   }
 
   if (/^https?:\/\//i.test(candidate)) {
-    return candidate;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === 'http:') url.protocol = 'https:';
+      return url.toString();
+    } catch {
+      return candidate;
+    }
   }
 
   const cdnDomain = process.env.ASSETS_CDN_DOMAIN;
