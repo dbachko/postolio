@@ -1015,6 +1015,16 @@ export class SchedulerAdapter {
               userId: true, // Include userId for scheduler
             },
           },
+          mediaAssets: {
+            select: {
+              cdnUrl: true,
+              usageContext: true,
+              displayOrder: true,
+              width: true,
+              height: true,
+              assetId: true,
+            },
+          },
         },
       });
 
