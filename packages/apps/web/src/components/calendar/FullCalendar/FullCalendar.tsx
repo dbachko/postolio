@@ -54,6 +54,13 @@ function FullCalendarImpl({
   const calendarView = CALENDAR_VIEW_MAP[view] ?? 'month';
   const calendarDate = calendarView === 'agenda' ? new Date() : date;
   const isTouch = isTouchDevice();
+  const touchDndOptions = isTouch
+    ? {
+        enableTouchEvents: true,
+        enableMouseEvents: true,
+        delayTouchStart: 800,
+      }
+    : undefined;
 
   const handleEventDrop = useCallback(
     async ({ event, start }: { event: CalendarEvent; start: Date }) => {
@@ -111,7 +118,7 @@ function FullCalendarImpl({
         weekStartsOn={weekStartsOn}
         dragAndDrop
         dndBackend={isTouch ? TouchBackend : undefined}
-        dndOptions={isTouch ? { enableMouseEvents: true } : undefined}
+        dndOptions={touchDndOptions}
         onEventDrop={handleEventDrop}
         components={{
           event: ({ event }: { event: CalendarEvent }) => (
