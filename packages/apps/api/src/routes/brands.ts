@@ -550,6 +550,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             campaignName: item.campaign?.name,
             campaignColor: item.campaign?.color,
             permalink: primaryPermalink,
+            firstComment: (item as any).firstComment ?? null,
+            firstCommentStatus: (item as any).firstCommentStatus ?? null,
+            firstCommentPostedAt: (item as any).firstCommentPostedAt ?? null,
+            firstCommentError: (item as any).firstCommentError ?? null,
           };
         });
 

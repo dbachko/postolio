@@ -28,6 +28,7 @@ export interface CreateManualContentBody {
   campaignId?: string;
   scheduledAt?: string;
   shareToFeed?: boolean;
+  firstComment?: string;
 }
 
 export interface ApproveContentBody {
@@ -65,6 +66,27 @@ export function validateRequestBody(body: CreateManualContentBody) {
         details: validation.errors,
       },
     };
+  }
+
+  if (body.firstComment !== undefined) {
+    if (typeof body.firstComment !== 'string') {
+      return {
+        ok: false,
+        error: {
+          error: 'firstComment must be a string if provided',
+          details: ['firstComment must be a string if provided'],
+        },
+      };
+    }
+    if (body.firstComment.length > 2200) {
+      return {
+        ok: false,
+        error: {
+          error: 'firstComment must be at most 2200 characters',
+          details: ['firstComment must be at most 2200 characters'],
+        },
+      };
+    }
   }
 
   return { ok: true };
@@ -198,6 +220,7 @@ export async function createContentInTransaction(
     campaignId?: string;
     scheduledAt?: string;
     shareToFeed?: boolean;
+    firstComment?: string;
     resolvedAsset: any;
     resolvedCarouselAssets: any;
   },
@@ -219,6 +242,7 @@ export async function createContentInTransaction(
         contentType: params.contentType || 'post',
         videoUrl: params.videoUrl || null,
         shareToFeed: params.shareToFeed ?? null,
+        firstComment: params.firstComment ? params.firstComment.trim() : null,
         generationParams: Prisma.JsonNull,
       },
       select: {
@@ -236,6 +260,7 @@ export async function createContentInTransaction(
         contentType: true,
         videoUrl: true,
         shareToFeed: true,
+        firstComment: true,
       },
     });
 

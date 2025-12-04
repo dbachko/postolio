@@ -80,6 +80,10 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           mediaType: true,
           contentType: true,
           videoUrl: true,
+          firstComment: true,
+          firstCommentStatus: true,
+          firstCommentPostedAt: true,
+          firstCommentError: true,
         },
       });
 
@@ -237,6 +241,10 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           mediaType: true,
           contentType: true,
           videoUrl: true,
+          firstComment: true,
+          firstCommentStatus: true,
+          firstCommentPostedAt: true,
+          firstCommentError: true,
         },
       });
 

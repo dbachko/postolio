@@ -211,6 +211,17 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       let planLimitMessage: string | undefined;
       if (!isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
         try {
+          // Ensure firstComment is persisted before creating the AWS schedule
+          // so the scheduler and publisher receive the latest text.
+          if (firstComment !== undefined) {
+            await prisma.content.update({
+              where: { id: contentId },
+              data: {
+                firstComment: firstComment || null,
+              },
+            });
+          }
+
           console.log(
             `Attempting to create new AWS schedule for content ${contentId} at ${newScheduledTime} before DB update`
           );
@@ -350,6 +361,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           mediaType: true,
           contentType: true,
           videoUrl: true,
+          firstComment: true,
+          firstCommentStatus: true,
+          firstCommentPostedAt: true,
+          firstCommentError: true,
         },
       });
 

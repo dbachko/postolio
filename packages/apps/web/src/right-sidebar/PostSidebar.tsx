@@ -343,6 +343,8 @@ export function PostSidebar({
       shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
       firstComment: (post as any).firstComment || '',
     });
+    // Automatically expand the First Comment section when a saved firstComment exists
+    setFirstCommentOpen(Boolean((post as any).firstComment));
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
     setHasChanges(false);
     formInitializedRef.current = true;
@@ -404,7 +406,6 @@ export function PostSidebar({
     },
     onError: () => toast.error('Failed to save changes'),
   });
-
   const { mutate: unschedulePost, isPending: isUnscheduling } = useMutation({
     mutationFn: async (contentId: string) => {
       return contentApi.updateContent({
@@ -469,7 +470,7 @@ export function PostSidebar({
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
         shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : undefined,
-        firstComment: formData.firstComment?.trim() || undefined,
+        firstComment: formData.firstComment?.trim(),
         scheduledAt: scheduledUtc ? scheduledUtc.toISOString() : undefined,
       });
     },
@@ -637,7 +638,7 @@ export function PostSidebar({
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
       campaignId: selectedCampaign || null,
-      firstComment: formData.firstComment?.trim() || undefined,
+      firstComment: formData.firstComment?.trim(),
     };
 
     if (scheduledAtPayload !== undefined) {

@@ -81,6 +81,10 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             scheduledAt: true,
             createdAt: true,
             updatedAt: true,
+            firstComment: true,
+            firstCommentStatus: true,
+            firstCommentPostedAt: true,
+            firstCommentError: true,
           },
         });
 

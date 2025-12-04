@@ -122,6 +122,10 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             scheduledAt: true,
             brandId: true,
             generationParams: true,
+            firstComment: true,
+            firstCommentStatus: true,
+            firstCommentPostedAt: true,
+            firstCommentError: true,
           },
           // For draft review, default to last modified first
           orderBy: { updatedAt: 'desc' },

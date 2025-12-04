@@ -67,6 +67,10 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           brandId: true,
           campaignId: true,
           schedulingError: true,
+          firstComment: true,
+          firstCommentStatus: true,
+          firstCommentPostedAt: true,
+          firstCommentError: true,
           mediaAssets: {
             select: { cdnUrl: true, usageContext: true, displayOrder: true, assetId: true },
             orderBy: { displayOrder: 'asc' },
@@ -161,6 +165,10 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         brandId: post.brandId,
         scheduledAt: post.scheduledAt,
         postedAt: post.postedAt,
+        firstComment: post.firstComment,
+        firstCommentStatus: post.firstCommentStatus,
+        firstCommentPostedAt: post.firstCommentPostedAt,
+        firstCommentError: post.firstCommentError,
         // Deprecated fields removed; fallback permalink for UI convenience
         instagramPostId: undefined,
         instagramPermalink:

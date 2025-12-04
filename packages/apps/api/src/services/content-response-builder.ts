@@ -31,6 +31,10 @@ export interface ContentWithMetadata extends ContentBase {
   contentType?: string | null;
   videoUrl?: string | null;
   shareToFeed?: boolean | null;
+  firstComment?: string | null;
+  firstCommentStatus?: string | null;
+  firstCommentPostedAt?: Date | null;
+  firstCommentError?: string | null;
 }
 
 /**
@@ -51,6 +55,10 @@ export interface ContentResponse {
   contentType?: string | null;
   videoUrl?: string | null;
   shareToFeed?: boolean | null;
+  firstComment?: string | null;
+  firstCommentStatus?: string | null;
+  firstCommentPostedAt?: Date | null;
+  firstCommentError?: string | null;
 }
 
 /**
@@ -99,6 +107,18 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   }
   if (content.shareToFeed !== undefined) {
     response.shareToFeed = content.shareToFeed;
+  }
+  if (content.firstComment !== undefined) {
+    response.firstComment = content.firstComment;
+  }
+  if (content.firstCommentStatus !== undefined) {
+    response.firstCommentStatus = content.firstCommentStatus;
+  }
+  if (content.firstCommentPostedAt !== undefined) {
+    response.firstCommentPostedAt = content.firstCommentPostedAt;
+  }
+  if (content.firstCommentError !== undefined) {
+    response.firstCommentError = content.firstCommentError;
   }
 
   return response;
