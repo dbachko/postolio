@@ -1560,79 +1560,76 @@ export function PostSidebar({
                     </div>
                   </div>
                 )}
-                <Separator />
                 <TooltipProvider>
-                  <div className="border-border bg-card flex flex-col gap-3 rounded-md border px-3 py-2">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-1 items-center gap-2">
-                        <Clock className="text-muted-foreground h-4 w-4" />
-                        <Input
-                          type="datetime-local"
-                          value={formData.scheduledAt}
-                          onChange={(e) =>
-                            setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
-                          }
-                          min={minScheduleInput}
-                          className="h-9 max-w-[220px]"
-                        />
-                        {brandTimezone && (
-                          <span className="text-muted-foreground text-xs">({brandTimezone})</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-end">
-                        <ButtonGroup>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                onClick={() => createPost('schedule')}
-                                disabled={createScheduleDisabled}
-                                aria-disabled={createScheduleDisabled}
-                                className={cn(createScheduleDisabled && 'cursor-not-allowed')}
-                              >
-                                {isCreatingPost ? (
-                                  <>
-                                    <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                                    Creating...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Clock className="mr-2 h-4 w-4" />
-                                    Schedule
-                                  </>
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            {scheduleBlocker && (
-                              <TooltipContent>
-                                <p className="text-sm">{scheduleBlocker}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="default"
-                                className="!px-2"
-                                aria-label="More scheduling options"
-                              >
-                                <ChevronDown className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  if (isCreatingPost || !validation.ok) return;
-                                  createPost('draft');
-                                }}
-                                disabled={isCreatingPost || !validation.ok}
-                              >
-                                <Save className="mr-2 h-4 w-4" />
-                                Save draft
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </ButtonGroup>
-                      </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-1 items-center gap-2">
+                      <Clock className="text-muted-foreground h-4 w-4" />
+                      <Input
+                        type="datetime-local"
+                        value={formData.scheduledAt}
+                        onChange={(e) =>
+                          setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
+                        }
+                        min={minScheduleInput}
+                        className="h-9 max-w-[220px]"
+                      />
+                      {brandTimezone && (
+                        <span className="text-muted-foreground text-xs">({brandTimezone})</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end">
+                      <ButtonGroup>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => createPost('schedule')}
+                              disabled={createScheduleDisabled}
+                              aria-disabled={createScheduleDisabled}
+                              className={cn(createScheduleDisabled && 'cursor-not-allowed')}
+                            >
+                              {isCreatingPost ? (
+                                <>
+                                  <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                                  Creating...
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="mr-2 h-4 w-4" />
+                                  Schedule
+                                </>
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          {scheduleBlocker && (
+                            <TooltipContent>
+                              <p className="text-sm">{scheduleBlocker}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="default"
+                              className="!px-2"
+                              aria-label="More scheduling options"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (isCreatingPost || !validation.ok) return;
+                                createPost('draft');
+                              }}
+                              disabled={isCreatingPost || !validation.ok}
+                            >
+                              <Save className="mr-2 h-4 w-4" />
+                              Save draft
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </ButtonGroup>
                     </div>
                   </div>
                 </TooltipProvider>
@@ -1642,73 +1639,70 @@ export function PostSidebar({
           {!isCreating && !isLoading && post && !disabled && (
             <div className="border-border bg-card sticky bottom-0 z-20 border-t px-4 py-3">
               <div className="space-y-3">
-                <Separator />
                 <TooltipProvider>
-                  <div className="border-border bg-card flex flex-col gap-3 rounded-md border px-3 py-2">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-1 items-center gap-2">
-                        <Clock className="text-muted-foreground h-4 w-4" />
-                        <Input
-                          type="datetime-local"
-                          value={formData.scheduledAt}
-                          onChange={(e) =>
-                            setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
-                          }
-                          min={minScheduleInput}
-                          className="h-9 max-w-[220px]"
-                        />
-                        {brandTimezone && (
-                          <span className="text-muted-foreground text-xs">({brandTimezone})</span>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-1 items-center gap-2">
+                      <Clock className="text-muted-foreground h-4 w-4" />
+                      <Input
+                        type="datetime-local"
+                        value={formData.scheduledAt}
+                        onChange={(e) =>
+                          setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
+                        }
+                        min={minScheduleInput}
+                        className="h-9 max-w-[220px]"
+                      />
+                      {brandTimezone && (
+                        <span className="text-muted-foreground text-xs">({brandTimezone})</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {isScheduled && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" disabled={isUnscheduling}>
+                              <Clock className="mr-2 h-4 w-4" />
+                              Unschedule to Draft
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                We’ll cancel the scheduled publish time and move this post back to
+                                Drafts. It will no longer publish automatically.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={isUnscheduling}>
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => id && unschedulePost(id)}
+                                disabled={isUnscheduling}
+                              >
+                                Unschedule and move to Drafts
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                      <Button
+                        onClick={handleSaveChanges}
+                        disabled={!hasChanges || isSaving || !validation.ok}
+                      >
+                        {isSaving ? (
+                          <>
+                            <Save className="mr-2 h-4 w-4 animate-pulse" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            {primaryEditCtaLabel}
+                          </>
                         )}
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {isScheduled && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" disabled={isUnscheduling}>
-                                <Clock className="mr-2 h-4 w-4" />
-                                Unschedule to Draft
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  We’ll cancel the scheduled publish time and move this post back to
-                                  Drafts. It will no longer publish automatically.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel disabled={isUnscheduling}>
-                                  Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => id && unschedulePost(id)}
-                                  disabled={isUnscheduling}
-                                >
-                                  Unschedule and move to Drafts
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                        <Button
-                          onClick={handleSaveChanges}
-                          disabled={!hasChanges || isSaving || !validation.ok}
-                        >
-                          {isSaving ? (
-                            <>
-                              <Save className="mr-2 h-4 w-4 animate-pulse" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="mr-2 h-4 w-4" />
-                              {primaryEditCtaLabel}
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                      </Button>
                     </div>
                   </div>
                 </TooltipProvider>
