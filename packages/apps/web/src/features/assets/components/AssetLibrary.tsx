@@ -13,6 +13,7 @@ import { AssetCard } from './AssetCard';
 import { SortControls } from './SortControls';
 import { SelectionBar } from './SelectionBar';
 import { DeleteAssetsDialog } from './DeleteAssetsDialog';
+import { FilterPanel, type AssetFilters } from './FilterPanel';
 import { groupByMonth, sortAssets, useDebouncedValue } from './asset-utils';
 import type { AssetTypeFilter, SortDirection, SortField } from './asset-utils';
 
@@ -28,13 +29,18 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   const [selected, setSelected] = useState<Map<string, AssetType>>(new Map());
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [filters, setFilters] = useState<AssetFilters>({
+    aspectRatios: [],
+    orientationTypes: [],
+    usageStatuses: [],
+  });
   const search = useDebouncedValue(searchInput, 350);
   const { openSidebar } = useRightSidebarRouter();
   const queryClient = useQueryClient();
 
   const { data, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useInfiniteQuery({
-      queryKey: ['assets', brandId, search, typeFilter],
+      queryKey: ['assets', brandId, search, typeFilter, filters],
       queryFn: ({ pageParam = 1 }) =>
         assetsApi.listAssets({
           brandId,
@@ -42,6 +48,16 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
           limit: 30,
           search,
           type: typeFilter === 'all' ? undefined : typeFilter,
+          aspectRatios: filters.aspectRatios.length > 0 ? filters.aspectRatios : undefined,
+          orientationTypes:
+            filters.orientationTypes.length > 0 ? filters.orientationTypes : undefined,
+          minWidth: filters.minWidth,
+          maxWidth: filters.maxWidth,
+          minHeight: filters.minHeight,
+          maxHeight: filters.maxHeight,
+          uploadedAfter: filters.uploadedAfter,
+          uploadedBefore: filters.uploadedBefore,
+          usageStatuses: filters.usageStatuses.length > 0 ? filters.usageStatuses : undefined,
         }),
       enabled: !!brandId,
       getNextPageParam: (lastPage) =>
@@ -223,8 +239,21 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
     setTypeFilter('all');
     setSortField('created');
     setSortDirection('desc');
+    setFilters({
+      aspectRatios: [],
+      orientationTypes: [],
+      usageStatuses: [],
+    });
     clearSelection();
   }, [clearSelection]);
+
+  const handleResetFilters = useCallback(() => {
+    setFilters({
+      aspectRatios: [],
+      orientationTypes: [],
+      usageStatuses: [],
+    });
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -297,6 +326,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
             </TabsList>
           </Tabs>
           <div className="flex items-center gap-2">
+            <FilterPanel filters={filters} onChange={setFilters} onReset={handleResetFilters} />
             <SortControls
               field={sortField}
               direction={sortDirection}
@@ -313,72 +343,79 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
         </div>
       </div>
 
-      {isFetching && (
-        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Updating results…
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {Array.from({ length: 10 }).map((_, idx) => (
-            <div key={idx} className="space-y-2">
-              <Skeleton className="aspect-square rounded-lg" />
-              <Skeleton className="h-3 w-2/3" />
+      <div className="relative">
+        {/* Overlay when refetching (not initial load) */}
+        {isFetching && !isLoading && (
+          <div className="bg-background/80 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-background flex items-center gap-2 rounded-lg border px-4 py-3 shadow-lg">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm font-medium">Updating results…</span>
             </div>
-          ))}
-        </div>
-      ) : sortedAssets.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed py-12 text-center">
-          <p className="text-muted-foreground">No assets match these filters</p>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Try adjusting search or upload your first image or video.
-          </p>
-          <div className="mt-4 flex justify-center gap-3">
-            <Button variant="outline" onClick={resetFilters}>
-              Reset filters
-            </Button>
-            <Button onClick={() => openSidebar('asset-upload', { id: brandId })}>
-              Upload assets
-            </Button>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {Object.entries(groupedAssets).map(([month, assets]) => (
-            <div key={month} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="text-muted-foreground h-4 w-4" />
-                <h3 className="text-sm font-semibold">{month}</h3>
-                <span className="text-muted-foreground text-xs">{assets.length} assets</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {assets.map((asset) => (
-                  <AssetCard
-                    key={asset.id}
-                    asset={asset}
-                    selected={selected.has(asset.id)}
-                    onToggle={(opts) => toggleSelect(asset, opts)}
-                    onOpen={() => handleOpenAsset(asset.id)}
-                    onCreatePost={() =>
-                      openSidebar('post-create', { params: { assetId: asset.id, assetIds: null } })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+        )}
 
-          <div ref={loadMoreRef} className="h-1" />
-          {isFetchingNextPage && (
-            <div className="text-muted-foreground flex justify-center py-4 text-sm">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading more assets…
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 10 }).map((_, idx) => (
+              <div key={idx} className="space-y-2">
+                <Skeleton className="aspect-square rounded-lg" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            ))}
+          </div>
+        ) : sortedAssets.length === 0 ? (
+          <div className="rounded-lg border-2 border-dashed py-12 text-center">
+            <p className="text-muted-foreground">No assets match these filters</p>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Try adjusting search or upload your first image or video.
+            </p>
+            <div className="mt-4 flex justify-center gap-3">
+              <Button variant="outline" onClick={resetFilters}>
+                Reset filters
+              </Button>
+              <Button onClick={() => openSidebar('asset-upload', { id: brandId })}>
+                Upload assets
+              </Button>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {Object.entries(groupedAssets).map(([month, assets]) => (
+              <div key={month} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="text-muted-foreground h-4 w-4" />
+                  <h3 className="text-sm font-semibold">{month}</h3>
+                  <span className="text-muted-foreground text-xs">{assets.length} assets</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {assets.map((asset) => (
+                    <AssetCard
+                      key={asset.id}
+                      asset={asset}
+                      selected={selected.has(asset.id)}
+                      onToggle={(opts) => toggleSelect(asset, opts)}
+                      onOpen={() => handleOpenAsset(asset.id)}
+                      onCreatePost={() =>
+                        openSidebar('post-create', {
+                          params: { assetId: asset.id, assetIds: null },
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div ref={loadMoreRef} className="h-1" />
+            {isFetchingNextPage && (
+              <div className="text-muted-foreground flex justify-center py-4 text-sm">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading more assets…
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <SelectionBar
         count={selectedAssets.length}

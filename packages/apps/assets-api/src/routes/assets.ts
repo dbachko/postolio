@@ -160,6 +160,22 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       limit?: string;
       folderId?: string;
       includeHidden?: string;
+
+      // New filters for aspect ratio and dimensions
+      aspectRatio?: string;
+      aspectRatios?: string | string[];
+      orientationType?: 'portrait' | 'landscape' | 'square';
+      minWidth?: string;
+      maxWidth?: string;
+      minHeight?: string;
+      maxHeight?: string;
+
+      // Date filters
+      uploadedAfter?: string;
+      uploadedBefore?: string;
+
+      // Usage filter
+      usageStatus?: 'used' | 'unused';
     };
 
     try {
@@ -225,6 +241,93 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         ];
       }
 
+      // Aspect ratio filters
+      if (query.aspectRatio) {
+        where.aspectRatio = query.aspectRatio;
+      }
+
+      if (query.aspectRatios) {
+        const ratios = Array.isArray(query.aspectRatios)
+          ? query.aspectRatios
+          : [query.aspectRatios];
+        where.aspectRatio = { in: ratios };
+      }
+
+      if (query.orientationType) {
+        where.orientationType = query.orientationType;
+      }
+
+      // Dimension filters - only apply to assets with dimensions
+      if (query.minWidth || query.maxWidth) {
+        const andConditions: AssetsPrisma.AssetWhereInput[] = [];
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            andConditions.push(...where.AND);
+          } else {
+            andConditions.push(where.AND);
+          }
+        }
+        andConditions.push({ width: { not: null } });
+        where.AND = andConditions;
+
+        where.width = {
+          ...(query.minWidth && { gte: parseInt(query.minWidth, 10) }),
+          ...(query.maxWidth && { lte: parseInt(query.maxWidth, 10) }),
+        };
+      }
+
+      if (query.minHeight || query.maxHeight) {
+        const andConditions: AssetsPrisma.AssetWhereInput[] = [];
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            andConditions.push(...where.AND);
+          } else {
+            andConditions.push(where.AND);
+          }
+        }
+        andConditions.push({ height: { not: null } });
+        where.AND = andConditions;
+
+        where.height = {
+          ...(query.minHeight && { gte: parseInt(query.minHeight, 10) }),
+          ...(query.maxHeight && { lte: parseInt(query.maxHeight, 10) }),
+        };
+      }
+
+      // Date filters with validation
+      if (query.uploadedAfter || query.uploadedBefore) {
+        const parseDate = (dateStr: string): Date | null => {
+          try {
+            const date = new Date(dateStr);
+            return isNaN(date.getTime()) ? null : date;
+          } catch {
+            return null;
+          }
+        };
+
+        const after = query.uploadedAfter ? parseDate(query.uploadedAfter) : null;
+        const before = query.uploadedBefore ? parseDate(query.uploadedBefore) : null;
+
+        if (query.uploadedAfter && !after) {
+          return reply.code(400).send({ error: 'Invalid uploadedAfter date format' });
+        }
+        if (query.uploadedBefore && !before) {
+          return reply.code(400).send({ error: 'Invalid uploadedBefore date format' });
+        }
+
+        where.createdAt = {
+          ...(after && { gte: after }),
+          ...(before && { lte: before }),
+        };
+      }
+
+      // Usage status filter
+      if (query.usageStatus === 'used') {
+        where.usageCount = { gt: 0 };
+      } else if (query.usageStatus === 'unused') {
+        where.usageCount = 0;
+      }
+
       // Fetch assets with pagination
       const [assets, total] = await Promise.all([
         prismaAssets.asset.findMany({
@@ -262,6 +365,66 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   });
+
+  // Get available aspect ratios for a brand
+  fastify.get(
+    '/assets/aspect-ratios',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const query = request.query as { brandId?: string };
+
+      if (!query.brandId) {
+        return reply.code(400).send({ error: 'brandId is required' });
+      }
+
+      try {
+        // Get distinct aspect ratios used in this brand's assets
+        const results = await prismaAssets.asset.groupBy({
+          by: ['aspectRatio', 'orientationType'],
+          where: {
+            brandId: query.brandId,
+            aspectRatio: { not: null },
+            archivedAt: null,
+          },
+          _count: {
+            id: true,
+          },
+        });
+
+        // Transform and sort by count
+        const aspectRatios = results
+          .map((r) => ({
+            aspectRatio: r.aspectRatio,
+            orientationType: r.orientationType,
+            count: r._count.id,
+          }))
+          .sort((a, b) => b.count - a.count);
+
+        // Standard aspect ratios for quick reference
+        const commonRatios = [
+          { label: '1:1 — Square', value: '1:1', platform: 'Instagram Post, Facebook' },
+          { label: '4:5 — Portrait', value: '4:5', platform: 'Instagram Feed' },
+          { label: '9:16 — Full vertical', value: '9:16', platform: 'Stories, Reels, TikTok' },
+          { label: '3:4 — Tall classic', value: '3:4', platform: 'Pinterest, Portrait' },
+          { label: '4:3 — Photo classic', value: '4:3', platform: 'Traditional Photo' },
+          { label: '16:9 — Standard landscape', value: '16:9', platform: 'YouTube, Twitter/X' },
+          { label: '1.91:1 — Social ads landscape', value: '1.91:1', platform: 'Facebook Ads' },
+          { label: '2:1 — Ultra-wide', value: '2:1', platform: 'Ultra-wide displays' },
+          { label: '2.39:1 — Cinematic wide', value: '2.39:1', platform: 'Cinematic films' },
+        ];
+
+        return {
+          aspectRatios,
+          common: commonRatios,
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to fetch aspect ratios',
+        });
+      }
+    }
+  );
 
   // Get single asset
   fastify.get(
@@ -513,10 +676,49 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
         let width: number | undefined;
         let height: number | undefined;
+        let aspectRatio: string | undefined;
+        let aspectRatioDecimal: number | undefined;
+        let orientationType: string | undefined;
+
         if (fileType === 'image') {
           const metadata = await sharp(buffer).metadata();
           width = metadata.width ?? undefined;
           height = metadata.height ?? undefined;
+
+          // Calculate aspect ratio if dimensions are available with standardized matching
+          if (width && height) {
+            aspectRatioDecimal = width / height;
+            const tolerance = 0.03; // 3% tolerance for matching to standard ratios
+
+            // Standard ratios (same as in aspect-ratio.ts utility)
+            const standardRatios = [
+              { label: '1:1', decimal: 1.0 },
+              { label: '4:5', decimal: 0.8 },
+              { label: '9:16', decimal: 0.5625 },
+              { label: '3:4', decimal: 0.75 },
+              { label: '4:3', decimal: 1.3333 },
+              { label: '16:9', decimal: 1.7778 },
+              { label: '1.91:1', decimal: 1.91 },
+              { label: '2:1', decimal: 2.0 },
+              { label: '2.39:1', decimal: 2.39 },
+            ];
+
+            // Try to match to a standard ratio
+            aspectRatio = 'CUSTOM';
+            for (const standard of standardRatios) {
+              if (Math.abs(aspectRatioDecimal - standard.decimal) <= tolerance) {
+                aspectRatio = standard.label;
+                break;
+              }
+            }
+
+            // Determine orientation
+            if (Math.abs(aspectRatioDecimal - 1.0) < 0.01) {
+              orientationType = 'square';
+            } else {
+              orientationType = aspectRatioDecimal < 1 ? 'portrait' : 'landscape';
+            }
+          }
         }
 
         let resolvedFolderId: string | undefined;
@@ -543,6 +745,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             fileType,
             width,
             height,
+            aspectRatio,
+            aspectRatioDecimal,
+            orientationType,
             title: body.title,
             altText: body.altText,
             tags: body.tags || [],

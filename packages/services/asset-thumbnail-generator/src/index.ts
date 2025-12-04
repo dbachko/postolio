@@ -76,6 +76,57 @@ export const handler = async (event: S3Event): Promise<void> => {
         sizeBytes: imageBuffer.length,
       });
 
+      // Extract image metadata using Sharp
+      const metadata = await sharp(imageBuffer).metadata();
+      const width = metadata.width || 0;
+      const height = metadata.height || 0;
+
+      // Calculate aspect ratio with standardized matching
+      const aspectRatioDecimal = height > 0 ? width / height : null;
+      let aspectRatio: string | null = null;
+      let orientationType: 'portrait' | 'landscape' | 'square' | null = null;
+
+      if (aspectRatioDecimal !== null && width > 0 && height > 0) {
+        const tolerance = 0.03; // 3% tolerance for matching to standard ratios
+
+        // Standard ratios (same as in aspect-ratio.ts utility)
+        const standardRatios = [
+          { label: '1:1', decimal: 1.0 },
+          { label: '4:5', decimal: 0.8 },
+          { label: '9:16', decimal: 0.5625 },
+          { label: '3:4', decimal: 0.75 },
+          { label: '4:3', decimal: 1.3333 },
+          { label: '16:9', decimal: 1.7778 },
+          { label: '1.91:1', decimal: 1.91 },
+          { label: '2:1', decimal: 2.0 },
+          { label: '2.39:1', decimal: 2.39 },
+        ];
+
+        // Try to match to a standard ratio
+        aspectRatio = 'CUSTOM';
+        for (const standard of standardRatios) {
+          if (Math.abs(aspectRatioDecimal - standard.decimal) <= tolerance) {
+            aspectRatio = standard.label;
+            break;
+          }
+        }
+
+        // Determine orientation
+        if (Math.abs(aspectRatioDecimal - 1.0) < 0.01) {
+          orientationType = 'square';
+        } else {
+          orientationType = aspectRatioDecimal < 1 ? 'portrait' : 'landscape';
+        }
+      }
+
+      logger.info('Extracted image metadata', {
+        assetId,
+        width,
+        height,
+        aspectRatio,
+        orientationType,
+      });
+
       // Generate thumbnails for each size
       const thumbnailKeys: Record<string, string> = {};
 
@@ -116,10 +167,15 @@ export const handler = async (event: S3Event): Promise<void> => {
         metrics.addMetric(`ThumbnailGenerated_${sizeName}`, MetricUnit.Count, 1);
       }
 
-      // Update asset in database with thumbnail keys
+      // Update asset in database with thumbnail keys and metadata
       await prismaAssets.asset.update({
         where: { id: assetId },
         data: {
+          width,
+          height,
+          aspectRatio,
+          aspectRatioDecimal,
+          orientationType,
           thumbnailKey: thumbnailKeys.medium, // Primary thumbnail (medium size)
           thumbnailSmallKey: thumbnailKeys.small,
           thumbnailLargeKey: thumbnailKeys.large,

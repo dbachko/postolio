@@ -14,6 +14,7 @@ import {
   type SortField,
 } from './asset-utils';
 import { SortControls } from './SortControls';
+import { FilterPanel, type AssetFilters } from './FilterPanel';
 
 export interface AssetPickerProps {
   onSelect?: (asset: AssetType) => void;
@@ -36,10 +37,15 @@ export default function AssetPicker({
   const [typeFilter, setTypeFilter] = useState<AssetTypeFilter>(type ?? 'all');
   const [sortField, setSortField] = useState<SortField>('created');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [filters, setFilters] = useState<AssetFilters>({
+    aspectRatios: [],
+    orientationTypes: [],
+    usageStatuses: [],
+  });
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
-    queryKey: ['assets-picker', brandId, debouncedSearch, type ?? typeFilter],
+    queryKey: ['assets-picker', brandId, debouncedSearch, type ?? typeFilter, filters],
     queryFn: ({ pageParam = 1 }) =>
       assetsApi.listAssets({
         brandId,
@@ -47,6 +53,10 @@ export default function AssetPicker({
         limit: 30,
         search: debouncedSearch,
         type: type ?? (typeFilter === 'all' ? undefined : typeFilter),
+        aspectRatios: filters.aspectRatios.length > 0 ? filters.aspectRatios : undefined,
+        orientationTypes:
+          filters.orientationTypes.length > 0 ? filters.orientationTypes : undefined,
+        usageStatuses: filters.usageStatuses.length > 0 ? filters.usageStatuses : undefined,
       }),
     enabled: !!brandId,
     getNextPageParam: (lastPage) =>
@@ -121,6 +131,14 @@ export default function AssetPicker({
     });
   };
 
+  const handleResetFilters = () => {
+    setFilters({
+      aspectRatios: [],
+      orientationTypes: [],
+      usageStatuses: [],
+    });
+  };
+
   return (
     <div className="pl-assets">
       <div
@@ -155,6 +173,7 @@ export default function AssetPicker({
               </Tabs>
             )}
             <div className="flex items-center gap-2">
+              <FilterPanel filters={filters} onChange={setFilters} onReset={handleResetFilters} />
               <SortControls
                 field={sortField}
                 direction={sortDirection}

@@ -32,6 +32,9 @@ export interface AssetRecord {
   width?: number | null;
   height?: number | null;
   duration?: number | null;
+  aspectRatio?: string | null;
+  aspectRatioDecimal?: number | null;
+  orientationType?: string | null;
   s3Key: string;
   url: string;
   thumbnailKey?: string | null;
@@ -93,6 +96,16 @@ export interface ListAssetsParams {
   page?: number;
   limit?: number;
   folderId?: string;
+  aspectRatio?: string;
+  aspectRatios?: string[];
+  orientationTypes?: Array<'portrait' | 'landscape' | 'square'>;
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  uploadedAfter?: string;
+  uploadedBefore?: string;
+  usageStatuses?: Array<'used' | 'unused'>;
 }
 
 export interface ListAssetsResponse {
@@ -295,6 +308,17 @@ export class AssetsServiceClient {
     if (params.folderId) query.set('folderId', params.folderId);
     if (params.tags) params.tags.forEach((tag) => query.append('tags', tag));
     if (params.excludeTags) params.excludeTags.forEach((tag) => query.append('excludeTags', tag));
+    if (params.aspectRatio) query.set('aspectRatio', params.aspectRatio);
+    if (params.aspectRatios) params.aspectRatios.forEach((r) => query.append('aspectRatios', r));
+    if (params.orientationTypes)
+      params.orientationTypes.forEach((o) => query.append('orientationTypes', o));
+    if (params.minWidth) query.set('minWidth', String(params.minWidth));
+    if (params.maxWidth) query.set('maxWidth', String(params.maxWidth));
+    if (params.minHeight) query.set('minHeight', String(params.minHeight));
+    if (params.maxHeight) query.set('maxHeight', String(params.maxHeight));
+    if (params.uploadedAfter) query.set('uploadedAfter', params.uploadedAfter);
+    if (params.uploadedBefore) query.set('uploadedBefore', params.uploadedBefore);
+    if (params.usageStatuses) params.usageStatuses.forEach((s) => query.append('usageStatuses', s));
 
     return this.get<ListAssetsResponse>(`/assets?${query.toString()}`);
   }

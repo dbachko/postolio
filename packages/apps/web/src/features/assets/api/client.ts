@@ -17,6 +17,10 @@ export interface Asset {
   width?: number;
   height?: number;
   duration?: number;
+  // New aspect ratio fields
+  aspectRatio?: string; // "1:1", "4:5", "9:16", etc.
+  aspectRatioDecimal?: number;
+  orientationType?: 'portrait' | 'landscape' | 'square';
   s3Key: string;
   url: string;
   thumbnailUrl?: string | null;
@@ -102,6 +106,17 @@ export const assetsApi = {
     page?: number;
     limit?: number;
     folderId?: string;
+    // New filter parameters
+    aspectRatio?: string;
+    aspectRatios?: string[];
+    orientationTypes?: Array<'portrait' | 'landscape' | 'square'>;
+    minWidth?: number;
+    maxWidth?: number;
+    minHeight?: number;
+    maxHeight?: number;
+    uploadedAfter?: string;
+    uploadedBefore?: string;
+    usageStatuses?: Array<'used' | 'unused'>;
   }): Promise<PaginatedAssets> {
     const queryParams = new URLSearchParams();
     if (params.brandId) queryParams.set('brandId', params.brandId);
@@ -111,6 +126,21 @@ export const assetsApi = {
     if (params.limit) queryParams.set('limit', String(params.limit));
     if (params.folderId) queryParams.set('folderId', params.folderId);
     if (params.tags) params.tags.forEach((t) => queryParams.append('tags', t));
+
+    // New filter parameters
+    if (params.aspectRatio) queryParams.set('aspectRatio', params.aspectRatio);
+    if (params.aspectRatios)
+      params.aspectRatios.forEach((r) => queryParams.append('aspectRatios', r));
+    if (params.orientationTypes)
+      params.orientationTypes.forEach((o) => queryParams.append('orientationTypes', o));
+    if (params.minWidth) queryParams.set('minWidth', String(params.minWidth));
+    if (params.maxWidth) queryParams.set('maxWidth', String(params.maxWidth));
+    if (params.minHeight) queryParams.set('minHeight', String(params.minHeight));
+    if (params.maxHeight) queryParams.set('maxHeight', String(params.maxHeight));
+    if (params.uploadedAfter) queryParams.set('uploadedAfter', params.uploadedAfter);
+    if (params.uploadedBefore) queryParams.set('uploadedBefore', params.uploadedBefore);
+    if (params.usageStatuses)
+      params.usageStatuses.forEach((s) => queryParams.append('usageStatuses', s));
 
     return httpGet(`${API_BASE_URL}?${queryParams.toString()}`);
   },

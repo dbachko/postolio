@@ -120,11 +120,39 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
       folderId?: string;
       tags?: string[];
       excludeTags?: string[];
+      // New filter parameters
+      aspectRatio?: string;
+      aspectRatios?: string[];
+      orientationTypes?: Array<'portrait' | 'landscape' | 'square'>;
+      minWidth?: string;
+      maxWidth?: string;
+      minHeight?: string;
+      maxHeight?: string;
+      uploadedAfter?: string;
+      uploadedBefore?: string;
+      usageStatuses?: Array<'used' | 'unused'>;
     };
   }>('/', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = request.user!.id;
-      const { brandId, type, search, page, limit, folderId } = request.query;
+      const {
+        brandId,
+        type,
+        search,
+        page,
+        limit,
+        folderId,
+        aspectRatio,
+        aspectRatios,
+        orientationTypes,
+        minWidth,
+        maxWidth,
+        minHeight,
+        maxHeight,
+        uploadedAfter,
+        uploadedBefore,
+        usageStatuses,
+      } = request.query;
       const tags = request.query.tags;
       const excludeTags = request.query.excludeTags;
 
@@ -146,6 +174,17 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         folderId: folderId || undefined,
         tags,
         excludeTags,
+        // Forward new filter parameters
+        aspectRatio,
+        aspectRatios,
+        orientationTypes,
+        minWidth: minWidth ? Number(minWidth) : undefined,
+        maxWidth: maxWidth ? Number(maxWidth) : undefined,
+        minHeight: minHeight ? Number(minHeight) : undefined,
+        maxHeight: maxHeight ? Number(maxHeight) : undefined,
+        uploadedAfter,
+        uploadedBefore,
+        usageStatuses,
       });
 
       return reply.send(result);

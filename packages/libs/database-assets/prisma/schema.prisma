@@ -23,6 +23,11 @@ model Asset {
   height            Int?
   duration          Int?          // for videos
 
+  // Aspect ratio (computed from width/height)
+  aspectRatio        String?      // "1:1", "4:5", "9:16", "16:9", "CUSTOM"
+  aspectRatioDecimal Float?       // Decimal representation (e.g., 1.0, 0.8, 0.5625)
+  orientationType    String?      // "portrait", "landscape", "square"
+
   // S3 storage
   s3Key             String        @unique
   s3Bucket          String
@@ -65,6 +70,10 @@ model Asset {
   @@index([brandId, fileType])
   @@index([brandId, createdAt])
   @@index([tags])
+  @@index([aspectRatio])
+  @@index([orientationType])
+  @@index([brandId, aspectRatio])
+  @@index([brandId, fileType, aspectRatio])
   @@map("assets")
 }
 

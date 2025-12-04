@@ -34,6 +34,8 @@ interface VideoMetadata {
   width: number;
   height: number;
   aspectRatio: string;
+  aspectRatioDecimal: number;
+  orientationType: 'portrait' | 'landscape' | 'square';
   codec: string;
   bitrate: number;
   fps: number;
@@ -168,6 +170,9 @@ export const handler = async (event: S3Event): Promise<void> => {
           width: metadata.width,
           height: metadata.height,
           duration: Math.round(metadata.duration),
+          aspectRatio: metadata.aspectRatio,
+          aspectRatioDecimal: metadata.aspectRatioDecimal,
+          orientationType: metadata.orientationType,
           thumbnailKey: thumbnailKeys[0], // Primary thumbnail (first frame)
           thumbnailSmallKey: thumbnailKeys[0],
           thumbnailLargeKey: thumbnailKeys[thumbnailKeys.length - 1],
@@ -284,16 +289,47 @@ function extractVideoMetadata(videoPath: string): Promise<VideoMetadata> {
       const bitrate = metadata.format.bit_rate || 0;
       const fps = eval(videoStream.r_frame_rate || '0'); // e.g., "30/1" => 30
 
-      // Calculate aspect ratio
-      const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-      const divisor = gcd(width, height);
-      const aspectRatio = `${width / divisor}:${height / divisor}`;
+      // Calculate aspect ratio with standardized matching
+      const aspectRatioDecimal = width / height;
+      const tolerance = 0.03; // 3% tolerance for matching to standard ratios
+
+      // Standard ratios (same as in aspect-ratio.ts utility)
+      const standardRatios = [
+        { label: '1:1', decimal: 1.0 },
+        { label: '4:5', decimal: 0.8 },
+        { label: '9:16', decimal: 0.5625 },
+        { label: '3:4', decimal: 0.75 },
+        { label: '4:3', decimal: 1.3333 },
+        { label: '16:9', decimal: 1.7778 },
+        { label: '1.91:1', decimal: 1.91 },
+        { label: '2:1', decimal: 2.0 },
+        { label: '2.39:1', decimal: 2.39 },
+      ];
+
+      // Try to match to a standard ratio
+      let aspectRatio = 'CUSTOM';
+      for (const standard of standardRatios) {
+        if (Math.abs(aspectRatioDecimal - standard.decimal) <= tolerance) {
+          aspectRatio = standard.label;
+          break;
+        }
+      }
+
+      // Determine orientation
+      let orientationType: 'portrait' | 'landscape' | 'square';
+      if (Math.abs(aspectRatioDecimal - 1.0) < 0.01) {
+        orientationType = 'square';
+      } else {
+        orientationType = aspectRatioDecimal < 1 ? 'portrait' : 'landscape';
+      }
 
       resolve({
         duration,
         width,
         height,
         aspectRatio,
+        aspectRatioDecimal,
+        orientationType,
         codec,
         bitrate,
         fps,
