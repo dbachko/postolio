@@ -12,7 +12,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
 import { VideoUploader } from '@/components/VideoUploader';
@@ -1122,26 +1121,24 @@ export function PostSidebar({
                         Add First Comment (Optional)
                       </CollapsibleTrigger>
                       <CollapsibleContent className="space-y-2 pt-2">
-                        <Label htmlFor="firstComment" className="text-sm font-medium">
-                          First Comment
-                        </Label>
-                        <Textarea
+                        <PostCaptionEditor
                           id="firstComment"
-                          placeholder="Add hashtags, links, or CTAs..."
+                          label="First Comment"
+                          required={false}
                           value={formData.firstComment || ''}
-                          onChange={(e) =>
-                            setFormData((s) => ({ ...s, firstComment: e.target.value }))
-                          }
-                          rows={4}
+                          onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
+                          brandId={selectedBrand?.id}
+                          placeholder="Add hashtags, links, or CTAs..."
+                          minHeight="min-h-24"
                           maxLength={2200}
-                          className="resize-none"
+                          disabled={false}
+                          showIcon={false}
+                          helperText={
+                            <span className="italic">
+                              Posts automatically when your content goes live
+                            </span>
+                          }
                         />
-                        <div className="text-muted-foreground flex justify-between text-xs">
-                          <span className="italic">
-                            Posts automatically when your content goes live
-                          </span>
-                          <span>{(formData.firstComment || '').length}/2200 characters</span>
-                        </div>
                       </CollapsibleContent>
                     </Collapsible>
                   </>
@@ -1200,15 +1197,16 @@ export function PostSidebar({
                           </p>
                           <p className="text-muted-foreground">
                             You can still save drafts, but new scheduled posts will fail until you
-                            free up slots or upgrade your plan.
+                            free up slots or{' '}
+                            <button
+                              type="button"
+                              onClick={() => (window.location.href = '/limits')}
+                              className="font-medium underline underline-offset-2"
+                            >
+                              upgrade your plan
+                            </button>
+                            .
                           </p>
-                          <button
-                            type="button"
-                            onClick={() => (window.location.href = '/limits')}
-                            className="text-xs font-medium underline underline-offset-2"
-                          >
-                            View scheduling limits
-                          </button>
                         </div>
                       </div>
                     )}
@@ -1391,25 +1389,24 @@ export function PostSidebar({
                     Add First Comment (Optional)
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-2 pt-2">
-                    <Label htmlFor="firstComment-edit" className="text-sm font-medium">
-                      First Comment
-                    </Label>
-                    <Textarea
+                    <PostCaptionEditor
                       id="firstComment-edit"
-                      placeholder="Add hashtags, links, or CTAs..."
+                      label="First Comment"
+                      required={false}
                       value={formData.firstComment || ''}
-                      onChange={(e) => setFormData((s) => ({ ...s, firstComment: e.target.value }))}
-                      rows={4}
+                      onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
+                      brandId={post?.brand?.id}
+                      placeholder="Add hashtags, links, or CTAs..."
+                      minHeight="min-h-24"
                       maxLength={2200}
-                      className="resize-none"
                       disabled={disabled}
+                      showIcon={false}
+                      helperText={
+                        <span className="italic">
+                          Posts automatically when your content goes live
+                        </span>
+                      }
                     />
-                    <div className="text-muted-foreground flex justify-between text-xs">
-                      <span className="italic">
-                        Posts automatically when your content goes live
-                      </span>
-                      <span>{(formData.firstComment || '').length}/2200 characters</span>
-                    </div>
                   </CollapsibleContent>
                 </Collapsible>
               </>
@@ -1549,15 +1546,16 @@ export function PostSidebar({
                       </p>
                       <p className="text-muted-foreground">
                         You can still save drafts, but new scheduled posts will fail until you free
-                        up slots or upgrade your plan.
+                        up slots or{' '}
+                        <button
+                          type="button"
+                          onClick={() => (window.location.href = '/limits')}
+                          className="font-medium underline underline-offset-2"
+                        >
+                          upgrade your plan
+                        </button>
+                        .
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => (window.location.href = '/limits')}
-                        className="text-xs font-medium underline underline-offset-2"
-                      >
-                        View scheduling limits
-                      </button>
                     </div>
                   </div>
                 )}

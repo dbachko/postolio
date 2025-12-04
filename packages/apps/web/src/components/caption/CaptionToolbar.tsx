@@ -8,7 +8,6 @@ interface CaptionToolbarProps {
   disabled?: boolean;
   value?: string;
   maxLength?: number;
-  showCharacterCount?: boolean;
 }
 
 export function CaptionToolbar({
@@ -17,7 +16,6 @@ export function CaptionToolbar({
   disabled,
   value = '',
   maxLength = 2200,
-  showCharacterCount = true,
 }: CaptionToolbarProps) {
   return (
     <div className="border-border bg-muted/30 flex items-center justify-between gap-1 border-t px-2 py-1">
@@ -30,11 +28,9 @@ export function CaptionToolbar({
           disabled={disabled}
         />
       </div>
-      {showCharacterCount && (
-        <div className="text-muted-foreground text-xs">
-          {value.length}/{maxLength}
-        </div>
-      )}
+      <div className="text-muted-foreground text-xs">
+        {value.length}/{maxLength}
+      </div>
     </div>
   );
 }

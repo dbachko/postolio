@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Type } from 'lucide-react';
@@ -10,10 +10,13 @@ interface PostCaptionEditorProps {
   brandId?: string;
   placeholder?: string;
   minHeight?: string;
-  showCharacterCount?: boolean;
   maxLength?: number;
   disabled?: boolean;
   showIcon?: boolean;
+  label?: string;
+  id?: string;
+  required?: boolean;
+  helperText?: ReactNode;
 }
 
 export function PostCaptionEditor({
@@ -22,10 +25,13 @@ export function PostCaptionEditor({
   brandId,
   placeholder = 'Write your caption...',
   minHeight = 'min-h-32',
-  showCharacterCount = true,
   maxLength = 2200,
   disabled = false,
   showIcon = false,
+  label = 'Caption',
+  id = 'caption',
+  required = true,
+  helperText,
 }: PostCaptionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -54,14 +60,15 @@ export function PostCaptionEditor({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="caption" className="flex items-center gap-2">
+      <Label htmlFor={id} className="flex items-center gap-2">
         {showIcon && <Type className="h-4 w-4" />}
-        Caption <span className="text-destructive">*</span>
+        {label}
+        {required && <span className="text-destructive">*</span>}
       </Label>
       <div className="border-border overflow-hidden rounded-md border">
         <Textarea
           ref={textareaRef}
-          id="caption"
+          id={id}
           value={value}
           onChange={(e) => {
             const newValue = e.target.value;
@@ -80,9 +87,9 @@ export function PostCaptionEditor({
           disabled={disabled}
           value={value}
           maxLength={maxLength}
-          showCharacterCount={showCharacterCount}
         />
       </div>
+      {helperText && <div className="text-muted-foreground text-xs">{helperText}</div>}
     </div>
   );
 }
