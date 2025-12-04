@@ -13,6 +13,7 @@ import {
 } from '../../services/assets-media.js';
 import type { AssetRecord } from '@postolio/assets-client';
 import { buildContentResponse } from '../../services/content-response-builder.js';
+import { haveUniformAspectRatio } from '../../utils/aspect-ratio.js';
 
 const prisma = getDatabaseClient();
 
@@ -174,6 +175,14 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           return reply
             .code(400)
             .send({ error: 'All media assets must belong to the same brand as the content' });
+        }
+
+        // When updating a carousel (multiple assets), require a consistent aspect ratio.
+        if (assetIds.length > 1 && !haveUniformAspectRatio(validAssets)) {
+          return reply.code(400).send({
+            error:
+              'All carousel items must have the same aspect ratio. Please crop or resize your media so they match.',
+          });
         }
 
         // Replace media set transactionally

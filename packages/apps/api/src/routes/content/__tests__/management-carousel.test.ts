@@ -78,7 +78,7 @@ vi.mock('../../../services/content-operations/authorization.js', () => ({
 }));
 
 vi.mock('../../../services/assets-media.js', () => {
-  const getAssetsClient = () => ({
+  const getAssetsClient = vi.fn(() => ({
     getBatchAssets: vi.fn(async (assetIds: string[]) =>
       assetIds.map((assetId) => ({
         id: assetId,
@@ -88,7 +88,7 @@ vi.mock('../../../services/assets-media.js', () => {
         height: 1080,
       }))
     ),
-  });
+  }));
 
   return {
     getAssetsClient,
@@ -98,6 +98,9 @@ vi.mock('../../../services/assets-media.js', () => {
     importImageBuffer: vi.fn(),
   };
 });
+
+// Re-import mocked helpers for finer-grained control in tests
+import { getAssetsClient } from '../../../services/assets-media.js';
 
 describe('Content management carousel assets', () => {
   let app: FastifyInstance;
@@ -162,5 +165,41 @@ describe('Content management carousel assets', () => {
     expect(response.statusCode).toBe(201);
     const payload = JSON.parse(response.payload);
     expect(payload?.content?.id).toBeDefined();
+  });
+
+  it('rejects content when carousel assets have mismatched aspect ratios', async () => {
+    (getAssetsClient as any).mockImplementation(() => ({
+      getBatchAssets: vi.fn(async (assetIds: string[]) =>
+        assetIds.map((assetId, index) => ({
+          id: assetId,
+          brandId: 'brand-1',
+          url: `https://cdn.example.com/assets/${assetId}.jpg`,
+          // First asset square, second asset wide to trigger mismatch
+          width: index === 0 ? 1080 : 1920,
+          height: 1080,
+        }))
+      ),
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/content',
+      headers: {
+        authorization: authHeader,
+        'content-type': 'application/json',
+      },
+      payload: {
+        brandId: 'brand-1',
+        caption: 'Test mismatched carousel caption',
+        hashtags: [],
+        mediaType: 'image',
+        contentType: 'post',
+        assetIds: ['asset-1', 'asset-2'],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const payload = JSON.parse(response.payload);
+    expect(payload?.error).toContain('same aspect ratio');
   });
 });

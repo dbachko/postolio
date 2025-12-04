@@ -70,16 +70,17 @@ export function VideoUploader({
       const height = video.videoHeight;
       const duration = video.duration;
 
-      const metadataErrors: string[] = [];
+      const blockingErrors: string[] = [];
+      const metadataWarnings: string[] = [];
 
       if (Number.isFinite(duration)) {
         if (typeof minDurationSeconds === 'number' && duration < minDurationSeconds) {
-          metadataErrors.push(
+          blockingErrors.push(
             `Video is too short. Instagram reels require at least ${minDurationSeconds} seconds.`
           );
         }
         if (typeof maxDurationSeconds === 'number' && duration > maxDurationSeconds) {
-          metadataErrors.push(
+          blockingErrors.push(
             `Video is too long. Instagram reels support up to ${maxDurationSeconds} seconds.`
           );
         }
@@ -87,22 +88,22 @@ export function VideoUploader({
 
       if (width > 0 && height > 0) {
         if (typeof minWidth === 'number' && width < minWidth) {
-          metadataErrors.push(
+          metadataWarnings.push(
             `Video width is too small (${Math.round(width)}px). Minimum recommended width is ${minWidth}px.`
           );
         }
         if (typeof minHeight === 'number' && height < minHeight) {
-          metadataErrors.push(
+          metadataWarnings.push(
             `Video height is too small (${Math.round(height)}px). Minimum recommended height is ${minHeight}px.`
           );
         }
         if (typeof maxWidth === 'number' && width > maxWidth) {
-          metadataErrors.push(
+          metadataWarnings.push(
             `Video width is too large (${Math.round(width)}px). Maximum supported width is ${maxWidth}px.`
           );
         }
         if (typeof maxHeight === 'number' && height > maxHeight) {
-          metadataErrors.push(
+          metadataWarnings.push(
             `Video height is too large (${Math.round(height)}px). Maximum supported height is ${maxHeight}px.`
           );
         }
@@ -124,7 +125,7 @@ export function VideoUploader({
           const tolerance = 0.03;
           if (closest.diff > tolerance) {
             const labels = allowedAspectRatios.map((r) => r.label).join(', ');
-            metadataErrors.push(
+            metadataWarnings.push(
               `Unusual aspect ratio detected. Instagram works best with ${labels}. Your video is approximately ${(
                 width / height
               ).toFixed(2)}:1 (${Math.round(width)}×${Math.round(height)}).`
@@ -133,15 +134,21 @@ export function VideoUploader({
         }
       }
 
-      if (metadataErrors.length > 0) {
-        setError(metadataErrors.join(' '));
-      } else {
-        setError((prev) =>
-          prev && prev.toLowerCase().includes('video') && prev.toLowerCase().includes('instagram')
-            ? null
-            : prev
-        );
+      if (metadataWarnings.length > 0) {
+        toast.warning(metadataWarnings.join(' '));
       }
+
+      if (blockingErrors.length > 0) {
+        setError(blockingErrors.join(' '));
+        return;
+      }
+
+      // Clear previous Instagram-specific video errors while preserving unrelated ones.
+      setError((prev) =>
+        prev && prev.toLowerCase().includes('video') && prev.toLowerCase().includes('instagram')
+          ? null
+          : prev
+      );
     },
     [
       allowedAspectRatios,

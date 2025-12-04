@@ -24,6 +24,7 @@ import {
   type InstagramContentType,
   type InstagramMediaType,
 } from '@postolio/content-validation';
+import { haveUniformAspectRatio } from '../utils/aspect-ratio.js';
 
 const prisma = getDatabaseClient();
 
@@ -239,6 +240,9 @@ export class SchedulerAdapter {
               cdnUrl: true,
               usageContext: true,
               displayOrder: true,
+              width: true,
+              height: true,
+              assetId: true,
             },
             orderBy: { displayOrder: 'asc' },
           },
@@ -617,6 +621,17 @@ export class SchedulerAdapter {
             normalizedMediaType === 'image' && normalizedContentType !== 'reel';
           if (requiresImageAsset && structuredMediaAssets.length === 0) {
             const msg = 'Missing asset for scheduling. Please re-upload or regenerate the image.';
+            await emitScheduleFailure(msg);
+            return {
+              success: false,
+              error: msg,
+            };
+          }
+
+          // For carousels (multiple media assets), Instagram requires a consistent aspect ratio.
+          if (structuredMediaAssets.length > 1 && !haveUniformAspectRatio(structuredMediaAssets)) {
+            const msg =
+              'All carousel items must have the same aspect ratio before scheduling. Please crop or resize your media so they match.';
             await emitScheduleFailure(msg);
             return {
               success: false,
@@ -1273,6 +1288,15 @@ export class SchedulerAdapter {
 
         // Sort by display order
         structuredMediaAssets.sort((a, b) => a.order - b.order);
+
+        // For carousels, enforce consistent aspect ratio before rescheduling.
+        if (structuredMediaAssets.length > 1 && !haveUniformAspectRatio(structuredMediaAssets)) {
+          return {
+            success: false,
+            error:
+              'All carousel items must have the same aspect ratio before rescheduling. Please crop or resize your media so they match.',
+          };
+        }
 
         // Send structured media assets
         if (structuredMediaAssets.length > 0) {

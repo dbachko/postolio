@@ -16,6 +16,7 @@ import {
   type MediaType as ValidationMediaType,
 } from '@postolio/content-validation';
 import { extractHashtagsFromCaption } from './hashtag-extractor.js';
+import { haveUniformAspectRatio } from './aspect-ratio.js';
 
 export interface CreateManualContentBody {
   brandId: string;
@@ -135,6 +136,16 @@ export async function resolveAssets(
         success: false,
         code: 400,
         error: 'All assets must belong to the same brand as the content',
+      };
+    }
+
+    // When creating a carousel, require all assets to share the same aspect ratio.
+    if (assetIds.length > 1 && !haveUniformAspectRatio(validAssets)) {
+      return {
+        success: false,
+        code: 400,
+        error:
+          'All carousel items must have the same aspect ratio. Please crop or resize your media so they match.',
       };
     }
 
