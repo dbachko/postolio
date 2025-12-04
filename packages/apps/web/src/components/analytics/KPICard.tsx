@@ -1,7 +1,8 @@
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, HelpCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatGrowth } from '@/utils/formatNumber';
+import { Button } from '@/components/ui/button';
 
 interface KPICardProps {
   title: string;
@@ -11,9 +12,19 @@ interface KPICardProps {
   icon?: React.ReactNode;
   loading?: boolean;
   onClick?: () => void;
+  onHelpClick?: () => void;
 }
 
-export function KPICard({ title, value, change, trend, icon, loading, onClick }: KPICardProps) {
+export function KPICard({
+  title,
+  value,
+  change,
+  trend,
+  icon,
+  loading,
+  onClick,
+  onHelpClick,
+}: KPICardProps) {
   if (loading) {
     return (
       <Card className="cursor-pointer transition-shadow hover:shadow-md">
@@ -63,7 +74,24 @@ export function KPICard({ title, value, change, trend, icon, loading, onClick }:
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground text-sm font-medium">{title}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground text-sm font-medium">{title}</span>
+            {onHelpClick && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground h-5 w-5"
+                aria-label={`What is ${title}?`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onHelpClick();
+                }}
+              >
+                <HelpCircle className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
           {icon && <div className="text-muted-foreground">{icon}</div>}
         </div>
       </CardHeader>

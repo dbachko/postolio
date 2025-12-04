@@ -21,6 +21,13 @@ import { GrowthProjectionCard } from '../analytics/GrowthProjectionCard';
 import { RecommendationsPanel } from '../analytics/RecommendationsPanel';
 import { PostingScheduleOptimizer } from '../analytics/PostingScheduleOptimizer';
 import { MultiMetricTimeSeriesChart } from '../analytics/MultiMetricTimeSeriesChart';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type {
   AIInsight,
   ApiForecastsData,
@@ -93,6 +100,7 @@ export function AnalyticsOverviewTab({
 }: AnalyticsOverviewTabProps) {
   const [showScheduleOptimizer, setShowScheduleOptimizer] = useState(false);
   const [topPostThumbs, setTopPostThumbs] = useState<Record<string, string>>({});
+  const [bestPostHelpOpen, setBestPostHelpOpen] = useState(false);
   const hasPosts = (report?.totalPosts || 0) > 0;
   const hasPostMetrics = Boolean(report?.topPosts && report.topPosts.length > 0);
   const showIngestionNotice = hasPosts && !hasPostMetrics;
@@ -226,8 +234,43 @@ export function AnalyticsOverviewTab({
               value={report.topPost ? formatPercent(report.topPost.engagementRate) : 'N/A'}
               icon={<Heart className="h-5 w-5" />}
               loading={loading}
+              onHelpClick={() => setBestPostHelpOpen(true)}
             />
           </div>
+
+          <Dialog open={bestPostHelpOpen} onOpenChange={setBestPostHelpOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>What does “Best Post” mean?</DialogTitle>
+                <DialogDescription>
+                  Learn how we calculate engagement rate for your top post.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <p>
+                  The <span className="font-medium">Best Post</span> card shows the{' '}
+                  <span className="font-medium">engagement rate</span> of the single best-performing
+                  post in the selected time range.
+                </p>
+                <p className="text-muted-foreground">
+                  Engagement rate is calculated as:
+                  <br />
+                  <span className="font-mono">
+                    (likes + comments + saves + shares) ÷ reach (or impressions) × 100
+                  </span>
+                </p>
+                <p>
+                  Because we count all interactions, engagement rate can be higher than 100% when
+                  people take multiple actions on the same post (for example, like, comment, save,
+                  and share) or when impressions are relatively low compared to engagement.
+                </p>
+                <p className="text-muted-foreground">
+                  In general, higher percentages mean your post generates more interactions per
+                  person reached.
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* AI Insights Panel */}
           <InsightsPanel insights={aiInsights} loading={insightsLoading} />
