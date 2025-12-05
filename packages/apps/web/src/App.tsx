@@ -33,6 +33,8 @@ import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationsPage from './pages/Notifications';
 import { RouteError } from './components/RouteError';
+import OnboardingPage from './pages/Onboarding';
+import { useOnboardingStatus } from './hooks/useOnboardingStatus';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
 const InboxComments = lazy(() => import('./pages/InboxComments'));
 const InboxDMs = lazy(() => import('./pages/InboxDMs'));
@@ -60,6 +62,36 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 }
 
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore();
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  const { data: onboarding, isLoading } = useOnboardingStatus({
+    enabled: isAuthenticated && !path.startsWith('/onboarding'),
+  });
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  if (path.startsWith('/onboarding')) {
+    return <>{children}</>;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
+      </div>
+    );
+  }
+
+  if (onboarding && (onboarding.status === 'no_brand' || onboarding.status === 'brand_no_social')) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 // Loading fallback for lazy routes
 const LazyLoadingFallback = ({ minHeight = '200px' }: { minHeight?: string }) => (
   <div className="flex items-center justify-center" style={{ minHeight }}>
@@ -79,6 +111,15 @@ const router = createBrowserRouter([
   { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
   { path: '/account/recover', element: <AccountRecover />, errorElement: <RouteError /> },
   {
+    path: '/onboarding',
+    element: (
+      <ProtectedRoute>
+        <OnboardingPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
     path: '/legal/data-deletion-verify',
     element: <DataDeletionVerify />,
     errorElement: <RouteError />,
@@ -94,13 +135,15 @@ const router = createBrowserRouter([
     path: '/inbox/comments',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-              <InboxComments />
-            </Suspense>
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+                <InboxComments />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -109,13 +152,15 @@ const router = createBrowserRouter([
     path: '/inbox/dms',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-              <InboxDMs />
-            </Suspense>
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+                <InboxDMs />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -124,9 +169,11 @@ const router = createBrowserRouter([
     path: '/notifications',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <NotificationsPage />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <NotificationsPage />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
   },
@@ -134,9 +181,11 @@ const router = createBrowserRouter([
     path: '/',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Dashboard />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Dashboard />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -145,9 +194,11 @@ const router = createBrowserRouter([
     path: '/dashboard',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Dashboard />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Dashboard />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -156,9 +207,11 @@ const router = createBrowserRouter([
     path: '/brands',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Brands />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Brands />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -167,11 +220,13 @@ const router = createBrowserRouter([
     path: '/assets',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Assets />
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Assets />
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -180,11 +235,13 @@ const router = createBrowserRouter([
     path: '/assets/:assetId',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <AssetDetail />
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <AssetDetail />
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -193,9 +250,11 @@ const router = createBrowserRouter([
     path: '/content',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Content />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Content />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -204,44 +263,46 @@ const router = createBrowserRouter([
     path: '/analytics',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary
-            fallback={
-              <div className="border-border bg-card flex min-h-[400px] flex-col items-center justify-center gap-4 rounded-lg border p-8 text-center">
-                <div className="text-destructive">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-12 w-12"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary
+              fallback={
+                <div className="border-border bg-card flex min-h-[400px] flex-col items-center justify-center gap-4 rounded-lg border p-8 text-center">
+                  <div className="text-destructive">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-12 w-12"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">Analytics Error</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Something went wrong loading the analytics page. Please refresh to try again.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
+                    Refresh Page
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">Analytics Error</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Something went wrong loading the analytics page. Please refresh to try again.
-                  </p>
-                </div>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium"
-                >
-                  Refresh Page
-                </button>
-              </div>
-            }
-          >
-            <Analytics />
-          </ErrorBoundary>
-        </Layout>
+              }
+            >
+              <Analytics />
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -250,13 +311,15 @@ const router = createBrowserRouter([
     path: '/drafts',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Suspense fallback={<LazyLoadingFallback />}>
-              <Drafts />
-            </Suspense>
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <Drafts />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
   },
@@ -264,9 +327,11 @@ const router = createBrowserRouter([
     path: '/campaigns',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Campaigns />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Campaigns />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
   },
@@ -274,9 +339,11 @@ const router = createBrowserRouter([
     path: '/campaigns/create',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Campaigns />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Campaigns />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
   },
@@ -284,9 +351,11 @@ const router = createBrowserRouter([
     path: '/campaigns/:campaignId/edit',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Campaigns />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Campaigns />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
   },
@@ -294,9 +363,11 @@ const router = createBrowserRouter([
     path: '/campaigns/:campaignId',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Campaigns />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Campaigns />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -305,13 +376,15 @@ const router = createBrowserRouter([
     path: '/posts/:postId',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-              <PostDetail />
-            </Suspense>
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+                <PostDetail />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -320,13 +393,15 @@ const router = createBrowserRouter([
     path: '/posts/create',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-              <CreatePost />
-            </Suspense>
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+                <CreatePost />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -335,9 +410,11 @@ const router = createBrowserRouter([
     path: '/settings',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <Settings />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <Settings />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -346,9 +423,11 @@ const router = createBrowserRouter([
     path: '/security',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <SecuritySettings />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <SecuritySettings />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -357,13 +436,15 @@ const router = createBrowserRouter([
     path: '/limits',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <ErrorBoundary>
-            <Suspense fallback={<LazyLoadingFallback />}>
-              <Limits />
-            </Suspense>
-          </ErrorBoundary>
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <Limits />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,
@@ -372,9 +453,11 @@ const router = createBrowserRouter([
     path: '/_ui',
     element: (
       <ProtectedRoute>
-        <Layout>
-          <UiKitchenSink />
-        </Layout>
+        <OnboardingGuard>
+          <Layout>
+            <UiKitchenSink />
+          </Layout>
+        </OnboardingGuard>
       </ProtectedRoute>
     ),
     errorElement: <RouteError />,

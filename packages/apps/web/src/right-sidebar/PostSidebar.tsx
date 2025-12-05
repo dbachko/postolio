@@ -102,6 +102,30 @@ function getScheduleBlockerMessage(params: {
   return null;
 }
 
+interface PostFormState {
+  caption: string;
+  imageUrl: string;
+  videoUrl: string;
+  carouselAssets: AssetReference[];
+  contentType: InstagramContentType;
+  mediaType: InstagramMediaType;
+  scheduledAt: string;
+  shareToFeed: boolean;
+  firstComment: string;
+}
+
+const createEmptyPostFormState = (): PostFormState => ({
+  caption: '',
+  imageUrl: '',
+  videoUrl: '',
+  carouselAssets: [],
+  contentType: 'post',
+  mediaType: 'image',
+  scheduledAt: '',
+  shareToFeed: true,
+  firstComment: '',
+});
+
 interface PostDetailData {
   id: string;
   caption: string;
@@ -228,17 +252,7 @@ export function PostSidebar({
     };
   }, [post?.brand?.id, getBrandTimezone, timezone]);
 
-  const [formData, setFormData] = useState({
-    caption: '',
-    imageUrl: '',
-    videoUrl: '',
-    carouselAssets: [] as AssetReference[],
-    contentType: 'post' as InstagramContentType,
-    mediaType: 'image' as InstagramMediaType,
-    scheduledAt: '',
-    shareToFeed: true,
-    firstComment: '',
-  });
+  const [formData, setFormData] = useState<PostFormState>(() => createEmptyPostFormState());
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
   const hasScheduleTime = Boolean(formData.scheduledAt);
@@ -311,7 +325,7 @@ export function PostSidebar({
   useEffect(() => {
     if (!post || !brandTimezone) return;
     const mediaAssets = post.mediaAssets || [];
-    const carouselAssetsFromPost: AssetReference[] = mediaAssets.map((asset) => {
+    let carouselAssetsFromPost: AssetReference[] = mediaAssets.map((asset) => {
       const type =
         asset.fileType === 'video'
           ? ('video' as const)
@@ -324,6 +338,20 @@ export function PostSidebar({
         type,
       };
     });
+
+    // Fallback for posts (such as demo content) that only expose a primary image URL
+    // and do not yet have structured mediaAssets. This ensures the "Post Media"
+    // section renders the image instead of showing "No image".
+    if (!carouselAssetsFromPost.length && post.imageUrl) {
+      carouselAssetsFromPost = [
+        {
+          id: post.imageUrl,
+          url: post.imageUrl,
+          type: inferAssetTypeFromUrl(post.imageUrl),
+        },
+      ];
+    }
+
     const videoAsset = carouselAssetsFromPost.find((a) => a.type === 'video');
 
     // Normalize mediaType from API/DB:
@@ -705,6 +733,19 @@ export function PostSidebar({
 
   // Prefill from query params when creating
   const prefillAppliedRef = useRef(false);
+  // When switching into creation mode (e.g., from viewing an existing post to creating
+  // a new one from the calendar), reset the form so media/caption from the previous
+  // post do not leak into the new "New Post" flow.
+  useEffect(() => {
+    if (!isCreating) return;
+    setFormData(createEmptyPostFormState());
+    setHasChanges(false);
+    setFirstCommentOpen(false);
+    setSelectedCampaign(null);
+    formInitializedRef.current = false;
+    prefillAppliedRef.current = false;
+  }, [isCreating]);
+
   useEffect(() => {
     if (!isCreating || prefillAppliedRef.current === true) return;
     const hasPrefillInput =

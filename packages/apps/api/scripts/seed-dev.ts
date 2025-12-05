@@ -78,7 +78,7 @@ async function main() {
   const { getDatabaseClient, disconnectDatabase } = await import('../src/config/database.js');
   const prisma = getDatabaseClient();
 
-  console.log(`==> Creating user ${email}`);
+  console.log(`==> Creating primary dev user ${email}`);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log('User already exists. Re-using existing user.');
@@ -98,6 +98,27 @@ async function main() {
         timezoneAutoDetected: true,
       },
     }));
+
+  // Secondary dev user for onboarding flow testing (no brands, no social accounts)
+  const onboardingTestEmail = 'dev001@postolio.test';
+  console.log(`==> Ensuring onboarding test user ${onboardingTestEmail} exists (no brands)`);
+  const existingOnboardingUser = await prisma.user.findUnique({
+    where: { email: onboardingTestEmail },
+  });
+  if (!existingOnboardingUser) {
+    await prisma.user.create({
+      data: {
+        email: onboardingTestEmail,
+        password: await bcrypt.hash(password, 10),
+        name: 'Onboarding Test User',
+        subscriptionTier: 'free',
+        timezone: 'UTC',
+        timezoneAutoDetected: true,
+      },
+    });
+  } else {
+    console.log('Onboarding test user already exists; leaving as-is to preserve local state.');
+  }
 
   console.log(`==> Creating brand "${brandName}" for user ${user.id}`);
 

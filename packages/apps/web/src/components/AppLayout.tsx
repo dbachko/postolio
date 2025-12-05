@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { EmailVerificationBanner } from './EmailVerificationBanner';
+import { DemoModeBanner } from './DemoModeBanner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -219,6 +220,7 @@ export function AppLayout({ children }: LayoutProps) {
 
       {/* Banners above top nav */}
       <EmailVerificationBanner />
+      <DemoModeBanner />
       <ScheduleLimitBanner />
 
       {/* Ultra-thin navigation bar */}

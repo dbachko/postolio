@@ -99,7 +99,7 @@ export function PreferredPostingTime({ brandId }: { brandId: string }) {
         )}
         {isError && (
           <div className="text-muted-foreground">
-            Connect Instagram to enable personalized posting time recommendations.
+            Connect a social media account to enable personalized posting time recommendations.
           </div>
         )}
         {!isLoading && !isError && data && (
@@ -123,7 +123,7 @@ export function PreferredPostingTime({ brandId }: { brandId: string }) {
         )}
         {!isLoading && !isError && !data && (
           <div className="text-muted-foreground">
-            No data yet. Connect Instagram and try Refresh.
+            No data yet. Connect a social media account and try Refresh.
           </div>
         )}
       </CardContent>

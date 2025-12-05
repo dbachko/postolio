@@ -50,6 +50,7 @@ import accountRoutes from './routes/account.js';
 import brandAnalysisNested from './routes/brand-analysis-nested.js';
 import brandsInstagram from './routes/brands-instagram.js';
 import notificationsRoutes from './routes/notifications.js';
+import onboardingRoutes from './routes/onboarding.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -244,6 +245,7 @@ export function buildFastify(): FastifyInstance {
   app.register(postDetailRoutes); // Post detail routes include /api in their own paths
   app.register(assetsProxyRoutes, { prefix: '/api/assets' });
   // Account utility routes
+  app.register(onboardingRoutes); // Onboarding routes include their own /api prefix
   app.register(accountRoutes, { prefix: '/api/account' });
   app.register(configRoutes); // Config routes include their own /api prefix
   app.register(backgroundJobsRoutes); // Background job monitoring routes
