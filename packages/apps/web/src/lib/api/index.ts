@@ -6,6 +6,7 @@ import { ContentClient } from './content-client';
 import { NotificationsClient } from './notifications-client';
 import { AnalyticsV2Client } from './analytics-v2-client';
 import { OnboardingClient } from './onboarding-client';
+import { DMAutomationClient } from './dm-automation-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -18,6 +19,7 @@ export const content = new ContentClient(http);
 export const notifications = new NotificationsClient(http);
 export const onboarding = new OnboardingClient(http);
 export const analyticsV2 = new AnalyticsV2Client(http);
+export const dmAutomation = new DMAutomationClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 
@@ -36,4 +38,13 @@ export type {
   Campaign,
   Notification,
   NotificationPreference,
+  DMAutomationRule,
+  CreateRuleInput,
+  UpdateRuleInput,
+  DMAutomationAnalytics,
+  DMTriggerType,
+  DMActionType,
+  DMRuleStatus,
+  DMTriggerConfig,
+  DMActiveHours,
 } from './types';

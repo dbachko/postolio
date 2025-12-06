@@ -410,3 +410,83 @@ export interface InstagramPostDetailed {
     engagementRate: number;
   };
 }
+
+// ============================================
+// DM Automation Types
+// ============================================
+
+export type DMTriggerType = 'comment_keyword' | 'dm_keyword' | 'comment_any' | 'dm_any';
+export type DMActionType = 'send_dm' | 'reply_comment' | 'send_dm_and_reply';
+export type DMRuleStatus = 'active' | 'paused' | 'archived';
+
+export interface DMTriggerConfig {
+  keywords: string[];
+  matchType: 'exact' | 'contains' | 'regex';
+}
+
+export interface DMActiveHours {
+  start: string; // HH:MM format
+  end: string; // HH:MM format
+  timezone?: string;
+}
+
+export interface DMAutomationRule {
+  id: string;
+  brandId: string;
+  name: string;
+  triggerType: DMTriggerType;
+  triggerConfig: DMTriggerConfig;
+  actionType: DMActionType;
+  messageTemplate: string;
+  commentReplyTemplate: string | null;
+  status: DMRuleStatus;
+  priority: number;
+  maxUsesPerUser: number | null;
+  cooldownMinutes: number | null;
+  activeHours: DMActiveHours | null;
+  activeDays: number[] | null; // 0=Sunday, 6=Saturday
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface CreateRuleInput {
+  name: string;
+  triggerType: DMTriggerType;
+  triggerConfig: DMTriggerConfig;
+  actionType: DMActionType;
+  messageTemplate: string;
+  commentReplyTemplate?: string;
+  maxUsesPerUser?: number;
+  cooldownMinutes?: number;
+  activeHours?: DMActiveHours;
+  activeDays?: number[];
+  priority?: number;
+}
+
+export interface UpdateRuleInput extends Partial<CreateRuleInput> {
+  status?: DMRuleStatus;
+}
+
+export interface DMAutomationAnalytics {
+  period: {
+    days: number;
+    since: string;
+  };
+  overview: {
+    totalEvents: number;
+    messagesSent: number;
+    commentRepliesSent: number;
+    rateLimitedEvents: number;
+    uniqueUsers: number;
+    successRate: number;
+  };
+  byRule: Array<{
+    ruleId: string;
+    ruleName: string;
+    totalEvents: number;
+    messagesSent: number;
+    commentRepliesSent: number;
+    rateLimited: number;
+  }>;
+}

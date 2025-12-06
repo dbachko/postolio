@@ -291,6 +291,137 @@ class InstagramService {
   }
 
   /**
+   * Send a direct message to an Instagram user (for DM automation)
+   * This method initiates or continues a conversation with a user
+   *
+   * @param brand - Brand sending the message
+   * @param recipientId - Instagram user ID (IGSID) of the recipient
+   * @param message - Message text to send
+   * @returns Message ID from Instagram
+   *
+   * Note: Instagram's 24-hour messaging window applies. You can only message users who have
+   * interacted with your content (comment, DM, story mention) in the last 24 hours.
+   */
+  async sendDirectMessage(
+    brand: BrandData | string,
+    recipientId: string,
+    message: string
+  ): Promise<{ messageId: string }> {
+    if (!(await this.isConfigured(brand))) {
+      throw new Error('Instagram not connected for this brand');
+    }
+    if (!message || !message.trim()) throw new Error('Message must not be empty');
+    if (!recipientId) throw new Error('Recipient ID is required');
+
+    try {
+      const credentials = await this.getCredentialsOrThrow(brand);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      // Send DM via Instagram Graph API
+      const url = fbGraph(`me/messages`);
+      const payload = {
+        recipient: { id: recipientId },
+        message: { text: message },
+        access_token: credentials.accessToken,
+      };
+
+      const response = await axios.post(url, payload);
+      const messageId = String(
+        (response.data as any)?.message_id || (response.data as any)?.id || ''
+      );
+
+      if (!messageId) {
+        throw new Error('Instagram did not return a message ID');
+      }
+
+      instagramLogger.info('DM sent via automation', {
+        brandId: typeof brand === 'string' ? brand : brand.id,
+        recipientId,
+        messageId,
+      });
+
+      return { messageId };
+    } catch (error) {
+      const errorMsg = (error as any)?.response?.data?.error?.message || (error as Error).message;
+
+      // Check for 24-hour window violation
+      if (/24.hour|messaging.window|Cannot message/i.test(errorMsg)) {
+        instagramLogger.warn('24-hour messaging window expired', {
+          brandId: typeof brand === 'string' ? brand : brand.id,
+          recipientId,
+          error: errorMsg,
+        });
+        throw new Error('Cannot send message: 24-hour messaging window has expired');
+      }
+
+      // Check for rate limiting
+      if (/rate.limit|too.many/i.test(errorMsg)) {
+        instagramLogger.error('Instagram API rate limit exceeded', {
+          brandId: typeof brand === 'string' ? brand : brand.id,
+          error: errorMsg,
+        });
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+
+      instagramLogger.error('Failed to send direct message', formatError(error));
+      throw new Error(`Failed to send direct message: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Reply to a comment directly (for DM automation)
+   * Uses the /{comment-id}/replies endpoint which doesn't require media ID
+   *
+   * @param brand - Brand replying to the comment
+   * @param commentId - Instagram comment ID
+   * @param message - Reply text
+   * @returns ID of the reply comment
+   */
+  async replyToCommentDirect(
+    brand: BrandData | string,
+    commentId: string,
+    message: string
+  ): Promise<{ commentId: string }> {
+    if (!(await this.isConfigured(brand))) {
+      throw new Error('Instagram not connected for this brand');
+    }
+    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+    if (!commentId) throw new Error('Comment ID is required');
+
+    try {
+      const credentials = await this.getCredentialsOrThrow(brand);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      // Reply to comment via Graph API
+      const url = fbGraph(`${commentId}/replies`);
+      const payload = {
+        message,
+        access_token: credentials.accessToken,
+      };
+
+      const response = await axios.post(url, payload);
+      const replyId = String((response.data as any)?.id || '');
+
+      if (!replyId) {
+        throw new Error('Instagram did not return a comment ID');
+      }
+
+      instagramLogger.info('Comment reply sent via automation', {
+        brandId: typeof brand === 'string' ? brand : brand.id,
+        commentId,
+        replyId,
+      });
+
+      return { commentId: replyId };
+    } catch (error) {
+      const errorMsg = (error as any)?.response?.data?.error?.message || (error as Error).message;
+
+      instagramLogger.error('Failed to reply to comment', formatError(error));
+      throw new Error(`Failed to reply to comment: ${errorMsg}`);
+    }
+  }
+
+  /**
    * Reply to a specific comment on a media item
    * Instagram Graph API accepts replies by posting a new comment to the media
    * with the `reply_to_comment_id` parameter.

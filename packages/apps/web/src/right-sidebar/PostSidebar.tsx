@@ -867,7 +867,7 @@ export function PostSidebar({
   const headerClass = useMemo(
     () =>
       cn(
-        'bg-card flex h-14 items-center justify-between border-b px-4',
+        'bg-card flex h-12 items-center justify-between border-b px-4',
         layout === 'sidebar' ? 'sticky top-0 z-10' : 'rounded-t'
       ),
     [layout]

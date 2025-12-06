@@ -15,6 +15,7 @@ import AssetDetail from './pages/AssetDetail';
 import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
+import { DMAutomation } from './pages/DMAutomation';
 import { Settings } from './pages/Settings';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
@@ -332,6 +333,16 @@ const router = createBrowserRouter([
             <Campaigns />
           </Layout>
         </OnboardingGuard>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dm-automation',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <DMAutomation />
+        </Layout>
       </ProtectedRoute>
     ),
   },

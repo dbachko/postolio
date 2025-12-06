@@ -14,49 +14,49 @@ datasource db {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  email             String             @unique
-  password          String
-  name              String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  subscriptionTier  String             @default("free")
-  deletedAt         DateTime?
-  deletionReason    String?
-  scheduledDeletion DateTime?
-  timezone             String?            // User's preferred timezone (null = auto-detect)
-  timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
+  id                   String              @id @default(cuid())
+  email                String              @unique
+  password             String
+  name                 String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  subscriptionTier     String              @default("free")
+  deletedAt            DateTime?
+  deletionReason       String?
+  scheduledDeletion    DateTime?
+  timezone             String? // User's preferred timezone (null = auto-detect)
+  timezoneAutoDetected Boolean             @default(true) // Whether to auto-detect timezone
   // Theme preference (system, light, dark)
-  themePreference     ThemePreference    @default(system)
+  themePreference      ThemePreference     @default(system)
   // Calendar week start preference (monday or sunday)
-  weekStartPreference WeekStartPreference @default(monday)
+  weekStartPreference  WeekStartPreference @default(monday)
   // UI preferences (JSON), e.g., { "rightSidebar": { "notifications": 460, "post": 560 } }
-  uiPreferences       Json?
-  
+  uiPreferences        Json?
+
   // OAuth fields
-  googleId          String?            @unique @map("googleid") // Google OAuth ID
-  facebookId        String?            @unique @map("facebookid") // Facebook OAuth ID  
-  profilePicture    String?            @map("profilepicture") // Profile picture URL from OAuth provider
-  emailVerified     Boolean            @default(false) @map("emailverified") // Email verification status
-  
+  googleId       String? @unique @map("googleid") // Google OAuth ID
+  facebookId     String? @unique @map("facebookid") // Facebook OAuth ID  
+  profilePicture String? @map("profilepicture") // Profile picture URL from OAuth provider
+  emailVerified  Boolean @default(false) @map("emailverified") // Email verification status
+
   // Two-factor authentication fields
-  twoFactorEnabled     Boolean        @default(false) @map("twofactorenabled")
-  twoFactorMethod      String?        @map("twofactormethod") // 'totp', 'email', 'sms'
-  twoFactorSecret      String?        @map("twofactorsecret") // Secret for TOTP
-  twoFactorBackupCodes Json?          @map("twofactorbackupcodes") // Array of hashed backup codes
-  twoFactorPhoneNumber String?        @map("twofactorphonenumber") // Phone number for SMS 2FA
+  twoFactorEnabled     Boolean @default(false) @map("twofactorenabled")
+  twoFactorMethod      String? @map("twofactormethod") // 'totp', 'email', 'sms'
+  twoFactorSecret      String? @map("twofactorsecret") // Secret for TOTP
+  twoFactorBackupCodes Json?   @map("twofactorbackupcodes") // Array of hashed backup codes
+  twoFactorPhoneNumber String? @map("twofactorphonenumber") // Phone number for SMS 2FA
 
   // Account security fields
-  failedLoginAttempts  Int            @default(0) @map("failedloginattempts") // Count of failed login attempts
-  accountLockedUntil   DateTime?      @map("accountlockeduntil") // Account lock expiration time
-  
-  brands            Brand[]
-  modifiedCampaigns Campaign[]
-  notifications     Notification[]
+  failedLoginAttempts Int       @default(0) @map("failedloginattempts") // Count of failed login attempts
+  accountLockedUntil  DateTime? @map("accountlockeduntil") // Account lock expiration time
+
+  brands                  Brand[]
+  modifiedCampaigns       Campaign[]
+  notifications           Notification[]
   notificationPreferences NotificationPreference[]
-  notificationState UserNotificationState?
+  notificationState       UserNotificationState?
   // Inbox & Replies
-  savedReplies     SavedReply[]
+  savedReplies            SavedReply[]
 
   @@index([email])
   @@index([accountLockedUntil])
@@ -66,24 +66,28 @@ model User {
 }
 
 model Brand {
-  id                   String             @id @default(cuid())
-  name                 String
-  description          String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  styleProfile         Json?
-  preferences          Json?
-  userId               String
-  postingTimezone      String?            // Brand-specific posting timezone (null = use user's timezone)
-  countryCode          String?            // ISO 3166-1 alpha-2 country code for seasonality/holidays
-  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaigns            Campaign[]
-  content              Content[]
-  notifications        Notification[]
+  id                      String                   @id @default(cuid())
+  name                    String
+  description             String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  styleProfile            Json?
+  preferences             Json?
+  userId                  String
+  postingTimezone         String? // Brand-specific posting timezone (null = use user's timezone)
+  countryCode             String? // ISO 3166-1 alpha-2 country code for seasonality/holidays
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns               Campaign[]
+  content                 Content[]
+  notifications           Notification[]
   notificationPreferences NotificationPreference[]
-  socialAccounts      SocialAccount[]
+  socialAccounts          SocialAccount[]
   // Inbox & Replies
-  savedReplies        SavedReply[]
+  savedReplies            SavedReply[]
+  // DM Automation
+  dmAutomationRules       DMAutomationRule[]
+  dmConversations         DMConversation[]
+  dmAutomationEvents      DMAutomationEvent[]
 
   @@index([userId])
   @@index([createdAt])
@@ -91,38 +95,38 @@ model Brand {
 }
 
 model Content {
-  id                 String        @id @default(cuid())
-  caption            String
-  hashtags           String[]
-  status             ContentStatus @default(draft)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  scheduledAt        DateTime?
-  postedAt           DateTime?
-  generationParams   Json?
-  brandId            String
-  campaignId         String?
-  schedulingError    String?
-  primaryAssetId     String?       // Asset service identifier
-  primaryAssetCdnUrl String?       // Cached CDN URL for fast reads
-  primaryAssetWidth  Int?
-  primaryAssetHeight Int?
-  mediaType          String        @default("image") // 'image' | 'video' (carousels = image + multiple mediaAssets; reels = contentType='reel' + mediaType='video')
-  contentType        String        @default("post") // 'post' | 'reel' | 'story'
-  videoUrl           String?       // CDN URL for video content
-  videoDuration      Int?          // Duration in seconds (for videos/reels)
-  videoThumbnail     String?       // S3 key for video thumbnail
-  aspectRatio        String?       // e.g., "9:16", "16:9", "1:1", "4:5"
-  shareToFeed        Boolean?      // For reels: show in both feed and Reels tab
-  thumbOffset        Int?          // Optional thumbnail offset in milliseconds
-  firstComment       String?       // Optional first comment text (max 2200 chars)
-  firstCommentStatus String?       // 'pending' | 'posted' | 'failed' | 'retrying'
-  firstCommentPostedAt DateTime?   // ISO timestamp of successful comment
-  firstCommentError  String?       // Error message if comment failed
-  brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  campaign           Campaign?     @relation(fields: [campaignId], references: [id])
-  mediaAssets        PostMediaAsset[]
-  publications       ContentPublication[]
+  id                   String               @id @default(cuid())
+  caption              String
+  hashtags             String[]
+  status               ContentStatus        @default(draft)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  scheduledAt          DateTime?
+  postedAt             DateTime?
+  generationParams     Json?
+  brandId              String
+  campaignId           String?
+  schedulingError      String?
+  primaryAssetId       String? // Asset service identifier
+  primaryAssetCdnUrl   String? // Cached CDN URL for fast reads
+  primaryAssetWidth    Int?
+  primaryAssetHeight   Int?
+  mediaType            String               @default("image") // 'image' | 'video' (carousels = image + multiple mediaAssets; reels = contentType='reel' + mediaType='video')
+  contentType          String               @default("post") // 'post' | 'reel' | 'story'
+  videoUrl             String? // CDN URL for video content
+  videoDuration        Int? // Duration in seconds (for videos/reels)
+  videoThumbnail       String? // S3 key for video thumbnail
+  aspectRatio          String? // e.g., "9:16", "16:9", "1:1", "4:5"
+  shareToFeed          Boolean? // For reels: show in both feed and Reels tab
+  thumbOffset          Int? // Optional thumbnail offset in milliseconds
+  firstComment         String? // Optional first comment text (max 2200 chars)
+  firstCommentStatus   String? // 'pending' | 'posted' | 'failed' | 'retrying'
+  firstCommentPostedAt DateTime? // ISO timestamp of successful comment
+  firstCommentError    String? // Error message if comment failed
+  brand                Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  campaign             Campaign?            @relation(fields: [campaignId], references: [id])
+  mediaAssets          PostMediaAsset[]
+  publications         ContentPublication[]
 
   @@index([brandId, status])
   @@index([scheduledAt])
@@ -141,31 +145,31 @@ enum CampaignTypeEnum {
 }
 
 model Campaign {
-  id                 String         @id @default(cuid())
-  name               String
-  brandId            String
-  status             CampaignStatus @default(creating)
-  config             Json
-  priority           Int            @default(5)
-  previewGenerated   Boolean        @default(false)
-  errorMessage       String?
+  id                String           @id @default(cuid())
+  name              String
+  brandId           String
+  status            CampaignStatus   @default(creating)
+  config            Json
+  priority          Int              @default(5)
+  previewGenerated  Boolean          @default(false)
+  errorMessage      String?
   // Visual identification: hex color code for calendar/timeline display
-  color              String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-  startedAt          DateTime?
-  completedAt        DateTime?
-  lastModifiedAt     DateTime       @default(now()) @updatedAt
-  lastModifiedById   String?
-  modificationCount  Int            @default(0)
+  color             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  startedAt         DateTime?
+  completedAt       DateTime?
+  lastModifiedAt    DateTime         @default(now()) @updatedAt
+  lastModifiedById  String?
+  modificationCount Int              @default(0)
   // NEW: Campaign classification and structured metadata
-  campaignType       CampaignTypeEnum @default(custom)
-  contentPillars     Json?
-  urgencyTactics     Json?
-  seasonalContext    Json?
-  brand              Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  lastModifiedBy     User?          @relation(fields: [lastModifiedById], references: [id])
-  content            Content[]
+  campaignType      CampaignTypeEnum @default(custom)
+  contentPillars    Json?
+  urgencyTactics    Json?
+  seasonalContext   Json?
+  brand             Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  lastModifiedBy    User?            @relation(fields: [lastModifiedById], references: [id])
+  content           Content[]
 
   @@index([priority])
   @@index([status])
@@ -188,20 +192,19 @@ model PostMediaAsset {
 
   content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
-  @@index([contentId])
   @@unique([contentId, usageContext])
+  @@index([contentId])
   @@map("post_media_assets")
 }
 
 // CampaignDraft model removed; drafts feature fully deprecated
 
-
 enum ContentStatus {
-  draft      // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)
-  scheduled  // Content scheduled for future posting (replaces approved with scheduledAt)
-  published  // Successfully posted to social platform(s)
-  failed     // Publishing failed
-  skipped    // Missed during campaign pause
+  draft // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)
+  scheduled // Content scheduled for future posting (replaces approved with scheduledAt)
+  published // Successfully posted to social platform(s)
+  failed // Publishing failed
+  skipped // Missed during campaign pause
   unavailable // Post removed or no longer accessible on the platform
 }
 
@@ -239,6 +242,29 @@ enum MetricPeriod {
   hour
 }
 
+// =========================
+// DM Automation — Enums
+// =========================
+
+enum DMTriggerType {
+  comment_keyword // User comments with keyword on any post
+  dm_keyword // User sends DM with keyword
+  comment_any // Any comment (use sparingly - rate limits!)
+  dm_any // Any DM received
+}
+
+enum DMActionType {
+  send_dm // Send DM to user
+  reply_comment // Reply to comment
+  send_dm_and_reply // Both DM + comment reply
+}
+
+enum DMRuleStatus {
+  active
+  paused
+  archived
+}
+
 model SocialAccount {
   id                String   @id @default(cuid())
   brandId           String
@@ -251,8 +277,8 @@ model SocialAccount {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  publications      ContentPublication[]
+  brand                Brand                 @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  publications         ContentPublication[]
   accountMetricSamples AccountMetricSample[]
   accountMetricsLatest AccountMetricsLatest?
 
@@ -262,26 +288,26 @@ model SocialAccount {
 }
 
 model ContentPublication {
-  id                 String    @id @default(cuid())
-  contentId          String
-  socialAccountId    String
-  platform           Platform
-  externalPostId     String
+  id                   String    @id @default(cuid())
+  contentId            String
+  socialAccountId      String
+  platform             Platform
+  externalPostId       String
   externalThreadRootId String?
-  externalAccountId  String?   // cache for faster joins
-  externalPageId     String?   // cache for faster joins (FB/IG)
-  permalink          String?
-  publishedAt        DateTime?
-  status             String?
-  metadata           Json?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  externalAccountId    String? // cache for faster joins
+  externalPageId       String? // cache for faster joins (FB/IG)
+  permalink            String?
+  publishedAt          DateTime?
+  status               String?
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  content            Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
-  socialAccount      SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
-  metricsLatest      PublicationMetricsLatest?
-  metricSamples      MetricSample[]
-  comments           PublicationComment[]
+  content       Content                   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount             @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  metricsLatest PublicationMetricsLatest?
+  metricSamples MetricSample[]
+  comments      PublicationComment[]
 
   @@unique([socialAccountId, externalPostId])
   @@index([contentId, platform])
@@ -289,63 +315,63 @@ model ContentPublication {
 }
 
 model MetricSample {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   publicationId String
   platform      Platform
-  metricName    MetricName  @map("metric_name")
+  metricName    MetricName   @map("metric_name")
   value         Decimal
   period        MetricPeriod
-  windowStart   DateTime?   @map("window_start")
-  windowEnd     DateTime?   @map("window_end")
-  asOf          DateTime    @map("as_of")
+  windowStart   DateTime?    @map("window_start")
+  windowEnd     DateTime?    @map("window_end")
+  asOf          DateTime     @map("as_of")
   raw           Json?
 
-  publication   ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  publication ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
 
   @@index([publicationId, metricName, asOf])
   @@map("metric_samples")
 }
 
 model PublicationMetricsLatest {
-  publicationId String     @id @map("publication_id")
-  platform      Platform
+  publicationId  String   @id @map("publication_id")
+  platform       Platform
   // Store common metrics; extend as needed
-  impressions   Int        @default(0)
-  reach         Int        @default(0)
-  likes         Int        @default(0)
-  comments      Int        @default(0)
-  saves         Int        @default(0)
-  shares        Int        @default(0)
-  videoViews    Int        @default(0) @map("video_views")
-  engagement    Int        @default(0)
-  engagementRate Decimal   @default(0)
-  lastUpdated   DateTime   @default(now()) @map("last_updated")
+  impressions    Int      @default(0)
+  reach          Int      @default(0)
+  likes          Int      @default(0)
+  comments       Int      @default(0)
+  saves          Int      @default(0)
+  shares         Int      @default(0)
+  videoViews     Int      @default(0) @map("video_views")
+  engagement     Int      @default(0)
+  engagementRate Decimal  @default(0)
+  lastUpdated    DateTime @default(now()) @map("last_updated")
 
-  publication   ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  publication ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
 
   @@map("publication_metrics_latest")
 }
 
 model PublicationComment {
-  id                  String   @id @default(cuid())
-  publicationId       String
-  platform            Platform
-  externalCommentId   String   @map("external_comment_id")
-  parentExternalCommentId String? @map("parent_external_comment_id")
-  authorUsername      String?
-  authorExternalUserId String?
-  text                String?
-  likeCount           Int?     @default(0) @map("like_count")
-  createdAt           DateTime @default(now())
-  fetchedAt           DateTime @default(now()) @map("fetched_at")
-  metadata            Json?
+  id                      String   @id @default(cuid())
+  publicationId           String
+  platform                Platform
+  externalCommentId       String   @map("external_comment_id")
+  parentExternalCommentId String?  @map("parent_external_comment_id")
+  authorUsername          String?
+  authorExternalUserId    String?
+  text                    String?
+  likeCount               Int?     @default(0) @map("like_count")
+  createdAt               DateTime @default(now())
+  fetchedAt               DateTime @default(now()) @map("fetched_at")
+  metadata                Json?
 
   // Inbox workflow (persisted status/assignments)
-  status              CommentWorkflowStatus @default(open)
+  status CommentWorkflowStatus @default(open)
   // snoozedUntil removed
   // assignee removed
 
-  publication         ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  publication ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
 
   @@unique([publicationId, externalCommentId])
   @@index([publicationId])
@@ -368,12 +394,12 @@ model SavedReply {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([brandId, title])
   @@index([brandId])
   @@index([userId])
-  @@unique([brandId, title])
   @@map("saved_replies")
 }
 
@@ -390,23 +416,23 @@ model AccountMetricSample {
   asOf            DateTime     @map("as_of")
   raw             Json?
 
-  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@index([socialAccountId, metricName, asOf])
   @@map("account_metric_samples")
 }
 
 model AccountMetricsLatest {
-  socialAccountId String     @id @map("social_account_id")
+  socialAccountId String   @id @map("social_account_id")
   platform        Platform
   // Common account metrics
-  followers       Int        @default(0)
-  impressions     Int        @default(0)
-  reach           Int        @default(0)
-  profileViews    Int        @default(0) @map("profile_views")
-  lastUpdated     DateTime   @default(now()) @map("last_updated")
+  followers       Int      @default(0)
+  impressions     Int      @default(0)
+  reach           Int      @default(0)
+  profileViews    Int      @default(0) @map("profile_views")
+  lastUpdated     DateTime @default(now()) @map("last_updated")
 
-  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@map("account_metrics_latest")
 }
@@ -473,19 +499,19 @@ model AuditLog {
 
 /// Projection of latest brand style profile for fast reads
 model BrandStyleProfileProjection {
-  brandId          String   @id @map("brand_id")
-  profileVersion   Int      @map("profile_version")
-  promptSetVersion String?  @map("prompt_set_version")
-  createdAt        DateTime @map("created_at")
-  hasRecentDrift   Boolean  @default(false) @map("has_recent_drift")
-  lastDriftAt      DateTime? @map("last_drift_at")
-  archetype        String?
-  primaryTones     String[] @db.Text
-  primaryPalette   String[] @db.Text
-  topicsTop        Json?    @map("topics_top")
-  summaryProjection Json?   @map("summary_projection")
-  checksum         String?
-  updatedAt        DateTime @default(now()) @map("updated_at")
+  brandId           String    @id @map("brand_id")
+  profileVersion    Int       @map("profile_version")
+  promptSetVersion  String?   @map("prompt_set_version")
+  createdAt         DateTime  @map("created_at")
+  hasRecentDrift    Boolean   @default(false) @map("has_recent_drift")
+  lastDriftAt       DateTime? @map("last_drift_at")
+  archetype         String?
+  primaryTones      String[]  @db.Text
+  primaryPalette    String[]  @db.Text
+  topicsTop         Json?     @map("topics_top")
+  summaryProjection Json?     @map("summary_projection")
+  checksum          String?
+  updatedAt         DateTime  @default(now()) @map("updated_at")
 
   @@index([profileVersion])
   @@index([archetype])
@@ -500,30 +526,30 @@ enum ThemePreference {
 
 /// User-facing notifications for events like publishing failures, approvals, etc.
 model Notification {
-  id            String   @id @default(cuid())
-  userId        String
-  brandId       String?
-  type          String     // e.g., 'publishing.post_failed'
-  category      String     // 'publishing' | 'accounts' | 'collaboration' | 'system' | 'billing'
-  severity      String     // 'info' | 'warning' | 'error'
-  title         String
-  body          String?
-  linkUrl       String?
-  actorId       String?
-  resourceType  String?
-  resourceId    String?
-  metadata      Json?
-  dedupeKey     String?   @unique
-  groupKey      String?
-  createdAt     DateTime  @default(now())
-  seenAt        DateTime?
-  readAt        DateTime?
-  archivedAt    DateTime?
-  expiresAt     DateTime?
+  id           String    @id @default(cuid())
+  userId       String
+  brandId      String?
+  type         String // e.g., 'publishing.post_failed'
+  category     String // 'publishing' | 'accounts' | 'collaboration' | 'system' | 'billing'
+  severity     String // 'info' | 'warning' | 'error'
+  title        String
+  body         String?
+  linkUrl      String?
+  actorId      String?
+  resourceType String?
+  resourceId   String?
+  metadata     Json?
+  dedupeKey    String?   @unique
+  groupKey     String?
+  createdAt    DateTime  @default(now())
+  seenAt       DateTime?
+  readAt       DateTime?
+  archivedAt   DateTime?
+  expiresAt    DateTime?
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand         Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  deliveries    NotificationDelivery[]
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand      Brand?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  deliveries NotificationDelivery[]
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
@@ -533,22 +559,22 @@ model Notification {
 
 /// Per-user notification channel and frequency preferences
 model NotificationPreference {
-  id                   String   @id @default(cuid())
+  id                   String  @id @default(cuid())
   userId               String
   brandId              String?
   category             String
   type                 String
-  channel              String   // 'in_app' | 'email' | 'digest' | 'push' | 'slack'
-  enabled              Boolean  @default(true)
-  frequency            String?  // 'instant' | 'daily' | 'weekly'
-  digestTime           String?  // '09:00'
-  dndStart             String?  // '22:00'
-  dndEnd               String?  // '07:00'
-  timezone             String?  // e.g., 'America/Los_Angeles'
-  allowMentionOverride Boolean  @default(true)
+  channel              String // 'in_app' | 'email' | 'digest' | 'push' | 'slack'
+  enabled              Boolean @default(true)
+  frequency            String? // 'instant' | 'daily' | 'weekly'
+  digestTime           String? // '09:00'
+  dndStart             String? // '22:00'
+  dndEnd               String? // '07:00'
+  timezone             String? // e.g., 'America/Los_Angeles'
+  allowMentionOverride Boolean @default(true)
 
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand                Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand? @relation(fields: [brandId], references: [id], onDelete: SetNull)
 
   @@unique([userId, brandId, category, type, channel])
   @@map("notification_preferences")
@@ -556,16 +582,16 @@ model NotificationPreference {
 
 /// Delivery attempts per channel for auditing and retries
 model NotificationDelivery {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   notificationId String
   channel        String
-  status         String   // 'queued' | 'sent' | 'failed'
-  attempts       Int      @default(0)
+  status         String // 'queued' | 'sent' | 'failed'
+  attempts       Int       @default(0)
   lastError      String?
   sentAt         DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
-  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
   @@index([notificationId])
   @@index([channel, status])
@@ -579,7 +605,133 @@ model UserNotificationState {
   unreadCount Int      @default(0)
   updatedAt   DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_notification_state")
+}
+
+// ===========================
+// DM Automation Models
+// ===========================
+
+/// Automation rules for Instagram direct message auto-replies
+model DMAutomationRule {
+  id                   String        @id @default(cuid())
+  brandId              String
+  name                 String // User-friendly name "Promo Code Distribution"
+  triggerType          DMTriggerType
+  triggerConfig        Json // { "keywords": ["DISCOUNT", "PROMO"], "matchType": "exact"|"contains"|"regex" }
+  actionType           DMActionType
+  messageTemplate      String?       @db.Text // Template with {{variables}} - optional for reply_comment actions
+  commentReplyTemplate String?       @db.Text // Optional comment reply
+  status               DMRuleStatus  @default(active)
+  priority             Int           @default(0) // Higher = evaluated first (for multi-rule matching)
+
+  // Rate limiting per rule
+  maxUsesPerUser  Int? // Limit: 1 code per user per 24h
+  cooldownMinutes Int? // Wait N minutes between triggers per user
+
+  // Scheduling
+  activeHours Json? // { "start": "09:00", "end": "21:00", "timezone": "America/New_York" }
+  activeDays  Int[] // [1,2,3,4,5] = Mon-Fri
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String // userId
+
+  brand         Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  events        DMAutomationEvent[]
+  conversations DMConversation[]
+
+  @@index([brandId, status])
+  @@index([triggerType])
+  @@map("dm_automation_rules")
+}
+
+/// Conversation state for multi-step DM workflows
+model DMConversation {
+  id                String  @id @default(cuid())
+  brandId           String
+  ruleId            String? // Triggering rule (null = manual DM)
+  instagramUserId   String // Instagram user's ID (from Graph API)
+  instagramUsername String // Username for display
+
+  // Conversation state (for multi-step flows in Phase 2)
+  state       String @default("active") // active, completed, abandoned
+  currentStep Int    @default(0) // Multi-step flow progress
+  contextData Json? // { "capturedEmail": "...", "lastKeyword": "..." }
+
+  // Metadata
+  startedAt     DateTime  @default(now())
+  lastMessageAt DateTime  @default(now())
+  completedAt   DateTime?
+
+  brand    Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  rule     DMAutomationRule? @relation(fields: [ruleId], references: [id])
+  messages DMMessage[]
+
+  @@unique([brandId, instagramUserId]) // One conversation per user per brand
+  @@index([brandId, state])
+  @@index([lastMessageAt])
+  @@map("dm_conversations")
+}
+
+/// Individual messages in DM conversations
+model DMMessage {
+  id             String @id @default(cuid())
+  conversationId String
+  direction      String // 'inbound' | 'outbound'
+  messageText    String @db.Text
+
+  // Instagram metadata
+  externalMessageId String? // Instagram message ID (for outbound)
+  externalCommentId String? // If triggered by comment
+
+  // Delivery tracking
+  status       String    @default("pending") // pending, sent, delivered, failed
+  errorMessage String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  conversation DMConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([status])
+  @@map("dm_messages")
+}
+
+/// Audit log for automation events
+model DMAutomationEvent {
+  id             String  @id @default(cuid())
+  brandId        String
+  ruleId         String // Which rule triggered
+  conversationId String? // Link to conversation (if DM sent)
+
+  // Trigger context
+  triggerType   DMTriggerType
+  triggerSource String // 'comment' | 'dm'
+  triggerText   String? // Original comment/DM text
+  triggeredBy   String // Instagram username
+
+  // Action taken
+  actionType       DMActionType
+  messageSent      Boolean      @default(false)
+  commentReplySent Boolean      @default(false)
+
+  // Metadata
+  rateLimited  Boolean  @default(false) // Was action blocked by rate limit?
+  errorMessage String?
+  timestamp    DateTime @default(now())
+  metadata     Json? // Additional context
+
+  brand Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  rule  DMAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, timestamp])
+  @@index([ruleId])
+  @@index([rateLimited])
+  @@map("dm_automation_events")
 }

@@ -51,6 +51,8 @@ import brandAnalysisNested from './routes/brand-analysis-nested.js';
 import brandsInstagram from './routes/brands-instagram.js';
 import notificationsRoutes from './routes/notifications.js';
 import onboardingRoutes from './routes/onboarding.js';
+import instagramWebhookRoutes from './routes/instagram-webhook.js';
+import dmAutomationRoutes from './routes/dm-automation.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -262,6 +264,12 @@ export function buildFastify(): FastifyInstance {
   // Add brand-nested Instagram wrappers under /api/brands
   app.register(brandsInstagram, { prefix: '/api/brands' });
   app.register(themeSuggestionRoutes, { prefix: '/api/brands' });
+
+  // Instagram webhook for DM automation (no /api prefix - Meta webhooks expect exact path)
+  app.register(instagramWebhookRoutes);
+
+  // DM Automation CRUD API
+  app.register(dmAutomationRoutes, { prefix: '/api' });
 
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload

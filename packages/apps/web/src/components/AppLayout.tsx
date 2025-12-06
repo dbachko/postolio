@@ -79,6 +79,13 @@ const mainNavItems: NavigationItem[] = [
     matchType: 'startsWith',
   },
   {
+    label: 'DM Automation',
+    path: '/dm-automation',
+    icon: Send,
+    description: 'Automated DM responses',
+    matchType: 'exact',
+  },
+  {
     label: 'Campaigns',
     path: '/campaigns',
     icon: Megaphone,
