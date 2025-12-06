@@ -45,6 +45,7 @@ export function Brands() {
     removeBrand,
     updateBrand,
   } = useBrandStore();
+  const hasExistingBrand = brands.length > 0;
 
   const { data: brandsData, isLoading } = useQuery({
     queryKey: ['brands'],
@@ -223,12 +224,22 @@ export function Brands() {
             {selectedBrand && profileAvailable[selectedBrand.id] && (
               <SidebarViewProfileButton brandId={selectedBrand.id} />
             )}
-            <Button
-              variant={isCreating ? 'outline' : 'neutral'}
-              onClick={() => setIsCreating(!isCreating)}
-            >
-              {isCreating ? 'Cancel' : 'Create Brand'}
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                variant={isCreating ? 'outline' : 'neutral'}
+                onClick={() => {
+                  if (!hasExistingBrand) {
+                    setIsCreating(!isCreating);
+                  }
+                }}
+                disabled={hasExistingBrand}
+              >
+                {isCreating ? 'Cancel' : 'Create Brand'}
+              </Button>
+              {hasExistingBrand && (
+                <p className="text-muted-foreground text-xs">This feature is coming later.</p>
+              )}
+            </div>
           </div>
         }
       />
