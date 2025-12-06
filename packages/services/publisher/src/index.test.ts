@@ -358,6 +358,76 @@ describe('Publisher Lambda', () => {
   });
 
   describe('Campaign Blocking', () => {
+    it('should treat missing campaign record as inactive and skip publishing', async () => {
+      // Arrange: Mock DynamoDB schedule with a campaignId
+      dynamoMock.on(QueryCommand).resolves({
+        Items: [
+          {
+            pk: 'BRAND#brand-789',
+            sk: 'SCHEDULE#test-schedule-123',
+            scheduleId: 'test-schedule-123',
+            contentId: 'content-456',
+            brandId: 'brand-789',
+            userId: 'user-001',
+            campaignId: 'campaign-001',
+            platform: 'instagram',
+            caption: 'Test post',
+          },
+        ],
+      });
+
+      // Simulate missing campaign record in DynamoDB cache
+      getCampaignByContentIdMock.mockResolvedValueOnce(null);
+      getCampaignByIdMock.mockResolvedValueOnce(null);
+
+      // isCampaignActive should be called with a non-null inferred campaign and return false
+      isCampaignActiveMock.mockImplementationOnce((campaign) => {
+        expect(campaign).toBeTruthy();
+        expect(campaign).toMatchObject({
+          campaignId: 'campaign-001',
+          status: 'paused',
+        });
+        return false;
+      });
+
+      getCampaignBlockReasonMock.mockReturnValueOnce('Campaign is paused (inferred)');
+
+      // Mock skip event
+      eventBridgeMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
+
+      // Mock schedule deletion
+      schedulerMock.on(DeleteScheduleCommand).resolves({});
+
+      // Mock DynamoDB update
+      dynamoMock.on(UpdateCommand).resolves({});
+
+      // Act
+      const { handler } = await import('./index.js');
+      const event: EventBridgeEvent<'schedule.due', ScheduleDueDetail> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'schedule.due',
+        source: 'postolio.scheduling',
+        account: '123456789',
+        time: new Date().toISOString(),
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          scheduleId: 'test-schedule-123',
+        },
+      };
+
+      await handler(event, {} as Context);
+
+      // Assert: Verify post.skipped event was published
+      const eventCall = eventBridgeMock.commandCalls(PutEventsCommand)[0];
+      expect(eventCall.args[0].input.Entries?.[0].DetailType).toBe('post.skipped');
+      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain('campaign');
+
+      // Should not call token service or Instagram API
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('should skip publishing if campaign is paused', async () => {
       // Arrange: Mock DynamoDB schedule with campaign
       dynamoMock.on(QueryCommand).resolves({

@@ -9,6 +9,7 @@ import {
   isCampaignActive,
   getCampaignBlockReason,
 } from '@postolio/aws';
+import type { DynamoCampaign } from '@postolio/aws';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { SchedulerClient, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
@@ -58,24 +59,58 @@ export const handler = async (
       return;
     }
 
-    const campaign = await getCampaignByContentId(schedule.contentId || event.scheduleId);
+    const campaignFromSchedule = await getCampaignByContentId(
+      schedule.contentId || event.scheduleId
+    );
 
-    let validatedCampaign = campaign;
-    if (campaign) {
+    let validatedCampaign: DynamoCampaign | null = campaignFromSchedule;
+
+    // SAFETY: If the schedule references a campaign but we cannot load it from DynamoDB,
+    // treat the campaign as inactive rather than allowing publishing with unknown state.
+    if (!validatedCampaign && schedule.campaignId) {
+      validatedCampaign = {
+        pk: `CAMPAIGN#${schedule.campaignId}`,
+        sk: 'METADATA',
+        campaignId: schedule.campaignId,
+        status: 'paused',
+        brandId: schedule.brandId || 'unknown',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      logger.warn('Campaign missing from DynamoDB; treating as inactive for publishing safety', {
+        scheduleId: event.scheduleId,
+        contentId: schedule.contentId,
+        campaignId: schedule.campaignId,
+      });
+    }
+
+    if (validatedCampaign) {
       try {
-        validatedCampaign = await getCampaignById(campaign.campaignId, true);
-        if (validatedCampaign && validatedCampaign.status !== campaign.status) {
-          logger.warn('Campaign status changed after consistency validation', {
-            scheduleId: event.scheduleId,
-            campaignId: campaign.campaignId,
-            originalStatus: campaign.status,
-            validatedStatus: validatedCampaign.status,
-          });
+        const refreshedCampaign = await getCampaignById(validatedCampaign.campaignId, true);
+        if (refreshedCampaign) {
+          if (refreshedCampaign.status !== validatedCampaign.status) {
+            logger.warn('Campaign status changed after consistency validation', {
+              scheduleId: event.scheduleId,
+              campaignId: validatedCampaign.campaignId,
+              originalStatus: validatedCampaign.status,
+              validatedStatus: refreshedCampaign.status,
+            });
+          }
+          validatedCampaign = refreshedCampaign;
+        } else {
+          logger.warn(
+            'Campaign not found during consistency validation; using cached/inferred state',
+            {
+              scheduleId: event.scheduleId,
+              campaignId: validatedCampaign.campaignId,
+            }
+          );
         }
       } catch (consistencyError) {
-        logger.warn('Consistency validation failed, using original campaign data', {
+        logger.warn('Consistency validation failed, using cached/inferred campaign data', {
           scheduleId: event.scheduleId,
-          campaignId: campaign.campaignId,
+          campaignId: validatedCampaign.campaignId,
           error: consistencyError,
         });
       }
@@ -150,8 +185,8 @@ export const handler = async (
     logger.info('Using content from schedule - campaign validation passed', {
       contentId: schedule.contentId,
       brandId: schedule.brandId,
-      campaignId: campaign?.campaignId,
-      campaignStatus: campaign?.status,
+      campaignId: validatedCampaign?.campaignId,
+      campaignStatus: validatedCampaign?.status,
       hasCaption: !!schedule.caption,
       hasHashtags: !!schedule.hashtags,
     });
