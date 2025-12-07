@@ -90,22 +90,26 @@ export interface VerifyAssetResponse {
 export interface ListAssetsParams {
   brandId: string;
   type?: 'image' | 'video';
-  tags?: string[];
-  excludeTags?: string[];
+  tags?: string[] | string;
+  excludeTags?: string[] | string;
   search?: string;
   page?: number;
   limit?: number;
   folderId?: string;
   aspectRatio?: string;
-  aspectRatios?: string[];
-  orientationTypes?: Array<'portrait' | 'landscape' | 'square'>;
+  aspectRatios?: string[] | string;
+  orientationTypes?:
+    | Array<'portrait' | 'landscape' | 'square'>
+    | 'portrait'
+    | 'landscape'
+    | 'square';
   minWidth?: number;
   maxWidth?: number;
   minHeight?: number;
   maxHeight?: number;
   uploadedAfter?: string;
   uploadedBefore?: string;
-  usageStatuses?: Array<'used' | 'unused'>;
+  usageStatuses?: Array<'used' | 'unused'> | 'used' | 'unused';
 }
 
 export interface ListAssetsResponse {
@@ -306,19 +310,39 @@ export class AssetsServiceClient {
     if (params.page) query.set('page', String(params.page));
     if (params.limit) query.set('limit', String(params.limit));
     if (params.folderId) query.set('folderId', params.folderId);
-    if (params.tags) params.tags.forEach((tag) => query.append('tags', tag));
-    if (params.excludeTags) params.excludeTags.forEach((tag) => query.append('excludeTags', tag));
+    if (params.tags) {
+      const tags = Array.isArray(params.tags) ? params.tags : [params.tags];
+      tags.forEach((tag) => query.append('tags', tag));
+    }
+    if (params.excludeTags) {
+      const exclude = Array.isArray(params.excludeTags) ? params.excludeTags : [params.excludeTags];
+      exclude.forEach((tag) => query.append('excludeTags', tag));
+    }
     if (params.aspectRatio) query.set('aspectRatio', params.aspectRatio);
-    if (params.aspectRatios) params.aspectRatios.forEach((r) => query.append('aspectRatios', r));
-    if (params.orientationTypes)
-      params.orientationTypes.forEach((o) => query.append('orientationTypes', o));
+    if (params.aspectRatios) {
+      const ratios = Array.isArray(params.aspectRatios)
+        ? params.aspectRatios
+        : [params.aspectRatios];
+      ratios.forEach((r) => query.append('aspectRatios', r));
+    }
+    if (params.orientationTypes) {
+      const orientations = Array.isArray(params.orientationTypes)
+        ? params.orientationTypes
+        : [params.orientationTypes];
+      orientations.forEach((o) => query.append('orientationTypes', o));
+    }
     if (params.minWidth) query.set('minWidth', String(params.minWidth));
     if (params.maxWidth) query.set('maxWidth', String(params.maxWidth));
     if (params.minHeight) query.set('minHeight', String(params.minHeight));
     if (params.maxHeight) query.set('maxHeight', String(params.maxHeight));
     if (params.uploadedAfter) query.set('uploadedAfter', params.uploadedAfter);
     if (params.uploadedBefore) query.set('uploadedBefore', params.uploadedBefore);
-    if (params.usageStatuses) params.usageStatuses.forEach((s) => query.append('usageStatuses', s));
+    if (params.usageStatuses) {
+      const statuses = Array.isArray(params.usageStatuses)
+        ? params.usageStatuses
+        : [params.usageStatuses];
+      statuses.forEach((s) => query.append('usageStatuses', s));
+    }
 
     return this.get<ListAssetsResponse>(`/assets?${query.toString()}`);
   }
