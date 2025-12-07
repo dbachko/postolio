@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
+import { isDemoBrand } from '../utils/demo-brand.js';
 
 // Lightweight proxy endpoints for account-scoped utilities
 const accountRoutes: FastifyPluginAsync = async (fastify) => {
@@ -27,18 +28,22 @@ const accountRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
         const now = new Date();
 
-        // Fetch user's brands for names
+        // Fetch user's brands for names and demo flag
         const brands = await prisma.brand.findMany({
           where: { userId },
-          select: { id: true, name: true },
+          select: { id: true, name: true, preferences: true },
         });
-        if (brands.length === 0) return reply.send({ success: true, data: [] });
+
+        const realBrands = brands.filter((b) => !isDemoBrand(b.preferences));
+        if (realBrands.length === 0) return reply.send({ success: true, data: [] });
+
+        const realBrandIds = realBrands.map((b) => b.id);
 
         // Group counts of future drafts/scheduled by brand
         const grouped = await prisma.content.groupBy({
           by: ['brandId', 'status'],
           where: {
-            brand: { userId },
+            brandId: { in: realBrandIds },
             scheduledAt: { gte: now },
             status: { in: ['scheduled', 'draft'] },
           },
@@ -46,7 +51,9 @@ const accountRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         const brandMap = new Map<string, { name: string; scheduled: number; draft: number }>();
-        for (const b of brands) brandMap.set(b.id, { name: b.name, scheduled: 0, draft: 0 });
+        for (const b of realBrands) {
+          brandMap.set(b.id, { name: b.name, scheduled: 0, draft: 0 });
+        }
         for (const row of grouped) {
           const entry = brandMap.get(row.brandId);
           if (!entry) continue;

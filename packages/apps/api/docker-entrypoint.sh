@@ -43,11 +43,19 @@ if [ -n "$FAILED" ]; then
   done
 fi
 
-# Apply all migrations for main DB (idempotent). If failing (e.g., P3009), do a clean reset for dev.
+# Apply all migrations for main DB (idempotent).
+# If migrate deploy fails, NEVER auto-reset in shared environments.
+# Allow an explicit opt-in reset only when MIGRATE_RESET_ON_FAILURE=true.
 if ! prisma migrate deploy; then
-  echo "migrate deploy failed; attempting clean reset (dev) ..."
-  prisma migrate reset --force --skip-seed || true
-  prisma migrate deploy
+  echo "migrate deploy failed"
+  if [ "${MIGRATE_RESET_ON_FAILURE:-}" = "true" ]; then
+    echo "MIGRATE_RESET_ON_FAILURE=true - attempting clean reset ..."
+    prisma migrate reset --force --skip-seed || true
+    prisma migrate deploy
+  else
+    echo "Automatic prisma migrate reset is disabled. Exiting with failure."
+    exit 1
+  fi
 fi
 
 # Return to API app directory
