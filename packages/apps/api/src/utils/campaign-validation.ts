@@ -244,22 +244,6 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
     }
   }
 
-  // Validate date relationship if both dates provided
-  if (sanitizedData.startDate && sanitizedData.endDate) {
-    const startDate = new Date(sanitizedData.startDate);
-    const endDate = new Date(sanitizedData.endDate);
-    if (startDate >= endDate) {
-      errors.push({
-        field: 'endDate',
-        message: 'End date must be after start date',
-        value: {
-          startDate: sanitizedData.startDate,
-          endDate: sanitizedData.endDate,
-        },
-      });
-    }
-  }
-
   // Validate status (optional)
   if (obj.status !== undefined) {
     const validStatuses = [

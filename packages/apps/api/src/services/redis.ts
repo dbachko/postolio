@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import type { RedisOptions } from 'ioredis';
 import { logger as baseLogger } from '@postolio/logger';
 import { getRedisUrl } from '../utils/redis-url.js';
 
@@ -6,6 +7,30 @@ const redisLogger = baseLogger.child({ module: 'redis-service' });
 
 // Global Redis client instance
 let redisInstance: Redis | null = null;
+
+function createRedisInstance(redisUrl: string, options?: RedisOptions): Redis {
+  const client = new Redis(redisUrl, {
+    enableReadyCheck: true,
+    lazyConnect: true,
+    maxRetriesPerRequest: 3,
+    ...options,
+  });
+
+  client.on('error', (err) => {
+    const error = err instanceof Error ? err : new Error(String(err));
+    redisLogger.error('Redis connection error', {
+      error: { name: error.name, message: error.message, stack: error.stack },
+    });
+  });
+
+  client.on('connect', () => {
+    redisLogger.info('Successfully connected to Redis', {
+      url: redisUrl.replace(/\/\/.*@/, '//***@'),
+    });
+  });
+
+  return client;
+}
 
 class RedisService {
   private client: Redis | null = null;
@@ -25,25 +50,7 @@ class RedisService {
       // Use shared utility for Redis URL construction
       const redisUrl = getRedisUrl();
 
-      this.client = new Redis(redisUrl, {
-        enableReadyCheck: true,
-        lazyConnect: true,
-        maxRetriesPerRequest: 3,
-      });
-
-      this.client.on('error', (err) => {
-        const error = err instanceof Error ? err : new Error(String(err));
-        redisLogger.error('Redis connection error', {
-          error: { name: error.name, message: error.message, stack: error.stack },
-        });
-      });
-
-      this.client.on('connect', () => {
-        redisLogger.info('Successfully connected to Redis', {
-          url: redisUrl.replace(/\/\/.*@/, '//***@'),
-        });
-      });
-
+      this.client = createRedisInstance(redisUrl);
       redisInstance = this.client;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -172,3 +179,12 @@ class RedisService {
 
 export const redisService = new RedisService();
 export const getRedisClient = () => redisService.getClient();
+
+/**
+ * Factory for creating dedicated Redis clients for queues, workers, etc.
+ * Uses the same base configuration and logging as the shared RedisService.
+ */
+export function createRedisClient(options?: RedisOptions): Redis {
+  const redisUrl = getRedisUrl();
+  return createRedisInstance(redisUrl, options);
+}

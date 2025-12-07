@@ -4,7 +4,7 @@ import { BrandClient } from './brand-client';
 import { CampaignClient } from './campaign-client';
 import { ContentClient } from './content-client';
 import { NotificationsClient } from './notifications-client';
-import { AnalyticsV2Client } from './analytics-v2-client';
+import { AnalyticsClient } from './analytics-client';
 import { OnboardingClient } from './onboarding-client';
 import { DMAutomationClient } from './dm-automation-client';
 
@@ -18,7 +18,7 @@ export const campaign = new CampaignClient(http);
 export const content = new ContentClient(http);
 export const notifications = new NotificationsClient(http);
 export const onboarding = new OnboardingClient(http);
-export const analyticsV2 = new AnalyticsV2Client(http);
+export const analytics = new AnalyticsClient(http);
 export const dmAutomation = new DMAutomationClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };

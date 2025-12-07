@@ -58,9 +58,24 @@ export async function errorHandler(
     ip: request.ip,
   };
 
+  // Handle CSRF errors from @fastify/csrf-protection with a consistent response
+  if (error instanceof Error && /csrf/i.test(error.message)) {
+    logger.warn('CSRF validation failed', {
+      ...context,
+      message: error.message,
+    });
+
+    return reply.code(403).send({
+      error: 'Invalid or missing CSRF token',
+      code: 'CSRF_VALIDATION_FAILED',
+    });
+  }
+
   // Handle APIError instances (our standardized errors)
   if (isAPIError(error)) {
     error.correlationId = context.correlationId;
+    const payload = error.toJSON() as APIErrorResponse & { correlationId?: string };
+    payload.correlationId = context.correlationId;
 
     // Log based on error type and severity
     if (error.statusCode >= 500) {
@@ -83,7 +98,7 @@ export async function errorHandler(
       reply.header('Retry-After', error.details.retryAfter.toString());
     }
 
-    return reply.status(error.statusCode).send(error.toJSON());
+    return reply.status(error.statusCode).send(payload);
   }
 
   // Handle Fastify validation errors
@@ -92,13 +107,15 @@ export async function errorHandler(
       fields: error.validation,
     }) as ExtendedAPIError;
     validationError.correlationId = context.correlationId;
+    const payload = validationError.toJSON() as APIErrorResponse & { correlationId?: string };
+    payload.correlationId = context.correlationId;
 
     logger.warn('Validation Error', {
       ...context,
       validation: error.validation,
     });
 
-    return reply.status(400).send(validationError.toJSON());
+    return reply.status(400).send(payload);
   }
 
   // Handle Fastify HTTP errors (like 404, 405, etc.)
@@ -128,13 +145,15 @@ export async function errorHandler(
     }
 
     apiError.correlationId = context.correlationId;
+    const payload = apiError.toJSON() as APIErrorResponse & { correlationId?: string };
+    payload.correlationId = context.correlationId;
 
     logger.warn(`HTTP Error ${error.statusCode}: ${error.message}`, {
       ...context,
       statusCode: error.statusCode,
     });
 
-    return reply.status(error.statusCode || 500).send(apiError.toJSON());
+    return reply.status(error.statusCode || 500).send(payload);
   }
 
   // Handle generic errors (convert to InternalServerError)
@@ -147,6 +166,8 @@ export async function errorHandler(
     }),
   }) as ExtendedAPIError;
   internalError.correlationId = context.correlationId;
+  const payload = internalError.toJSON() as APIErrorResponse & { correlationId?: string };
+  payload.correlationId = context.correlationId;
 
   logger.error(`Unexpected Error: ${error.message}`, {
     ...context,
@@ -155,7 +176,7 @@ export async function errorHandler(
     originalMessage: error.message,
   });
 
-  return reply.status(500).send(internalError.toJSON());
+  return reply.status(500).send(payload);
 }
 
 // Helper function to create error responses in route handlers

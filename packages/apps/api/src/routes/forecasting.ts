@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { forecastingService } from '../services/forecasting.js';
-import { getDatabaseClient } from '../config/database.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 interface BrandParams {
   brandId: string;
@@ -41,17 +41,7 @@ const forecastingRoutes: FastifyPluginAsync = async function (fastify) {
         const { brandId } = request.params;
         const { days, historical } = request.query;
 
-        // Verify brand ownership
-        const brand = await getDatabaseClient().brand.findFirst({
-          where: {
-            id: brandId,
-            userId: request.user.id,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        await assertBrandOwnership(request.user.id, brandId);
 
         // Generate forecast
         const forecastDays = days ? parseInt(days) : 30;
@@ -63,16 +53,13 @@ const forecastingRoutes: FastifyPluginAsync = async function (fastify) {
           historicalDays
         );
 
-        reply.send({
+        return reply.send({
           success: true,
           data: forecast,
         });
       } catch (error: unknown) {
-        fastify.log.error({ error }, 'Error generating forecast');
-        reply.code(500).send({
-          error: 'Failed to generate forecast',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        fastify.log.error({ err: error }, 'Error generating forecast');
+        throw error;
       }
     }
   );
@@ -90,36 +77,16 @@ const forecastingRoutes: FastifyPluginAsync = async function (fastify) {
 
         const { campaignId } = request.params;
 
-        // Get campaign and verify ownership
-        const campaign = await getDatabaseClient().campaign.findFirst({
-          where: { id: campaignId },
-          include: { brand: true },
-        });
+        // Generate campaign forecast (service is responsible for ownership checks)
+        const prediction = await forecastingService.predictCampaignPerformance(campaignId);
 
-        if (!campaign) {
-          return reply.code(404).send({ error: 'Campaign not found' });
-        }
-
-        if (campaign.brand.userId !== request.user.id) {
-          return reply.code(403).send({ error: 'Not authorized' });
-        }
-
-        // Generate campaign forecast
-        const prediction = await forecastingService.predictCampaignPerformance(
-          campaignId,
-          campaign.brandId
-        );
-
-        reply.send({
+        return reply.send({
           success: true,
           data: prediction,
         });
       } catch (error: unknown) {
-        fastify.log.error({ error }, 'Error predicting campaign performance');
-        reply.code(500).send({
-          error: 'Failed to predict campaign performance',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        fastify.log.error({ err: error }, 'Error predicting campaign performance');
+        throw error;
       }
     }
   );

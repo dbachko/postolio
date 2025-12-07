@@ -1,6 +1,6 @@
 import type { HttpRequest } from '../http/http';
 
-export class AnalyticsV2Client {
+export class AnalyticsClient {
   constructor(private request: HttpRequest) {}
 
   getPublicationsByContent(contentId: string) {
@@ -20,6 +20,18 @@ export class AnalyticsV2Client {
 
   getCampaignAggregates(campaignId: string) {
     return this.request(`/api/analytics/campaigns/${campaignId}`);
+  }
+
+  getCampaignMetrics(campaignId: string) {
+    return this.request(`/api/analytics/campaigns/${campaignId}/metrics`);
+  }
+
+  getCampaignRecommendations(campaignId: string) {
+    return this.request(`/api/analytics/campaigns/${campaignId}/recommendations`);
+  }
+
+  getCampaignROI(campaignId: string) {
+    return this.request(`/api/analytics/campaigns/${campaignId}/roi`);
   }
 
   getBrandSummary(brandId: string, period: '7d' | '30d' | '90d' = '30d') {
@@ -43,7 +55,6 @@ export class AnalyticsV2Client {
     return this.request(`/api/analytics/brands/${brandId}/account/series?${qs}`);
   }
 
-  // Week 2: Instagram analytics endpoints
   getBrandHashtags(brandId: string) {
     return this.request(`/api/analytics/brands/${brandId}/hashtags`);
   }

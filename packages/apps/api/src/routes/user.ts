@@ -2,6 +2,7 @@ import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import type { ThemePreference, WeekStartPreference } from '@postolio/database';
 import { TimezoneService } from '../services/timezone.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
@@ -234,25 +235,11 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/brands/:brandId/timezone',
     { preHandler: fastify.authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user!.id;
-
       try {
+        const userId = request.user!.id;
         const { brandId } = request.params as { brandId: string };
 
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId,
-          },
-          select: {
-            postingTimezone: true,
-          },
-        });
-
-        if (!brand) {
-          return reply.status(404).send({ error: 'Brand not found or access denied' });
-        }
+        const brand = await assertBrandOwnership(userId, brandId);
 
         return { timezone: brand.postingTimezone };
       } catch (err: unknown) {
@@ -267,9 +254,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/brands/:brandId/timezone',
     { preHandler: fastify.authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user!.id;
-
       try {
+        const userId = request.user!.id;
         const { brandId } = request.params as { brandId: string };
 
         // Validate request body
@@ -282,17 +268,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
         const { timezone } = validatedData;
 
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId,
-          },
-        });
-
-        if (!brand) {
-          return reply.status(404).send({ error: 'Brand not found or access denied' });
-        }
+        await assertBrandOwnership(userId, brandId);
 
         // Validate timezone if provided
         if (timezone && !TimezoneService.isValidTimezone(timezone)) {

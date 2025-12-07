@@ -175,14 +175,14 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Log the update for debugging
-      console.log(
-        'Updating content with data:',
-        JSON.stringify({
+      request.log.info(
+        {
           contentId,
           updateData,
           originalScheduledAt: content.scheduledAt,
           originalStatus: content.status,
-        })
+        },
+        'Updating content with data'
       );
 
       // Check if content belongs to a campaign in preview (draft) state
@@ -261,8 +261,9 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       let needsNewSchedule = false;
       if (!isInDraftCampaign && originalScheduledTime && newScheduledTime) {
         try {
-          console.log(
-            `Attempting to reschedule content ${contentId} from ${originalScheduledTime} to ${newScheduledTime}`
+          request.log.info(
+            { contentId, originalScheduledTime, newScheduledTime },
+            'Attempting to reschedule content'
           );
 
           // Call AWS reschedule FIRST - fail fast if this doesn't work
@@ -272,7 +273,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           );
 
           if (!rescheduleResult.success) {
-            console.error('AWS reschedule failed:', rescheduleResult.error);
+            request.log.error(
+              { error: rescheduleResult.error, contentId },
+              'AWS reschedule failed'
+            );
 
             // Check if reschedule failed because content was never scheduled
             // In this case, we'll create a new schedule instead of erroring
@@ -283,8 +287,9 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
               rescheduleResult.error?.toLowerCase().includes('missing') ||
               rescheduleResult.error?.toLowerCase().includes('does not exist')
             ) {
-              console.log(
-                `Content ${contentId} was never scheduled in AWS - will create new schedule instead`
+              request.log.info(
+                { contentId },
+                'Content was never scheduled in AWS - will create new schedule instead'
               );
               needsNewSchedule = true;
               // Don't return error - fall through to create new schedule
@@ -304,10 +309,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
               });
             }
           } else {
-            console.log(`AWS reschedule succeeded for content ${contentId}`);
+            request.log.info({ contentId }, 'AWS reschedule succeeded for content');
           }
         } catch (rescheduleError) {
-          console.error('Error during AWS reschedule:', rescheduleError);
+          request.log.error({ err: rescheduleError, contentId }, 'Error during AWS reschedule');
           return reply.code(500).send({
             success: false,
             error: `Reschedule failed: ${rescheduleError instanceof Error ? rescheduleError.message : 'Unknown error'}`,
@@ -334,7 +339,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             },
           });
         } catch (persistError) {
-          console.error('Failed to persist scheduling failure state', persistError);
+          request.log.error(
+            { err: persistError, contentId },
+            'Failed to persist scheduling failure state'
+          );
         }
 
         return reply.code(status).send({
@@ -369,14 +377,14 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Log the result for debugging
-      console.log(
-        'Content update result:',
-        JSON.stringify({
+      request.log.info(
+        {
           contentId: updatedContent.id,
           newScheduledAt: updatedContent.scheduledAt,
           newStatus: updatedContent.status,
           updateSuccessful: true,
-        })
+        },
+        'Content update result'
       );
 
       // Handle scheduling changes with AWS ContentScheduler
@@ -468,19 +476,20 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             const cancelResult = await schedulerService.cancelScheduledPost(contentId);
 
             if (cancelResult) {
-              console.log(`Schedule for content ${contentId} cancelled successfully`);
+              request.log.info({ contentId }, 'Schedule cancelled successfully');
             } else {
-              console.error('Failed to cancel AWS schedule for content:', contentId);
+              request.log.error({ contentId }, 'Failed to cancel AWS schedule for content');
             }
           } catch (cancelError) {
-            console.error('Error cancelling schedule:', cancelError);
+            request.log.error({ err: cancelError, contentId }, 'Error cancelling schedule');
           }
         }
         // Note: Reschedule logic moved earlier in the flow to prevent race conditions
         // AWS operations now happen BEFORE local DB updates
       } else if (scheduledAt !== undefined && isInDraftCampaign) {
-        console.log(
-          `Skipping AWS scheduling operations for content ${contentId} - belongs to draft campaign ${content.campaign?.id}`
+        request.log.info(
+          { contentId, campaignId: content.campaign?.id },
+          'Skipping AWS scheduling operations for draft campaign content'
         );
       }
 
@@ -511,17 +520,18 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
                 learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis)
               )
               .then((results) => {
-                console.log(
-                  `Learning applied for brand ${content.brand.id}:`,
-                  JSON.stringify({
+                request.log.info(
+                  {
+                    brandId: content.brand.id,
                     insights: results.insights.length,
                     profileUpdates: results.profileUpdates.length,
                     appliedToFuturePosts: results.appliedToFuturePosts,
-                  })
+                  },
+                  'Learning applied for brand'
                 );
               })
               .catch((error) => {
-                console.error('Learning application error:', error);
+                request.log.error({ err: error, brandId: content.brand.id }, 'Learning error');
               });
 
             // Provide immediate feedback about learning
@@ -531,7 +541,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             };
           }
         } catch (error) {
-          console.error('Learning analysis error:', error);
+          request.log.error({ err: error, brandId: content.brand?.id }, 'Learning analysis error');
         }
       }
 
@@ -544,8 +554,8 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         ...(planLimitHit ? { upsell: { upgradeRequired: true, message: planLimitMessage } } : {}),
       };
     } catch (error) {
-      console.error('Content update error:', error);
-      return reply.code(500).send({ error: 'Failed to update content' });
+      request.log.error({ err: error }, 'Content update error');
+      throw error;
     }
   });
 

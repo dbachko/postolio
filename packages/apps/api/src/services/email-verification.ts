@@ -1,11 +1,10 @@
 import { nanoid } from 'nanoid';
 import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
-import Redis from 'ioredis';
-import { getRedisUrl } from '../utils/redis-url.js';
+import { createRedisClient } from './redis.js';
 
 const prisma = getDatabaseClient();
-const redis = new Redis(getRedisUrl());
+const redis = createRedisClient();
 
 interface VerificationData {
   userId: string;

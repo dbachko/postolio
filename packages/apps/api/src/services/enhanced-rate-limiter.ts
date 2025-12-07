@@ -1,9 +1,8 @@
-import Redis from 'ioredis';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
-import { getRedisUrl } from '../utils/redis-url.js';
+import { createRedisClient } from './redis.js';
 
-const redis = new Redis(getRedisUrl());
+const redis = createRedisClient();
 const RATE_LIMIT_ENABLED =
   process.env.RATE_LIMIT_ENABLED === 'true' || process.env.NODE_ENV === 'prod';
 const prisma = getDatabaseClient();

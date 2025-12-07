@@ -1,8 +1,9 @@
 import Bull from 'bull';
 import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
-import Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
+import { createRedisClient } from './redis.js';
 
 const prisma = getDatabaseClient();
 
@@ -31,7 +32,7 @@ export class DeletionQueueService {
     const redisUrl = getRedisUrl();
 
     // Create Redis connection for Bull
-    this.redis = new Redis(redisUrl, {
+    this.redis = createRedisClient({
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       family: 4, // Force IPv4

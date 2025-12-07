@@ -3,6 +3,7 @@ import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { getDatabaseClient } from '../config/database.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 import { instagramService } from '../services/instagram.js';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
@@ -31,13 +32,7 @@ const brandAnalysisRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params;
       const { force, maxPosts = 20 } = request.body || {};
-      // Validate brand ownership
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId: request.user!.id },
-      });
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
+      const brand = await assertBrandOwnership(request.user!.id, brandId);
 
       // Ensure Instagram configured via SocialAccount (and not soft-disconnected)
       const instagramAccount = await prisma.socialAccount.findFirst({

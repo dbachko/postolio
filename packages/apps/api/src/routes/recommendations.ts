@@ -1,5 +1,6 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { RecommendationEngine } from '../services/recommendations.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const recommendationEngine = new RecommendationEngine();
 
@@ -11,9 +12,10 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { brandId: string };
     Querystring: { days?: string };
-  }>('/:brandId', async (request, reply) => {
+  }>('/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const { brandId } = request.params;
+      const userId = request.user!.id;
       const days = request.query.days ? parseInt(request.query.days) : 90;
 
       // Validate days parameter
@@ -24,6 +26,8 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
         });
       }
 
+      await assertBrandOwnership(userId, brandId);
+
       const report = await recommendationEngine.generateRecommendations(brandId, days);
 
       return reply.send({
@@ -31,12 +35,8 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
         data: report,
       });
     } catch (error: any) {
-      fastify.log.error('Failed to generate recommendations:', error);
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to generate recommendations',
-        message: error.message,
-      });
+      fastify.log.error({ err: error }, 'Failed to generate recommendations');
+      throw error;
     }
   });
 
@@ -47,10 +47,13 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { brandId: string };
     Querystring: { days?: string };
-  }>('/:brandId/posting-times', async (request, reply) => {
+  }>('/:brandId/posting-times', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const { brandId } = request.params;
+      const userId = request.user!.id;
       const days = request.query.days ? parseInt(request.query.days) : 90;
+
+      await assertBrandOwnership(userId, brandId);
 
       const report = await recommendationEngine.generateRecommendations(brandId, days);
 
@@ -62,12 +65,8 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
         },
       });
     } catch (error: any) {
-      fastify.log.error('Failed to generate posting time recommendations:', error);
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to generate posting time recommendations',
-        message: error.message,
-      });
+      fastify.log.error({ err: error }, 'Failed to generate posting time recommendations');
+      throw error;
     }
   });
 
@@ -78,10 +77,13 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { brandId: string };
     Querystring: { days?: string };
-  }>('/:brandId/content', async (request, reply) => {
+  }>('/:brandId/content', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const { brandId } = request.params;
+      const userId = request.user!.id;
       const days = request.query.days ? parseInt(request.query.days) : 90;
+
+      await assertBrandOwnership(userId, brandId);
 
       const report = await recommendationEngine.generateRecommendations(brandId, days);
 
@@ -94,12 +96,8 @@ export default async function recommendationsRoutes(fastify: FastifyInstance) {
         },
       });
     } catch (error: any) {
-      fastify.log.error('Failed to generate content recommendations:', error);
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to generate content recommendations',
-        message: error.message,
-      });
+      fastify.log.error({ err: error }, 'Failed to generate content recommendations');
+      throw error;
     }
   });
 }

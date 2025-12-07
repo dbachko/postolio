@@ -6,10 +6,7 @@ import { Prisma } from '@postolio/database';
 
 import { schedulerService } from '../services/scheduler.js';
 import { attachAssetToContent, getAssetsClient } from '../services/assets-media.js';
-import {
-  verifyBrandOwnership,
-  verifyCampaignAccess,
-} from '../services/content-operations/authorization.js';
+import { assertBrandOwnership, assertCampaignAccess } from '../services/ownership.js';
 import {
   validateContentPayload,
   type ContentType as ValidationContentType,
@@ -99,20 +96,12 @@ export async function verifyBrandAndCampaign(
   userId: string,
   brandId: string,
   campaignId?: string
-): Promise<{ authorized: boolean; code?: number; error?: string }> {
-  const authResult = await verifyBrandOwnership(userId, brandId);
-  if (!authResult.authorized) {
-    return { authorized: false, code: 404, error: authResult.error };
-  }
+): Promise<void> {
+  await assertBrandOwnership(userId, brandId);
 
   if (campaignId) {
-    const campaignAuthResult = await verifyCampaignAccess(userId, campaignId);
-    if (!campaignAuthResult.authorized) {
-      return { authorized: false, code: 404, error: campaignAuthResult.error };
-    }
+    await assertCampaignAccess(userId, campaignId);
   }
-
-  return { authorized: true };
 }
 
 /**

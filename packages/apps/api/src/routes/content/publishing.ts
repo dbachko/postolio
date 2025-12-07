@@ -71,14 +71,8 @@ const publishingRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Failed to publish to Instagram';
-        return reply.status(500).send({
-          error: errorMessage,
-          retryable: true,
-          timestamp: new Date().toISOString(),
-          details: 'Check Instagram connection and try again',
-        });
+        request.log.error({ err: error }, 'Failed to publish content to Instagram');
+        throw error;
       }
     }
   );

@@ -100,38 +100,6 @@ const csrfAutoProtectPlugin: FastifyPluginAsync = async (fastify) => {
     protectedRoutes.push(`${routeOptions.method} ${routeOptions.path}`);
   });
 
-  // Add error handler for CSRF failures with logging
-  fastify.setErrorHandler((error, request, reply) => {
-    // Check if this is a CSRF error
-    if (
-      error instanceof Error &&
-      (error.message.includes('csrf') || error.message.includes('CSRF'))
-    ) {
-      // Log the failure for security monitoring
-      fastify.log.warn(
-        {
-          type: 'CSRF_FAILURE',
-          ip: request.ip,
-          path: request.url,
-          method: request.method,
-          userAgent: request.headers['user-agent'],
-          referer: request.headers.referer,
-          origin: request.headers.origin,
-          timestamp: new Date().toISOString(),
-        },
-        'CSRF validation failed - possible attack'
-      );
-
-      return reply.code(403).send({
-        error: 'Invalid or missing CSRF token',
-        code: 'CSRF_VALIDATION_FAILED',
-      });
-    }
-
-    // Pass through other errors
-    return reply.send(error as any);
-  });
-
   // Log protected routes on startup
   fastify.addHook('onReady', async () => {
     fastify.log.info(

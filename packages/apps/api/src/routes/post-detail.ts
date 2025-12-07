@@ -10,6 +10,7 @@ import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api
 import crypto from 'crypto';
 import { getRedisClient } from '../services/redis.js';
 import { getAssetsClient } from '../services/assets-media.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
@@ -96,17 +97,8 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send(ErrorResponses.notFound('Post'));
       }
 
-      // Check user has access to this post
-      const hasAccess = await prisma.brand.findFirst({
-        where: {
-          id: post.brandId,
-          userId: userId,
-        },
-      });
-
-      if (!hasAccess) {
-        return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
-      }
+      // Check user has access to this post via brand ownership
+      await assertBrandOwnership(userId, post.brandId);
 
       // Build CDN URL and map to public response format
       const mediaAssets = (post as any).mediaAssets as
@@ -187,9 +179,8 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
 
       return reply.send(successResponse(postWithUrl));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'An unknown error occurred';
-      app.log.error({ message }, 'Error fetching post detail:');
-      return reply.code(500).send(ErrorResponses.internalError('Failed to fetch post detail'));
+      app.log.error({ err: error, postId }, 'Error fetching post detail');
+      throw error;
     }
   });
 

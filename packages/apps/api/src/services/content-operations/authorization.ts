@@ -4,6 +4,7 @@
  */
 
 import { getDatabaseClient } from '../../config/database.js';
+import { assertBrandOwnership, assertCampaignAccess } from '../ownership.js';
 
 const prisma = getDatabaseClient();
 
@@ -75,31 +76,28 @@ export async function verifyBrandOwnership(
   userId: string,
   brandId: string
 ): Promise<BrandAuthResult> {
-  const brand = await prisma.brand.findFirst({
-    where: {
-      id: brandId,
-      userId,
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-  });
+  try {
+    const brand = await assertBrandOwnership(userId, brandId);
 
-  if (!brand) {
     return {
-      authorized: false,
-      error: 'Brand not found',
+      authorized: true,
+      data: {
+        brandId: brand.id,
+        name: brand.name ?? '',
+      },
     };
-  }
+  } catch (error: any) {
+    // Normalize "brand not found" into the existing AuthorizationResult shape;
+    // let other errors bubble up to the global error handler.
+    if (error && typeof error === 'object' && (error as any).code === 'BRAND_NOT_FOUND') {
+      return {
+        authorized: false,
+        error: 'Brand not found',
+      };
+    }
 
-  return {
-    authorized: true,
-    data: {
-      brandId: brand.id,
-      name: brand.name,
-    },
-  };
+    throw error;
+  }
 }
 
 /**
@@ -109,35 +107,27 @@ export async function verifyCampaignAccess(
   userId: string,
   campaignId: string
 ): Promise<AuthorizationResult> {
-  const campaign = await prisma.campaign.findFirst({
-    where: {
-      id: campaignId,
-      brand: {
-        userId,
-      },
-    },
-    select: {
-      id: true,
-      brandId: true,
-      status: true,
-    },
-  });
+  try {
+    const campaign = await assertCampaignAccess(userId, campaignId);
 
-  if (!campaign) {
     return {
-      authorized: false,
-      error: 'Campaign not found or does not belong to this brand',
+      authorized: true,
+      data: {
+        campaignId: campaign.id,
+        brandId: campaign.brandId,
+        status: campaign.status,
+      },
     };
-  }
+  } catch (error: any) {
+    if (error && typeof error === 'object' && (error as any).code === 'CAMPAIGN_NOT_FOUND') {
+      return {
+        authorized: false,
+        error: 'Campaign not found or does not belong to this brand',
+      };
+    }
 
-  return {
-    authorized: true,
-    data: {
-      campaignId: campaign.id,
-      brandId: campaign.brandId,
-      status: campaign.status,
-    },
-  };
+    throw error;
+  }
 }
 
 /**

@@ -7,6 +7,7 @@ import {
 import { config } from '../config/env-validation.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const assetsClient = new AssetsServiceClient({
   baseUrl: config.ASSETS_API_BASE_URL,
@@ -17,11 +18,12 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
   const prisma = getDatabaseClient();
 
   const ensureBrandOwned = async (brandId: string, userId: string) => {
-    const brand = await prisma.brand.findFirst({
-      where: { id: brandId, userId },
-      select: { id: true },
-    });
-    return !!brand;
+    try {
+      await assertBrandOwnership(userId, brandId);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const ensureAssetOwned = async (assetId: string, userId: string) => {

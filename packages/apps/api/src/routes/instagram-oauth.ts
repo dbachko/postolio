@@ -9,6 +9,7 @@ import { instagramService } from '../services/instagram.js';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 import { redisService } from '../services/redis.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const prisma = getDatabaseClient();
 const tokenServiceClient = new TokenServiceClient();
@@ -85,16 +86,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         const userId = request.user.id;
 
         // Verify brand belongs to user
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: userId,
-          },
-        });
-
-        if (!brand) {
-          return reply.status(404).send({ error: 'Brand not found' });
-        }
+        const brand = await assertBrandOwnership(userId, brandId);
 
         // Generate secure state parameter
         const state = crypto.randomBytes(32).toString('hex');

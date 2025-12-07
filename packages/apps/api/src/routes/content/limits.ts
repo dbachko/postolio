@@ -40,7 +40,7 @@ const limitsRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error('Limits status error:', error);
+        request.log.error({ err: error }, 'Limits status error');
         return reply.code(500).send({ success: false, error: 'Failed to get limit status' });
       }
     }

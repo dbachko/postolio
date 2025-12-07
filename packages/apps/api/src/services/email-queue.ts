@@ -2,9 +2,10 @@ import Bull from 'bull';
 import type Mail from 'nodemailer/lib/mailer';
 import { logger as baseLogger } from '@postolio/logger';
 import { EmailService } from './email.js';
-import Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
 import { formatError } from '../utils/logging.js';
+import { createRedisClient } from './redis.js';
 
 // Email job types
 export interface EmailJob {
@@ -45,7 +46,7 @@ export class EmailQueueService {
     const redisUrl = getRedisUrl();
 
     // Create Redis connection for Bull
-    this.redis = new Redis(redisUrl, {
+    this.redis = createRedisClient({
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       family: 4, // Force IPv4

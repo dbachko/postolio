@@ -89,18 +89,6 @@ export class CampaignClient {
   }
 
   // Analytics
-  getCampaignMetrics(campaignId: string) {
-    return this.request(`/api/campaigns/${campaignId}/analytics`);
-  }
-
-  getCampaignRecommendations(campaignId: string) {
-    return this.request(`/api/campaigns/${campaignId}/analytics/recommendations`);
-  }
-
-  getCampaignROI(campaignId: string) {
-    return this.request(`/api/campaigns/${campaignId}/analytics/roi`);
-  }
-
   // Regeneration
   regenerateContent(
     campaignId: string,

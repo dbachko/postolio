@@ -1,17 +1,13 @@
 import { Queue, Worker, Job } from 'bullmq';
-import Redis from 'ioredis';
 import { prisma } from '../config/database.js';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
-import { getRedisUrl } from '../utils/redis-url.js';
+import { createRedisClient } from './redis.js';
 
 // Fixed batch size as per product decision
 const BATCH_SIZE = 5;
 
-// Redis connection configuration using shared utility
-const redisUrl = getRedisUrl();
-
-const redisConnection = new Redis(redisUrl, {
+const redisConnection = createRedisClient({
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 });

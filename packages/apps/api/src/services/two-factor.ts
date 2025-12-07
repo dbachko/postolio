@@ -2,14 +2,13 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { getDatabaseClient } from '../config/database.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
-import Redis from 'ioredis';
 import { EmailService } from './email.js';
 import { randomBytes } from 'crypto';
 import { Prisma } from '@postolio/database';
-import { getRedisUrl } from '../utils/redis-url.js';
+import { createRedisClient } from './redis.js';
 
 const prisma = getDatabaseClient();
-const redis = new Redis(getRedisUrl());
+const redis = createRedisClient();
 
 export enum TwoFactorMethod {
   TOTP = 'totp', // Time-based One-Time Password (Google Authenticator)

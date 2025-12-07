@@ -7,6 +7,8 @@ import { logger as baseLogger } from '@postolio/logger';
 import { getRedisClient } from '../services/redis.js';
 import { fetchTokensFromService } from '../utils/token-service-client.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
+import { assertBrandOwnership } from '../services/ownership.js';
+import { APIError } from '@postolio/errors';
 
 const logger = baseLogger.child({ module: 'social-platform-routes' });
 
@@ -19,6 +21,48 @@ const ContentIdSchema = z.object({
   platform: z.string(),
   contentId: z.string(),
 });
+
+type BrandOwnershipOperation = 'status' | 'sync' | 'disconnect';
+
+async function assertBrandOwnershipWithAudit(opts: {
+  req: any;
+  userId: string;
+  brandId: string;
+  platform: string;
+  operation: BrandOwnershipOperation;
+}) {
+  const { req, userId, brandId, platform, operation } = opts;
+
+  try {
+    return await assertBrandOwnership(userId, brandId);
+  } catch (error: any) {
+    if (error && (error as any).code === 'BRAND_NOT_FOUND') {
+      try {
+        await prisma.auditLog.create({
+          data: {
+            userId,
+            email: req.user!.email,
+            eventType: 'social.unauthorized_access',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            metadata: {
+              brandId,
+              platform,
+              operation,
+            },
+            success: false,
+          },
+        });
+      } catch (err: any) {
+        logger.warn('Failed to create audit log', {
+          error: err?.message ?? String(err),
+        });
+      }
+    }
+
+    throw error;
+  }
+}
 
 function ensurePlatformSupported(platform: string) {
   if (!ConnectorFactory.supports(platform as PlatformName)) {
@@ -111,43 +155,13 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(platformError.statusCode).send(platformError.body);
         }
 
-        // Verify user owns this brand
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId,
-          },
+        await assertBrandOwnershipWithAudit({
+          req,
+          userId,
+          brandId,
+          platform,
+          operation: 'status',
         });
-
-        if (!brand) {
-          // Security audit: log unauthorized access attempt
-          try {
-            await prisma.auditLog.create({
-              data: {
-                userId,
-                email: req.user!.email,
-                eventType: 'social.unauthorized_access',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent'],
-                metadata: {
-                  brandId,
-                  platform,
-                  operation: 'status',
-                },
-                success: false,
-              },
-            });
-          } catch (err: any) {
-            logger.warn('Failed to create audit log', {
-              error: err?.message ?? String(err),
-            });
-          }
-
-          return reply.code(404).send({
-            error: 'brand_not_found',
-            message: 'Brand not found or access denied',
-          });
-        }
 
         // Check if social account exists (and is not soft-disconnected)
         const socialAccount = await prisma.socialAccount.findFirst({
@@ -188,10 +202,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           params: req.params,
         });
 
-        return reply.code(500).send({
-          error: 'internal_error',
-          message: 'Failed to check platform connection status',
-        });
+        throw error;
       }
     }
   );
@@ -528,43 +539,13 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(platformError.statusCode).send(platformError.body);
         }
 
-        // Verify user owns this brand
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId,
-          },
+        await assertBrandOwnershipWithAudit({
+          req,
+          userId,
+          brandId,
+          platform,
+          operation: 'sync',
         });
-
-        if (!brand) {
-          // Security audit: log unauthorized access attempt
-          try {
-            await prisma.auditLog.create({
-              data: {
-                userId,
-                email: req.user!.email,
-                eventType: 'social.unauthorized_access',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent'],
-                metadata: {
-                  brandId,
-                  platform,
-                  operation: 'sync',
-                },
-                success: false,
-              },
-            });
-          } catch (err: any) {
-            logger.warn('Failed to create audit log', {
-              error: err?.message ?? String(err),
-            });
-          }
-
-          return reply.code(404).send({
-            error: 'brand_not_found',
-            message: 'Brand not found or access denied',
-          });
-        }
 
         // Check rate limit cooldown
         const redis = getRedisClient();
@@ -630,7 +611,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
         const connector = ConnectorFactory.get(platform as PlatformName);
 
         // Get credentials
-        const tokens = await fetchTokensFromService(brand.userId, brandId, platform);
+        const tokens = await fetchTokensFromService(userId, brandId, platform);
 
         if (!tokens || !tokens.accessToken) {
           return reply.code(401).send({
@@ -826,6 +807,9 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           error: error.message,
           params: req.params,
         });
+        if (error instanceof APIError) {
+          throw error;
+        }
 
         return reply.code(500).send({
           error: 'sync_failed',
@@ -863,43 +847,13 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(platformError.statusCode).send(platformError.body);
         }
 
-        // Verify user owns this brand
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId,
-          },
+        await assertBrandOwnershipWithAudit({
+          req,
+          userId,
+          brandId,
+          platform,
+          operation: 'disconnect',
         });
-
-        if (!brand) {
-          // Security audit: log unauthorized access attempt
-          try {
-            await prisma.auditLog.create({
-              data: {
-                userId,
-                email: req.user!.email,
-                eventType: 'social.unauthorized_access',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent'],
-                metadata: {
-                  brandId,
-                  platform,
-                  operation: 'disconnect',
-                },
-                success: false,
-              },
-            });
-          } catch (err: any) {
-            logger.warn('Failed to create audit log', {
-              error: err?.message ?? String(err),
-            });
-          }
-
-          return reply.code(404).send({
-            error: 'brand_not_found',
-            message: 'Brand not found or access denied',
-          });
-        }
 
         // Get social account
         const socialAccount = await prisma.socialAccount.findFirst({
@@ -1015,10 +969,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           params: req.params,
         });
 
-        return reply.code(500).send({
-          error: 'disconnect_failed',
-          message: error.message || 'Failed to disconnect platform',
-        });
+        throw error;
       }
     }
   );

@@ -12,8 +12,31 @@ vi.mock('../../plugins/csrf-auto-protect.js', () => ({
 
 // Disable Redis-backed rate limiting in these tests to avoid
 // stateful 429 responses when hitting sync endpoints repeatedly.
-vi.mock('../../services/redis.js', () => ({
-  getRedisClient: vi.fn(() => null),
+vi.mock('../../services/redis.js', () => {
+  const redisService = {
+    increment: vi.fn(async () => null),
+    del: vi.fn(async () => true),
+    getClient: vi.fn(() => null),
+    set: vi.fn(async () => false),
+    setex: vi.fn(async () => false),
+    disconnect: vi.fn(async () => {}),
+    isConnected: vi.fn(() => false),
+  };
+
+  return {
+    redisService,
+    getRedisClient: vi.fn(() => null),
+    createRedisClient: vi.fn(() => null),
+  };
+});
+
+// Avoid starting real BullMQ workers during tests.
+vi.mock('../../services/regeneration-queue.js', () => ({
+  regenerationService: {
+    startRegeneration: vi.fn(),
+    getJobProgress: vi.fn(),
+    cancelJob: vi.fn(),
+  },
 }));
 
 // In-memory store to observe DB changes

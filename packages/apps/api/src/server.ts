@@ -30,12 +30,10 @@ import videoRoutes from './routes/video.js';
 import analyticsRoutes from './routes/analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
 import campaignRoutes from './routes/campaign.js';
-import campaignAnalyticsRoutes from './routes/campaign-analytics.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import forecastingRoutes from './routes/forecasting.js';
 import recommendationsRoutes from './routes/recommendations.js';
 import publicationsRoutes from './routes/publications.js';
-import analyticsRoutesV2 from './routes/analytics-v2.js';
 import brandStyleRoutes from './routes/brand-style.js';
 import rollingContentRoutes from './routes/rolling-content.js';
 import legalRoutes from './routes/legal.js';
@@ -55,14 +53,14 @@ import instagramWebhookRoutes from './routes/instagram-webhook.js';
 import dmAutomationRoutes from './routes/dm-automation.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
-import Redis from 'ioredis';
-import { getRedisUrl } from './utils/redis-url.js';
+import type { Redis } from 'ioredis';
 import { StatusBroadcaster } from './services/status-broadcaster.js';
 import { schedulerAdapter } from './services/scheduler-adapter.js';
 import { applyRateLimiting } from './middleware/rate-limit.js';
-import { getRedisClient } from './services/redis.js';
+import { createRedisClient, getRedisClient } from './services/redis.js';
 import { backgroundJobs } from './services/background-jobs.js';
 import assetsProxyRoutes from './routes/assets-proxy.js';
+import { errorHandler } from './middleware/error-handler.js';
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -232,11 +230,11 @@ export function buildFastify(): FastifyInstance {
   app.register(brandsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
   app.register(videoRoutes, { prefix: '/api/video' });
-  app.register(analyticsRoutes, { prefix: '/api/analytics' });
+  // All analytics (scheduler + v2) under /api/analytics/*
+  app.register(analyticsRoutes, { prefix: '/api' });
   app.register(autopilotRoutes, { prefix: '/api/autopilot' });
   // Mount campaigns at plural REST path
   app.register(campaignRoutes, { prefix: '/api/campaigns' });
-  app.register(campaignAnalyticsRoutes, { prefix: '/api' }); // API root level for campaign analytics
   app.register(aiInsightsRoutes, { prefix: '/api/ai-insights' }); // AI-powered insights
   app.register(forecastingRoutes, { prefix: '/api/forecasting' }); // Predictive analytics
   app.register(recommendationsRoutes, { prefix: '/api/recommendations' }); // Smart recommendations
@@ -259,7 +257,6 @@ export function buildFastify(): FastifyInstance {
 
   // Analytics/Publications endpoints (canonical under /api)
   app.register(publicationsRoutes, { prefix: '/api' });
-  app.register(analyticsRoutesV2, { prefix: '/api' });
 
   // Add brand-nested Instagram wrappers under /api/brands
   app.register(brandsInstagram, { prefix: '/api/brands' });
@@ -300,6 +297,9 @@ export function buildFastify(): FastifyInstance {
   // Health check endpoints for both load balancer probes and internal monitoring
   registerHealthRoute('/health');
   registerHealthRoute('/api/health');
+
+  // Global error handler for consistent API error responses
+  app.setErrorHandler(errorHandler as any);
 
   return app;
 }
@@ -397,7 +397,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Services are triggered by AWS Lambda/EventBridge, not started here
 
       // Initialize Redis and StatusBroadcaster for WebSocket real-time updates
-      redis = new Redis(getRedisUrl(), {
+      redis = createRedisClient({
         maxRetriesPerRequest: 3,
         enableReadyCheck: true,
         reconnectOnError: (err) => {

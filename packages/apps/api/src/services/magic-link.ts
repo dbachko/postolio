@@ -4,13 +4,12 @@ import bcrypt from 'bcryptjs';
 import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
-import Redis from 'ioredis';
-import { getRedisUrl } from '../utils/redis-url.js';
 import { FastifyInstance } from 'fastify';
 import { formatError } from '../utils/logging.js';
+import { createRedisClient } from './redis.js';
 
 const prisma = getDatabaseClient();
-const redis = new Redis(getRedisUrl());
+const redis = createRedisClient();
 const magicLinkLogger = baseLogger.child({ module: 'magic-link-service' });
 
 interface MagicLinkData {

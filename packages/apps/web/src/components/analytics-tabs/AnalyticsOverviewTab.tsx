@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { formatNumber, formatPercent } from '@/utils/formatNumber';
 import { Eye, Heart, Users, FileText, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
-import { analyticsV2, content as contentApi } from '../../lib/api';
+import { analytics, content as contentApi } from '../../lib/api';
 import { BrandHealthScore as BrandHealthScoreComponent } from '../analytics/BrandHealthScore';
 import { KPICard } from '../analytics/KPICard';
 import { TopPostsGrid } from '../analytics/TopPostsGrid';
@@ -406,7 +406,7 @@ export function AnalyticsOverviewTab({
               onClick={async () => {
                 if (!selectedBrand) return;
                 try {
-                  const res = await analyticsV2.refreshBrandAccounts(selectedBrand.id);
+                  const res = await analytics.refreshBrandAccounts(selectedBrand.id);
                   if (res?.success) {
                     toast.success('Account analytics refresh enqueued');
                   } else {
@@ -477,8 +477,8 @@ function V2Charts({ brandId }: { brandId: string }) {
       setLoading(true);
       setErr(null);
       try {
-        await analyticsV2.getBrandSummary(brandId).catch(() => null);
-        const seriesRes = await analyticsV2.getBrandAccountSeries(brandId, '30d').catch(() => null);
+        await analytics.getBrandSummary(brandId).catch(() => null);
+        const seriesRes = await analytics.getBrandAccountSeries(brandId, '30d').catch(() => null);
         if (!cancelled && seriesRes?.data?.series) {
           setSeries(seriesRes.data.series);
         }

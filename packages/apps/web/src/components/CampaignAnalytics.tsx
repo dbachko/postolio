@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { campaign as campaignApi, analyticsV2 } from '../lib/api';
+import { analytics } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, AlertCircle, Loader2 } from 'lucide-react';
@@ -18,31 +18,24 @@ interface CampaignAnalyticsProps {
 export function CampaignAnalytics({ campaignId, campaignName, timezone }: CampaignAnalyticsProps) {
   const [selectedTab, setSelectedTab] = useState('overview');
 
-  // Fetch campaign metrics (v1)
+  // Fetch campaign metrics (v2 path, legacy-compatible shape)
   const metricsQuery = useQuery({
     queryKey: ['campaign-metrics', campaignId],
-    queryFn: () => campaignApi.getCampaignMetrics(campaignId),
-    enabled: !!campaignId,
-  });
-
-  // Fetch campaign aggregates (v2)
-  const v2MetricsQuery = useQuery({
-    queryKey: ['campaign-metrics-v2', campaignId],
-    queryFn: () => analyticsV2.getCampaignAggregates(campaignId),
+    queryFn: () => analytics.getCampaignMetrics(campaignId),
     enabled: !!campaignId,
   });
 
   // Fetch optimization recommendations
   const recommendationsQuery = useQuery({
     queryKey: ['campaign-recommendations', campaignId],
-    queryFn: () => campaignApi.getCampaignRecommendations(campaignId),
+    queryFn: () => analytics.getCampaignRecommendations(campaignId),
     enabled: !!campaignId,
   });
 
   // Fetch ROI data
   const roiQuery = useQuery({
     queryKey: ['campaign-roi', campaignId],
-    queryFn: () => campaignApi.getCampaignROI(campaignId),
+    queryFn: () => analytics.getCampaignROI(campaignId),
     enabled: !!campaignId,
   });
 
@@ -70,39 +63,7 @@ export function CampaignAnalytics({ campaignId, campaignName, timezone }: Campai
     );
   }
 
-  const metricsV1 = metricsQuery.data?.data;
-  const metricsV2 = v2MetricsQuery.data?.data;
-
-  // Merge: prefer v2 totals when available, preserve v1 fields for progress UI
-  const metrics = metricsV1
-    ? {
-        ...metricsV1,
-        ...(metricsV2?.data
-          ? {
-              totalPosts: metricsV2.data.totalPosts,
-              totalImpressions: metricsV2.data.totalImpressions,
-              totalEngagement: metricsV2.data.totalEngagement,
-              reach: metricsV2.data.reach,
-              averageEngagementRate: metricsV2.data.averageEngagementRate,
-            }
-          : {}),
-      }
-    : metricsV2?.data
-      ? {
-          totalPosts: metricsV2.data.totalPosts,
-          totalImpressions: metricsV2.data.totalImpressions,
-          totalEngagement: metricsV2.data.totalEngagement,
-          reach: metricsV2.data.reach,
-          averageEngagementRate: metricsV2.data.averageEngagementRate,
-          postsScheduled: 0,
-          postsPosted: 0,
-          postsDraft: 0,
-          campaignDuration: 0,
-          postingFrequency: 0,
-          topHashtags: [],
-          performanceByDate: [],
-        }
-      : undefined;
+  const metrics = metricsQuery.data?.data;
 
   const recommendations = recommendationsQuery.data?.data || [];
   const roi = roiQuery.data?.data;

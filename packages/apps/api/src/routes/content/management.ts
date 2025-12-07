@@ -44,11 +44,8 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send(validationResult.error);
         }
 
-        // Verify brand and campaign access
-        const authResult = await verifyBrandAndCampaign(userId, body.brandId, body.campaignId);
-        if (!authResult.authorized) {
-          return reply.code(authResult.code || 500).send({ error: authResult.error });
-        }
+        // Verify brand and campaign access (throws APIError on failure)
+        await verifyBrandAndCampaign(userId, body.brandId, body.campaignId);
 
         // Resolve assets (unified for single and carousel)
         const assetResult = await resolveAssets(body.assetIds, body.brandId, request);
@@ -85,8 +82,8 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           ...(upsell ? { upsell } : {}),
         });
       } catch (error) {
-        console.error('Manual content creation error:', error);
-        return reply.code(500).send({ error: 'Failed to create content' });
+        request.log.error({ err: error }, 'Manual content creation error');
+        throw error;
       }
     }
   );
@@ -136,8 +133,8 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
 
         return { content: contentWithUrls };
       } catch (error) {
-        console.error('Draft content error:', error);
-        return reply.code(500).send({ error: 'Failed to retrieve draft content' });
+        request.log.error({ err: error }, 'Draft content error');
+        throw error;
       }
     }
   );
@@ -198,8 +195,9 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         // If scheduledAt is provided, create a schedule in AWS (unless in draft campaign)
         if (scheduledAt) {
           if (isInDraftCampaign) {
-            console.log(
-              `Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`
+            request.log.info(
+              { contentId, campaignId: content.campaign?.id },
+              'Content belongs to preview campaign - skipping AWS scheduling'
             );
           } else {
             try {
@@ -208,14 +206,20 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               const scheduleResult = await schedulerService.scheduleContent(contentId);
 
               if (!scheduleResult.success) {
-                console.error('Failed to create AWS schedule:', scheduleResult.error);
+                request.log.error(
+                  { err: scheduleResult.error, contentId },
+                  'Failed to create AWS schedule'
+                );
                 // Note: We don't fail the request here as the content is already scheduled locally
                 // The scheduler adapter has fallback logic
               } else {
-                console.log(`Content ${contentId} scheduled successfully in AWS`);
+                request.log.info({ contentId }, 'Content scheduled successfully in AWS');
               }
             } catch (scheduleError) {
-              console.error('Error calling scheduler service:', scheduleError);
+              request.log.error(
+                { err: scheduleError, contentId },
+                'Error calling scheduler service'
+              );
               // Continue with local scheduling
             }
           }
@@ -223,8 +227,8 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
 
         return { content: updatedContent };
       } catch (error) {
-        console.error('Content approval error:', error);
-        return reply.code(500).send({ error: 'Failed to approve content' });
+        request.log.error({ err: error }, 'Content approval error');
+        throw error;
       }
     }
   );
@@ -261,8 +265,8 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
 
         return { content: updatedContent };
       } catch (error) {
-        console.error('Content rejection error:', error);
-        return reply.code(500).send({ error: 'Failed to reject content' });
+        request.log.error({ err: error }, 'Content rejection error');
+        throw error;
       }
     }
   );

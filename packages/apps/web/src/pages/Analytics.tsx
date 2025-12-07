@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { brand as brandApi, httpGet, analyticsV2 } from '../lib/api';
+import { brand as brandApi, httpGet, analytics } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -159,9 +159,9 @@ export default function Analytics() {
 
       const window = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
       const [v2Summary, topPublications, accountSeries] = await Promise.all([
-        analyticsV2.getBrandSummary(selectedBrand.id, period).catch(() => null),
-        analyticsV2.getBrandTopPublications(selectedBrand.id, 10).catch(() => null),
-        analyticsV2.getBrandAccountSeries(selectedBrand.id, window as any).catch(() => null),
+        analytics.getBrandSummary(selectedBrand.id, period).catch(() => null),
+        analytics.getBrandTopPublications(selectedBrand.id, 10).catch(() => null),
+        analytics.getBrandAccountSeries(selectedBrand.id, window as any).catch(() => null),
       ]);
 
       if (cancelled) return;
@@ -273,10 +273,10 @@ export default function Analytics() {
     setIgLoading(true);
     try {
       // Build "overview" from brand summary breakdown[instagram] and account latest series first point
-      const summaryRes = await analyticsV2.getBrandSummary(selectedBrand.id).catch(() => null);
+      const summaryRes = await analytics.getBrandSummary(selectedBrand.id).catch(() => null);
       const breakdown = (summaryRes?.data?.breakdown || {}) as Record<string, any>;
       const ig = breakdown['instagram'] || null;
-      const seriesRes = await analyticsV2
+      const seriesRes = await analytics
         .getBrandAccountSeries(selectedBrand.id, '30d')
         .catch(() => null);
 
@@ -297,9 +297,9 @@ export default function Analytics() {
 
       // Week 2: Fetch Instagram detailed analytics
       const [hashtagsRes, audienceRes, postsRes] = await Promise.all([
-        analyticsV2.getBrandHashtags(selectedBrand.id).catch(() => null),
-        analyticsV2.getBrandAudience(selectedBrand.id).catch(() => null),
-        analyticsV2
+        analytics.getBrandHashtags(selectedBrand.id).catch(() => null),
+        analytics.getBrandAudience(selectedBrand.id).catch(() => null),
+        analytics
           .getBrandPosts(selectedBrand.id, {
             platform: 'instagram',
             sortBy: 'publishedAt',
@@ -347,7 +347,7 @@ export default function Analytics() {
     if (!selectedBrand?.id) return;
     setIgLoading(true);
     try {
-      const postsRes = await analyticsV2.getBrandPosts(selectedBrand.id, {
+      const postsRes = await analytics.getBrandPosts(selectedBrand.id, {
         platform: 'instagram',
         sortBy: 'publishedAt',
         order: 'desc',

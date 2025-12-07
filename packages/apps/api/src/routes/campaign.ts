@@ -21,6 +21,12 @@ import type { CampaignType } from '../services/goal-templates.js';
 
 import { getDatabaseClient } from '../config/database.js';
 import { campaignSlidingWindowService } from '../services/campaign-sliding-window.js';
+import {
+  assertBrandOwnership,
+  assertInstagramConnected,
+  assertCampaignAccess,
+} from '../services/ownership.js';
+import { APIError } from '@postolio/errors';
 
 const prisma = getDatabaseClient();
 
@@ -148,29 +154,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const userProvidedGoals = toGoalArray(body.goals);
 
         // Gate campaign creation until Instagram is connected
-        // 1) Verify brand ownership
-        const brandForConnCheck = await prisma.brand.findFirst({
-          where: { id: body.brandId, userId },
-          select: { id: true },
-        });
-        if (!brandForConnCheck) {
-          return reply.code(404).send({ error: 'Brand not found or access denied' });
-        }
-
-        // 2) Check if Instagram is connected via SocialAccount
-        const instagramAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId: body.brandId,
-            platform: 'instagram',
-          },
-        });
-        if (!instagramAccount) {
-          return reply.code(400).send({
-            error: 'Instagram not connected for this brand',
-            code: 'INSTAGRAM_NOT_CONNECTED',
-            help: 'Connect an Instagram Business account to enable campaign creation.',
-          });
-        }
+        await assertBrandOwnership(userId, body.brandId);
+        await assertInstagramConnected(body.brandId);
 
         // Token validity checks intentionally omitted here; only connection presence is required
 
@@ -204,14 +189,23 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
                 },
               }),
             ]);
-            console.log(
-              `Auto-detected and saved timezone ${detectedTimezone} for user ${userId} and brand ${body.brandId}`
+            request.log.info(
+              {
+                userId,
+                brandId: body.brandId,
+                timezone: detectedTimezone,
+              },
+              'Auto-detected and saved timezone for campaign configuration'
             );
           }
         }
 
-        console.log(
-          `Campaign configuration using timezone: ${brandTimezone} for brand ${body.brandId}`
+        request.log.info(
+          {
+            brandId: body.brandId,
+            timezone: brandTimezone,
+          },
+          'Campaign configuration using timezone'
         );
 
         // Auto-generate goals if none provided (Lazy Defaults approach)
@@ -234,13 +228,23 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
               brandId: body.brandId,
             });
             finalGoals = generatedGoals;
-            console.log(`Auto-generated ${generatedGoals.length} goals for campaign`, {
-              brandId: body.brandId,
-              campaignType: body.campaignType,
-              goals: generatedGoals,
-            });
+            request.log.info(
+              {
+                brandId: body.brandId,
+                campaignType: body.campaignType,
+                goalCount: generatedGoals.length,
+              },
+              'Auto-generated goals for campaign'
+            );
           } catch (error) {
-            console.error('Failed to auto-generate goals, proceeding without goals', { error });
+            request.log.warn(
+              {
+                err: error,
+                brandId: body.brandId,
+                campaignType: body.campaignType,
+              },
+              'Failed to auto-generate goals, proceeding without goals'
+            );
           }
         }
 
@@ -302,26 +306,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error('Campaign configuration error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-          if (
-            error.message.includes('Brand not found') ||
-            error.message.includes('access denied')
-          ) {
-            return reply.code(404).send({ error: 'Brand not found or access denied' });
-          }
-          if (error.message.includes('start date') || error.message.includes('end date')) {
-            return reply.code(400).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to configure campaign. Please try again.',
-        });
+        request.log.error({ err: error }, 'Campaign configuration error');
+        // Domain errors are encoded as APIError in campaignService; delegate to global handler
+        throw error;
       }
     }
   );
@@ -354,23 +341,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           preview,
         });
       } catch (error) {
-        console.error('Campaign preview error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-          if (error.message.includes('not found') || error.message.includes('access denied')) {
-            return reply.code(404).send({ error: 'Campaign not found or access denied' });
-          }
-          if (error.message.includes('style profile')) {
-            return reply.code(400).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to generate campaign preview. Please try again.',
-        });
+        request.log.error({ err: error }, 'Campaign preview error');
+        // Let global error handler map APIError/other errors to HTTP responses
+        throw error;
       }
     }
   );
@@ -385,14 +358,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const body = request.body;
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({ where: { id: body.brandId, userId } });
-        if (!brand) return reply.code(403).send({ error: 'Access denied' });
+        await assertBrandOwnership(userId, body.brandId);
 
         const result = await analyzeGoalSvc(body);
         return reply.send({ success: true, analysis: result });
       } catch (error) {
-        request.log.error({ error }, 'analyze-goal failed');
-        return reply.code(500).send({ error: 'Failed to analyze goal' });
+        request.log.error({ err: error }, 'analyze-goal failed');
+        throw error;
       }
     }
   );
@@ -424,14 +396,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const body = request.body;
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({ where: { id: body.brandId, userId } });
-        if (!brand) return reply.code(403).send({ error: 'Access denied' });
+        await assertBrandOwnership(userId, body.brandId);
 
         const strategy = await generateStrategySvc(body);
         return reply.send({ success: true, strategy });
       } catch (error) {
-        request.log.error({ error }, 'generate-strategy failed');
-        return reply.code(500).send({ error: 'Failed to generate strategy' });
+        request.log.error({ err: error }, 'generate-strategy failed');
+        throw error;
       }
     }
   );
@@ -464,8 +435,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const { brandId, campaignType, limit } = request.query;
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(403).send({ error: 'Access denied' });
+        await assertBrandOwnership(userId, brandId);
 
         // Get goal suggestions
         const suggestions = await suggestGoals({
@@ -479,8 +449,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           suggestions,
         });
       } catch (error) {
-        request.log.error({ error }, 'suggest-goals failed');
-        return reply.code(500).send({ error: 'Failed to suggest goals' });
+        request.log.error({ err: error }, 'suggest-goals failed');
+        throw error;
       }
     }
   );
@@ -496,17 +466,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
         const { id: campaignId } = request.params;
 
-        const result = await campaignService.startCampaign(campaignId, userId);
-
-        if (!result.success) {
-          if (result.error?.includes('not found') || result.error?.includes('access denied')) {
-            return reply.code(404).send({ error: result.error });
-          }
-          if (result.error?.includes('style profile')) {
-            return reply.code(400).send({ error: result.error });
-          }
-          return reply.code(400).send({ error: result.error || 'Failed to start campaign' });
-        }
+        const { campaign, scheduledPosts } = await campaignService.startCampaign(
+          campaignId,
+          userId
+        );
 
         // Maintain sliding window after start (generate next posts to keep window full)
         try {
@@ -517,22 +480,14 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         return reply.send({
           success: true,
-          campaign: result.campaign,
-          scheduledPosts: result.scheduledPosts,
-          message: `Campaign started successfully. ${result.scheduledPosts} posts have been scheduled.`,
+          campaign,
+          scheduledPosts,
+          message: `Campaign started successfully. ${scheduledPosts} posts have been scheduled.`,
         });
       } catch (error) {
-        console.error('Campaign start error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to start campaign. Please try again.',
-        });
+        request.log.error({ err: error }, 'Campaign start error');
+        // Delegate error mapping to global error handler (APIError, validation, etc.)
+        throw error;
       }
     }
   );
@@ -551,24 +506,22 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Verify ownership
-        const campaign = await prisma.campaign.findFirst({
-          where: { id: campaignId, brand: { userId } },
-          select: { id: true, status: true },
-        });
-        if (!campaign)
-          return reply.code(404).send({ error: 'Campaign not found or access denied' });
+        const campaign = await assertCampaignAccess(userId, campaignId);
 
         if (campaign.status !== 'active') {
-          return reply
-            .code(400)
-            .send({ error: 'Only active campaigns can fill the scheduling window.' });
+          throw new APIError(
+            'Only active campaigns can fill the scheduling window.',
+            'CAMPAIGN_INVALID_STATE',
+            400,
+            { campaignId, userId, status: campaign.status }
+          );
         }
 
         const res = await campaignSlidingWindowService.maintainWindow(campaignId, 3);
         return reply.send({ success: res.success, generated: res.generated, message: res.message });
       } catch (error) {
-        request.log.error({ error }, 'fill-window failed');
-        return reply.code(500).send({ error: 'Failed to fill sliding window' });
+        request.log.error({ err: error }, 'fill-window failed');
+        throw error;
       }
     }
   );
@@ -593,20 +546,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           campaign,
         });
       } catch (error) {
-        console.error('Get campaign error:', error);
+        request.log.error({ err: error }, 'Get campaign error');
 
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-          if (error.message.includes('not found') || error.message.includes('access denied')) {
-            return reply.code(404).send({ error: 'Campaign not found or access denied' });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to retrieve campaign details. Please try again.',
-        });
+        // Delegate error mapping to global error handler (APIError, validation, etc.)
+        throw error;
       }
     }
   );
@@ -663,14 +606,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         const updates = validation.sanitizedData!;
 
-        const campaignMeta = await prisma.campaign.findFirst({
-          where: { id, brand: { userId } },
-          select: { brandId: true },
-        });
-
-        if (!campaignMeta) {
-          return reply.code(404).send({ error: 'Campaign not found or access denied' });
-        }
+        const campaignMeta = await assertCampaignAccess(userId, id);
 
         const updatedGoalList = toGoalArray(updates.goals);
         const normalizedGoals: string | undefined =
@@ -781,29 +717,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         return reply.send(unified);
       } catch (error) {
-        console.error('Update campaign error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-          if (error.message.includes('not found') || error.message.includes('access denied')) {
-            return reply.code(404).send({ error: 'Campaign not found or access denied' });
-          }
-          if (
-            error.message.includes('cannot be updated') ||
-            error.message.includes('already active')
-          ) {
-            return reply.code(400).send({ error: error.message });
-          }
-          if (error.message.includes('Invalid status transition')) {
-            return reply.code(400).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to update campaign. Please try again.',
-        });
+        request.log.error({ err: error }, 'Update campaign error');
+        throw error;
       }
     }
   );
@@ -826,17 +741,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (brandId) {
           // Verify the user owns this brand before filtering
-          const brand = await prisma.brand.findFirst({
-            where: {
-              id: brandId,
-              userId,
-            },
-          });
-
-          if (!brand) {
-            return reply.code(404).send({ error: 'Brand not found or access denied' });
-          }
-
+          await assertBrandOwnership(userId, brandId);
           whereClause.brandId = brandId;
         }
 
@@ -904,17 +809,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           })),
         });
       } catch (error) {
-        console.error('List campaigns error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to retrieve campaigns. Please try again.',
-        });
+        request.log.error({ err: error }, 'List campaigns error');
+        throw error;
       }
     }
   );
@@ -933,25 +829,11 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Check if campaign exists and user owns it
-        const campaign = await prisma.campaign.findFirst({
-          where: {
-            id,
-            brand: {
-              userId,
-            },
-          },
-          include: {
-            _count: {
-              select: {
-                content: true,
-              },
-            },
-          },
-        });
+        const campaign = await assertCampaignAccess(userId, id);
 
-        if (!campaign) {
-          return reply.code(404).send({ error: 'Campaign not found or access denied' });
-        }
+        const contentCount = await prisma.content.count({
+          where: { campaignId: id },
+        });
 
         // Only allow deletion of campaigns that haven't been started
         const deletableStatuses = ['draft', 'preview', 'creating', 'failed'];
@@ -962,9 +844,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Delete the campaign (this will also delete related content due to cascade)
-        await prisma.campaign.delete({
-          where: { id },
-        });
+        await prisma.campaign.delete({ where: { id } });
 
         return reply.send({
           success: true,
@@ -973,21 +853,12 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             id: campaign.id,
             name: campaign.name,
             status: campaign.status,
-            contentCount: campaign._count.content,
+            contentCount,
           },
         });
       } catch (error) {
-        console.error('Delete campaign error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to delete campaign. Please try again.',
-        });
+        request.log.error({ err: error }, 'Delete campaign error');
+        throw error;
       }
     }
   );
@@ -1018,20 +889,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         campaign: updatedCampaign,
       });
     } catch (error) {
-      console.error('Update campaign priority error:', error);
-
-      if (error instanceof Error) {
-        if (error.message.includes('Authentication') || error.message.includes('access denied')) {
-          return reply.code(401).send({ error: error.message });
-        }
-        if (error.message.includes('not found')) {
-          return reply.code(404).send({ error: error.message });
-        }
-      }
-
-      return reply.code(500).send({
-        error: 'Failed to update campaign priority. Please try again.',
-      });
+      request.log.error({ err: error }, 'Update campaign priority error');
+      throw error;
     }
   });
 
@@ -1046,17 +905,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         coordination,
       });
     } catch (error) {
-      console.error('Get campaign coordination error:', error);
-
-      if (error instanceof Error) {
-        if (error.message.includes('Authentication')) {
-          return reply.code(401).send({ error: error.message });
-        }
-      }
-
-      return reply.code(500).send({
-        error: 'Failed to get campaign coordination. Please try again.',
-      });
+      request.log.error({ err: error }, 'Get campaign coordination error');
+      throw error;
     }
   });
 
@@ -1075,29 +925,24 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const { id: campaignId } = request.params;
         const { themes, style, contentIds } = request.body;
 
-        // Get campaign and verify ownership
-        const campaign = await prisma.campaign.findUnique({
-          where: { id: campaignId },
-          include: {
-            brand: true,
-            content: true,
-          },
-        });
-
-        if (!campaign) {
-          return reply.code(404).send({ error: 'Campaign not found' });
-        }
-
-        if (campaign.brand.userId !== userId) {
-          return reply.code(403).send({ error: 'Access denied' });
-        }
+        // Verify ownership via invariant helper
+        await assertCampaignAccess(userId, campaignId);
 
         // Determine which content to regenerate
         const targetContentIds =
-          contentIds && contentIds.length > 0 ? contentIds : campaign.content.map((c) => c.id);
+          contentIds && contentIds.length > 0
+            ? contentIds
+            : (
+                await prisma.content.findMany({
+                  where: { campaignId },
+                  select: { id: true },
+                })
+              ).map((c) => c.id);
 
         if (targetContentIds.length === 0) {
-          return reply.code(400).send({ error: 'No content to regenerate' });
+          throw new APIError('No content to regenerate', 'CAMPAIGN_REGEN_NO_CONTENT', 400, {
+            campaignId,
+          });
         }
 
         // Start regeneration job
@@ -1113,10 +958,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           data: regenerationJob,
         });
       } catch (error) {
-        console.error('Content regeneration error:', error);
-        return reply.code(500).send({
-          error: 'Failed to start content regeneration. Please try again.',
-        });
+        request.log.error({ err: error }, 'Content regeneration error');
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          'Failed to start content regeneration. Please try again.',
+          'CAMPAIGN_REGEN_FAILED',
+          500,
+          { campaignId: request.params.id, userId: request.user!.id }
+        );
       }
     }
   );
@@ -1133,7 +984,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const progress = await regenerationService.getJobProgress(jobId, userId);
 
         if (!progress) {
-          return reply.code(404).send({ error: 'Job not found' });
+          throw new APIError('Job not found', 'CAMPAIGN_REGEN_JOB_NOT_FOUND', 404, {
+            jobId,
+            userId,
+          });
         }
 
         return reply.send({
@@ -1141,10 +995,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           data: progress,
         });
       } catch (error) {
-        console.error('Get job progress error:', error);
-        return reply.code(500).send({
-          error: 'Failed to get job progress. Please try again.',
-        });
+        request.log.error({ err: error }, 'Get job progress error');
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          'Failed to get job progress. Please try again.',
+          'CAMPAIGN_REGEN_PROGRESS_FAILED',
+          500,
+          { jobId: request.params.jobId, userId: request.user!.id }
+        );
       }
     }
   );
@@ -1161,7 +1021,12 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const cancelled = await regenerationService.cancelJob(jobId, userId);
 
         if (!cancelled) {
-          return reply.code(404).send({ error: 'Job not found or already completed' });
+          throw new APIError(
+            'Job not found or already completed',
+            'CAMPAIGN_REGEN_JOB_NOT_FOUND',
+            404,
+            { jobId, userId }
+          );
         }
 
         return reply.send({
@@ -1169,10 +1034,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'Job cancelled successfully',
         });
       } catch (error) {
-        console.error('Cancel job error:', error);
-        return reply.code(500).send({
-          error: 'Failed to cancel job. Please try again.',
-        });
+        request.log.error({ err: error }, 'Cancel job error');
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          'Failed to cancel job. Please try again.',
+          'CAMPAIGN_REGEN_CANCEL_FAILED',
+          500,
+          { jobId: request.params.jobId, userId: request.user!.id }
+        );
       }
     }
   );

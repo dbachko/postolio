@@ -1,28 +1,24 @@
 import { FastifyPluginAsync } from 'fastify';
-import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { getAssetsClient, importImageFromExternalUrl } from '../services/assets-media.js';
-import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
+import { getAssetsClient } from '../services/assets-media.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
 import { getRedisClient } from '../services/redis.js';
 import { ingestBrandComments } from '../services/inbox-comments-ingestor.js';
-
 import { getDatabaseClient } from '../config/database.js';
+import { assertBrandOwnership } from '../services/ownership.js';
+import {
+  BrandNotFoundError,
+  BrandValidationError,
+  createBrand,
+  deleteBrand,
+  getBrandDetails,
+  listUserBrands,
+  updateBrand,
+  type CreateBrandBody,
+  type UpdateBrandBody,
+} from '../services/brand.js';
 
 const prisma = getDatabaseClient();
-const eventBridge = new EventBridge({});
-
-interface CreateBrandBody {
-  name: string;
-  description?: string;
-  countryCode?: string | null;
-}
-
-interface UpdateBrandBody {
-  name?: string;
-  description?: string;
-  countryCode?: string | null;
-}
 
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   // Create a new brand (RESTful: POST /)
@@ -33,52 +29,20 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
 
-        const { name, description, countryCode } = request.body;
-
-        // Validate required fields
-        if (!name || name.trim().length === 0) {
-          return reply.code(400).send({ error: 'Brand name is required' });
-        }
-
-        if (name.length > 100) {
-          return reply.code(400).send({ error: 'Brand name must be less than 100 characters' });
-        }
-
-        const brand = await prisma.brand.create({
-          data: {
-            name: name.trim(),
-            description: description?.trim() || null,
-            userId,
-            ...(countryCode
-              ? {
-                  countryCode:
-                    typeof countryCode === 'string' && countryCode.length === 2
-                      ? countryCode.toUpperCase()
-                      : null,
-                }
-              : {}),
-          },
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            createdAt: true,
-            countryCode: true,
-          },
-        });
+        const brand = await createBrand(userId, request.body);
 
         // Note: do not auto-start brand analysis on creation.
         // Analysis runs only on IG connect, brand updates, or manual trigger.
         return reply.code(201).send({ brand });
       } catch (error) {
-        console.error('Brand creation error:', error);
+        request.log.error({ err: error }, 'Brand creation error');
 
-        // Handle specific Prisma errors
-        if (error instanceof Error && error.message.includes('Unique constraint')) {
-          return reply.code(400).send({ error: 'A brand with this name already exists' });
+        if (error instanceof BrandValidationError) {
+          return reply.code(400).send({ error: error.message });
         }
 
-        return reply.code(500).send({ error: 'Failed to create brand. Please try again.' });
+        // Unique constraint + other domain errors should be mapped by the global error handler
+        throw error;
       }
     }
   );
@@ -88,23 +52,11 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const userId = request.user!.id;
 
-      const brands = await prisma.brand.findMany({
-        where: { userId },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          styleProfile: true,
-          createdAt: true,
-          countryCode: true,
-          postingTimezone: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const brands = await listUserBrands(userId);
 
       return { brands };
     } catch (error) {
-      console.error('Brands list error:', error);
+      request.log.error({ err: error }, 'Brands list error');
       return reply.code(500).send({ error: 'Failed to retrieve brands' });
     }
   });
@@ -119,29 +71,14 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
 
         const { id } = request.params;
 
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id,
-            userId, // Ensure user owns this brand
-          },
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            styleProfile: true,
-            preferences: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        const brand = await getBrandDetails(userId, id);
 
         return { brand };
       } catch (error) {
-        console.error('Brand details error:', error);
+        request.log.error({ err: error }, 'Brand details error');
+        if (error instanceof BrandNotFoundError) {
+          return reply.code(404).send({ error: error.message });
+        }
         return reply.code(500).send({ error: 'Failed to retrieve brand details' });
       }
     }
@@ -156,164 +93,23 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
 
         const { id } = request.params;
-        const { name, description, countryCode } = request.body;
-
-        // Validate at least one field is provided
-        if (!name && description === undefined && countryCode === undefined) {
-          return reply.code(400).send({ error: 'At least one field must be provided for update' });
-        }
-
-        // Validate name if provided
-        if (name !== undefined) {
-          if (!name || name.trim().length === 0) {
-            return reply.code(400).send({ error: 'Brand name cannot be empty' });
-          }
-          if (name.length > 100) {
-            return reply.code(400).send({ error: 'Brand name must be less than 100 characters' });
-          }
-        }
-
-        // Basic validation for countryCode if provided
-        if (countryCode !== undefined && countryCode !== null) {
-          if (typeof countryCode !== 'string' || countryCode.length !== 2) {
-            return reply.code(400).send({ error: 'countryCode must be a 2-letter ISO code' });
-          }
-        }
-
-        // Check if brand exists and user owns it
-        const existingBrand = await prisma.brand.findFirst({
-          where: {
-            id,
-            userId,
-          },
-        });
-
-        if (!existingBrand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
-
-        // Prepare update data with explicit typing
-        interface BrandUpdateData {
-          name?: string;
-          description?: string | null;
-          countryCode?: string | null;
-        }
-        const updateData: BrandUpdateData = {};
-        if (name !== undefined) updateData.name = name.trim();
-        if (description !== undefined) updateData.description = description?.trim() || null;
-        if (countryCode !== undefined)
-          updateData.countryCode = countryCode ? countryCode.toUpperCase() : null;
-
-        // Update the brand
-        const updatedBrand = await prisma.brand.update({
-          where: { id },
-          data: updateData,
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            styleProfile: true,
-            createdAt: true,
-            updatedAt: true,
-            countryCode: true,
-          },
-        });
-
-        // If brand name or description changed, trigger a new brand analysis (fire-and-forget)
-        const nameChanged =
-          typeof name === 'string' && name.trim() !== (existingBrand.name || '').trim();
-        const descChanged =
-          typeof description === 'string' &&
-          (existingBrand.description || '') !== (description?.trim() || '');
-
-        // Check if Instagram is connected via SocialAccount (and not soft-disconnected)
-        const instagramAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId: id,
-            platform: 'instagram',
-          },
-          select: { id: true, metadata: true },
-        });
-
-        const isDisconnected =
-          instagramAccount && (instagramAccount.metadata as any)?.disconnected === true;
-
-        if ((nameChanged || descChanged) && instagramAccount && !isDisconnected) {
-          // Fire-and-forget background job to include a small recent-post sample (with CDN URLs)
-          (async () => {
-            try {
-              const postsRaw = await instagramService.getRecentPosts({ id: updatedBrand.id }, 20);
-              const posts = await Promise.all(
-                postsRaw.map(async (p) => {
-                  let mediaUrl = p.media_url;
-                  if (
-                    p.media_type?.toUpperCase() !== 'VIDEO' &&
-                    typeof p.media_url === 'string' &&
-                    p.media_url
-                  ) {
-                    try {
-                      const metadata = await buildAnalysisAssetMetadata({
-                        brandId: updatedBrand.id,
-                        contentId: p.id,
-                        generatedAt: p.timestamp ? new Date(p.timestamp) : new Date(),
-                      });
-                      const asset = await importImageFromExternalUrl(p.media_url, metadata);
-                      mediaUrl = asset.url;
-                    } catch (e) {
-                      request.log.warn(
-                        { err: e, postId: p.id },
-                        'Failed to cache image via assets service for analysis; using original URL'
-                      );
-                    }
-                  }
-                  return {
-                    id: p.id,
-                    caption: p.caption,
-                    hashtags: p.hashtags,
-                    timestamp: p.timestamp,
-                    like_count: p.like_count,
-                    comments_count: p.comments_count,
-                    media_type: p.media_type,
-                    media_url: mediaUrl,
-                  };
-                })
-              );
-              await eventBridge.send(
-                new PutEventsCommand({
-                  Entries: [
-                    {
-                      DetailType: 'brand.analysis.requested',
-                      Source: 'postolio.brand',
-                      EventBusName: process.env.EVENT_BUS_NAME || 'default',
-                      Detail: JSON.stringify({
-                        brandId: updatedBrand.id,
-                        requestedBy: request.user.id,
-                        options: { reason: 'brand-updated', maxPosts: 20 },
-                        posts,
-                      }),
-                    },
-                  ],
-                })
-              );
-            } catch (e) {
-              request.log.warn({ err: e }, 'Failed to emit brand.analysis.requested on update');
-            }
-          })();
-        }
+        const updatedBrand = await updateBrand(userId, id, request.body);
 
         return reply.code(200).send({
           message: 'Brand updated successfully',
           brand: updatedBrand,
         });
       } catch (error) {
-        console.error('Brand update error:', error);
+        request.log.error({ err: error }, 'Brand update error');
 
-        // Handle specific Prisma errors
-        if (error instanceof Error && error.message.includes('Unique constraint')) {
-          return reply.code(400).send({ error: 'A brand with this name already exists' });
+        if (error instanceof BrandValidationError) {
+          return reply.code(400).send({ error: error.message });
+        }
+        if (error instanceof BrandNotFoundError) {
+          return reply.code(404).send({ error: error.message });
         }
 
-        return reply.code(500).send({ error: 'Failed to update brand' });
+        throw error;
       }
     }
   );
@@ -328,31 +124,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
 
         const { id } = request.params;
 
-        // Check if brand exists and user owns it
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id,
-            userId,
-          },
-          select: {
-            id: true,
-            name: true,
-            _count: {
-              select: {
-                content: true,
-              },
-            },
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
-
-        // Delete the brand (cascade will handle related content)
-        await prisma.brand.delete({
-          where: { id },
-        });
+        const brand = await deleteBrand(userId, id);
 
         return reply.code(200).send({
           message: 'Brand deleted successfully',
@@ -363,7 +135,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error('Brand deletion error:', error);
+        request.log.error({ err: error }, 'Brand deletion error');
+        if (error instanceof BrandNotFoundError) {
+          return reply.code(404).send({ error: error.message });
+        }
         return reply.code(500).send({ error: 'Failed to delete brand' });
       }
     }
@@ -379,8 +154,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const { id: brandId, month } = request.params;
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(404).send({ success: false, error: 'Brand not found' });
+        await assertBrandOwnership(userId, brandId);
 
         // Parse month string (format: YYYY-MM)
         const parts = month.split('-');
@@ -575,8 +349,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const { id: brandId } = request.params;
 
         // Verify ownership
-        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+        await assertBrandOwnership(userId, brandId);
 
         // Get Instagram SocialAccount for API calls
         const instagramAccount = await prisma.socialAccount.findFirst({
@@ -797,8 +570,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { id: brandId } = request.params;
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      await assertBrandOwnership(userId, brandId);
       const rows = await prisma.savedReply.findMany({
         where: { brandId },
         orderBy: { updatedAt: 'desc' },
@@ -813,8 +585,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/:id/replies', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: brandId } = request.params;
     const userId = request.user!.id;
-    const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-    if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+    await assertBrandOwnership(userId, brandId);
     const { title, body, isDefault } = request.body || ({} as any);
     if (!title?.trim() || !body?.trim())
       return reply.code(400).send({ error: 'Title and body are required' });
@@ -830,8 +601,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/:id/replies/:replyId', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: brandId, replyId } = request.params;
     const userId = request.user!.id;
-    const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-    if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+    await assertBrandOwnership(userId, brandId);
     const data: any = {};
     if (request.body?.title !== undefined) data.title = request.body.title;
     if (request.body?.body !== undefined) data.body = request.body.body;
@@ -846,8 +616,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { id: brandId, replyId } = request.params;
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      await assertBrandOwnership(userId, brandId);
       await prisma.savedReply.delete({ where: { id: replyId } });
       return reply.send({ success: true });
     }

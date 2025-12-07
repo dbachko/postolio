@@ -1,6 +1,5 @@
 import { getDatabaseClient } from '../config/database.js';
-
-const prisma = getDatabaseClient();
+import { APIError } from '@postolio/errors';
 
 export interface CampaignMetrics {
   totalPosts: number;
@@ -90,6 +89,8 @@ export interface ROIMetrics {
   methodology: string;
 }
 
+const prisma = getDatabaseClient();
+
 export class CampaignAnalyticsService {
   /**
    * Get comprehensive metrics for a single campaign
@@ -117,7 +118,10 @@ export class CampaignAnalyticsService {
     });
 
     if (!campaign) {
-      throw new Error('Campaign not found or access denied');
+      throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+        campaignId,
+        userId,
+      });
     }
 
     const content = campaign.content;

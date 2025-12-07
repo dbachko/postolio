@@ -14,6 +14,8 @@ import {
   type UpdateRuleInput,
   type AnalyticsQuery,
 } from '../schemas/dm-automation.js';
+import { assertBrandOwnership } from '../services/ownership.js';
+import { APIError } from '@postolio/errors';
 
 const logger = baseLogger.child({ module: 'dm-automation-routes' });
 
@@ -31,13 +33,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        await assertBrandOwnership(userId, brandId);
 
         // Fetch all rules
         const rules = await prisma.dMAutomationRule.findMany({
@@ -57,7 +53,15 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
           brandId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        return reply.code(500).send({ error: 'Failed to fetch rules' });
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to fetch DM automation rules',
+          'DM_RULES_FETCH_FAILED',
+          500,
+          { brandId, userId }
+        );
       }
     }
   );
@@ -78,13 +82,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
         const data = createRuleSchema.parse(request.body);
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        await assertBrandOwnership(userId, brandId);
 
         // Create rule
         const rule = await prisma.dMAutomationRule.create({
@@ -118,7 +116,15 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
           brandId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        return reply.code(500).send({ error: 'Failed to create rule' });
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to create DM automation rule',
+          'DM_RULE_CREATE_FAILED',
+          500,
+          { brandId, userId }
+        );
       }
     }
   );
@@ -139,16 +145,21 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
         const data = updateRuleSchema.parse(request.body);
 
         // Verify rule exists and user owns the brand
+        // Verify brand ownership first (will throw APIError on failure)
+        await assertBrandOwnership(userId, brandId);
+
         const existingRule = await prisma.dMAutomationRule.findFirst({
           where: {
             id,
             brandId,
-            brand: { userId },
           },
         });
 
         if (!existingRule) {
-          return reply.code(404).send({ error: 'Rule not found' });
+          throw new APIError('Rule not found', 'DM_RULE_NOT_FOUND', 404, {
+            brandId,
+            ruleId: id,
+          });
         }
 
         // Update rule
@@ -184,7 +195,15 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
           ruleId: id,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        return reply.code(500).send({ error: 'Failed to update rule' });
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to update DM automation rule',
+          'DM_RULE_UPDATE_FAILED',
+          500,
+          { brandId, ruleId: id, userId }
+        );
       }
     }
   );
@@ -202,16 +221,21 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         // Verify rule exists and user owns the brand
+        // Verify brand ownership first
+        await assertBrandOwnership(userId, brandId);
+
         const rule = await prisma.dMAutomationRule.findFirst({
           where: {
             id,
             brandId,
-            brand: { userId },
           },
         });
 
         if (!rule) {
-          return reply.code(404).send({ error: 'Rule not found' });
+          throw new APIError('Rule not found', 'DM_RULE_NOT_FOUND', 404, {
+            brandId,
+            ruleId: id,
+          });
         }
 
         // Soft delete by archiving
@@ -234,7 +258,15 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
           ruleId: id,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        return reply.code(500).send({ error: 'Failed to archive rule' });
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to archive DM automation rule',
+          'DM_RULE_ARCHIVE_FAILED',
+          500,
+          { brandId, ruleId: id, userId }
+        );
       }
     }
   );
@@ -256,13 +288,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
         const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        await assertBrandOwnership(userId, brandId);
 
         // Aggregate stats
         const [totalEvents, messagesSent, commentRepliesSent, rateLimitedEvents, uniqueUsers] =
@@ -395,7 +421,15 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
           brandId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        return reply.code(500).send({ error: 'Failed to fetch analytics' });
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to fetch DM automation analytics',
+          'DM_ANALYTICS_FETCH_FAILED',
+          500,
+          { brandId, userId }
+        );
       }
     }
   );

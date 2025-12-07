@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
-import { content as contentApi, analyticsV2 } from '../lib/api';
+import { content as contentApi, analytics } from '../lib/api';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -264,7 +264,7 @@ export default function PostDetail() {
   // Fetch v2 publications then latest metrics
   const publicationsQuery = useQuery<{ success: boolean; data: Array<any> }>({
     queryKey: ['v2-publications', postId],
-    queryFn: async () => analyticsV2.getPublicationsByContent(postId!),
+    queryFn: async () => analytics.getPublicationsByContent(postId!),
     enabled: !!postId && post?.status === 'published',
     staleTime: 30000,
   });
@@ -281,7 +281,7 @@ export default function PostDetail() {
     queryKey: ['v2-latest', selectedPublicationId],
     queryFn: async () =>
       selectedPublicationId
-        ? await analyticsV2.getPublicationLatest(selectedPublicationId)
+        ? await analytics.getPublicationLatest(selectedPublicationId)
         : undefined,
     enabled: !!selectedPublicationId,
     refetchInterval: 60000,
@@ -951,7 +951,7 @@ export default function PostDetail() {
                         size="sm"
                         onClick={async () => {
                           try {
-                            await analyticsV2.refreshPublication(selectedPublicationId);
+                            await analytics.refreshPublication(selectedPublicationId);
                             toast.success('Refresh enqueued');
                           } catch (e: any) {
                             const status = e?.status;
@@ -1014,7 +1014,7 @@ export default function PostDetail() {
                         size="sm"
                         onClick={async () => {
                           try {
-                            await analyticsV2.refreshPublication(selectedPublicationId);
+                            await analytics.refreshPublication(selectedPublicationId);
                             toast.success('Comments refresh enqueued');
                           } catch {
                             toast.error('Unable to enqueue refresh');

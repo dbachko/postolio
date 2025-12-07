@@ -13,6 +13,7 @@ import { buildSimpleContentListResponse } from '../../services/content-response-
 import { importImageFromExternalUrl, attachAssetToContent } from '../../services/assets-media.js';
 import { verifyBrandOwnership } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
+import { assertBrandOwnership } from '../../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
@@ -35,17 +36,7 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: authResult.error });
         }
 
-        const brand = await prisma.brand.findUnique({
-          where: { id: brandId },
-          select: {
-            id: true,
-            name: true,
-            styleProfile: true,
-          },
-        });
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        const brand = await assertBrandOwnership(userId, brandId);
 
         // Brand analysis profile is now read from the projection table by the generator
 
@@ -141,7 +132,7 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error('Content generation error:', error);
+        request.log.error({ err: error }, 'Content generation error');
 
         // Handle specific OpenAI errors with appropriate status codes
         if (error instanceof Error) {

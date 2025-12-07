@@ -22,8 +22,11 @@ import { importImageFromExternalUrl, attachAssetToContent } from './assets-media
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
+import { logger as baseLogger } from '@postolio/logger';
+import { APIError } from '@postolio/errors';
 
 const prisma = getDatabaseClient();
+const logger = baseLogger.child({ module: 'campaign-service' });
 
 // In-memory store for edit sessions (in production, this would be Redis or database)
 const editSessions = new Map<string, { userId: string; startedAt: Date }>();
@@ -65,10 +68,8 @@ export interface CampaignPreview {
 }
 
 export interface CampaignStartResult {
-  success: boolean;
-  campaign?: CampaignWithBrand;
-  scheduledPosts?: number;
-  error?: string;
+  campaign: CampaignWithBrand;
+  scheduledPosts: number;
 }
 
 // Detailed campaign type including selected relations used within this service
@@ -138,7 +139,11 @@ class CampaignService {
           options
         );
       } catch (error) {
-        console.error('Failed to broadcast campaign status change:', error);
+        logger.error('Failed to broadcast campaign status change', {
+          campaignId,
+          brandId,
+          error,
+        });
       }
     }
   }
@@ -161,12 +166,24 @@ class CampaignService {
       });
 
       if (!brand) {
-        throw new Error('Brand not found or access denied');
+        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+          brandId: config.brandId,
+          userId,
+        });
       }
 
       // Validate dates
       if (config.duration.start >= config.duration.end) {
-        throw new Error('Campaign start date must be before end date');
+        throw new APIError(
+          'Campaign start date must be before end date',
+          'CAMPAIGN_INVALID_DATES',
+          400,
+          {
+            brandId: config.brandId,
+            start: config.duration.start.toISOString(),
+            end: config.duration.end.toISOString(),
+          }
+        );
       }
 
       // Get brand's timezone for proper date comparison
@@ -185,7 +202,17 @@ class CampaignService {
       // Compare dates without time components
       // Allow start date to be today or in the future
       if (startDateMidnight < todayMidnight) {
-        throw new Error('Campaign start date cannot be in the past');
+        throw new APIError(
+          'Campaign start date cannot be in the past',
+          'CAMPAIGN_INVALID_DATES',
+          400,
+          {
+            brandId: config.brandId,
+            start: config.duration.start.toISOString(),
+            today: todayMidnight.toISOString(),
+            timezone: brandTimezone,
+          }
+        );
       }
 
       // Check for scheduling conflicts with other campaigns
@@ -315,15 +342,18 @@ class CampaignService {
       });
 
       // Start async preview generation with error handling and logging
-      console.log(`[CampaignService] Triggering preview generation for campaign ${campaign.id}`);
+      logger.info('[CampaignService] Triggering preview generation for campaign preview', {
+        campaignId: campaign.id,
+        brandId: campaign.brandId,
+      });
       try {
         // Await the start (which is non-blocking for the actual work) to ensure it kicks off successfully
         await campaignJobService.startCampaignPreviewGeneration(campaign.id, userId);
       } catch (jobError) {
-        console.error(
-          `[CampaignService] Failed to start preview generation for ${campaign.id}:`,
-          jobError
-        );
+        logger.error('Failed to start preview generation', {
+          campaignId: campaign.id,
+          error: jobError,
+        });
         // We don't block the response, but we log the error to ensure visibility
         // In a critical system we might want to revert the campaign creation, but here we let it persist
         // so the user sees the 'creating' (or failed) state.
@@ -331,7 +361,7 @@ class CampaignService {
 
       return campaign;
     } catch (error) {
-      console.error('Campaign configuration error:', error);
+      logger.error('Campaign configuration error', { error, userId });
       throw error;
     }
   }
@@ -365,7 +395,10 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error('Campaign not found or access denied');
+        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+          campaignId,
+          userId,
+        });
       }
 
       const config = (campaign.config ?? {}) as {
@@ -425,7 +458,12 @@ class CampaignService {
       }
 
       if (!examplePosts.length) {
-        throw new Error('Failed to generate any preview content for campaign');
+        throw new APIError(
+          'Failed to generate any preview content for campaign',
+          'CAMPAIGN_PREVIEW_NO_CONTENT',
+          400,
+          { campaignId }
+        );
       }
 
       // Trim to exact count requested
@@ -456,8 +494,16 @@ class CampaignService {
       for (const post of examplePosts) {
         // Validate post data before saving
         if (!post.caption || post.caption.trim().length === 0) {
-          console.error('Attempting to save content with empty caption:', post);
-          throw new Error('Cannot save content with empty caption');
+          logger.error('Attempting to save content with empty caption', {
+            campaignId,
+            post,
+          });
+          throw new APIError(
+            'Cannot save content with empty caption',
+            'CAMPAIGN_EMPTY_PREVIEW_CAPTION',
+            400,
+            { campaignId }
+          );
         }
 
         const savedPost = await prisma.content.create({
@@ -490,16 +536,18 @@ class CampaignService {
               originalPrompt: imageMetadata.originalPrompt,
             });
             await attachAssetToContent({ contentId, asset });
-            console.log(`[CampaignPreview] Asset imported for content ${contentId}`, {
+            logger.info('[CampaignPreview] Asset imported for content', {
               campaignId: campaign.id,
+              contentId,
               assetId: asset.id,
             });
           } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
-            console.error(
-              `[CampaignPreview] Failed to import asset for content ${contentId}; leaving post without media`,
+            logger.warn(
+              '[CampaignPreview] Failed to import asset for content; leaving post without media',
               {
                 campaignId: campaign.id,
+                contentId,
                 error: { name: err.name, message: err.message },
               }
             );
@@ -525,8 +573,15 @@ class CampaignService {
         },
       };
     } catch (error) {
-      console.error('Campaign preview error:', error);
-      throw error;
+      logger.error('Campaign preview error', { campaignId, userId, error });
+      throw error instanceof APIError
+        ? error
+        : new APIError(
+            error instanceof Error ? error.message : 'Failed to generate campaign preview',
+            'CAMPAIGN_PREVIEW_FAILED',
+            500,
+            { campaignId, userId }
+          );
     }
   }
 
@@ -557,10 +612,12 @@ class CampaignService {
       });
 
       if (!campaign) {
-        return {
-          success: false,
-          error: 'Campaign not found, access denied, or not ready for launch',
-        };
+        throw new APIError(
+          'Campaign not found, access denied, or not ready for launch',
+          'CAMPAIGN_NOT_FOUND',
+          404,
+          { campaignId, userId }
+        );
       }
 
       const rawCfg = (campaign.config ?? {}) as unknown;
@@ -582,10 +639,12 @@ class CampaignService {
         !config.frequency ||
         !config.postingTime
       ) {
-        return {
-          success: false,
-          error: 'Campaign configuration incomplete. Regenerate preview.',
-        };
+        throw new APIError(
+          'Campaign configuration incomplete. Regenerate preview.',
+          'CAMPAIGN_CONFIG_INCOMPLETE',
+          400,
+          { campaignId }
+        );
       }
       const postDates = await this.generatePostingSchedule(
         new Date(config.duration.start),
@@ -610,20 +669,25 @@ class CampaignService {
 
       // Only schedule existing preview posts (no new content generation)
       if (existingPreviews.length === 0) {
-        return {
-          success: false,
-          error: 'No preview posts found. Please generate campaign preview first.',
-        };
+        throw new APIError(
+          'No preview posts found. Please generate campaign preview first.',
+          'CAMPAIGN_NO_PREVIEW',
+          400,
+          { campaignId }
+        );
       }
 
-      console.log(
-        `Scheduling ${existingPreviews.length} preview posts for campaign: ${campaign.name}`
-      );
+      logger.info('Scheduling preview posts for campaign', {
+        campaignId: campaign.id,
+        brandId: campaign.brandId,
+        previewCount: existingPreviews.length,
+      });
 
-      // Log scheduling details for debugging
-      console.log(
-        `Scheduling for brand ${campaign.brandId} in timezone: ${await TimezoneService.getBrandTimezone(campaign.brandId)}`
-      );
+      logger.info('Scheduling timezone for campaign start', {
+        campaignId: campaign.id,
+        brandId: campaign.brandId,
+        timezone: await TimezoneService.getBrandTimezone(campaign.brandId),
+      });
 
       // Schedule existing preview posts only
       for (let i = 0; i < Math.min(existingPreviews.length, postDates.length); i++) {
@@ -675,13 +739,19 @@ class CampaignService {
       }
 
       // Log successful scheduling
-      console.log(
-        `Successfully scheduled ${createdContent.length} posts for campaign: ${campaign.name}`
-      );
+      logger.info('Successfully scheduled posts for campaign', {
+        campaignId: campaign.id,
+        scheduledPosts: createdContent.length,
+      });
 
       if (existingPreviews.length < postDates.length) {
-        console.warn(
-          `Campaign has ${postDates.length} planned posts but only ${existingPreviews.length} preview posts available. Rolling generation will create additional content as needed.`
+        logger.warn(
+          'Campaign has more planned posts than preview posts; rolling generation will create additional content as needed',
+          {
+            campaignId: campaign.id,
+            plannedPosts: postDates.length,
+            previewPosts: existingPreviews.length,
+          }
         );
       }
 
@@ -701,16 +771,19 @@ class CampaignService {
       });
 
       return {
-        success: true,
         campaign: updatedCampaign,
         scheduledPosts: createdContent.length,
       };
     } catch (error) {
-      console.error('Campaign start error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to start campaign',
-      };
+      logger.error('Campaign start error', { campaignId, userId, error });
+      throw error instanceof APIError
+        ? error
+        : new APIError(
+            error instanceof Error ? error.message : 'Failed to start campaign',
+            'CAMPAIGN_START_FAILED',
+            500,
+            { campaignId, userId }
+          );
     }
   }
 
@@ -757,7 +830,10 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error('Campaign not found or access denied');
+        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+          campaignId,
+          userId,
+        });
       }
 
       // Detect campaigns that are stuck in "creating" due to a previous process exit
@@ -770,9 +846,10 @@ class CampaignService {
           campaign.createdAt instanceof Date &&
           Date.now() - campaign.createdAt.getTime() > CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS
         ) {
-          console.warn(
-            `Campaign ${campaignId} appears stuck in 'creating' for more than ${CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS / 60000} minutes. Marking as failed to prevent infinite retry loops.`
-          );
+          logger.warn('Campaign appears stuck in creating state; marking as failed', {
+            campaignId,
+            thresholdMinutes: CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS / 60000,
+          });
 
           // Update status to failed instead of blindly retrying, which causes OOM loops
           await prisma.campaign.update({
@@ -796,7 +873,10 @@ class CampaignService {
           );
         }
       } catch (requeueError) {
-        console.error(`Failed to handle stuck campaign ${campaignId}:`, requeueError);
+        logger.error('Failed to handle stuck campaign', {
+          campaignId,
+          error: requeueError,
+        });
       }
 
       // Build CDN URLs for all content and map to public response format
@@ -816,7 +896,7 @@ class CampaignService {
 
       return campaignWithUrls;
     } catch (error) {
-      console.error('Get campaign error:', error);
+      logger.error('Get campaign error', { campaignId, userId, error });
       throw error;
     }
   }
@@ -859,9 +939,11 @@ class CampaignService {
       if (scheduledTime > bufferTime) {
         schedule.push(scheduledTime);
       } else {
-        console.log(
-          `Skipping past/too-soon scheduling time: ${scheduledTime.toISOString()} (current time + buffer: ${bufferTime.toISOString()})`
-        );
+        logger.debug('Skipping past/too-soon scheduling time for campaign posting schedule', {
+          scheduledTime: scheduledTime.toISOString(),
+          bufferTime: bufferTime.toISOString(),
+          brandId,
+        });
       }
 
       // Increment based on frequency
@@ -936,7 +1018,10 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error('Campaign not found or access denied');
+        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+          campaignId,
+          userId,
+        });
       }
 
       // Special handling for status transitions
@@ -967,8 +1052,11 @@ class CampaignService {
 
       // Block non-status updates for active campaigns
       if (campaign.status === 'active') {
-        throw new Error(
-          'Active campaigns can only be paused. Please pause the campaign first to make other changes.'
+        throw new APIError(
+          'Active campaigns can only be paused. Please pause the campaign first to make other changes.',
+          'CAMPAIGN_INVALID_STATE',
+          400,
+          { campaignId, userId, status: campaign.status }
         );
       }
 
@@ -987,13 +1075,19 @@ class CampaignService {
       // Update basic fields
       if (updates.name !== undefined) {
         if (!updates.name.trim()) {
-          throw new Error('Campaign name cannot be empty');
+          throw new APIError('Campaign name cannot be empty', 'CAMPAIGN_INVALID_NAME', 400, {
+            campaignId,
+            userId,
+          });
         }
       }
 
       if (updates.themes !== undefined) {
         if (!Array.isArray(updates.themes) || updates.themes.length === 0) {
-          throw new Error('At least one theme is required');
+          throw new APIError('At least one theme is required', 'CAMPAIGN_INVALID_THEMES', 400, {
+            campaignId,
+            userId,
+          });
         }
         updatedConfig.themes = updates.themes;
       }
@@ -1004,14 +1098,24 @@ class CampaignService {
 
       if (updates.frequency !== undefined) {
         if (!['daily', 'every2days', '3weekly'].includes(updates.frequency)) {
-          throw new Error('Invalid frequency. Must be daily, every2days, or 3weekly');
+          throw new APIError(
+            'Invalid frequency. Must be daily, every2days, or 3weekly',
+            'CAMPAIGN_INVALID_FREQUENCY',
+            400,
+            { campaignId, userId }
+          );
         }
         updatedConfig.frequency = updates.frequency;
       }
 
       if (updates.postingTime !== undefined) {
         if (!/^\d{2}:\d{2}$/.test(updates.postingTime)) {
-          throw new Error('Posting time must be in HH:MM format');
+          throw new APIError(
+            'Posting time must be in HH:MM format',
+            'CAMPAIGN_INVALID_POSTING_TIME',
+            400,
+            { campaignId, userId }
+          );
         }
         updatedConfig.postingTime = updates.postingTime;
       }
@@ -1029,7 +1133,10 @@ class CampaignService {
 
         // Validate dates
         if (endDate <= startDate) {
-          throw new Error('End date must be after start date');
+          throw new APIError('End date must be after start date', 'CAMPAIGN_INVALID_DATES', 400, {
+            campaignId,
+            userId,
+          });
         }
 
         // Get brand's timezone for proper date comparison
@@ -1062,7 +1169,10 @@ class CampaignService {
 
         // Only validate if campaign is not active (active campaigns can keep their past dates)
         if ((campaign.status as string) !== 'active' && startDateMidnight < todayMidnight) {
-          throw new Error('Start date cannot be in the past');
+          throw new APIError('Start date cannot be in the past', 'CAMPAIGN_START_IN_PAST', 400, {
+            campaignId,
+            userId,
+          });
         }
 
         updatedConfig.duration = {
@@ -1128,14 +1238,17 @@ class CampaignService {
         },
       });
 
-      console.log(`Campaign ${campaignId} updated successfully`);
+      logger.info('Campaign updated successfully', {
+        campaignId,
+        userId,
+      });
       return {
         success: true,
         campaign: updatedCampaign as unknown as CampaignWithContent,
         message: 'Campaign updated successfully',
       };
     } catch (error) {
-      console.error('Update campaign error:', error);
+      logger.error('Update campaign error', { campaignId, userId, error });
       throw error;
     }
   }
@@ -1152,7 +1265,10 @@ class CampaignService {
         });
 
         if (!campaign) {
-          throw new Error('Campaign not found or access denied');
+          throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+            campaignId,
+            userId,
+          });
         }
 
         // Validate status transition inside transaction
@@ -1160,8 +1276,16 @@ class CampaignService {
         const allowedTransitions = validTransitions[campaign.status] || [];
 
         if (!allowedTransitions.includes('paused')) {
-          throw new Error(
-            `Invalid status transition: ${campaign.status} → paused. Allowed transitions: ${allowedTransitions.join(', ')}`
+          throw new APIError(
+            `Invalid status transition: ${campaign.status} → paused. Allowed transitions: ${allowedTransitions.join(', ')}`,
+            'CAMPAIGN_INVALID_STATUS',
+            400,
+            {
+              campaignId,
+              userId,
+              currentStatus: campaign.status,
+              attemptedStatus: 'paused',
+            }
           );
         }
 
@@ -1189,14 +1313,11 @@ class CampaignService {
           },
         });
 
-        console.log(
-          `Campaign ${campaignId} paused. ${skippedContent.count} scheduled posts marked as skipped.`
-        );
-        if (skippedContent.count > 0) {
-          console.log(`  - Marked ${skippedContent.count} future posts as skipped`);
-          console.log(`  - Status changed: scheduled → skipped`);
-          console.log(`  - scheduledAt preserved for potential resume`);
-        }
+        logger.info('Campaign paused and scheduled posts marked as skipped', {
+          campaignId,
+          userId,
+          skippedCount: skippedContent.count,
+        });
 
         return {
           campaign: updatedCampaign,
@@ -1222,7 +1343,7 @@ class CampaignService {
 
       return result;
     } catch (error) {
-      console.error('Pause campaign error:', error);
+      logger.error('Pause campaign error', { campaignId, userId, error });
       throw error;
     }
   }
@@ -1239,7 +1360,10 @@ class CampaignService {
         });
 
         if (!campaign) {
-          throw new Error('Campaign not found or access denied');
+          throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+            campaignId,
+            userId,
+          });
         }
 
         // Validate status transition inside transaction
@@ -1247,8 +1371,16 @@ class CampaignService {
         const allowedTransitions = validTransitions[campaign.status] || [];
 
         if (!allowedTransitions.includes('active')) {
-          throw new Error(
-            `Invalid status transition: ${campaign.status} → active. Allowed transitions: ${allowedTransitions.join(', ')}`
+          throw new APIError(
+            `Invalid status transition: ${campaign.status} → active. Allowed transitions: ${allowedTransitions.join(', ')}`,
+            'CAMPAIGN_INVALID_STATUS',
+            400,
+            {
+              campaignId,
+              userId,
+              currentStatus: campaign.status,
+              attemptedStatus: 'active',
+            }
           );
         }
 
@@ -1314,16 +1446,12 @@ class CampaignService {
           data: { status: 'active' },
         });
 
-        console.log(`Campaign ${campaignId} resumed.`);
-        if (restoredContent.count > 0) {
-          console.log(`  - Restored ${restoredContent.count} future posts`);
-          console.log(`  - Status changed: skipped → scheduled`);
-        }
-        if (permanentlySkipped.count > 0) {
-          console.log(
-            `  - ${permanentlySkipped.count} posts permanently skipped (past scheduled time)`
-          );
-        }
+        logger.info('Campaign resumed with content status updates', {
+          campaignId,
+          userId,
+          restoredCount: restoredContent.count,
+          permanentlySkippedCount: permanentlySkipped.count,
+        });
 
         return {
           campaign: updatedCampaign,
@@ -1355,7 +1483,7 @@ class CampaignService {
 
       return result;
     } catch (error) {
-      console.error('Resume campaign error:', error);
+      logger.error('Resume campaign error', { campaignId, userId, error });
       throw error;
     }
   }
@@ -1399,7 +1527,10 @@ class CampaignService {
         });
 
         if (!campaign) {
-          throw new Error('Campaign not found or access denied');
+          throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+            campaignId,
+            userId,
+          });
         }
 
         // Validate status transition inside transaction
@@ -1407,8 +1538,16 @@ class CampaignService {
         const allowedTransitions = validTransitions[campaign.status] || [];
 
         if (!allowedTransitions.includes(newStatus)) {
-          throw new Error(
-            `Invalid status transition: ${campaign.status} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(', ')}`
+          throw new APIError(
+            `Invalid status transition: ${campaign.status} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(', ')}`,
+            'CAMPAIGN_INVALID_STATUS',
+            400,
+            {
+              campaignId,
+              userId,
+              currentStatus: campaign.status,
+              attemptedStatus: newStatus,
+            }
           );
         }
 
@@ -1421,7 +1560,12 @@ class CampaignService {
           },
         });
 
-        console.log(`Campaign ${campaignId} status updated: ${campaign.status} → ${newStatus}`);
+        logger.info('Campaign status updated', {
+          campaignId,
+          userId,
+          oldStatus: campaign.status,
+          newStatus,
+        });
 
         return {
           success: true,
@@ -1467,7 +1611,7 @@ class CampaignService {
 
       return result;
     } catch (error) {
-      console.error('Update campaign status error:', error);
+      logger.error('Update campaign status error', { campaignId, userId, error, newStatus });
       throw error;
     }
   }
@@ -1495,7 +1639,10 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error('Campaign not found or access denied');
+        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+          campaignId,
+          userId,
+        });
       }
 
       // Update priority
@@ -1564,7 +1711,12 @@ class CampaignService {
         conflicts: conflicts.length,
       };
     } catch (error) {
-      console.error('Update campaign priority error:', error);
+      logger.error('Update campaign priority error', {
+        campaignId,
+        userId,
+        newPriority,
+        error,
+      });
       throw error;
     }
   }
@@ -1613,7 +1765,7 @@ class CampaignService {
         }, 0),
       };
     } catch (error) {
-      console.error('Get campaign coordination error:', error);
+      logger.error('Get campaign coordination error', { userId, error });
       throw error;
     }
   }
@@ -1811,7 +1963,12 @@ class CampaignService {
 
       return { valid: errors.length === 0, errors };
     } catch (error) {
-      console.error('Validate field editability error:', error);
+      logger.error('Validate field editability error', {
+        campaignId,
+        userId,
+        updateData: fieldsToUpdate,
+        error,
+      });
       return {
         valid: false,
         errors: [{ field: 'system', message: 'Failed to validate field editability' }],
@@ -1836,8 +1993,15 @@ class CampaignService {
       // First validate field editability
       const editabilityCheck = await this.validateFieldEditability(campaignId, updateData, userId);
       if (!editabilityCheck.valid) {
-        throw new Error(
-          `Validation failed: ${editabilityCheck.errors.map((e) => e.message).join(', ')}`
+        throw new APIError(
+          'Validation failed for campaign update',
+          'CAMPAIGN_UPDATE_VALIDATION_FAILED',
+          400,
+          {
+            campaignId,
+            userId,
+            errors: editabilityCheck.errors,
+          }
         );
       }
 
@@ -1851,7 +2015,10 @@ class CampaignService {
       });
 
       if (!currentCampaign) {
-        throw new Error('Campaign not found or access denied');
+        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
+          campaignId,
+          userId,
+        });
       }
 
       // Check if regeneration is needed
@@ -2020,7 +2187,11 @@ class CampaignService {
           : 'Campaign updated successfully.',
       };
     } catch (error) {
-      console.error('Update campaign with regeneration error:', error);
+      logger.error('Update campaign with regeneration error', {
+        campaignId,
+        userId,
+        error,
+      });
       throw error;
     }
   }
@@ -2090,23 +2261,32 @@ class CampaignService {
         const scheduleResult = await schedulerService.scheduleContent(contentId);
 
         if (scheduleResult.success) {
-          console.log(
-            `Content ${contentId} scheduling initiated in AWS (campaign ${campaignId}, operation ${operationId})`
-          );
+          logger.info('Content scheduling initiated in AWS', {
+            contentId,
+            campaignId,
+            operationId,
+          });
           return;
         }
 
-        console.error(
-          `Failed to create AWS schedule for content ${contentId}:`,
-          scheduleResult.error
-        );
+        logger.error('Failed to create AWS schedule for content', {
+          contentId,
+          campaignId,
+          operationId,
+          error: scheduleResult.error,
+        });
         await this.applySchedulingError(
           contentId,
           generationParams,
           scheduleResult.error || 'Unknown error'
         );
       } catch (error) {
-        console.error(`Error scheduling content ${contentId}:`, error);
+        logger.error('Error scheduling content', {
+          contentId,
+          campaignId,
+          operationId,
+          error,
+        });
         await this.applySchedulingError(
           contentId,
           generationParams,
@@ -2114,10 +2294,12 @@ class CampaignService {
         );
       }
     })().catch((fatalError) => {
-      console.error(
-        `Fatal scheduling error for content ${contentId} (campaign ${campaignId}):`,
-        fatalError
-      );
+      logger.error('Fatal scheduling error for content', {
+        contentId,
+        campaignId,
+        operationId,
+        error: fatalError,
+      });
     });
   }
 

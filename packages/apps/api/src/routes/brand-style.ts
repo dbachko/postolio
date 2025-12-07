@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import type { Prisma } from '@postolio/database';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
@@ -11,11 +12,7 @@ const brandStyleRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const { brandId } = request.params;
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId: request.user!.id },
-        select: { preferences: true },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      const brand = await assertBrandOwnership(request.user!.id, brandId);
       type BrandPreferences = Record<string, unknown> & { profileFreezeCore?: boolean };
       const prefsRaw = brand.preferences as unknown;
       const prefs: BrandPreferences =
@@ -36,11 +33,7 @@ const brandStyleRoutes: FastifyPluginAsync = async (fastify) => {
       if (typeof freezeCore !== 'boolean') {
         return reply.code(400).send({ error: 'freezeCore boolean required' });
       }
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId: request.user!.id },
-        select: { preferences: true },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      const brand = await assertBrandOwnership(request.user!.id, brandId);
       type BrandPreferences = Record<string, unknown> & { profileFreezeCore?: boolean };
       const prefsRaw = brand.preferences as unknown;
       const prefs: BrandPreferences =

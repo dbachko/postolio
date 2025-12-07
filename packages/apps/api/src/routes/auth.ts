@@ -1,7 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import bcrypt from 'bcryptjs';
-import { getDatabaseClient, getDatabaseUrl } from '../config/database.js';
-import { PrismaClient as PrismaClientDB } from '@postolio/database';
+import { getDatabaseClient } from '../config/database.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import {
@@ -12,33 +10,15 @@ import {
 } from '../schemas/auth.js';
 import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
 import { RefreshTokenService } from '../services/refresh-token.js';
-import { TimezoneService } from '../services/timezone.js';
-import Redis from 'ioredis';
-import { getRedisUrl } from '../utils/redis-url.js';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
 import { ensureDeviceId } from '../utils/device-id.js';
-import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
 import { signupsAllowedForEmail } from '../utils/access-control.js';
+import { createRedisClient } from '../services/redis.js';
+import { AuthService } from '../services/auth.js';
 
-// Prefer shared Prisma client; in dev fallback to a fresh client if model accessors are missing
-const prismaShared = getDatabaseClient() as any;
-const prisma =
-  prismaShared && prismaShared.user && typeof prismaShared.user.findUnique === 'function'
-    ? prismaShared
-    : new PrismaClientDB({
-        datasources: { db: { url: process.env.DATABASE_URL || getDatabaseUrl() } },
-      });
-const redis = new Redis(getRedisUrl());
-
-/**
- * Add a random delay to help mitigate timing attacks
- * Delays between 10-50ms to normalize response times
- */
-async function addTimingJitter(): Promise<void> {
-  const delayMs = Math.floor(Math.random() * 40) + 10; // 10-50ms random delay
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
+const prisma = getDatabaseClient();
+const redis = createRedisClient();
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // User registration with rate limiting and validation
@@ -48,7 +28,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [validateAndSanitize(registerSchema), enhancedRateLimiters.register()],
     },
     async (request, reply) => {
-      const { email, password, name, timezone, deviceFingerprint, deviceName } = request.body;
+      const { email, deviceFingerprint, deviceName } = request.body;
 
       // Enforce signup mode restrictions before proceeding
       const gate = signupsAllowedForEmail(email);
@@ -58,37 +38,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
       }
 
-      // Check if user exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
-        return reply.code(409).send({ error: 'User already exists' });
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      // Create user with auto-detected timezone
-      const user = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          name: name || null,
-          timezone: timezone || 'UTC', // Use detected timezone or UTC fallback
-          timezoneAutoDetected: true, // Mark as auto-detected during registration
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          timezone: true,
-          timezoneAutoDetected: true,
-          createdAt: true,
-        },
-      });
-
       // Resolve stable device identifier and set cookie if needed
       const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
 
@@ -96,18 +45,18 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const ipAddress = getClientIp(request);
       const userAgent = getUserAgent(request);
       const humanDeviceName = deviceName || parseDeviceName(userAgent);
-      const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+      const { user, refreshToken, accessToken } = await AuthService.register({
         fastify,
-        user.id,
+        input: {
+          ...request.body,
+          // Ensure email is non-optional for the service layer
+          email: request.body.email,
+        },
         ipAddress,
         userAgent,
-        {
-          deviceFingerprint: stableFingerprint,
-          deviceName: humanDeviceName,
-          ipAddress,
-          userAgent,
-        }
-      );
+        deviceFingerprint: stableFingerprint,
+        deviceName: humanDeviceName,
+      });
 
       // Set access token in HTTP-only cookie
       reply.setCookie('auth_token', accessToken, {
@@ -140,12 +89,18 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         ]).then(([{ EmailService }, { EmailVerificationService }]) => {
           // Send welcome email
           EmailService.sendWelcomeEmail(user.email, user.name || undefined).catch((error) => {
-            console.error('Failed to send welcome email:', error);
+            fastify.log.error(
+              { err: error, userId: user.id },
+              'Failed to send welcome email after registration'
+            );
           });
 
           // Send verification email
           EmailVerificationService.sendVerificationEmail(user.id).catch((error) => {
-            console.error('Failed to send verification email:', error);
+            fastify.log.error(
+              { err: error, userId: user.id },
+              'Failed to send verification email after registration'
+            );
           });
         });
       }
@@ -164,169 +119,46 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [validateAndSanitize(loginSchema), enhancedRateLimiters.login()],
     },
     async (request, reply) => {
-      const { email, password, rememberMe, deviceFingerprint, deviceName } = request.body;
-
-      // Check if account is locked before proceeding
-      const isLocked = await AuditLogger.isAccountLocked(email);
-      if (isLocked) {
-        return reply.code(423).send({
-          error:
-            'Account temporarily locked due to multiple failed login attempts. Please try again later.',
-          code: 'ACCOUNT_LOCKED',
-        });
-      }
-
-      // If using allowlist for logins too, optionally block here for unknown users
-      // Current behavior: only restrict signups; existing users may log in.
-      // Find user with password for verification
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          password: true,
-          subscriptionTier: true,
-        },
-      });
-
-      // Always perform password comparison to prevent timing attacks
-      // Use a dummy hash if user doesn't exist
-      const dummyHash = '$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m'; // Hash of 'dummy'
-      const passwordToCheck = user?.password || dummyHash;
-      const validPassword = await bcrypt.compare(password, passwordToCheck);
-
-      // Add random timing jitter to mitigate timing-based user enumeration
-      // This helps normalize response times regardless of user existence
-      await addTimingJitter();
-
-      // Check both user existence and password validity
-      if (!user || !validPassword) {
-        // Log failed login attempt
-        await AuditLogger.logAuthFailure(
-          AuditEventType.USER_LOGIN_FAILED,
-          email,
-          request,
-          !user ? 'User not found' : 'Invalid password'
-        );
-
-        // Check for account lockout
-        const shouldLock = await AuditLogger.checkAccountLockout(email);
-        if (shouldLock) {
-          return reply.code(423).send({
-            error:
-              'Account temporarily locked due to multiple failed login attempts. Please try again later.',
-          });
-        }
-
-        return reply.code(401).send({ error: 'Invalid credentials' });
-      }
-
-      // Auto-detect and save timezone if user doesn't have one set
-      const userTimezone = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { timezone: true, timezoneAutoDetected: true },
-      });
-
-      if (
-        !userTimezone?.timezone ||
-        userTimezone.timezone === 'UTC' ||
-        userTimezone.timezoneAutoDetected
-      ) {
-        const detectedTimezone = await TimezoneService.detectTimezone(request, user.id);
-        if (detectedTimezone !== 'UTC') {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              timezone: detectedTimezone,
-              timezoneAutoDetected: true,
-            },
-          });
-          console.log(
-            `Auto-detected and saved timezone ${detectedTimezone} for user ${user.id} during login`
-          );
-        }
-      }
-
-      // Check if two-factor authentication is enabled
-      const userWithTwoFactor = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: {
-          twoFactorEnabled: true,
-          twoFactorMethod: true,
-        },
-      });
-
-      if (userWithTwoFactor?.twoFactorEnabled) {
-        // Check for trusted device token
-        const trustedDeviceToken = request.cookies?.trusted_device;
-        if (trustedDeviceToken) {
-          const { TwoFactorService } = await import('../services/two-factor.js');
-          const trustedUserId = await TwoFactorService.isTrustedDevice(trustedDeviceToken);
-
-          if (trustedUserId === user.id) {
-            // Trusted device, proceed with login
-          } else {
-            // Need 2FA verification
-            // Store pending authentication in Redis temporarily
-            const pendingKey = `2fa-pending:${email}`;
-            await redis.setex(pendingKey, 300, user.id); // 5 minutes to complete 2FA
-
-            // Send 2FA code if using email method
-            if (userWithTwoFactor.twoFactorMethod === 'email') {
-              const { TwoFactorService } = await import('../services/two-factor.js');
-              await TwoFactorService.sendEmailCode(user.id);
-            }
-
-            return reply.code(200).send({
-              requiresTwoFactor: true,
-              method: userWithTwoFactor.twoFactorMethod,
-              message: 'Two-factor authentication required',
-            });
-          }
-        } else {
-          // Need 2FA verification
-          const pendingKey = `2fa-pending:${email}`;
-          await redis.setex(pendingKey, 300, user.id); // 5 minutes to complete 2FA
-
-          // Send 2FA code if using email method
-          if (userWithTwoFactor.twoFactorMethod === 'email') {
-            const { TwoFactorService } = await import('../services/two-factor.js');
-            await TwoFactorService.sendEmailCode(user.id);
-          }
-
-          return reply.code(200).send({
-            requiresTwoFactor: true,
-            method: userWithTwoFactor.twoFactorMethod,
-            message: 'Two-factor authentication required',
-          });
-        }
-      }
+      const { rememberMe, deviceFingerprint, deviceName } = request.body;
 
       // Resolve stable device identifier and set cookie if needed
       const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
 
-      // Before creating a new session, revoke any existing active session for this device to avoid duplicates
-      if (stableFingerprint) {
-        await revokeSameDeviceSessions(user.id, stableFingerprint, request);
-      }
-
-      // Generate tokens with refresh token rotation and session tracking
       const ipAddress = getClientIp(request);
       const userAgent = getUserAgent(request);
-      const humanDeviceName = deviceName || parseDeviceName(userAgent);
-      const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+
+      const result = await AuthService.login({
         fastify,
-        user.id,
+        request,
+        redis,
+        input: request.body,
         ipAddress,
         userAgent,
-        {
-          deviceFingerprint: stableFingerprint,
-          deviceName: humanDeviceName,
-          ipAddress,
-          userAgent,
-        }
-      );
+        stableFingerprint,
+        deviceName,
+      });
+
+      if (result.outcome === 'locked') {
+        return reply.code(423).send({
+          error: result.message,
+          code: 'ACCOUNT_LOCKED',
+        });
+      }
+
+      if (result.outcome === 'invalid_credentials') {
+        return reply.code(401).send({ error: result.message });
+      }
+
+      if (result.outcome === '2fa_required') {
+        return reply.code(200).send({
+          requiresTwoFactor: true,
+          method: result.method,
+          message: result.message,
+        });
+      }
+
+      // Authenticated
+      const { user, accessToken, refreshToken } = result;
 
       // Set access token in HTTP-only cookie
       reply.setCookie('auth_token', accessToken, {
@@ -348,16 +180,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           : 7 * 24 * 60 * 60, // 7 days otherwise
       });
 
-      // Log successful login and reset failed attempts
-      await AuditLogger.logAuth(AuditEventType.USER_LOGIN, user.id, user.email, request);
-      await AuditLogger.resetFailedLoginAttempts(user.email);
-
-      // Return user without password
-      const { password: _password, ...userWithoutPassword } = user;
-      void _password;
-
       return reply.send({
-        user: userWithoutPassword,
+        user,
         message: 'Login successful',
       });
     }
@@ -569,7 +393,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       // Log the specific error for debugging
       if (err instanceof Error) {
-        console.error('Auth verification failed:', err.message);
+        request.log.error(
+          {
+            err,
+            message: err.message,
+          },
+          'Auth verification failed in /me'
+        );
         if (err.name === 'TokenExpiredError') {
           return reply.code(401).send({ error: 'Token expired' });
         } else if (err.name === 'JsonWebTokenError') {

@@ -1,5 +1,5 @@
-import Redis from 'ioredis';
-import { getRedisUrl } from '../utils/redis-url.js';
+import type { Redis } from 'ioredis';
+import { createRedisClient } from './redis.js';
 
 interface TokenMetadata {
   token: string;
@@ -28,7 +28,7 @@ export class RedisTokenStore {
   private static readonly FAMILY_PREFIX = 'token-family:';
 
   constructor(redis?: Redis) {
-    this.redis = redis || new Redis(getRedisUrl());
+    this.redis = redis || createRedisClient();
   }
 
   /**

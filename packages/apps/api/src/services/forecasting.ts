@@ -163,8 +163,13 @@ export class ForecastingService {
 
   /**
    * Predict campaign performance
+   *
+   * If brandId is not provided, it is derived from the campaign.
    */
-  async predictCampaignPerformance(campaignId: string, brandId: string): Promise<CampaignForecast> {
+  async predictCampaignPerformance(
+    campaignId: string,
+    brandId?: string
+  ): Promise<CampaignForecast> {
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       include: {
@@ -183,7 +188,8 @@ export class ForecastingService {
     }
 
     // Get brand's historical performance
-    const brandForecast = await this.generateForecast(brandId, 30, 90);
+    const resolvedBrandId = brandId ?? campaign.brandId;
+    const brandForecast = await this.generateForecast(resolvedBrandId, 30, 90);
 
     // Extract campaign configuration
     const config = (campaign.config as any) || {};

@@ -4,11 +4,10 @@ import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
 import { RefreshTokenService } from './refresh-token.js';
-import Redis from 'ioredis';
-import { getRedisUrl } from '../utils/redis-url.js';
+import { createRedisClient } from './redis.js';
 
 const prisma = getDatabaseClient();
-const redis = new Redis(getRedisUrl());
+const redis = createRedisClient();
 
 interface PasswordResetData {
   userId: string;

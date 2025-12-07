@@ -1,6 +1,8 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { rollingContentService } from '../services/rolling-content.js';
 import { getDatabaseClient } from '../config/database.js';
+import { assertBrandOwnership } from '../services/ownership.js';
+import { APIError } from '@postolio/errors';
 
 const prisma = getDatabaseClient();
 
@@ -43,19 +45,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         const { brandId } = request.params as BrandParams;
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: request.user.id,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({
-            success: false,
-            error: 'Brand not found or access denied',
-          });
-        }
+        const brand = await assertBrandOwnership(request.user.id, brandId);
 
         const queueStatus = await rollingContentService.getQueueStatus(brandId);
 
@@ -68,11 +58,16 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error('Get queue status error:', error);
-        return reply.code(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        request.log.error({ err: error }, 'Get queue status error');
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to get rolling queue status',
+          'ROLLING_CONTENT_QUEUE_STATUS_FAILED',
+          500,
+          { brandId: (request.params as BrandParams).brandId }
+        );
       }
     }
   );
@@ -107,19 +102,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         const { campaignId } = request.body as { campaignId?: string };
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: request.user.id,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({
-            success: false,
-            error: 'Brand not found or access denied',
-          });
-        }
+        const brand = await assertBrandOwnership(request.user.id, brandId);
 
         const result = await rollingContentService.triggerManual(brandId, campaignId);
 
@@ -134,11 +117,16 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
           ...(result.success ? {} : { error: result.message }),
         });
       } catch (error) {
-        console.error('Manual rolling generation error:', error);
-        return reply.code(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        request.log.error({ err: error }, 'Manual rolling generation error');
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to trigger rolling content generation',
+          'ROLLING_CONTENT_GENERATE_FAILED',
+          500,
+          { brandId: (request.params as BrandParams).brandId }
+        );
       }
     }
   );
@@ -166,19 +154,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         const { brandId } = request.params as BrandParams;
 
         // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: request.user.id,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({
-            success: false,
-            error: 'Brand not found or access denied',
-          });
-        }
+        const brand = await assertBrandOwnership(request.user.id, brandId);
 
         const queueStatus = await rollingContentService.getQueueStatus(brandId);
 
@@ -198,11 +174,16 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error('Check rolling generation error:', error);
-        return reply.code(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        request.log.error({ err: error }, 'Check rolling generation error');
+        if (error instanceof APIError) {
+          throw error;
+        }
+        throw new APIError(
+          error instanceof Error ? error.message : 'Failed to check rolling content needs',
+          'ROLLING_CONTENT_CHECK_FAILED',
+          500,
+          { brandId: (request.params as BrandParams).brandId }
+        );
       }
     }
   );
@@ -269,11 +250,15 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
     } catch (error) {
-      console.error('Get rolling content overview error:', error);
-      return reply.code(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      request.log.error({ err: error }, 'Get rolling content overview error');
+      if (error instanceof APIError) {
+        throw error;
+      }
+      throw new APIError(
+        error instanceof Error ? error.message : 'Failed to get rolling content overview',
+        'ROLLING_CONTENT_OVERVIEW_FAILED',
+        500
+      );
     }
   });
 };

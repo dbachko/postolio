@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { analyticsV2 } from '@/lib/api';
+import { analytics } from '@/lib/api';
 
 interface HashtagData {
   hashtag: string;
@@ -24,7 +24,7 @@ export function useHashtagSuggestions(brandId: string | undefined) {
     queryFn: async () => {
       if (!brandId) return [];
 
-      const response = (await analyticsV2.getBrandHashtags(brandId)) as HashtagAnalyticsResponse;
+      const response = (await analytics.getBrandHashtags(brandId)) as HashtagAnalyticsResponse;
 
       if (response.success) {
         return response.data;

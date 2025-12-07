@@ -1,10 +1,9 @@
-import Redis from 'ioredis';
 import crypto from 'crypto';
 import { prisma } from '../config/database.js';
-import { getRedisUrl } from '../utils/redis-url.js';
 import { EmailService } from './email.js';
 import { deletionQueueService } from './deletion-queue.js';
 import { DELETION_RECOVERY_DELAY_MS } from './deletion-config.js';
+import { createRedisClient } from './redis.js';
 
 type DeletionSource = 'user' | 'meta' | 'legal';
 
@@ -40,7 +39,7 @@ interface ServiceResult {
 const TOKEN_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
 export class DataDeletionRequestService {
-  private static redis = new Redis(getRedisUrl());
+  private static redis = createRedisClient();
 
   static async sendVerification(params: SendVerificationParams): Promise<ServiceResult> {
     const { email, source, reason } = params;

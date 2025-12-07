@@ -1,11 +1,9 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
 import { instagramBestTimeService } from '../services/instagram-best-time.js';
 import type { BestTimePayload } from '../services/instagram-best-time.js';
 import { getRedisClient, redisService } from '../services/redis.js';
-
-const prisma = getDatabaseClient();
+import { assertBrandOwnership, assertInstagramConnected } from '../services/ownership.js';
 
 /**
  * Instagram-specific features that don't have generic equivalents
@@ -25,10 +23,9 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const { brandId } = request.params;
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId: request.user!.id },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      const userId = request.user!.id;
+
+      await assertBrandOwnership(userId, brandId);
 
       const redis = getRedisClient();
       const lockKey = `instagram_sync_lock:${brandId}`;
@@ -83,20 +80,15 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
       const { force } = request.query as { force?: string };
 
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-        select: { id: true },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
-      if (!(await instagramService.isConfigured(brand.id)))
-        return reply.code(400).send({ error: 'Instagram not connected' });
+      const brand = await assertBrandOwnership(userId, brandId);
+      await assertInstagramConnected(brand.id);
 
       try {
-        const rec = await instagramBestTimeService.getRecommendations(brandId, force === 'true');
-        reply.send(rec);
-      } catch (e) {
-        request.log.error({ err: e }, 'Failed to get best-time recommendations');
-        reply.code(500).send({ error: 'Failed to compute recommendations' });
+        const rec = await instagramBestTimeService.getRecommendations(brand.id, force === 'true');
+        return reply.send(rec);
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to get best-time recommendations');
+        throw error;
       }
     }
   );
@@ -108,20 +100,15 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params as { brandId: string };
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-        select: { id: true },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
-      if (!(await instagramService.isConfigured(brand.id)))
-        return reply.code(400).send({ error: 'Instagram not connected' });
+      const brand = await assertBrandOwnership(userId, brandId);
+      await assertInstagramConnected(brand.id);
 
       try {
-        const rec = await instagramBestTimeService.getRecommendations(brandId, true);
-        reply.send({ success: true, recommendations: rec });
-      } catch (e) {
-        request.log.error({ err: e }, 'Failed to refresh best-time recommendations');
-        reply.code(500).send({ success: false, error: 'Failed to recompute recommendations' });
+        const rec = await instagramBestTimeService.getRecommendations(brand.id, true);
+        return reply.send({ success: true, recommendations: rec });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to refresh best-time recommendations');
+        throw error;
       }
     }
   );
@@ -133,11 +120,7 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params as { brandId: string };
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-        select: { id: true },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      await assertBrandOwnership(userId, brandId);
 
       const key = `ig_best_time:${brandId}`;
       const redis = getRedisClient();
@@ -171,26 +154,22 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const { brandId } = request.params;
       const { limit, after } = request.query || {};
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-        select: { id: true },
-      });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
       try {
-        const configured = await instagramService.isConfigured(brand.id);
+        await assertBrandOwnership(userId, brandId);
+
+        const configured = await instagramService.isConfigured(brandId);
         if (!configured) {
           return reply.code(501).send({ supported: false, threads: [] });
         }
 
-        const res = await instagramService.listDmThreads(brand.id, { limit, after });
+        const res = await instagramService.listDmThreads(brandId, { limit, after });
         if (!res.supported) {
           return reply.code(501).send({ supported: false, threads: [] });
         }
         return reply.send(res);
-      } catch (e: any) {
-        return reply
-          .code(500)
-          .send({ error: 'Failed to fetch threads', message: e?.message || 'Unknown error' });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to fetch Instagram DM threads');
+        throw error;
       }
     }
   );
@@ -206,15 +185,15 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const { brandId, threadId } = request.params;
       const { limit, before } = request.query || {};
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
       try {
-        const configured = await instagramService.isConfigured(brand.id);
+        await assertBrandOwnership(userId, brandId);
+
+        const configured = await instagramService.isConfigured(brandId);
         if (!configured) {
           return reply.code(501).send({ supported: false, messages: [] });
         }
 
-        const res = await instagramService.getDmThreadMessages(brand.id, threadId, {
+        const res = await instagramService.getDmThreadMessages(brandId, threadId, {
           limit,
           before,
         });
@@ -222,10 +201,9 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(501).send({ supported: false, messages: [] });
         }
         return reply.send(res);
-      } catch (e: any) {
-        return reply
-          .code(500)
-          .send({ error: 'Failed to fetch messages', message: e?.message || 'Unknown error' });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to fetch Instagram DM messages');
+        throw error;
       }
     }
   );
@@ -237,20 +215,20 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId, threadId } = request.params;
       const userId = request.user!.id;
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
       const { text } = (request.body || {}) as { text?: string };
       if (!text || !text.trim())
         return reply.code(400).send({ error: 'Message must not be empty' });
       try {
-        const configured = await instagramService.isConfigured(brand.id);
+        await assertBrandOwnership(userId, brandId);
+
+        const configured = await instagramService.isConfigured(brandId);
         if (!configured) {
           return reply
             .code(501)
             .send({ supported: false, message: 'Instagram messaging not configured' });
         }
 
-        const res = await instagramService.sendDmMessage(brand.id, threadId, text);
+        const res = await instagramService.sendDmMessage(brandId, threadId, text);
         if (!res.supported)
           return reply
             .code(501)
@@ -259,10 +237,9 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(403).send({ supported: true, success: false, error: 'WINDOW_CLOSED' });
         }
         return reply.send({ supported: true, success: true });
-      } catch (e: any) {
-        return reply
-          .code(500)
-          .send({ error: 'Failed to send message', message: e?.message || 'Unknown error' });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to send Instagram DM message');
+        throw error;
       }
     }
   );

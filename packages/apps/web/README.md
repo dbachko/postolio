@@ -85,8 +85,8 @@ The web app consumes a RESTful API via domain-scoped clients backed by a shared 
   - `POST /api/campaigns/:id/fill-window` — generate window
   - Drafts: `GET|POST /api/campaigns/drafts`
   - Strategy & goal: `POST /api/campaigns/{strategy,analyze-goal}`
-  - Analytics: `/api/campaigns/:id/analytics{,/recommendations,/roi}`
-  - Brand analytics summary: `/api/brands/:brandId/analytics/summary`
+  - Analytics: `/api/analytics/campaigns/:id{,/metrics,/recommendations,/roi}`
+  - Brand analytics summary: `/api/analytics/brands/:brandId/summary`
 
 - Content
   - `POST /api/content` — create manual content
@@ -97,6 +97,6 @@ The web app consumes a RESTful API via domain-scoped clients backed by a shared 
   - `GET /api/posts/:id{,/insights,/comments}` — post detail and insights
 
 - Analytics (helpers)
-  - Analytics: `/api/analytics/{report/:brandId,stats/:brandId,scheduled/:brandId,reschedule}`
+  - Analytics: `/api/analytics/{stats/:brandId,scheduled/:brandId,reschedule,bulk-schedule,schedule}`
 
 The monolithic `api.ts` has been decomposed. Prefer importing domain clients from `src/lib/api/index.ts` and keep view components thin by using container hooks for data/mutations.

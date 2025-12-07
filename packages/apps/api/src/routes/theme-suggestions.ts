@@ -1,8 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getDatabaseClient } from '../config/database.js';
 import { suggestThemes, type CampaignType } from '../services/theme-suggester.js';
-
-const prisma = getDatabaseClient();
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const themeSuggestionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
@@ -13,15 +11,11 @@ const themeSuggestionRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const { brandId } = request.params;
+      const userId = request.user!.id;
       const { campaignType, goals, limit } = request.query || {};
 
-      // Validate ownership
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId: request.user!.id },
-      });
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
+      // Validate ownership (centralized invariant)
+      await assertBrandOwnership(userId, brandId);
 
       try {
         const res = await suggestThemes({
@@ -33,7 +27,7 @@ const themeSuggestionRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send(res);
       } catch (e) {
         request.log.error({ err: e }, 'Failed to suggest themes');
-        return reply.code(500).send({ error: 'Failed to suggest themes' });
+        throw e;
       }
     }
   );

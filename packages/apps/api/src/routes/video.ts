@@ -5,11 +5,9 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { AssetsServiceClient } from '@postolio/assets-client';
-import { getDatabaseClient } from '../config/database.js';
 import { config } from '../config/env-validation.js';
 import { formatError } from '../utils/logging.js';
-
-const prisma = getDatabaseClient();
+import { assertBrandOwnership } from '../services/ownership.js';
 
 const assetsClient = new AssetsServiceClient({
   baseUrl: config.ASSETS_API_BASE_URL,
@@ -49,15 +47,7 @@ const videoRoutes: FastifyPluginAsync = async (fastify) => {
           error: `File too large. Maximum size is ${MAX_VIDEO_SIZE / (1024 * 1024)}MB`,
         });
       }
-
-      const ownsBrand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-        select: { id: true },
-      });
-
-      if (!ownsBrand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
+      await assertBrandOwnership(userId, brandId);
 
       const uploadData = await assetsClient.getUploadUrl({
         brandId,
@@ -100,14 +90,7 @@ const videoRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Missing required fields' });
       }
 
-      const ownsBrand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-        select: { id: true },
-      });
-
-      if (!ownsBrand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
+      await assertBrandOwnership(userId, brandId);
 
       const result = await assetsClient.createAsset({
         brandId,

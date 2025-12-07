@@ -1,124 +1,21 @@
-import { FastifyPluginAsync } from 'fastify';
-import { getDatabaseClient } from '../config/database.js';
-import { getRedisClient } from '../services/redis.js';
-import { calculateBrandHealthScore } from '../services/brand-health-score.js';
+import type { FastifyPluginAsync } from 'fastify';
+import { getDatabaseClient } from '../../config/database.js';
+import { getRedisClient } from '../../services/redis.js';
+import { calculateBrandHealthScore } from '../../services/brand-health-score.js';
+import { assertBrandOwnership } from '../../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
-const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
-  fastify.addHook('preHandler', fastify.authenticate);
-
-  // Get latest metrics for a publication
-  fastify.get('/analytics/publications/:publicationId', async (request, reply) => {
-    try {
-      const { publicationId } = request.params as { publicationId: string };
-      const latest = await prisma.publicationMetricsLatest.findUnique({
-        where: { publicationId },
-      });
-      if (!latest) return reply.code(404).send({ error: 'Not found' });
-      return reply.send({ success: true, data: latest });
-    } catch (error) {
-      request.log.error({ error }, 'Failed to get publication metrics');
-      return reply.code(500).send({ error: 'Failed to get publication metrics' });
-    }
-  });
-
-  // Enqueue a refresh for a publication (throttled)
-  fastify.post('/analytics/publications/:publicationId/refresh', async (request, reply) => {
-    try {
-      const { publicationId } = request.params as { publicationId: string };
-      const pub = await prisma.contentPublication.findUnique({ where: { id: publicationId } });
-      if (!pub) return reply.code(404).send({ error: 'Publication not found' });
-
-      const redis = getRedisClient();
-      const key = `ingest:publication:${publicationId}`;
-      const throttleSeconds = 15 * 60; // 15 minutes
-      let nextAllowed: string | null = null;
-
-      if (redis) {
-        const ttl = await redis.ttl(key);
-        if (ttl > 0) {
-          nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
-          return reply.code(429).send({
-            success: false,
-            error: 'Refresh recently requested',
-            nextRefreshAllowed: nextAllowed,
-          });
-        }
-        await redis.setex(key, throttleSeconds, '1');
-      }
-
-      // Push to ingestion queue (best-effort)
-      try {
-        if (redis) {
-          await redis.lpush('ingest:queue:publications', publicationId);
-        }
-      } catch (e) {
-        request.log.warn({ err: e }, 'Failed to enqueue publication for ingestion');
-      }
-
-      nextAllowed = new Date(Date.now() + throttleSeconds * 1000).toISOString();
-      return reply.send({ success: true, nextRefreshAllowed: nextAllowed, enqueued: true });
-    } catch (error) {
-      request.log.error({ error }, 'Failed to enqueue refresh');
-      return reply.code(500).send({ error: 'Failed to enqueue refresh' });
-    }
-  });
-
-  // Campaign aggregates by platform
-  fastify.get('/analytics/campaigns/:campaignId', async (request, reply) => {
-    try {
-      const { campaignId } = request.params as { campaignId: string };
-      const contents = await prisma.content.findMany({
-        where: { campaignId },
-        select: { id: true },
-      });
-      if (!contents.length) return reply.send({ success: true, data: { totalPosts: 0 } });
-      const contentIds = contents.map((c) => c.id);
-      const pubs = await prisma.contentPublication.findMany({
-        where: { contentId: { in: contentIds } },
-        select: { id: true, platform: true, metricsLatest: true },
-      });
-      const byPlatform: Record<string, any> = {};
-      let totalImpressions = 0;
-      let totalEngagement = 0;
-      let totalReach = 0;
-      for (const p of pubs) {
-        const m = p.metricsLatest;
-        if (!m) continue;
-        const key = p.platform;
-        byPlatform[key] ||= { posts: 0, impressions: 0, engagement: 0, reach: 0 };
-        byPlatform[key].posts += 1;
-        byPlatform[key].impressions += m.impressions || 0;
-        byPlatform[key].engagement += m.engagement || 0;
-        byPlatform[key].reach += m.reach || 0;
-        totalImpressions += m.impressions || 0;
-        totalEngagement += m.engagement || 0;
-        totalReach += m.reach || 0;
-      }
-      const averageEngagementRate =
-        totalImpressions > 0 ? (totalEngagement / totalImpressions) * 100 : 0;
-      return reply.send({
-        success: true,
-        data: {
-          totalPosts: pubs.length,
-          totalImpressions,
-          totalEngagement,
-          reach: totalReach,
-          averageEngagementRate,
-          breakdown: byPlatform,
-        },
-      });
-    } catch (error) {
-      request.log.error({ error }, 'Failed to get campaign aggregates');
-      return reply.code(500).send({ error: 'Failed to get campaign aggregates' });
-    }
-  });
-
+export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
   // Brand summary aggregates (period-aware with account-series fallback)
   fastify.get('/analytics/brands/:brandId/summary', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
+      const userId = (request.user as { id: string } | undefined)?.id;
+
+      if (userId) {
+        await assertBrandOwnership(userId, brandId);
+      }
       const { period = '30d' } = request.query as { period?: '7d' | '30d' | '90d' };
 
       // Determine current window start based on period
@@ -253,7 +150,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       });
     } catch (error) {
       request.log.error({ error }, 'Failed to get brand summary');
-      return reply.code(500).send({ error: 'Failed to get brand summary' });
+      throw error;
     }
   });
 
@@ -261,6 +158,11 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
   fastify.get('/analytics/brands/:brandId/account/series', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
+      const userId = (request.user as { id: string } | undefined)?.id;
+
+      if (userId) {
+        await assertBrandOwnership(userId, brandId);
+      }
       const { window = '30d' } = request.query as { window?: '7d' | '30d' | '90d' };
       const end = new Date();
       const days = window === '7d' ? 7 : window === '90d' ? 90 : 30;
@@ -302,7 +204,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true, data: { series } });
     } catch (error) {
       request.log.error({ error }, 'Failed to get account series');
-      return reply.code(500).send({ error: 'Failed to get account series' });
+      throw error;
     }
   });
 
@@ -310,6 +212,11 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
   fastify.get('/analytics/brands/:brandId/top-publications', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
+      const userId = (request.user as { id: string } | undefined)?.id;
+
+      if (userId) {
+        await assertBrandOwnership(userId, brandId);
+      }
       const { limit = '10' } = request.query as { limit?: string };
       const take = Math.min(Math.max(parseInt(String(limit), 10) || 10, 1), 50);
 
@@ -350,7 +257,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true, data });
     } catch (error) {
       request.log.error({ error }, 'Failed to get top publications');
-      return reply.code(500).send({ error: 'Failed to get top publications' });
+      throw error;
     }
   });
 
@@ -358,6 +265,11 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
   fastify.post('/analytics/brands/:brandId/account/refresh', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
+      const userId = (request.user as { id: string } | undefined)?.id;
+
+      if (userId) {
+        await assertBrandOwnership(userId, brandId);
+      }
       const redis = getRedisClient();
       const throttleKey = `ingest:account:brand:${brandId}`;
       const throttleSeconds = 15 * 60;
@@ -386,7 +298,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true, nextRefreshAllowed: nextAllowed, enqueued: true });
     } catch (error) {
       request.log.error({ error }, 'Failed to enqueue account refresh');
-      return reply.code(500).send({ error: 'Failed to enqueue account refresh' });
+      throw error;
     }
   });
 
@@ -467,7 +379,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true, data: hashtags.slice(0, 50) });
     } catch (error) {
       request.log.error({ error }, 'Failed to get hashtag analysis');
-      return reply.code(500).send({ error: 'Failed to get hashtag analysis' });
+      throw error;
     }
   });
 
@@ -475,6 +387,11 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
   fastify.get('/analytics/brands/:brandId/audience', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
+      const userId = (request.user as { id: string } | undefined)?.id;
+
+      if (userId) {
+        await assertBrandOwnership(userId, brandId);
+      }
 
       // Get social accounts for the brand
       const accounts = await prisma.socialAccount.findMany({
@@ -609,7 +526,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       });
     } catch (error) {
       request.log.error({ error }, 'Failed to get audience insights');
-      return reply.code(500).send({ error: 'Failed to get audience insights' });
+      throw error;
     }
   });
 
@@ -617,6 +534,11 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
   fastify.get('/analytics/brands/:brandId/posts', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
+      const userId = (request.user as { id: string } | undefined)?.id;
+
+      if (userId) {
+        await assertBrandOwnership(userId, brandId);
+      }
       const {
         platform,
         sortBy = 'publishedAt',
@@ -712,9 +634,7 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       });
     } catch (error) {
       request.log.error({ error }, 'Failed to get posts performance');
-      return reply.code(500).send({ error: 'Failed to get posts performance' });
+      throw error;
     }
   });
 };
-
-export default analyticsRoutesV2;

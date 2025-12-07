@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { aiInsightsService } from '../services/ai-insights.js';
-import { getDatabaseClient } from '../config/database.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 
 interface BrandParams {
   brandId: string;
@@ -37,16 +37,7 @@ const aiInsightsRoutes: FastifyPluginAsync = async function (fastify) {
         const { days } = request.query;
 
         // Verify brand ownership
-        const brand = await getDatabaseClient().brand.findFirst({
-          where: {
-            id: brandId,
-            userId: request.user.id,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        await assertBrandOwnership(request.user.id, brandId);
 
         // Generate insights
         const period = days ? parseInt(days) : 30;
@@ -80,16 +71,7 @@ const aiInsightsRoutes: FastifyPluginAsync = async function (fastify) {
         const { brandId } = request.params;
 
         // Verify brand ownership
-        const brand = await getDatabaseClient().brand.findFirst({
-          where: {
-            id: brandId,
-            userId: request.user.id,
-          },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
+        await assertBrandOwnership(request.user.id, brandId);
 
         // Generate insights and return only summary
         const report = await aiInsightsService.generateInsights(brandId, 30);

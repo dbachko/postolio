@@ -170,8 +170,8 @@ export async function complianceRoutes(app: FastifyInstance) {
           ...result,
         });
       } catch (error) {
-        app.log.error({ error }, 'Brand deletion failed');
-        return reply.code(500).send({ error: 'Failed to delete brand data' });
+        app.log.error({ err: error }, 'Brand deletion failed');
+        throw error;
       }
     }
   );
