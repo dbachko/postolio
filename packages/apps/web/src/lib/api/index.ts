@@ -7,6 +7,7 @@ import { NotificationsClient } from './notifications-client';
 import { AnalyticsClient } from './analytics-client';
 import { OnboardingClient } from './onboarding-client';
 import { DMAutomationClient } from './dm-automation-client';
+import { SavedRepliesClient } from './saved-replies-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -20,6 +21,7 @@ export const notifications = new NotificationsClient(http);
 export const onboarding = new OnboardingClient(http);
 export const analytics = new AnalyticsClient(http);
 export const dmAutomation = new DMAutomationClient(http);
+export const savedReplies = new SavedRepliesClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 
@@ -47,4 +49,12 @@ export type {
   DMRuleStatus,
   DMTriggerConfig,
   DMActiveHours,
+  DMConversation,
+  DMMessage,
+  ConversationState,
+  MessageDirection,
+  MessageStatus,
+  SavedReply,
+  CreateSavedReplyInput,
+  UpdateSavedReplyInput,
 } from './types';

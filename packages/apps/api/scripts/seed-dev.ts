@@ -833,34 +833,181 @@ async function main() {
         userId: user.id,
         title: 'Thanks!',
         body: 'Thanks so much for the love! 🙌',
+        isDefault: true,
       },
       {
         brandId: brand.id,
         userId: user.id,
         title: 'Shipping Info',
         body: 'We ship worldwide. Standard delivery is 5–7 business days. 🌍',
+        isDefault: false,
       },
       {
         brandId: brand.id,
         userId: user.id,
         title: 'Pricing',
         body: 'Our sets start at $49. Tap the link in bio for details.',
+        isDefault: false,
       },
       {
         brandId: brand.id,
         userId: user.id,
         title: 'Support',
         body: 'Sorry about that! Can you DM us your order number so we can help?',
+        isDefault: false,
       },
       {
         brandId: brand.id,
         userId: user.id,
         title: 'Collab',
         body: 'Thanks for reaching out! Please email collabs@brand.com 💌',
+        isDefault: false,
       },
     ],
     skipDuplicates: true,
   });
+
+  // DM Conversations and Messages for DM Inbox testing
+  console.log('==> Creating DM conversations and messages');
+
+  // Helper to create conversations with messages
+  async function createConversation(opts: {
+    username: string;
+    state: 'active' | 'archived' | 'spam';
+    messagesCount: number;
+    lastMessageDaysAgo: number;
+  }) {
+    const { username, state, messagesCount, lastMessageDaysAgo } = opts;
+    const instagramUserId = `IG_USER_${Math.random().toString(36).slice(2, 15)}`;
+
+    const conversation = await prisma.dMConversation.create({
+      data: {
+        brandId: brand.id,
+        instagramUserId,
+        instagramUsername: username,
+        state,
+        lastMessageAt: new Date(now.getTime() - days(lastMessageDaysAgo)),
+      },
+    });
+
+    // Create messages for this conversation
+    const messages: Array<{
+      conversationId: string;
+      direction: 'inbound' | 'outbound';
+      messageText: string;
+      externalMessageId: string;
+      status: 'sent' | 'delivered' | 'read' | 'failed';
+      sentAt: Date | null;
+      createdAt: Date;
+    }> = [];
+
+    // Generate realistic message thread
+    const messageTemplates = {
+      inbound: [
+        'Hey! I love your content! 😍',
+        'Can you tell me more about your products?',
+        'Do you ship internationally?',
+        'What are your best sellers?',
+        'Thanks for the info!',
+        'I have a question about my order',
+        'Is this still available?',
+        'When will you restock?',
+      ],
+      outbound: [
+        'Thanks so much for reaching out! 🙌',
+        'Absolutely! We ship worldwide. Standard delivery is 5-7 business days.',
+        'Our best sellers are definitely the starter kits!',
+        'Yes, that item is in stock right now!',
+        'Happy to help! What can I assist you with?',
+        'Let me check that for you...',
+        'Great question! Here are the details...',
+        'We appreciate your interest! 💚',
+      ],
+    };
+
+    for (let i = 0; i < messagesCount; i++) {
+      const isInbound = i % 2 === 0; // Alternate between inbound and outbound
+      const messageAge = lastMessageDaysAgo + (messagesCount - i - 1) * 0.5; // Space messages out
+      const messageTime = new Date(now.getTime() - days(messageAge));
+
+      const templates = isInbound ? messageTemplates.inbound : messageTemplates.outbound;
+      const text = templates[i % templates.length];
+
+      messages.push({
+        conversationId: conversation.id,
+        direction: isInbound ? 'inbound' : 'outbound',
+        messageText: text,
+        externalMessageId: `IG_MSG_${Math.random().toString(36).slice(2, 15)}`,
+        status: isInbound ? 'read' : i === messagesCount - 1 ? 'delivered' : 'read',
+        sentAt: isInbound ? null : messageTime,
+        createdAt: messageTime,
+      });
+    }
+
+    await prisma.dMMessage.createMany({ data: messages });
+    return conversation;
+  }
+
+  // Create active conversations (most recent)
+  await createConversation({
+    username: 'sarah_wellness',
+    state: 'active',
+    messagesCount: 6,
+    lastMessageDaysAgo: 0.5, // 12 hours ago
+  });
+
+  await createConversation({
+    username: 'eco_enthusiast',
+    state: 'active',
+    messagesCount: 4,
+    lastMessageDaysAgo: 1, // 1 day ago
+  });
+
+  await createConversation({
+    username: 'fitness_journey_2024',
+    state: 'active',
+    messagesCount: 8,
+    lastMessageDaysAgo: 2,
+  });
+
+  await createConversation({
+    username: 'small_biz_owner',
+    state: 'active',
+    messagesCount: 3,
+    lastMessageDaysAgo: 3,
+  });
+
+  // Create archived conversations
+  await createConversation({
+    username: 'happy_customer_123',
+    state: 'archived',
+    messagesCount: 5,
+    lastMessageDaysAgo: 7,
+  });
+
+  await createConversation({
+    username: 'question_asker',
+    state: 'archived',
+    messagesCount: 4,
+    lastMessageDaysAgo: 14,
+  });
+
+  // Create spam conversations
+  await createConversation({
+    username: 'suspicious_account',
+    state: 'spam',
+    messagesCount: 2,
+    lastMessageDaysAgo: 5,
+  });
+
+  await createConversation({
+    username: 'bot_account_xyz',
+    state: 'spam',
+    messagesCount: 1,
+    lastMessageDaysAgo: 10,
+  });
+
+  console.log('✅ Created 8 DM conversations with messages (4 active, 2 archived, 2 spam)');
 
   // Generate additional historical published content for analytics (60-90 days)
   console.log('==> Generating historical published content for analytics');

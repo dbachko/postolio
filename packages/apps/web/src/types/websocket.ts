@@ -83,7 +83,9 @@ export interface WebSocketMessage {
     | 'campaign_status_update'
     | 'campaign_error'
     | 'notification_created'
-    | 'unread_count';
+    | 'unread_count'
+    | 'dm_message'
+    | 'dm_conversation_update';
   room?: string;
   brandId?: string;
   campaignId?: string;
@@ -95,8 +97,17 @@ export interface WebSocketMessage {
     | CampaignStatusUpdateData
     | CampaignErrorData
     | NotificationCreatedData
-    | UnreadCountData;
-  timestamp?: number; // For latency measurement in ping/pong
+    | UnreadCountData
+    | DMMessageData
+    | DMConversationUpdateData;
+  conversationId?: string;
+  messageId?: string;
+  direction?: 'inbound' | 'outbound';
+  messageText?: string;
+  instagramUsername?: string;
+  state?: 'active' | 'archived' | 'spam';
+  lastMessageAt?: string;
+  timestamp?: string | number; // For latency measurement in ping/pong or event timestamp
 }
 
 export interface NotificationCreatedData {
@@ -114,6 +125,24 @@ export interface NotificationCreatedData {
 
 export interface UnreadCountData {
   count: number;
+}
+
+export interface DMMessageData {
+  conversationId: string;
+  messageId: string;
+  brandId: string;
+  direction: 'inbound' | 'outbound';
+  messageText: string;
+  instagramUsername: string;
+  timestamp: string;
+}
+
+export interface DMConversationUpdateData {
+  conversationId: string;
+  brandId: string;
+  state: 'active' | 'archived' | 'spam';
+  lastMessageAt: string;
+  timestamp: string;
 }
 
 export interface UseSchedulingWebSocketOptions {

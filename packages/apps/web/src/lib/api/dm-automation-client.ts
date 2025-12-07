@@ -55,4 +55,62 @@ export class DMAutomationClient {
   getAnalytics(brandId: string, days: number = 30): Promise<DMAutomationAnalytics> {
     return this.request(`/api/brands/${brandId}/dm-automation/analytics?days=${days}`);
   }
+
+  /**
+   * List all DM conversations for a brand
+   */
+  listConversations(
+    brandId: string,
+    state?: 'active' | 'archived' | 'spam',
+    limit?: number
+  ): Promise<{ conversations: any[] }> {
+    const params = new URLSearchParams();
+    if (state) params.append('state', state);
+    if (limit) params.append('limit', limit.toString());
+
+    const query = params.toString();
+    return this.request(
+      `/api/brands/${brandId}/dm-automation/conversations${query ? `?${query}` : ''}`
+    );
+  }
+
+  /**
+   * Get all messages in a conversation
+   */
+  getConversationMessages(brandId: string, conversationId: string): Promise<{ messages: any[] }> {
+    return this.request(
+      `/api/brands/${brandId}/dm-automation/conversations/${conversationId}/messages`
+    );
+  }
+
+  /**
+   * Send a manual reply to a conversation
+   */
+  sendMessage(
+    brandId: string,
+    conversationId: string,
+    messageText: string
+  ): Promise<{ message: any }> {
+    return this.request(
+      `/api/brands/${brandId}/dm-automation/conversations/${conversationId}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ messageText }),
+      }
+    );
+  }
+
+  /**
+   * Update conversation state
+   */
+  updateConversationState(
+    brandId: string,
+    conversationId: string,
+    state: 'active' | 'archived' | 'spam'
+  ): Promise<{ conversation: any }> {
+    return this.request(`/api/brands/${brandId}/dm-automation/conversations/${conversationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ state }),
+    });
+  }
 }

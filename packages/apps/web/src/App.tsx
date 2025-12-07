@@ -39,6 +39,7 @@ import { useOnboardingStatus } from './hooks/useOnboardingStatus';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
 const InboxComments = lazy(() => import('./pages/InboxComments'));
 const InboxDMs = lazy(() => import('./pages/InboxDMs'));
+const SavedReplies = lazy(() => import('./pages/SavedReplies'));
 const CreatePost = lazy(() =>
   import('./pages/CreatePost').then((module) => ({
     default: module.CreatePost,
@@ -158,6 +159,23 @@ const router = createBrowserRouter([
             <ErrorBoundary>
               <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
                 <InboxDMs />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/inbox/saved-replies',
+    element: (
+      <ProtectedRoute>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+                <SavedReplies />
               </Suspense>
             </ErrorBoundary>
           </Layout>

@@ -38,6 +38,7 @@ import {
   Plus,
   Images,
   MessageSquare,
+  MessageSquarePlus,
   Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -295,6 +296,16 @@ export function AppLayout({ children }: LayoutProps) {
                             >
                               <span className="flex items-center">
                                 <Send className="mr-2 h-4 w-4" /> Direct Messages
+                              </span>
+                            </Link>
+                          </NavigationMenuLink>
+                          <NavigationMenuLink asChild>
+                            <Link
+                              to="/inbox/saved-replies"
+                              className="hover:bg-accent rounded px-2 py-2 text-sm"
+                            >
+                              <span className="flex items-center">
+                                <MessageSquarePlus className="mr-2 h-4 w-4" /> Saved Replies
                               </span>
                             </Link>
                           </NavigationMenuLink>

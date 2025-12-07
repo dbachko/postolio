@@ -55,6 +55,26 @@ export interface CampaignErrorEvent {
   timestamp: string;
 }
 
+export interface DMMessageEvent {
+  type: 'dm_message';
+  conversationId: string;
+  messageId: string;
+  brandId: string;
+  direction: 'inbound' | 'outbound';
+  messageText: string;
+  instagramUsername: string;
+  timestamp: string;
+}
+
+export interface DMConversationUpdateEvent {
+  type: 'dm_conversation_update';
+  conversationId: string;
+  brandId: string;
+  state: 'active' | 'archived' | 'spam';
+  lastMessageAt: string;
+  timestamp: string;
+}
+
 export class StatusBroadcaster {
   constructor(
     private fastify: FastifyInstance,
@@ -501,5 +521,122 @@ export class StatusBroadcaster {
       }
     }
     return result;
+  }
+
+  /**
+   * Broadcast new DM message to connected clients
+   */
+  async broadcastDMMessage(
+    conversationId: string,
+    messageId: string,
+    brandId: string,
+    direction: 'inbound' | 'outbound',
+    messageText: string,
+    instagramUsername: string
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const event: DMMessageEvent = {
+      type: 'dm_message',
+      conversationId,
+      messageId,
+      brandId,
+      direction,
+      messageText,
+      instagramUsername,
+      timestamp: new Date(timestamp).toISOString(),
+    };
+
+    // Store in Redis Stream for DM events
+    try {
+      await this.redis.xadd(
+        `dm_events:${brandId}`,
+        'MAXLEN',
+        '~',
+        '5000', // Keep approximately 5k DM events max
+        '*',
+        'type',
+        'dm_message',
+        'conversationId',
+        conversationId,
+        'messageId',
+        messageId,
+        'direction',
+        direction,
+        'messageText',
+        messageText,
+        'instagramUsername',
+        instagramUsername,
+        'timestamp',
+        timestamp.toString()
+      );
+    } catch (error) {
+      this.fastify.log.error(
+        { error, brandId, conversationId },
+        'Failed to store DM event in Redis'
+      );
+    }
+
+    // Broadcast to brand room
+    try {
+      this.fastify.broadcastToRoom(`brand:${brandId}`, event as unknown as Record<string, unknown>);
+    } catch (error) {
+      this.fastify.log.error({ error, brandId, conversationId }, 'Failed to broadcast DM message');
+    }
+  }
+
+  /**
+   * Broadcast conversation state update to connected clients
+   */
+  async broadcastDMConversationUpdate(
+    conversationId: string,
+    brandId: string,
+    state: 'active' | 'archived' | 'spam',
+    lastMessageAt: Date
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const event: DMConversationUpdateEvent = {
+      type: 'dm_conversation_update',
+      conversationId,
+      brandId,
+      state,
+      lastMessageAt: lastMessageAt.toISOString(),
+      timestamp: new Date(timestamp).toISOString(),
+    };
+
+    // Store in Redis Stream for conversation events
+    try {
+      await this.redis.xadd(
+        `dm_conversation_events:${brandId}`,
+        'MAXLEN',
+        '~',
+        '1000', // Keep approximately 1k conversation events max
+        '*',
+        'type',
+        'dm_conversation_update',
+        'conversationId',
+        conversationId,
+        'state',
+        state,
+        'lastMessageAt',
+        lastMessageAt.toISOString(),
+        'timestamp',
+        timestamp.toString()
+      );
+    } catch (error) {
+      this.fastify.log.error(
+        { error, brandId, conversationId },
+        'Failed to store conversation event in Redis'
+      );
+    }
+
+    // Broadcast to brand room
+    try {
+      this.fastify.broadcastToRoom(`brand:${brandId}`, event as unknown as Record<string, unknown>);
+    } catch (error) {
+      this.fastify.log.error(
+        { error, brandId, conversationId },
+        'Failed to broadcast conversation update'
+      );
+    }
   }
 }

@@ -51,6 +51,7 @@ import notificationsRoutes from './routes/notifications.js';
 import onboardingRoutes from './routes/onboarding.js';
 import instagramWebhookRoutes from './routes/instagram-webhook.js';
 import dmAutomationRoutes from './routes/dm-automation.js';
+import savedRepliesRoutes from './routes/saved-replies.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import type { Redis } from 'ioredis';
@@ -268,6 +269,9 @@ export function buildFastify(): FastifyInstance {
   // DM Automation CRUD API
   app.register(dmAutomationRoutes, { prefix: '/api' });
 
+  // Saved Replies API
+  app.register(savedRepliesRoutes, { prefix: '/api' });
+
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload
     app.route({
@@ -426,6 +430,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const notificationsBroadcaster = new NotificationsBroadcaster(app, redis);
       const { setNotificationsBroadcaster } = await import('./services/broadcast-registry.js');
       setNotificationsBroadcaster(notificationsBroadcaster);
+
+      // Initialize DM automation service with broadcaster for real-time DM updates
+      const { dmAutomation } = await import('./services/dm-automation.js');
+      dmAutomation.init(app, redis);
 
       app.log.info('✅ WebSocket real-time updates initialized');
 

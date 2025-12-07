@@ -9,8 +9,14 @@ import { instagramService } from './instagram.js';
 import { dmRateLimiter } from './dm-rate-limiter.js';
 import { logger as baseLogger } from '@postolio/logger';
 import type { DMTriggerType, DMActionType, DMAutomationRule } from '@postolio/database';
+import type { FastifyInstance } from 'fastify';
+import type { Redis } from 'ioredis';
+import { StatusBroadcaster } from './status-broadcaster.js';
 
 const logger = baseLogger.child({ module: 'dm-automation' });
+
+// Will be initialized by init() method
+let statusBroadcaster: StatusBroadcaster | null = null;
 
 // Types
 export interface TriggerEvent {
@@ -41,6 +47,14 @@ export interface EventLogData {
 }
 
 export const dmAutomation = {
+  /**
+   * Initialize the DM automation service with WebSocket broadcaster
+   */
+  init(fastify: FastifyInstance, redis: Redis): void {
+    statusBroadcaster = new StatusBroadcaster(fastify, redis);
+    logger.info('DM automation service initialized with WebSocket broadcaster');
+  },
+
   /**
    * Main orchestration method - processes a trigger event through the automation pipeline
    * Flow: Match rules → Evaluate conditions → Send messages → Log events
@@ -227,7 +241,7 @@ export const dmAutomation = {
       conversationId = conversation.id;
 
       // Log outbound message
-      await prisma.dMMessage.create({
+      const dmMessage = await prisma.dMMessage.create({
         data: {
           conversationId: conversation.id,
           direction: 'outbound',
@@ -244,6 +258,18 @@ export const dmAutomation = {
         conversationId: conversation.id,
         messageId,
       });
+
+      // Broadcast WebSocket event for new outbound message
+      if (statusBroadcaster) {
+        await statusBroadcaster.broadcastDMMessage(
+          conversation.id,
+          dmMessage.id,
+          context.brandId,
+          'outbound',
+          messageText,
+          context.triggeredBy
+        );
+      }
     }
 
     // Reply to comment

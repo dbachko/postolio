@@ -490,3 +490,68 @@ export interface DMAutomationAnalytics {
     rateLimited: number;
   }>;
 }
+
+export type ConversationState = 'active' | 'archived' | 'spam';
+export type MessageDirection = 'inbound' | 'outbound';
+export type MessageStatus = 'sent' | 'failed' | 'delivered' | 'read';
+
+export interface DMConversation {
+  id: string;
+  brandId: string;
+  ruleId: string | null;
+  instagramUserId: string;
+  instagramUsername: string;
+  state: ConversationState;
+  lastMessageAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  rule?: {
+    id: string;
+    name: string;
+  } | null;
+  messageCount?: number;
+  lastMessage?: {
+    text: string;
+    direction: MessageDirection;
+    createdAt: Date;
+  } | null;
+}
+
+export interface DMMessage {
+  id: string;
+  conversationId: string;
+  direction: MessageDirection;
+  messageText: string;
+  externalMessageId: string | null;
+  externalCommentId: string | null;
+  status: MessageStatus;
+  sentAt: Date | null;
+  deliveredAt: Date | null;
+  readAt: Date | null;
+  failureReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SavedReply {
+  id: string;
+  brandId: string;
+  userId: string;
+  title: string;
+  body: string;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateSavedReplyInput {
+  title: string;
+  body: string;
+  isDefault?: boolean;
+}
+
+export interface UpdateSavedReplyInput {
+  title?: string;
+  body?: string;
+  isDefault?: boolean;
+}
