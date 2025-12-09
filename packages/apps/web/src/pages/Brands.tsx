@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function Brands() {
   const [isCreating, setIsCreating] = useState(false);
@@ -225,19 +226,26 @@ export function Brands() {
               <SidebarViewProfileButton brandId={selectedBrand.id} />
             )}
             <div className="flex flex-col items-end gap-1">
-              <Button
-                variant={isCreating ? 'outline' : 'neutral'}
-                onClick={() => {
-                  if (!hasExistingBrand) {
-                    setIsCreating(!isCreating);
-                  }
-                }}
-                disabled={hasExistingBrand}
-              >
-                {isCreating ? 'Cancel' : 'Create Brand'}
-              </Button>
-              {hasExistingBrand && (
-                <p className="text-muted-foreground text-xs">This feature is coming later.</p>
+              {hasExistingBrand ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <Button variant="neutral" disabled>
+                          Create Brand
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>This feature is coming later.</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <Button
+                  variant={isCreating ? 'outline' : 'neutral'}
+                  onClick={() => setIsCreating(!isCreating)}
+                >
+                  {isCreating ? 'Cancel' : 'Create Brand'}
+                </Button>
               )}
             </div>
           </div>
