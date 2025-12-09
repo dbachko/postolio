@@ -310,7 +310,14 @@ export function OnboardingPage() {
                       We will connect social accounts for:{' '}
                       <span className="font-medium">{targetBrand.name}</span>
                     </p>
-                    <InstagramConnect brand={targetBrand} />
+                    <InstagramConnect
+                      brand={targetBrand}
+                      onConnectionChange={async (connected) => {
+                        if (!connected) return;
+                        await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
+                        navigate('/', { replace: true });
+                      }}
+                    />
                   </div>
                 )}
               </CardContent>
