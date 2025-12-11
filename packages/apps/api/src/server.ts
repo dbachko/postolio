@@ -62,6 +62,7 @@ import { createRedisClient, getRedisClient } from './services/redis.js';
 import { backgroundJobs } from './services/background-jobs.js';
 import assetsProxyRoutes from './routes/assets-proxy.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { initSentry, captureException } from '@postolio/observability';
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -310,11 +311,18 @@ export function buildFastify(): FastifyInstance {
 
 // Start server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
+  initSentry({
+    serviceName: 'api',
+  });
+
   const app = buildFastify();
   let redis: Redis | null = null;
 
   // OBSERVABILITY: Global error handlers for unhandled rejections and exceptions
   process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    captureException(reason, {
+      source: 'unhandledRejection',
+    });
     app.log.error(
       {
         error: reason instanceof Error ? reason.message : String(reason),
@@ -332,6 +340,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 
   process.on('uncaughtException', (error: Error, origin: string) => {
+    captureException(error, {
+      source: 'uncaughtException',
+      origin,
+    });
     app.log.error(
       {
         error: error.message,

@@ -6,9 +6,14 @@
 import { SQSClient, SendMessageCommand, MessageAttributeValue } from '@aws-sdk/client-sqs';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import type { SQSEvent } from 'aws-lambda';
+import { initSentry, captureException } from '@postolio/observability';
 
 const sqsClient = new SQSClient({});
 const ssmClient = new SSMClient({});
+
+initSentry({
+  serviceName: 'dlq-processor',
+});
 
 /**
  * Lambda handler for processing messages delivered from an SQS DLQ event source.
@@ -91,6 +96,10 @@ export const handler = async (
         error: error instanceof Error ? error.message : String(error),
         configuredRetryQueue: process.env.RETRY_QUEUE_URL,
         configuredPublishingQueue: process.env.PUBLISHING_QUEUE_URL,
+      });
+      captureException(error, {
+        function: 'dlq-processor',
+        messageId: record.messageId,
       });
       // Throwing will cause Lambda to report a failure and DLQ message to remain for retry/visibility timeout
       throw error;

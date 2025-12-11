@@ -59,6 +59,7 @@
     "@uppy/drag-drop": "^5.0.2",
     "@uppy/file-input": "^4.2.2",
     "@uppy/react": "^5.1.1",
+    "@sentry/react": "^8.32.0",
     "autoprefixer": "^10.4.22",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

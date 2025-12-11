@@ -10,8 +10,13 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } f
 import { HttpHandler } from './handlers/http-handler';
 import { CampaignEventHandler, type EventBridgeEvent } from './handlers/campaign-event-handler';
 import { createErrorResponse } from './utils/response-utils';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'schedule-management' });
+
+initSentry({
+  serviceName: 'schedule-management',
+});
 
 // Initialize handlers
 const httpHandler = new HttpHandler();
@@ -55,6 +60,11 @@ export const handler = async (
     return result;
   } catch (error) {
     logger.error('Lambda execution failed', { error });
+
+    captureException(error, {
+      function: 'schedule-management',
+      eventType: determineEventType(event),
+    });
 
     // For EventBridge events, re-throw to trigger DLQ
     if (isEventBridgeEvent(event)) {

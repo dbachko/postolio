@@ -19,6 +19,7 @@
     "@aws-sdk/rds-signer": "^3.932.0",
     "@postolio/database": "workspace:*",
     "@postolio/errors": "workspace:*",
+    "@postolio/observability": "workspace:*",
     "@prisma/adapter-pg": "^6.19.0",
     "pg": "^8.16.3",
     "zod": "^4.1.12"

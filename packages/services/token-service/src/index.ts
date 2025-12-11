@@ -11,10 +11,15 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import crypto from 'crypto';
 import { ServiceError, ErrorFactory } from '@postolio/errors';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'token-service' });
 const metrics = new Metrics({
   namespace: 'TokenService',
+  serviceName: 'token-service',
+});
+
+initSentry({
   serviceName: 'token-service',
 });
 
@@ -105,6 +110,10 @@ async function encryptToken(token: string): Promise<string> {
     return Buffer.from(response.CiphertextBlob!).toString('base64');
   } catch (error) {
     logger.error('Token encryption failed', { error });
+    captureException(error, {
+      function: 'token-service',
+      operation: 'encryptToken',
+    });
     throw ErrorFactory.internalError(
       'Failed to encrypt token',
       error instanceof Error ? error : new Error(String(error))
@@ -123,6 +132,10 @@ async function decryptToken(encryptedToken: string): Promise<string> {
     return Buffer.from(response.Plaintext!).toString();
   } catch (error) {
     logger.error('Token decryption failed', { error });
+    captureException(error, {
+      function: 'token-service',
+      operation: 'decryptToken',
+    });
     throw ErrorFactory.internalError(
       'Failed to decrypt token',
       error instanceof Error ? error : new Error(String(error))

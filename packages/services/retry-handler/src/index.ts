@@ -13,12 +13,17 @@ import { SchedulerClient, CreateScheduleCommand } from '@aws-sdk/client-schedule
 import type { ScheduledEvent } from 'aws-lambda';
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { RetryStrategy } from './retry-strategy';
+import { initSentry, captureException } from '@postolio/observability';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'retry-handler' });
 const tracer = new Tracer({ serviceName: 'retry-handler' });
 const metrics = new Metrics({
   namespace: 'ContentScheduler',
+  serviceName: 'retry-handler',
+});
+
+initSentry({
   serviceName: 'retry-handler',
 });
 
@@ -85,6 +90,9 @@ export const handler = async (event: SQSEvent | ScheduledEvent | undefined): Pro
         'Failed to process retry message - marking as permanently failed',
         error as Error
       );
+      captureException(error, {
+        function: 'retry-handler',
+      });
       metrics.addMetric('RetryFailed', MetricUnit.Count, 1);
 
       // 🔥 CRITICAL FIX: Never throw errors to prevent SQS from retrying the retry-handler

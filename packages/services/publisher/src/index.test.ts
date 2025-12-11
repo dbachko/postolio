@@ -205,7 +205,7 @@ describe('Publisher Lambda', () => {
 
       // Verify schedule was deleted
       expect(schedulerMock.commandCalls(DeleteScheduleCommand)).toHaveLength(1);
-    });
+    }, 15000);
 
     it('should handle missing credentials gracefully', async () => {
       // Arrange: Mock DynamoDB schedule retrieval

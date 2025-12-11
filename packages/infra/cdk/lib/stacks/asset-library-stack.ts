@@ -346,6 +346,9 @@ export class AssetLibraryStack extends cdk.Stack {
 
     const resolvedPublicCdnDomain =
       normalizedAssetsCdnDomain || this.assetsCdn.distributionDomainName;
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
 
     // Export CDN domain to SSM
     new ssm.StringParameter(this, 'AssetsCdnDomain', {
@@ -459,6 +462,7 @@ export class AssetLibraryStack extends cdk.Stack {
           S3_REGION: cdk.Aws.REGION,
           // EventBridge
           EVENT_BUS_NAME: assetEventBus.eventBusName,
+          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
         },
         bundling: {
           // Sharp requires special handling for native modules
@@ -519,6 +523,7 @@ export class AssetLibraryStack extends cdk.Stack {
         // CloudFront for presigned URLs
         CDN_DOMAIN: resolvedPublicCdnDomain,
         ASSETS_CDN_DOMAIN: resolvedPublicCdnDomain,
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       bundling: {
         // Do not package prisma; esbuild will bundle openai

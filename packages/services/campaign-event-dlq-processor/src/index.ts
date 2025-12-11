@@ -11,12 +11,17 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { campaignConsistency } from '@postolio/aws';
+import { initSentry, captureException } from '@postolio/observability';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'campaign-event-dlq-processor' });
 const tracer = new Tracer({ serviceName: 'campaign-event-dlq-processor' });
 const metrics = new Metrics({
   namespace: 'ContentScheduler',
+  serviceName: 'campaign-event-dlq-processor',
+});
+
+initSentry({
   serviceName: 'campaign-event-dlq-processor',
 });
 
@@ -141,6 +146,11 @@ async function processFailedCampaignEvent(record: SQSRecord): Promise<void> {
   } catch (error) {
     logger.error('Error processing failed campaign event', {
       error,
+      messageId: record.messageId,
+    });
+
+    captureException(error, {
+      function: 'campaign-event-dlq-processor',
       messageId: record.messageId,
     });
 

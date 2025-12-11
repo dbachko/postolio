@@ -10,12 +10,17 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import type { S3Event } from 'aws-lambda';
+import { initSentry, captureException } from '@postolio/observability';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'video-processor' });
 const tracer = new Tracer({ serviceName: 'video-processor' });
 const metrics = new Metrics({
   namespace: 'AssetLibrary',
+  serviceName: 'video-processor',
+});
+
+initSentry({
   serviceName: 'video-processor',
 });
 
@@ -223,6 +228,12 @@ export const handler = async (event: S3Event): Promise<void> => {
       metrics.addMetric('VideoProcessingSuccess', MetricUnit.Count, 1);
     } catch (error) {
       logger.error('Failed to process video', error as Error, {
+        assetId,
+        s3Key,
+      });
+
+      captureException(error, {
+        function: 'video-processor',
         assetId,
         s3Key,
       });

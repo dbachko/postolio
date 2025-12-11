@@ -38,6 +38,9 @@ export class AuthStack extends cdk.Stack {
     super(scope, id, props);
 
     const { environment, alertEmail, domainName } = props;
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
     const prefix = `postolio-${environment}-auth`;
 
     // ==================== KMS Key for Token Encryption ====================
@@ -246,6 +249,7 @@ export class AuthStack extends cdk.Stack {
         TIKTOK_CLIENT_SECRET: props.tiktokClientSecret || '',
         GOOGLE_CLIENT_ID: props.googleClientId || '',
         GOOGLE_CLIENT_SECRET: props.googleClientSecret || '',
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
@@ -437,6 +441,7 @@ export class AuthStack extends cdk.Stack {
           ENVIRONMENT: environment,
           LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           DB_SECRET_ARN: databaseSecretArn,
+          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
         },
         tracing: lambda.Tracing.ACTIVE,
       });

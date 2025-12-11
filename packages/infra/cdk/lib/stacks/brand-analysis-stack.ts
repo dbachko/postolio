@@ -134,6 +134,9 @@ export class BrandAnalysisStack extends cdk.Stack {
 
     const openaiApiKey =
       (this.node.tryGetContext('openaiApiKey') as string | undefined) || undefined;
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
 
     const fn = new lambdaNodejs.NodejsFunction(this, 'BrandAnalysisFunction', {
       functionName: `${prefix}-service`,
@@ -177,6 +180,7 @@ export class BrandAnalysisStack extends cdk.Stack {
         BRAND_ANALYSIS_LLM_MAX_RETRIES: '3',
         BRAND_ANALYSIS_LLM_MAX_CONCURRENT: '2',
         BRAND_ANALYSIS_LLM_MIN_INTERVAL_MS: '100',
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
     });
 
@@ -304,6 +308,7 @@ export class BrandAnalysisStack extends cdk.Stack {
           SERVICE_NAME: 'brand-analysis-projection',
           ENVIRONMENT: environment,
           BRAND_STYLE_PROFILES_TABLE: profilesTable.tableName,
+          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
         },
       }
     );
@@ -546,6 +551,7 @@ export class BrandAnalysisStack extends cdk.Stack {
         EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
         BRAND_ANALYSIS_JOBS_TABLE: jobsTable.tableName,
         BRAND_ANALYSIS_SCHEDULE_DEBOUNCE_MS: (6 * 24 * 60 * 60 * 1000).toString(),
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
     });
 

@@ -40,6 +40,9 @@ export class PublishingStack extends cdk.Stack {
     super(scope, id, props);
 
     const { environment, alertEmail } = props;
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
     const prefix = `postolio-${environment}-publishing`;
 
     // Import schedules table name from Scheduling stack via SSM Parameter Store
@@ -501,6 +504,7 @@ export class PublishingStack extends cdk.Stack {
         LINKEDIN_CLIENT_SECRET: props.linkedinClientSecret || '',
         TIKTOK_CLIENT_KEY: props.tiktokClientKey || '',
         TIKTOK_CLIENT_SECRET: props.tiktokClientSecret || '',
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
@@ -561,6 +565,7 @@ export class PublishingStack extends cdk.Stack {
         // (created below as retrySchedulerPutEventsRole)
         // NOTE: We avoid SSM lookups to keep first-time deploy order clean.
         SCHEDULER_EVENTS_ROLE_ARN: '', // placeholder, set after role creation via override below
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
@@ -604,6 +609,7 @@ export class PublishingStack extends cdk.Stack {
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
         ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
@@ -642,6 +648,7 @@ export class PublishingStack extends cdk.Stack {
           EVENT_BUS_NAME: publishingEventBus.eventBusName,
           KMS_KEY_ID: encryptionKey.keyId,
           ALERT_TOPIC_ARN: alertTopic.topicArn,
+          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,

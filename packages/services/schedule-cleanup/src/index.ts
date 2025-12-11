@@ -15,12 +15,17 @@ import {
   DeleteScheduleCommand,
   ListSchedulesCommand,
 } from '@aws-sdk/client-scheduler';
+import { initSentry, captureException } from '@postolio/observability';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'schedule-cleanup' });
 const tracer = new Tracer({ serviceName: 'schedule-cleanup' });
 const metrics = new Metrics({
   namespace: 'ContentScheduler',
+  serviceName: 'schedule-cleanup',
+});
+
+initSentry({
   serviceName: 'schedule-cleanup',
 });
 
@@ -73,6 +78,9 @@ export const handler = async (): Promise<CleanupResult> => {
     logger.error('Schedule cleanup job failed', error as Error);
     result.errors.push((error as Error).message);
     metrics.addMetric('CleanupJobFailed', MetricUnit.Count, 1);
+    captureException(error, {
+      function: 'schedule-cleanup',
+    });
   } finally {
     metrics.publishStoredMetrics();
   }

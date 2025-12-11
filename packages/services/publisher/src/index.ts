@@ -21,11 +21,16 @@ import { PlatformAdapterFactory, InstagramAdapter } from './adapters';
 import { getTokenFromTokenService } from './utils/token';
 import { getSchedule, updateScheduleStatus, updateFirstCommentStatus } from './utils/audit';
 import { getPublishMarker, writePublishMarker } from './utils/idempotency';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'publisher' });
 const tracer = new Tracer({ serviceName: 'publisher' });
 const metrics = new Metrics({
   namespace: 'ContentScheduler',
+  serviceName: 'publisher',
+});
+
+initSentry({
   serviceName: 'publisher',
 });
 
@@ -394,6 +399,12 @@ export const handler = async (
       errorName: err.name,
       errorMessage: err.message,
       stack: err.stack,
+    });
+    captureException(error, {
+      function: 'publisher',
+      scheduleId: event.scheduleId,
+      brandId: event.brandId,
+      userId: event.userId,
     });
     metrics.addMetric('PublishingError', MetricUnit.Count, 1);
 

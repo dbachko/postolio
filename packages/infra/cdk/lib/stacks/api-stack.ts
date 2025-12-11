@@ -67,6 +67,9 @@ export class ApiStack extends cdk.Stack {
       openaiApiKey,
       imageTag,
     } = props;
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
     const prefix = `postolio-${environment}-api`;
 
     // Initialized with SSM-based secret references (no cross-stack export imports)
@@ -550,6 +553,7 @@ export class ApiStack extends cdk.Stack {
                   DB_PORT: cdk.Fn.select(1, cdk.Fn.split(':', databaseEndpointValue)),
                 }
               : {}),
+            ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
           },
           secrets: containerSecrets,
           logDriver: ecs.LogDrivers.awsLogs({

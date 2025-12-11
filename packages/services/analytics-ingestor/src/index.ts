@@ -4,8 +4,14 @@ import Redis from 'ioredis';
 import { InstagramConnector, type AccountIdentity, type Credentials } from '@postolio/connectors';
 import fetch from 'node-fetch';
 import { signRequest } from '@postolio/aws';
+import { initSentry, captureException, registerGlobalErrorHandlers } from '@postolio/observability';
 
 // Minimal scaffolding for the ingestion loop; real selection logic will be added in Phase 3
+
+initSentry({
+  serviceName: 'analytics-ingestor',
+});
+registerGlobalErrorHandlers();
 
 // Ensure DATABASE_URL is available (fallback to discrete DB_* vars when running in ECS)
 function ensureDatabaseUrl() {
@@ -1143,6 +1149,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
           await new Promise((r) => setTimeout(r, sleepMs));
         } catch (e) {
           console.error('Ingestor loop error', e);
+          captureException(e, {
+            scope: 'ingestor-loop',
+          });
           await new Promise((r) => setTimeout(r, loopMs));
         }
       }
@@ -1152,6 +1161,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       .then(() => process.exit(0))
       .catch((e) => {
         console.error(e);
+        captureException(e, {
+          scope: 'ingestor-once',
+        });
         process.exit(1);
       });
   }

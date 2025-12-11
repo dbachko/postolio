@@ -14,6 +14,7 @@
     "@aws-sdk/client-eventbridge": "^3.932.0",
     "@aws-sdk/client-sqs": "^3.932.0",
     "@postolio/aws": "workspace:*",
+    "@postolio/observability": "workspace:*",
     "@postolio/errors": "workspace:*",
     "@prisma/adapter-pg": "^6.19.0",
     "pg": "^8.16.3"

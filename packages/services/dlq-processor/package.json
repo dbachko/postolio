@@ -18,7 +18,8 @@
     "@aws-sdk/client-ssm": "^3.932.0",
     "@aws-sdk/lib-dynamodb": "^3.932.0",
     "@postolio/aws": "workspace:^",
-    "@postolio/errors": "workspace:*"
+    "@postolio/errors": "workspace:*",
+    "@postolio/observability": "workspace:*"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",

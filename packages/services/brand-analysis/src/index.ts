@@ -2,14 +2,19 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 // Tracer temporarily disabled to simplify runtime path
 import type { EventBridgeEvent } from 'aws-lambda';
+import { EventBridge } from '@aws-sdk/client-eventbridge';
+import { initSentry, captureException } from '@postolio/observability';
 import { BrandAnalysisOrchestrator } from './orchestrator';
 import { publishCompleted, publishFailed } from './events/publish';
 import { LearningRepository } from './dynamo/learning-repo';
-import { EventBridge } from '@aws-sdk/client-eventbridge';
 
 const logger = new Logger({ serviceName: 'brand-analysis' });
 const metrics = new Metrics({ namespace: 'BrandAnalysis', serviceName: 'brand-analysis' });
 // const tracer = new Tracer({ serviceName: 'brand-analysis' });
+
+initSentry({
+  serviceName: 'brand-analysis',
+});
 
 export interface BrandAnalysisRequestedEvent {
   'detail-type': 'brand.analysis.requested';
@@ -79,6 +84,11 @@ export async function handler(event: EventBridgeEvent<string, any>): Promise<voi
     } catch (err) {
       logger.error('Brand analysis failed', { brandId, err });
       metrics.addMetric('AnalysisFailures', MetricUnit.Count, 1);
+      captureException(err, {
+        brandId,
+        function: 'brand-analysis',
+        phase: 'runBrandAnalysis',
+      });
       await publishFailed({ brandId, jobId: 'unknown', errorMessage: (err as Error).message });
     }
     return;

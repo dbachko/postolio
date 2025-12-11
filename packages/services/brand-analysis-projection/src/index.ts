@@ -8,10 +8,15 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { Pool } from 'pg';
 import { createLambdaPrismaClient } from '@postolio/database/lambda';
 import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lambda';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'brand-analysis-projection' });
 const metrics = new Metrics({
   namespace: 'BrandAnalysis',
+  serviceName: 'brand-analysis-projection',
+});
+
+initSentry({
   serviceName: 'brand-analysis-projection',
 });
 
@@ -179,30 +184,31 @@ export async function handler(
   }
   const { brandId, profileVersion, createdAt } = event.detail;
 
-  // Read profile from Dynamo
-  const res = await doc.send(
-    new QueryCommand({
-      TableName: PROFILES_TABLE,
-      KeyConditionExpression: 'PK = :pk AND SK = :sk',
-      ExpressionAttributeValues: { ':pk': profilePk(brandId), ':sk': profileSk(profileVersion) },
-      Limit: 1,
-    })
-  );
-  const item = res.Items?.[0];
-  if (!item) {
-    logger.warn('Profile not found in Dynamo; skipping projection', { brandId, profileVersion });
-    return;
-  }
-  const profile = (item as { profile?: unknown })?.profile ?? item;
-  const pmeta = profile as { promptSetVersion?: string | null; driftFindings?: unknown[] };
+  try {
+    // Read profile from Dynamo
+    const res = await doc.send(
+      new QueryCommand({
+        TableName: PROFILES_TABLE,
+        KeyConditionExpression: 'PK = :pk AND SK = :sk',
+        ExpressionAttributeValues: { ':pk': profilePk(brandId), ':sk': profileSk(profileVersion) },
+        Limit: 1,
+      })
+    );
+    const item = res.Items?.[0];
+    if (!item) {
+      logger.warn('Profile not found in Dynamo; skipping projection', { brandId, profileVersion });
+      return;
+    }
+    const profile = (item as { profile?: unknown })?.profile ?? item;
+    const pmeta = profile as { promptSetVersion?: string | null; driftFindings?: unknown[] };
 
-  const client = await getClient();
-  await ensureProjectionTable(client);
+    const client = await getClient();
+    await ensureProjectionTable(client);
 
-  // Upsert with version guard (only write if newer)
-  const derived = computeDerivedProjection(profile);
-  await client.$executeRawUnsafe(
-    `INSERT INTO brand_style_profile_projection (
+    // Upsert with version guard (only write if newer)
+    const derived = computeDerivedProjection(profile);
+    await client.$executeRawUnsafe(
+      `INSERT INTO brand_style_profile_projection (
       brand_id, profile_version, prompt_set_version, created_at, has_recent_drift, last_drift_at,
       archetype, primary_tones, primary_palette, topics_top, summary_projection, checksum, updated_at
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9::text[], $10::jsonb, $11::jsonb, $12, NOW())
@@ -221,20 +227,28 @@ export async function handler(
       checksum = EXCLUDED.checksum,
       updated_at = NOW()
     WHERE brand_style_profile_projection.profile_version < EXCLUDED.profile_version;`,
-    brandId,
-    profileVersion,
-    pmeta.promptSetVersion || null,
-    new Date(createdAt),
-    Array.isArray(pmeta?.driftFindings) && pmeta.driftFindings.length > 0,
-    null,
-    derived.archetype,
-    derived.tones,
-    derived.palette,
-    JSON.stringify(derived.topicsTop),
-    JSON.stringify(profile),
-    null
-  );
+      brandId,
+      profileVersion,
+      pmeta.promptSetVersion || null,
+      new Date(createdAt),
+      Array.isArray(pmeta?.driftFindings) && pmeta.driftFindings.length > 0,
+      null,
+      derived.archetype,
+      derived.tones,
+      derived.palette,
+      JSON.stringify(derived.topicsTop),
+      JSON.stringify(profile),
+      null
+    );
 
-  logger.info('Projection upserted', { brandId, profileVersion });
-  metrics.addMetric('ProjectionWrites', MetricUnit.Count, 1);
+    logger.info('Projection upserted', { brandId, profileVersion });
+    metrics.addMetric('ProjectionWrites', MetricUnit.Count, 1);
+  } catch (err) {
+    logger.error('Projection handler failed', { brandId, profileVersion, err });
+    captureException(err, {
+      brandId,
+      profileVersion,
+      function: 'brand-analysis-projection',
+    });
+  }
 }

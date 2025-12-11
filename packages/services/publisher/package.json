@@ -23,6 +23,7 @@
     "@aws-sdk/s3-request-presigner": "^3.932.0",
     "@postolio/aws": "workspace:^",
     "@postolio/errors": "workspace:*",
+    "@postolio/observability": "workspace:*",
     "zod": "^4.1.12"
   },
   "devDependencies": {

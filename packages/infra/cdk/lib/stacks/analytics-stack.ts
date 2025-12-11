@@ -86,6 +86,9 @@ export class AnalyticsStack extends cdk.Stack {
       'RedisPortParameter',
       `/postolio/${environment}/cache/port`
     );
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
 
     const tokenServiceUrl = ssm.StringParameter.valueForStringParameter(
       this,
@@ -203,6 +206,7 @@ export class AnalyticsStack extends cdk.Stack {
         REDIS_HOST: redisEndpointParam.stringValue,
         REDIS_PORT: redisPortParam.stringValue,
         REDIS_URL: `redis://${redisEndpointParam.stringValue}:${redisPortParam.stringValue}`,
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       secrets: {
         DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),

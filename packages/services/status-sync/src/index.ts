@@ -13,10 +13,15 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { Pool } from 'pg';
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'status-sync' });
 const metrics = new Metrics({
   namespace: 'Postolio/StatusSync',
+  serviceName: 'status-sync',
+});
+
+initSentry({
   serviceName: 'status-sync',
 });
 
@@ -812,6 +817,10 @@ export async function handler(event: EventBridgeEvent<string, EventDetail>, cont
       error: error instanceof Error ? error.message : error,
       eventType,
       detail,
+    });
+    captureException(error, {
+      function: 'status-sync',
+      eventType,
     });
     metrics.addMetric('ProcessingError', MetricUnit.Count, 1);
     metrics.publishStoredMetrics();

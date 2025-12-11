@@ -6,8 +6,13 @@ import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lambda';
 import { createLambdaPrismaClient } from '@postolio/database/lambda';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'brand-analysis-scheduler' });
+
+initSentry({
+  serviceName: 'brand-analysis-scheduler',
+});
 
 const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME!;
 const JOBS_TABLE = process.env.BRAND_ANALYSIS_JOBS_TABLE!;
@@ -100,6 +105,10 @@ export async function handler(): Promise<void> {
       enqueued++;
     } catch (err) {
       logger.warn('Failed to enqueue brand', { brandId, err });
+      captureException(err, {
+        brandId,
+        function: 'brand-analysis-scheduler',
+      });
     }
   }
   logger.info('Scheduler completed', { enqueued, total: socialAccounts.length });

@@ -6,12 +6,17 @@ import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge
 import { prismaAssets } from '@postolio/database-assets';
 import sharp from 'sharp';
 import type { S3Event } from 'aws-lambda';
+import { initSentry, captureException } from '@postolio/observability';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'asset-thumbnail-generator' });
 const tracer = new Tracer({ serviceName: 'asset-thumbnail-generator' });
 const metrics = new Metrics({
   namespace: 'AssetLibrary',
+  serviceName: 'asset-thumbnail-generator',
+});
+
+initSentry({
   serviceName: 'asset-thumbnail-generator',
 });
 
@@ -227,6 +232,12 @@ export const handler = async (event: S3Event): Promise<void> => {
       logger.error('Failed to generate thumbnails', error as Error, {
         assetId,
         s3Key,
+      });
+
+      captureException(error, {
+        assetId,
+        s3Key,
+        function: 'asset-thumbnail-generator',
       });
 
       // Update asset processing status to failed

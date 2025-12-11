@@ -2,10 +2,15 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { prisma } from '@postolio/database';
 import { addDays } from 'date-fns';
+import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'session-cleanup' });
 const metrics = new Metrics({
   namespace: 'SessionManagement',
+  serviceName: 'session-cleanup',
+});
+
+initSentry({
   serviceName: 'session-cleanup',
 });
 
@@ -60,6 +65,9 @@ export const handler = async (): Promise<CleanupResult> => {
     logger.error('Session cleanup job failed', error as Error);
     result.errors.push((error as Error).message);
     metrics.addMetric('CleanupJobFailed', MetricUnit.Count, 1);
+    captureException(error, {
+      function: 'session-cleanup',
+    });
   } finally {
     metrics.publishStoredMetrics();
   }

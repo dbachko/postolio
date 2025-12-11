@@ -1,6 +1,7 @@
 import { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { APIError, APIErrorResponse, InternalServerError, ValidationError } from '@postolio/errors';
 import { logger } from '@postolio/logger';
+import { captureException } from '@postolio/observability';
 
 // Type guards for enhanced error handling
 interface ExtendedAPIError extends APIError {
@@ -85,6 +86,12 @@ export async function errorHandler(
         details: error.details,
         stack: error.stack,
       });
+      captureException(error, {
+        ...context,
+        code: error.code,
+        details: error.details,
+        type: 'APIError',
+      });
     } else if (error.statusCode >= 400) {
       logger.warn(`Client Error: ${error.message}`, {
         ...context,
@@ -153,6 +160,14 @@ export async function errorHandler(
       statusCode: error.statusCode,
     });
 
+    if ((error.statusCode || 500) >= 500) {
+      captureException(error, {
+        ...context,
+        type: 'HTTPError',
+        statusCode: error.statusCode,
+      });
+    }
+
     return reply.status(error.statusCode || 500).send(payload);
   }
 
@@ -174,6 +189,11 @@ export async function errorHandler(
     error: error.name,
     stack: error.stack,
     originalMessage: error.message,
+  });
+
+  captureException(error, {
+    ...context,
+    type: 'UnexpectedError',
   });
 
   return reply.status(500).send(payload);

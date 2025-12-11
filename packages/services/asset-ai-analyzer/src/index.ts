@@ -5,12 +5,17 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { prismaAssets } from '@postolio/database-assets';
 import OpenAI from 'openai';
 import type { EventBridgeEvent as AwsEventBridgeEvent } from 'aws-lambda';
+import { initSentry, captureException } from '@postolio/observability';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'asset-ai-analyzer' });
 const tracer = new Tracer({ serviceName: 'asset-ai-analyzer' });
 const metrics = new Metrics({
   namespace: 'AssetLibrary',
+  serviceName: 'asset-ai-analyzer',
+});
+
+initSentry({
   serviceName: 'asset-ai-analyzer',
 });
 
@@ -144,6 +149,11 @@ Be concise, accurate, and focus on visual elements that would be useful for cont
       assetId,
     });
 
+    captureException(error, {
+      assetId,
+      function: 'asset-ai-analyzer',
+    });
+
     // Update asset processing status to failed
     try {
       await prismaAssets.asset.update({
@@ -180,6 +190,11 @@ async function getOpenAIKey(): Promise<string> {
     throw new Error('OpenAI API key not found in secret');
   } catch (error) {
     logger.error('Failed to get OpenAI API key from Secrets Manager', error as Error);
+    captureException(error, {
+      function: 'asset-ai-analyzer',
+      stage: 'get-openai-key',
+      secretName,
+    });
     throw error;
   }
 }

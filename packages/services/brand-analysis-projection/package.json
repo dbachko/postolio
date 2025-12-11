@@ -15,6 +15,7 @@
     "@aws-sdk/client-ssm": "^3.932.0",
     "@aws-sdk/lib-dynamodb": "^3.932.0",
     "@postolio/database": "workspace:*",
+    "@postolio/observability": "workspace:*",
     "@prisma/adapter-pg": "^6.19.0",
     "pg": "^8.16.3"
   },

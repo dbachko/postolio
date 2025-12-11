@@ -581,6 +581,9 @@ jobs:
           NODE_ENV: ${{ vars.NODE_ENV }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           ENABLE_MONITORING: ${{ vars.ENABLE_MONITORING }}
+          # Error tracking / observability (backend)
+          # Define SENTRY_BACKEND_DSN as a GitHub Actions variable (Settings → Variables → Actions).
+          SENTRY_BACKEND_DSN: ${{ vars.SENTRY_BACKEND_DSN }}
           # Signup gating variables (optional)
           AUTH_SIGNUPS_MODE: ${{ vars.AUTH_SIGNUPS_MODE }}
           AUTH_ALLOWLIST_EMAILS: ${{ vars.AUTH_ALLOWLIST_EMAILS }}
@@ -717,6 +720,7 @@ jobs:
               --context corsOrigin="${{ vars.VITE_API_URL }}" \
               --context authMagicLinkEnabled="${{ vars.AUTH_MAGIC_LINK_ENABLED }}" \
               --context openaiApiKey="$OPENAI_API_KEY" \
+              --context sentryDsn="$SENTRY_BACKEND_DSN" \
               --context googleClientId="$GOOGLE_CLIENT_ID" \
               --context googleClientSecret="$GOOGLE_CLIENT_SECRET" \
               --context facebookAppId="$FACEBOOK_APP_ID" \
@@ -816,6 +820,7 @@ jobs:
           VITE_FEATURE_AI_SUGGESTIONS: ${{ vars.VITE_FEATURE_AI_SUGGESTIONS }}
           VITE_FEATURE_VIDEO_SUPPORT: ${{ vars.VITE_FEATURE_VIDEO_SUPPORT }}
           VITE_ENVIRONMENT: ${{ needs.detect-changes.outputs.environment }}
+          VITE_SENTRY_FRONTEND_DSN: ${{ vars.VITE_SENTRY_FRONTEND_DSN }}
         run: pnpm build
 
       - name: Deploy to S3

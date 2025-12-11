@@ -41,6 +41,9 @@ export class SchedulingStack extends cdk.Stack {
     super(scope, id, props);
 
     const { environment, alertEmail } = props;
+    const sentryDsn =
+      (this.node.tryGetContext('sentryDsn') as string | undefined) ||
+      process.env.SENTRY_BACKEND_DSN;
     const prefix = `postolio-${environment}-scheduling`;
     // Import exact RDS Proxy resource ID and optional IAM DB username via deploy-time tokens
     const proxyResourceIdToken = ssm.StringParameter.valueForStringParameter(
@@ -525,6 +528,7 @@ export class SchedulingStack extends cdk.Stack {
           SCHEDULER_EVENTS_ROLE_ARN: schedulerPutEventsRole.roleArn,
           ...(databaseSecretArnParam ? { DB_SECRET_ARN: databaseSecretArnParam } : {}),
           JWT_SECRET: jwtSecret.secretValueFromJson('secret').unsafeUnwrap(),
+          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,
@@ -561,6 +565,7 @@ export class SchedulingStack extends cdk.Stack {
           SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
           KMS_KEY_ID: encryptionKey.keyId,
           SCHEDULER_GROUP_NAME: 'default',
+          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,
@@ -619,6 +624,7 @@ export class SchedulingStack extends cdk.Stack {
         KMS_KEY_ID: encryptionKey.keyId,
         ...(databaseSecretArnParam ? { DB_SECRET_ARN: databaseSecretArnParam } : {}),
         // DB_IAM_USER can be set via environment overrides or SSM the service reads at runtime
+        ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
