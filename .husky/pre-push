@@ -8,6 +8,13 @@ fi
 
 echo "[pre-push] Running formatting, lint, and type checks..."
 
+# 0) Ensure pnpm lockfile is in sync with package.json
+pnpm run check:lockfile
+if [ $? -ne 0 ]; then
+  echo "[pre-push] Lockfile check failed. Run: pnpm install to update pnpm-lock.yaml and commit the changes."
+  exit 1
+fi
+
 # 1) Prettier check for TS/TSX/MD only, honoring gitignore to avoid dist artifacts
 pnpm prettier --check "**/*.{ts,tsx,md}" --ignore-path .gitignore
 if [ $? -ne 0 ]; then

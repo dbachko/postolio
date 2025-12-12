@@ -79,8 +79,8 @@ export function EmailVerificationBanner() {
   // Fallback banner when we can't determine verification status
   if (hasError) {
     return (
-      <Alert className="bg-card/95 rounded-none border-0 border-b shadow-sm">
-        <AlertDescription className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <Alert className="bg-card/95 rounded-none border-0 border-b p-0 shadow-sm">
+        <AlertDescription className="flex min-h-12 w-full items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
           <div className="text-foreground flex min-w-0 items-center gap-2">
             <AlertCircle className="text-foreground h-4 w-4 flex-shrink-0" />
             <div className="truncate text-sm">
@@ -101,8 +101,8 @@ export function EmailVerificationBanner() {
   }
 
   return (
-    <Alert className="bg-card/95 rounded-none border-0 border-b shadow-sm">
-      <AlertDescription className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <Alert className="bg-card/95 rounded-none border-0 border-b p-0 shadow-sm">
+      <AlertDescription className="flex min-h-12 w-full items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
         {/* Left: message */}
         <div className="text-foreground flex min-w-0 items-center gap-2">
           <Mail className="text-foreground h-4 w-4 flex-shrink-0" />

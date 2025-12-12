@@ -11,7 +11,7 @@ export function DMAutomation() {
 
   if (!selectedBrand) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full py-8">
         <Card>
           <CardHeader>
             <CardTitle>No Brand Selected</CardTitle>
@@ -23,14 +23,7 @@ export function DMAutomation() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">DM Automation</h1>
-        <p className="text-muted-foreground mt-2">
-          Automatically respond to Instagram comments and messages with keyword-based rules.
-        </p>
-      </div>
-
+    <div className="w-full py-8">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="rules">Automation Rules</TabsTrigger>

@@ -49,13 +49,13 @@ export function AnalyticsDashboard({ brandId }: AnalyticsDashboardProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold">Analytics Overview</h2>
           <p className="text-muted-foreground">Automation performance for the last {days} days</p>
         </div>
         <Select value={days.toString()} onValueChange={(value) => setDays(parseInt(value))}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

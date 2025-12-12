@@ -5,14 +5,7 @@ import { Shield, Smartphone } from 'lucide-react';
 
 export function SecuritySettings() {
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Security</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your account security and active sessions
-        </p>
-      </div>
-
+    <div className="w-full">
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
           <TabsTrigger value="overview" className="flex items-center gap-2">

@@ -325,7 +325,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
               <TabsTrigger value="video">Videos</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <FilterPanel filters={filters} onChange={setFilters} onReset={handleResetFilters} />
             <SortControls
               field={sortField}
@@ -335,7 +335,10 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
                 setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
               }
             />
-            <Button onClick={() => openSidebar('asset-upload', { id: brandId })}>
+            <Button
+              onClick={() => openSidebar('asset-upload', { id: brandId })}
+              className="w-full sm:w-auto"
+            >
               <Upload className="mr-2 h-4 w-4" />
               Upload
             </Button>

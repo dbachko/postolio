@@ -12,6 +12,7 @@
     "test": "turbo test",
     "lint": "turbo lint",
     "clean": "turbo clean && rm -rf node_modules",
+    "check:lockfile": "pnpm install --frozen-lockfile",
     "prepare": "husky",
     "format": "prettier --write \"**/*.{css,scss,js,jsx,ts,tsx,md,mdx,json,yml,yaml,html,graphql}\"",
     "format:check": "prettier --check \"**/*.{css,scss,js,jsx,ts,tsx,md,mdx,json,yml,yaml,html,graphql}\"",

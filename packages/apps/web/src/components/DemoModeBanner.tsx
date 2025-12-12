@@ -16,7 +16,7 @@ export function DemoModeBanner() {
 
   return (
     <div className="bg-primary/90 text-primary-foreground border-b">
-      <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-4 text-sm sm:px-6 lg:px-8">
+      <div className="flex h-12 items-center justify-between px-4 text-sm sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-2">
           <Sparkles className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
           <div className="truncate">

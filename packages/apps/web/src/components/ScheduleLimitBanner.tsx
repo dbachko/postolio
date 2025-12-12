@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { campaign as campaignApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { getLocalSetting, setLocalSetting } from '@/lib/settings/localSettings';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 const DISMISS_TTL_DAYS = 7;
 const DISMISS_KEY = 'schedule-limit-banner-dismissed-at';
@@ -38,7 +38,7 @@ export function ScheduleLimitBanner() {
   return (
     <div className="bg-muted border-b shadow-sm">
       {/* Match AppLayout nav container sizing (height + paddings) */}
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="text-foreground flex min-w-0 items-center gap-2">
           <AlertTriangle className="text-foreground h-4 w-4 flex-shrink-0" />
           <span className="truncate text-sm font-medium">
@@ -56,18 +56,18 @@ export function ScheduleLimitBanner() {
             Learn More
           </Button>
           <Button
-            size="icon"
             variant="ghost"
-            aria-label="Dismiss banner"
+            size="sm"
+            aria-label="Dismiss schedule limit banner"
             onClick={() => {
               try {
                 setLocalSetting<number>(DISMISS_KEY, Date.now());
               } catch {}
               setDismissed(true);
             }}
-            className="hover:bg-accent h-9 w-9 p-2"
+            className="hover:bg-accent h-9"
           >
-            <X className="h-4 w-4" />
+            Dismiss
           </Button>
         </div>
       </div>

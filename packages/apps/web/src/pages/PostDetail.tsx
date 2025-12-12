@@ -710,22 +710,21 @@ export default function PostDetail() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full">
       {/* Header */}
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
-            <div className="mb-2 flex items-center gap-4">
-              <h1 className="text-xl font-bold sm:text-2xl md:text-3xl">Post Details</h1>
-              {isEditing && (
+            {isEditing && (
+              <div className="mb-2 flex items-center gap-4">
                 <PostSaveIndicator
                   status={saveStatus}
                   lastSaved={lastSaved}
                   showAILearningMessage={saveStatus === 'saved'}
                   idleHint="Click Save to apply your edits"
                 />
-              )}
-            </div>
+              </div>
+            )}
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs sm:gap-4 sm:text-sm">
               <span className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />

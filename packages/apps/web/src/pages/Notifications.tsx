@@ -19,12 +19,6 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl leading-tight font-semibold">Notifications</h1>
-          <p className="text-muted-foreground text-sm">
-            Stay on top of system and campaign updates.
-          </p>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as 'all' | 'unread')}>
             <TabsList>

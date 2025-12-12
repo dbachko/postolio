@@ -164,7 +164,7 @@ export function AnalyticsOverviewTab({
             }
           }}
         >
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Select range" />
           </SelectTrigger>
           <SelectContent>

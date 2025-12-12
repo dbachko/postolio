@@ -6,17 +6,14 @@ import { FullCalendar } from './calendar/FullCalendar';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CalendarFilters } from './calendar/CalendarFilters/index';
 import { CalendarExport } from './calendar/CalendarExport/index';
-import { CampaignColorLegend } from './CampaignColorLegend';
 import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
-import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
-import { getStableColorFromId } from '@/utils/campaign-colors';
 import { useTimezone } from '../contexts/TimezoneContext';
-import type { CalendarItem, Placeholder } from '../types/calendar';
+import type { Placeholder } from '../types/calendar';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import {
@@ -26,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getTimezoneAbbr, getTimezoneOffset } from '@/lib/timezone';
+import { COMMON_TIMEZONES, getTimezoneAbbr, getTimezoneOffset } from '@/lib/timezone';
 import { formatGmtOffset } from './calendar/FullCalendar/utils/timezone';
 
 // type guard no longer needed for the month grid only
@@ -53,6 +50,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     const offset = formatGmtOffset(getTimezoneOffset(brandTimezone));
     return `${abbr} · ${offset}`;
   }, [brandTimezone]);
+  const timezoneOptions = useMemo(() => COMMON_TIMEZONES.filter((tz) => tz.value !== 'auto'), []);
 
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
@@ -235,22 +233,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   };
 
   // Add a stable fallback color for items without a campaign color
-  const enrichWithCampaignColor = useMemo(
-    () =>
-      (items: any[]): any[] =>
-        items.map((i) => {
-          const campaignId = i.campaignId || i.campaign?.id || null;
-          const direct = i.campaignColor || null;
-          const stored = campaignId ? getStoredCampaignColor(campaignId) : null;
-          const fallback = campaignId ? getStableColorFromId(campaignId) : null;
-          return {
-            ...i,
-            campaignColor: direct || stored || fallback,
-          };
-        }),
-    []
-  );
-
   return (
     <div className="space-y-4">
       {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
@@ -273,7 +255,27 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
           </div>
 
           {/* Right: view dropdown + Filters + Export (wraps below on mobile) */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={brandTimezone}
+              onValueChange={(tz) => {
+                setBrandTimezone(tz);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <span className="truncate text-left">
+                  {brandTimezoneLabel} ({brandTimezone})
+                </span>
+              </SelectTrigger>
+              <SelectContent className="max-h-80">
+                {timezoneOptions.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label} ({getTimezoneAbbr(tz.value)} ·{' '}
+                    {formatGmtOffset(getTimezoneOffset(tz.value))})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={viewMode}
               onValueChange={(v) => {
@@ -282,7 +284,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 setParam('view', next);
               }}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="View" />
               </SelectTrigger>
               <SelectContent>
@@ -361,21 +363,10 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             {/* New Post button removed (exists in tab navigation) */}
           </div>
         </div>
-        <div className="text-muted-foreground mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm">
-          <span>
-            All times shown in brand timezone: {brandTimezoneLabel} ({brandTimezone})
-          </span>
-        </div>
       </div>
 
       {/* Filters (hidden by default, compact) */}
       {showFilters && <CalendarFilters brandId={brandId} compact />}
-
-      {/* Campaign Color Legend */}
-      <CampaignColorLegend
-        items={enrichWithCampaignColor(filteredItems as any) as any as CalendarItem[]}
-        className="hidden px-4 sm:flex"
-      />
 
       {/* Filter results summary removed for cleaner filtered state */}
 

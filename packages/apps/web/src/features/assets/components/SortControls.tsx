@@ -23,9 +23,9 @@ export function SortControls({
   onDirectionToggle,
 }: SortControlsProps) {
   return (
-    <div className="inline-flex items-center">
+    <div className="flex w-full items-center sm:w-auto">
       <Select value={field} onValueChange={(v) => onFieldChange(v as SortField)}>
-        <SelectTrigger className="h-10 w-[200px] rounded-r-none">
+        <SelectTrigger className="h-10 w-full rounded-r-none sm:w-[200px]">
           <SelectValue placeholder="Sort assets" />
         </SelectTrigger>
         <SelectContent>

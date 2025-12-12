@@ -65,7 +65,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
     return (
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <CardTitle>Predictive Forecast</CardTitle>
             </div>
@@ -73,7 +73,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
               value={selectedMetric}
               onValueChange={(v) => setSelectedMetric(v as MetricType)}
             >
-              <SelectTrigger className="w-[180px]" disabled>
+              <SelectTrigger className="w-full sm:w-[180px]" disabled>
                 <SelectValue />
               </SelectTrigger>
             </Select>
@@ -91,7 +91,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
     return (
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <CardTitle>Predictive Forecast</CardTitle>
             </div>
@@ -99,7 +99,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
               value={selectedMetric}
               onValueChange={(v) => setSelectedMetric(v as MetricType)}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -178,7 +178,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <CardTitle>Predictive Forecast</CardTitle>
             <TooltipProvider>
@@ -197,7 +197,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
           </div>
 
           <Select value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as MetricType)}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

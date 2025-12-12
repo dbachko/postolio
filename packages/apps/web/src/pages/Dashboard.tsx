@@ -4,13 +4,12 @@ import { brand as brandApi, campaign as campaignApi, content as contentApi } fro
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { CampaignProgress } from '@/components/CampaignProgress';
 import { Sparkles } from 'lucide-react';
 
 export function Dashboard() {
-  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore();
+  const { brands, setBrands, initializeSelectedBrand } = useBrandStore();
 
   // WebSocket connection active in background for real-time updates
 
@@ -25,8 +24,6 @@ export function Dashboard() {
       initializeSelectedBrand(brandsData.brands);
     }
   }, [brandsData, setBrands, initializeSelectedBrand]);
-
-  const activeBrand = selectedBrand;
 
   // Get comprehensive metrics across all brands
   const { data: allCampaignsData } = useQuery({
@@ -97,13 +94,6 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description={
-          activeBrand ? `Managing content for ${activeBrand.name}` : 'No active brand selected'
-        }
-      />
-
       {allCampaigns.length > 0 && (
         <div>
           <div className="mb-4 flex items-center justify-between">

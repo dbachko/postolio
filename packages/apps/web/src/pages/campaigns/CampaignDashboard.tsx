@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -75,46 +75,39 @@ export function CampaignDashboard({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Campaigns</CardTitle>
+        <CardContent className="pt-4">
+          {/* Filters / Sort on left, Create on right */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="preview">Preview</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Most Recent</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="name">Name (A-Z)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button size="sm" className="gap-2" onClick={() => navigate('/campaigns/create')}>
               <Plus className="h-4 w-4" />
               Create Campaign
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Filters and Sort */}
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="paused">Paused</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="preview">Preview</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">Most Recent</SelectItem>
-                <SelectItem value="oldest">Oldest First</SelectItem>
-                <SelectItem value="name">Name (A-Z)</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="text-muted-foreground ml-auto text-sm">
-              {filteredAndSortedCampaigns.length} campaign
-              {filteredAndSortedCampaigns.length !== 1 ? 's' : ''}
-            </div>
           </div>
 
           {/* Campaigns List */}

@@ -20,7 +20,6 @@ export function CreatePost() {
 
   return (
     <div>
-      <h1 className="mb-6 text-3xl font-semibold">Create New Post</h1>
       <PostSidebar layout="page" showHeader={false} />
     </div>
   );

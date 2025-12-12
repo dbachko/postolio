@@ -11,7 +11,8 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   const { type, id, open, close } = useRightSidebarRouter();
   const Sidebar = type ? SidebarRegistry[type]?.Component : undefined;
   const defaultWidthPx = type ? SidebarRegistry[type]?.defaultWidthPx : undefined;
-  const isSmall = useMediaQuery('(max-width: 768px)');
+  // Treat tablet / <lg as "small" so the sidebar uses Sheet overlay instead of squeezing content.
+  const isSmall = useMediaQuery('(max-width: 1023px)');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const asideRef = useRef<HTMLDivElement | null>(null);
   const [widthPx, setWidthPx] = useState<number>(() => defaultWidthPx || 460);

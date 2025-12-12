@@ -66,17 +66,12 @@ export default function Drafts() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Drafts</h1>
-          <p className="text-muted-foreground text-sm">{selectedBrand.name}</p>
-        </div>
-
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {/* Sort */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
           <span className="text-muted-foreground text-sm">Sort by</span>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-            <SelectTrigger className="h-9 w-[220px]">
+            <SelectTrigger className="h-9 w-full sm:w-[220px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

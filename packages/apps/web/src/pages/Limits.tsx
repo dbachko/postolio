@@ -41,7 +41,6 @@ export default function Limits() {
         <div className="flex items-start gap-4">
           <AlertTriangle className="text-foreground mt-1 h-5 w-5" />
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold">Limits & Plans</h1>
             <p className="text-muted-foreground">
               Postolio is currently in <span className="font-medium">Alpha</span>. We’re shaping the
               product and testing reliability at small scale. During this phase, we enforce a few

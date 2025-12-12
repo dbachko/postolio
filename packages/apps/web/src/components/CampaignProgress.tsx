@@ -63,10 +63,10 @@ export function CampaignProgress({ brandId, allBrands = false }: CampaignProgres
       {campaignProgress.slice(0, 3).map((campaign) => (
         <Card key={campaign.id}>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-lg">{campaign.name}</CardTitle>
-                <p className="text-muted-foreground mt-1 text-sm">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-lg break-words">{campaign.name}</CardTitle>
+                <p className="text-muted-foreground mt-1 text-sm break-words whitespace-normal">
                   Status:{' '}
                   <span
                     className={`capitalize ${
@@ -79,7 +79,9 @@ export function CampaignProgress({ brandId, allBrands = false }: CampaignProgres
                   >
                     {campaign.status}
                   </span>
-                  {campaign.brandId && <span> • Brand: {campaign.brandId}</span>}
+                  {campaign.brandId && (
+                    <span className="break-all"> • Brand: {campaign.brandId}</span>
+                  )}
                 </p>
                 {campaign.description && (
                   <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">

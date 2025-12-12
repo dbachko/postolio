@@ -1,9 +1,8 @@
 import { useState, type ReactNode, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useAuthStore } from '../stores/authStore';
-import { useBrandStore } from '../stores/brandStore';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { EmailVerificationBanner } from './EmailVerificationBanner';
 import { DemoModeBanner } from './DemoModeBanner';
+import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,128 +21,44 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import {
-  Settings,
-  LogOut,
-  Check,
   Building2,
-  Search,
-  BarChart3,
-  Megaphone,
   Grid3X3,
-  FileText,
-  FileEdit,
-  Sparkles,
   Home,
-  Shield,
+  LogOut,
   Plus,
-  Images,
-  MessageSquare,
-  MessageSquarePlus,
-  Send,
+  Search,
+  Settings,
+  Shield,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
 import { RightHelpDrawer } from './help/RightHelpDrawer';
 import { RightSidebarRoot } from '@/right-sidebar/RightSidebarRoot';
 import '@/right-sidebar/register';
-import { ScheduleLimitBanner } from './ScheduleLimitBanner';
-import { Bell } from '@/components/notifications/Bell';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { useAuthStore } from '../stores/authStore';
+import { useBrandStore } from '../stores/brandStore';
 import {
-  NavigationMenu,
-  NavigationMenuList,
-  NavigationMenuItem,
-  NavigationMenuTrigger,
-  NavigationMenuContent,
-  NavigationMenuLink,
-} from '@/components/ui/navigation-menu';
+  allNavItems,
+  isRouteActive as isRouteActiveForItem,
+  mainNavItems,
+  secondaryNavItems,
+  type NavigationItem,
+} from './app-shell/nav-config';
+import { getSectionNavItems } from './app-shell/section-nav';
+import { SidebarNav } from './app-shell/sidebar-nav';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-interface NavigationItem {
-  label: string;
-  path: string;
-  icon: typeof Megaphone;
-  description?: string;
-  matchType?: 'exact' | 'startsWith';
-}
-
-// Main navigation items (always visible on desktop)
-const mainNavItems: NavigationItem[] = [
-  {
-    label: 'Inbox',
-    path: '/inbox',
-    icon: MessageSquare,
-    description: 'Comments & DMs',
-    matchType: 'startsWith',
-  },
-  {
-    label: 'DM Automation',
-    path: '/dm-automation',
-    icon: Send,
-    description: 'Automated DM responses',
-    matchType: 'exact',
-  },
-  {
-    label: 'Campaigns',
-    path: '/campaigns',
-    icon: Megaphone,
-    description: 'Manage content campaigns',
-    matchType: 'startsWith',
-  },
-  {
-    label: 'Content',
-    path: '/content',
-    icon: FileText,
-    description: 'Content library',
-    matchType: 'exact',
-  },
-  {
-    label: 'Assets',
-    path: '/assets',
-    icon: Images,
-    description: 'Image & video library',
-    matchType: 'exact',
-  },
-  {
-    label: 'Drafts',
-    path: '/drafts',
-    icon: FileEdit,
-    description: 'Work-in-progress posts',
-    matchType: 'exact',
-  },
-  {
-    label: 'Analytics',
-    path: '/analytics',
-    icon: BarChart3,
-    description: 'Performance metrics',
-    matchType: 'exact',
-  },
-];
-
-// Secondary navigation items (in dropdown menu)
-const secondaryNavItems: NavigationItem[] = [];
-
-// Combine all navigation items for search
-const allNavItems = [...mainNavItems, ...secondaryNavItems];
-
-// Utility function for route matching
-const isRouteActive = (item: NavigationItem, currentPath: string): boolean => {
-  if (item.matchType === 'startsWith') {
-    return currentPath === item.path || currentPath.startsWith(item.path + '/');
-  }
-  // Default to exact match
-  return currentPath === item.path;
-};
-
 export function AppLayout({ children }: LayoutProps) {
-  const containerCls = 'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8';
   const { user, logout } = useAuthStore();
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,7 +66,6 @@ export function AppLayout({ children }: LayoutProps) {
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { openSidebar } = useRightSidebarRouter();
-  const [navValue, setNavValue] = useState<string | undefined>(undefined);
 
   const handleLogout = () => {
     logout();
@@ -160,7 +74,7 @@ export function AppLayout({ children }: LayoutProps) {
 
   const isActiveRoute = useCallback(
     (item: NavigationItem) => {
-      return isRouteActive(item, location.pathname);
+      return isRouteActiveForItem(item, location.pathname);
     },
     [location.pathname]
   );
@@ -177,7 +91,7 @@ export function AppLayout({ children }: LayoutProps) {
     return () => document.removeEventListener('keydown', down);
   }, []);
 
-  // Close menu when clicking outside
+  // Close mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -216,8 +130,41 @@ export function AppLayout({ children }: LayoutProps) {
     [searchQuery]
   );
 
+  const pageMeta = useMemo(() => {
+    const path = location.pathname;
+
+    if (path === '/' || path === '/dashboard') {
+      return {
+        title: 'Dashboard',
+        description: 'Overview of your brands and recent activity',
+      };
+    }
+
+    const matchedPrimary =
+      allNavItems.find((item) => isRouteActiveForItem(item, path)) ??
+      allNavItems.find((item) => path.startsWith(item.path + '/'));
+
+    if (matchedPrimary) {
+      const sectionChildren = getSectionNavItems(matchedPrimary);
+      const matchedChild =
+        sectionChildren.find((child) => path === child.path) ??
+        sectionChildren.find((child) => path.startsWith(child.path + '/'));
+
+      if (matchedChild) {
+        return { title: matchedChild.label, description: matchedChild.description };
+      }
+
+      return { title: matchedPrimary.label, description: matchedPrimary.description };
+    }
+
+    // Fallback: derive title from last segment
+    const last = path.split('/').filter(Boolean).pop();
+    const title = last ? last.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Page';
+    return { title, description: undefined };
+  }, [location.pathname]);
+
   return (
-    <div className="bg-background flex min-h-screen flex-col">
+    <div className="bg-background flex min-h-screen">
       {/* Skip to main content for accessibility */}
       <a
         href="#main-content"
@@ -226,143 +173,55 @@ export function AppLayout({ children }: LayoutProps) {
         Skip to main content
       </a>
 
-      {/* Banners above top nav */}
-      <EmailVerificationBanner />
-      <DemoModeBanner />
-      <ScheduleLimitBanner />
+      {/* Left hover-expandable navigation (desktop) */}
+      <div className="group fixed inset-y-0 left-0 z-50 hidden md:block">
+        <SidebarNav
+          mainItems={mainNavItems}
+          secondaryItems={secondaryNavItems}
+          currentPath={location.pathname}
+          userEmail={user?.email ?? null}
+          brands={brands}
+          selectedBrand={selectedBrand}
+          onBrandSelect={(brand) => setSelectedBrand(brand)}
+          onNavigate={(path) => navigate(path)}
+          onLogout={handleLogout}
+        />
+        {/* Dim main content slightly when sidebar is hovered (OpenSea-style) */}
+        <div className="pointer-events-none fixed inset-0 z-40 bg-transparent transition-colors duration-300 ease-out group-hover:bg-black/25" />
+      </div>
 
-      {/* Ultra-thin navigation bar */}
-      <nav
-        className="bg-card sticky top-0 z-40 h-12 border-b shadow-sm"
-        role="navigation"
-        aria-label="Main navigation"
-      >
-        <div className={cn('h-full', containerCls)}>
-          <div className="flex h-full items-center justify-between">
-            {/* Left Section: Logo + Main Nav (Desktop) / Logo (Mobile) */}
-            <div className="flex h-full items-center">
-              {/* Logo */}
+      {/* Main column: banners, top bar, content, footer */}
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col md:pl-[52px]">
+        {/* Banners above top bar */}
+        <EmailVerificationBanner />
+        <DemoModeBanner />
+        <ScheduleLimitBanner />
+
+        {/* Top bar */}
+        <header className="bg-card sticky top-0 z-40 border-b">
+          <div className="flex h-12 items-center justify-between px-4 sm:px-6 lg:px-8">
+            {/* Left: Page title + help text */}
+            <div className="flex min-w-0 items-center gap-3">
               <Link
                 to="/dashboard"
-                className="mr-8 flex items-center space-x-2"
+                className="flex items-center space-x-2 md:hidden"
                 aria-label="Postolio home"
               >
                 <img src="/postolio-icon.svg" alt="" className="h-7 w-7" aria-hidden="true" />
-                <h1 className="text-foreground hidden text-lg font-bold sm:block">Postolio</h1>
+                <h1 className="text-foreground text-lg font-bold">Postolio</h1>
               </Link>
 
-              {/* Main Navigation Items - Desktop Only */}
-              <div className="hidden h-full items-center md:flex">
-                <NavigationMenu value={navValue} onValueChange={setNavValue}>
-                  <NavigationMenuList>
-                    {/* Inbox as hover menu */}
-                    <NavigationMenuItem value="inbox">
-                      <NavigationMenuTrigger
-                        onMouseEnter={() => setNavValue('inbox')}
-                        className={cn(
-                          'inline-flex h-10 items-center rounded-none border-b-2 bg-transparent px-4 text-sm font-medium transition-colors',
-                          isRouteActive(
-                            {
-                              label: 'Inbox',
-                              path: '/inbox',
-                              icon: MessageSquare,
-                              matchType: 'startsWith',
-                            },
-                            location.pathname
-                          )
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground border-transparent'
-                        )}
-                      >
-                        <MessageSquare className="mr-2 h-5 w-5" />
-                        <span className="text-sm font-medium">Inbox</span>
-                      </NavigationMenuTrigger>
-                      <NavigationMenuContent onMouseLeave={() => setNavValue(undefined)}>
-                        <div className="grid gap-1 p-2 md:w-[240px]">
-                          <NavigationMenuLink asChild>
-                            <Link
-                              to="/inbox/comments"
-                              className="hover:bg-accent rounded px-2 py-2 text-sm"
-                            >
-                              <span className="flex items-center">
-                                <MessageSquare className="mr-2 h-4 w-4" /> Comments
-                              </span>
-                            </Link>
-                          </NavigationMenuLink>
-                          <NavigationMenuLink asChild>
-                            <Link
-                              to="/inbox/dms"
-                              className="hover:bg-accent rounded px-2 py-2 text-sm"
-                            >
-                              <span className="flex items-center">
-                                <Send className="mr-2 h-4 w-4" /> Direct Messages
-                              </span>
-                            </Link>
-                          </NavigationMenuLink>
-                          <NavigationMenuLink asChild>
-                            <Link
-                              to="/inbox/saved-replies"
-                              className="hover:bg-accent rounded px-2 py-2 text-sm"
-                            >
-                              <span className="flex items-center">
-                                <MessageSquarePlus className="mr-2 h-4 w-4" /> Saved Replies
-                              </span>
-                            </Link>
-                          </NavigationMenuLink>
-                        </div>
-                      </NavigationMenuContent>
-                    </NavigationMenuItem>
-
-                    {/* Other top-level links (desktop) - keep less crowded by moving Campaigns & Assets to Grid menu */}
-                    {mainNavItems
-                      .filter(
-                        (i) => i.label !== 'Inbox' && !['Campaigns', 'Assets'].includes(i.label)
-                      )
-                      .map((item) => (
-                        <NavigationMenuItem key={item.path}>
-                          <NavigationMenuLink asChild>
-                            <Link
-                              to={item.path}
-                              className={cn(
-                                'inline-flex h-10 items-center border-b-2 px-4 text-sm font-medium transition-colors',
-                                isActiveRoute(item)
-                                  ? 'border-primary bg-primary/10 text-primary'
-                                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground border-transparent'
-                              )}
-                            >
-                              <item.icon className="mr-2 h-5 w-5" aria-hidden="true" />
-                              {item.label}
-                            </Link>
-                          </NavigationMenuLink>
-                        </NavigationMenuItem>
-                      ))}
-                  </NavigationMenuList>
-                </NavigationMenu>
+              <div className="hidden min-w-0 flex-col md:flex">
+                <h1 className="text-foreground truncate text-sm font-semibold">{pageMeta.title}</h1>
+                {pageMeta.description && (
+                  <p className="text-muted-foreground truncate text-xs">{pageMeta.description}</p>
+                )}
               </div>
             </div>
 
-            {/* Right Section: Search + Notifications + Menu + Brand Dropdown */}
+            {/* Right Section: Actions, search, notifications, mobile nav, brand dropdown */}
             <div className="flex items-center space-x-2">
-              {/* Primary action: New Post (permanent in top bar) */}
-              <Button
-                size="sm"
-                className="hidden gap-2 sm:inline-flex"
-                onClick={() => openSidebar('post-create')}
-                aria-label="Create new post"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                New Post
-              </Button>
-              <Button
-                size="icon"
-                className="sm:hidden"
-                onClick={() => openSidebar('post-create')}
-                aria-label="Create new post"
-              >
-                <Plus className="h-5 w-5" aria-hidden="true" />
-              </Button>
-
-              {/* Search Button */}
+              {/* Search button */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -377,11 +236,27 @@ export function AppLayout({ children }: LayoutProps) {
                 </kbd>
               </Button>
 
-              {/* Notifications Bell */}
-              <Bell />
+              {/* Primary action: New Post */}
+              <Button
+                size="sm"
+                className="mr-0 hidden h-9 gap-2 pr-2 pl-3 sm:inline-flex"
+                onClick={() => openSidebar('post-create')}
+                aria-label="Create new post"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New Post
+              </Button>
+              <Button
+                size="icon"
+                className="mr-2 h-9 w-9 sm:mr-0 sm:hidden"
+                onClick={() => openSidebar('post-create')}
+                aria-label="Create new post"
+              >
+                <Plus className="h-5 w-5" aria-hidden="true" />
+              </Button>
 
-              {/* Grid Menu Dropdown (mobile + desktop overflow navigation) */}
-              <div className="relative" ref={menuRef}>
+              {/* Mobile navigation menu */}
+              <div className="relative md:hidden" ref={menuRef}>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -394,77 +269,43 @@ export function AppLayout({ children }: LayoutProps) {
                   <Grid3X3 className="h-5 w-5" aria-hidden="true" />
                 </Button>
 
-                {/* Dropdown Menu */}
                 {menuOpen && (
                   <>
-                    {/* Backdrop for mobile */}
                     <div
                       className="fixed inset-0 z-30 bg-black/20 md:hidden"
                       onClick={() => setMenuOpen(false)}
                     />
-
-                    {/* Menu Content */}
                     <div className="bg-card absolute right-0 z-40 mt-2 w-80 rounded-lg border shadow-lg">
                       <div className="p-4">
-                        {/* Mobile: Show main nav items */}
-                        <div className="mb-4 md:hidden">
+                        <div className="mb-4">
                           <div className="space-y-1">
-                            {mainNavItems
-                              // Move Campaigns and Assets into the Additional section on mobile
-                              .filter((item) => !['Campaigns', 'Assets'].includes(item.label))
-                              .map((item) => (
-                                <Link
-                                  key={item.path}
-                                  to={item.path}
-                                  onClick={() => setMenuOpen(false)}
-                                  className={cn(
-                                    'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
-                                    isActiveRoute(item)
-                                      ? 'bg-accent text-primary'
-                                      : 'hover:bg-accent hover:text-accent-foreground'
-                                  )}
-                                >
-                                  <item.icon className="mr-3 h-5 w-5" aria-hidden="true" />
-                                  <div>
-                                    <div className="font-medium">{item.label}</div>
+                            {mainNavItems.map((item) => (
+                              <Link
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => setMenuOpen(false)}
+                                className={cn(
+                                  'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
+                                  isActiveRoute(item)
+                                    ? 'bg-accent text-primary'
+                                    : 'hover:bg-accent hover:text-accent-foreground'
+                                )}
+                              >
+                                <item.icon className="mr-3 h-5 w-5" aria-hidden="true" />
+                                <div>
+                                  <div className="font-medium">{item.label}</div>
+                                  {item.description && (
                                     <div className="text-muted-foreground text-xs">
                                       {item.description}
                                     </div>
-                                  </div>
-                                </Link>
-                              ))}
-                          </div>
-                        </div>
-
-                        {/* Additional Navigation (More) */}
-                        <div>
-                          <div className="text-muted-foreground mb-2 text-xs font-medium">
-                            Additional
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {mainNavItems
-                              .filter((item) => ['Campaigns', 'Assets'].includes(item.label))
-                              .map((item) => (
-                                <Link
-                                  key={item.path}
-                                  to={item.path}
-                                  onClick={() => setMenuOpen(false)}
-                                  className={cn(
-                                    'flex flex-col items-center rounded-lg p-3 text-center transition-colors',
-                                    isActiveRoute(item)
-                                      ? 'bg-accent text-primary'
-                                      : 'hover:bg-accent hover:text-accent-foreground'
                                   )}
-                                >
-                                  <item.icon className="mb-2 h-6 w-6" aria-hidden="true" />
-                                  <span className="text-xs font-medium">{item.label}</span>
-                                </Link>
-                              ))}
+                                </div>
+                              </Link>
+                            ))}
                           </div>
                         </div>
 
-                        {/* Quick Actions */}
-                        <div className="mt-4 space-y-1 border-t pt-4">
+                        <div className="space-y-1 border-t pt-4">
                           <Link
                             to="/dashboard"
                             onClick={() => setMenuOpen(false)}
@@ -481,14 +322,17 @@ export function AppLayout({ children }: LayoutProps) {
                             <Building2 className="mr-3 h-4 w-4" aria-hidden="true" />
                             Manage Brands
                           </Link>
-                          <Link
-                            to="/settings"
-                            onClick={() => setMenuOpen(false)}
-                            className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
-                          >
-                            <Settings className="mr-3 h-4 w-4" aria-hidden="true" />
-                            Settings
-                          </Link>
+                          {secondaryNavItems.map((item) => (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setMenuOpen(false)}
+                              className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
+                            >
+                              <item.icon className="mr-3 h-4 w-4" aria-hidden="true" />
+                              {item.label}
+                            </Link>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -496,204 +340,202 @@ export function AppLayout({ children }: LayoutProps) {
                 )}
               </div>
 
-              {/* Brand Dropdown */}
+              {/* Brand + account dropdown */}
               {user && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="flex h-9 items-center px-2"
-                      aria-label="User and brand menu"
-                    >
-                      <div className="bg-primary flex h-7 w-7 items-center justify-center rounded-full">
-                        <span className="text-primary-foreground text-xs font-semibold">
-                          {selectedBrand?.name?.charAt(0) || user.email?.charAt(0)?.toUpperCase()}
-                        </span>
-                      </div>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm leading-none font-medium">Account</p>
-                        <p className="text-muted-foreground text-xs leading-none">{user.email}</p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
+                <div className="md:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center p-0"
+                        aria-label="User and brand menu"
+                      >
+                        <div className="bg-primary flex h-7 w-7 items-center justify-center rounded-full">
+                          <span className="text-primary-foreground text-xs font-semibold">
+                            {selectedBrand?.name?.charAt(0) || user.email?.charAt(0)?.toUpperCase()}
+                          </span>
+                        </div>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm leading-none font-medium">Account</p>
+                          <p className="text-muted-foreground text-xs leading-none">{user.email}</p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
 
-                    {/* Brand Switching Section */}
-                    {brands.length > 0 && (
-                      <>
-                        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                          Switch Brand
-                        </DropdownMenuLabel>
-                        {brands.map((brand) => (
-                          <DropdownMenuItem
-                            key={brand.id}
-                            onClick={() => setSelectedBrand(brand)}
-                            className={
-                              selectedBrand?.id === brand.id ? 'bg-accent font-medium' : ''
-                            }
-                          >
-                            <div className="flex w-full items-center justify-between">
-                              <span>{brand.name}</span>
-                              {selectedBrand?.id === brand.id && (
-                                <Check className="text-primary h-4 w-4" aria-hidden="true" />
-                              )}
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
+                      {/* Brand switching */}
+                      {brands.length > 0 && (
+                        <>
+                          <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+                            Switch Brand
+                          </DropdownMenuLabel>
+                          {brands.map((brand) => (
+                            <DropdownMenuItem
+                              key={brand.id}
+                              onClick={() => setSelectedBrand(brand)}
+                              className={
+                                selectedBrand?.id === brand.id ? 'bg-accent font-medium' : ''
+                              }
+                            >
+                              <div className="flex w-full items-center justify-between">
+                                <span>{brand.name}</span>
+                                {selectedBrand?.id === brand.id && <CheckmarkIcon />}
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
 
-                    {/* User Actions */}
-                    <DropdownMenuItem onClick={() => navigate('/brands')}>
-                      <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Manage Brands
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem onClick={() => navigate('/settings')}>
-                      <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Settings
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem onClick={() => navigate('/security')}>
-                      <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Security
-                    </DropdownMenuItem>
-
-                    <DropdownMenuSeparator />
-
-                    <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-                      <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <DropdownMenuItem onClick={() => navigate('/brands')}>
+                        <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Manage Brands
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/security')}>
+                        <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Security
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                        <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
             </div>
           </div>
-        </div>
-      </nav>
+        </header>
 
-      {/* Command Palette Search */}
-      <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <CommandInput
-          placeholder="Search features, campaigns, analytics..."
-          value={searchQuery}
-          onValueChange={setSearchQuery}
-        />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
+        {/* Command palette search */}
+        <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
+          <CommandInput
+            placeholder="Search features, campaigns, analytics..."
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+          />
+          <CommandList>
+            <CommandEmpty>No results found.</CommandEmpty>
 
-          <CommandGroup heading="Navigation">
-            {filteredItems.map((item) => (
+            <CommandGroup heading="Navigation">
+              {filteredItems.map((item) => (
+                <CommandItem
+                  key={item.path}
+                  onSelect={() => handleSearchSelect(item.path)}
+                  className="flex items-center space-x-3 px-2 py-2"
+                >
+                  <item.icon className="h-4 w-4" aria-hidden="true" />
+                  <div className="flex flex-col">
+                    <span>{item.label}</span>
+                    {item.description && (
+                      <span className="text-muted-foreground text-xs">{item.description}</span>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Quick Actions">
               <CommandItem
-                key={item.path}
-                onSelect={() => handleSearchSelect(item.path)}
-                className="flex items-center space-x-3 px-2 py-2"
+                onSelect={() => {
+                  navigate('/posts/create');
+                  setSearchOpen(false);
+                }}
               >
-                <item.icon className="h-4 w-4" aria-hidden="true" />
-                <div className="flex flex-col">
-                  <span>{item.label}</span>
-                  {item.description && (
-                    <span className="text-muted-foreground text-xs">{item.description}</span>
-                  )}
-                </div>
+                <Plus className="mr-3 h-4 w-4" aria-hidden="true" />
+                Create New Post
               </CommandItem>
-            ))}
-          </CommandGroup>
-
-          <CommandGroup heading="Quick Actions">
-            <CommandItem
-              onSelect={() => {
-                navigate('/posts/create');
-                setSearchOpen(false);
-              }}
-            >
-              <Plus className="mr-3 h-4 w-4" aria-hidden="true" />
-              Create New Post
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                navigate('/campaigns/create');
-                setSearchOpen(false);
-              }}
-            >
-              <Sparkles className="mr-3 h-4 w-4" aria-hidden="true" />
-              Create New Campaign
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                navigate('/brands');
-                setSearchOpen(false);
-              }}
-            >
-              <Building2 className="mr-3 h-4 w-4" aria-hidden="true" />
-              Add New Brand
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                navigate('/settings');
-                setSearchOpen(false);
-              }}
-            >
-              <Settings className="mr-3 h-4 w-4" aria-hidden="true" />
-              Account Settings
-            </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
-
-      {/* Global Help Modal and Sidebar (scaffolded) */}
-      <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <RightHelpDrawer open={helpDrawerOpen} onOpenChange={setHelpDrawerOpen} />
-
-      {/* Main Content + Universal Right Sidebar */}
-      <main id="main-content" className={cn('flex-1 py-6', containerCls)}>
-        <RightSidebarRoot>{children}</RightSidebarRoot>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-card mt-8 border-t">
-        <div className={cn('py-4', containerCls)}>
-          <div className="text-muted-foreground flex flex-col items-center justify-between space-y-3 text-sm md:flex-row md:space-y-0">
-            <div className="text-center md:text-left">
-              © {new Date().getFullYear()} Postolio. All rights reserved.
-            </div>
-            <div className="flex items-center gap-1 text-xs md:text-sm">
-              <Link
-                to="/limits"
-                className="hover:text-foreground hover:bg-accent rounded px-2 py-1 transition-colors"
+              <CommandItem
+                onSelect={() => {
+                  navigate('/campaigns/create');
+                  setSearchOpen(false);
+                }}
               >
-                Limits & Plans
-              </Link>
-              <span className="text-muted-foreground/50">•</span>
-              <Link
-                to="/privacy-policy"
-                className="hover:text-foreground hover:bg-accent rounded px-2 py-1 transition-colors"
+                <Sparkles className="mr-3 h-4 w-4" aria-hidden="true" />
+                Create New Campaign
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  navigate('/brands');
+                  setSearchOpen(false);
+                }}
               >
-                Privacy Policy
-              </Link>
-              <span className="text-muted-foreground/50">•</span>
-              <Link
-                to="/terms-of-service"
-                className="hover:text-foreground hover:bg-accent rounded px-2 py-1 transition-colors"
+                <Building2 className="mr-3 h-4 w-4" aria-hidden="true" />
+                Add New Brand
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  navigate('/settings');
+                  setSearchOpen(false);
+                }}
               >
-                Terms of Service
-              </Link>
-              <span className="text-muted-foreground/50">•</span>
-              <Link
-                to="/legal/data-deletion"
-                className="hover:text-foreground hover:bg-accent rounded px-2 py-1 transition-colors"
-              >
-                Data Deletion
-              </Link>
+                <Settings className="mr-3 h-4 w-4" aria-hidden="true" />
+                Account Settings
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </CommandDialog>
+
+        {/* Global help modal and sidebar */}
+        <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        <RightHelpDrawer open={helpDrawerOpen} onOpenChange={setHelpDrawerOpen} />
+
+        {/* Main content and universal right sidebar */}
+        <main
+          id="main-content"
+          className="min-w-0 flex-1 overflow-y-auto overscroll-y-none px-4 pt-6 pb-24 sm:px-6 lg:px-8"
+        >
+          <RightSidebarRoot>{children}</RightSidebarRoot>
+        </main>
+
+        {/* Footer */}
+        <footer
+          className={cn('bg-card fixed right-0 bottom-0 left-0 z-30 border-t', 'md:left-[52px]')}
+        >
+          <div className="px-4 py-2 sm:px-6 lg:px-8">
+            <div className="text-muted-foreground flex w-full flex-col items-center justify-center space-y-1 text-xs md:flex-row md:space-y-0 md:text-sm">
+              <div className="flex w-full flex-wrap items-center justify-center gap-1 text-xs md:justify-end md:text-sm">
+                <Link
+                  to="/limits"
+                  className="hover:text-foreground hover:bg-accent rounded px-2 py-0.5 transition-colors"
+                >
+                  Limits & Plans
+                </Link>
+                <span className="text-muted-foreground/50">•</span>
+                <Link
+                  to="/privacy-policy"
+                  className="hover:text-foreground hover:bg-accent rounded px-2 py-0.5 transition-colors"
+                >
+                  Privacy Policy
+                </Link>
+                <span className="text-muted-foreground/50">•</span>
+                <Link
+                  to="/terms-of-service"
+                  className="hover:text-foreground hover:bg-accent rounded px-2 py-0.5 transition-colors"
+                >
+                  Terms of Service
+                </Link>
+                <span className="text-muted-foreground/50">•</span>
+                <Link
+                  to="/legal/data-deletion"
+                  className="hover:text-foreground hover:bg-accent rounded px-2 py-0.5 transition-colors"
+                >
+                  Data Deletion
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
+}
+
+function CheckmarkIcon() {
+  return <span className="text-primary text-xs font-semibold">✓</span>;
 }

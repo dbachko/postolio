@@ -141,7 +141,7 @@ export function RulesList({ brandId }: RulesListProps) {
     <>
       {/* Header with filters and create button */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 gap-3">
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
           {/* Search input */}
           <div className="relative flex-1 sm:max-w-sm">
             <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -155,7 +155,7 @@ export function RulesList({ brandId }: RulesListProps) {
 
           {/* Status filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-full sm:w-[140px]">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>

@@ -43,14 +43,7 @@ export function Settings() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your account and application preferences
-        </p>
-      </div>
-
+    <div className="w-full">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="timezone">Timezone</TabsTrigger>

@@ -3,6 +3,20 @@
 @import '@uppy/core/css/style.css';
 @import '@uppy/dashboard/css/style.css';
 
+/* Prevent rubber-band overscroll past top/bottom */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* Only clamp horizontal overflow on small screens to avoid breaking desktop layouts */
+@media (max-width: 767px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
 /* Ensure inline Dashboard is visible in modal context */
 .pl-assets .uppy-host {
   position: relative;
