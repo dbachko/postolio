@@ -1,7 +1,22 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import {
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  CalendarDays,
+  FileText,
+  Image,
+  Loader2,
+  PencilLine,
+  Play,
+  Search,
+  Video,
+} from 'lucide-react';
+import { AppEmptyState } from '@/components/AppEmptyState';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -9,27 +24,175 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { content as contentApi, type Content } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useBrandStore } from '@/stores/brandStore';
-import { ContentCard } from '@/components/ContentCard';
-import { PencilLine } from 'lucide-react';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { AppEmptyState } from '@/components/AppEmptyState';
 
-type SortOption = 'lastModifiedDesc' | 'lastModifiedAsc';
+type DraftTypeFilter = 'all' | 'scheduled' | 'unscheduled';
+type DraftSortField = 'lastModified' | 'created';
+type SortDirection = 'asc' | 'desc';
+
+type DraftGroup = {
+  key: string;
+  label: string;
+  sortValue: number;
+  drafts: Content[];
+};
+
+const formatMonthLabel = (date: string) =>
+  new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(new Date(date));
+
+const formatShortDateTime = (date: string) =>
+  new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(date));
+
+const groupDraftsByCreatedMonth = (drafts: Content[], direction: SortDirection): DraftGroup[] => {
+  const groupsByKey = new Map<string, DraftGroup>();
+
+  drafts.forEach((draft) => {
+    const created = new Date(draft.createdAt);
+    const monthStart = new Date(created.getFullYear(), created.getMonth(), 1);
+    const key = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`;
+
+    const existing = groupsByKey.get(key);
+    if (existing) {
+      existing.drafts.push(draft);
+      return;
+    }
+
+    groupsByKey.set(key, {
+      key,
+      label: formatMonthLabel(draft.createdAt),
+      sortValue: monthStart.getTime(),
+      drafts: [draft],
+    });
+  });
+
+  return Array.from(groupsByKey.values()).sort((a, b) =>
+    direction === 'asc' ? a.sortValue - b.sortValue : b.sortValue - a.sortValue
+  );
+};
+
+const getDraftPreview = (draft: Content) => {
+  const imageUrl = draft.primaryAssetCdnUrl || draft.imageUrl || null;
+  const videoUrl = draft.videoUrl || null;
+  if (videoUrl) return { kind: 'video' as const, url: videoUrl };
+  if (imageUrl) return { kind: 'image' as const, url: imageUrl };
+  return { kind: 'text' as const, url: null };
+};
+
+function DraftCard({ draft, onOpen }: { draft: Content; onOpen: () => void }) {
+  const preview = getDraftPreview(draft);
+  const isScheduled = Boolean(draft.scheduledAt);
+  const statusVariant = isScheduled ? 'info' : 'secondary';
+  const statusLabel = isScheduled ? 'Scheduled' : 'Draft';
+  const mediaLabel =
+    preview.kind === 'video' ? 'Video' : preview.kind === 'image' ? 'Image' : 'Text';
+  const previewAlt = draft.caption?.trim()
+    ? `${draft.caption.trim()} preview`
+    : 'Draft media preview';
+
+  return (
+    <button type="button" onClick={onOpen} className="w-full text-left">
+      <div className="space-y-2">
+        <div className="group hover:border-border/80 relative aspect-square overflow-hidden rounded-lg border">
+          <div className="absolute top-2 left-2 z-10">
+            <Badge variant={statusVariant} className="flex items-center gap-1">
+              {isScheduled ? <Calendar className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+              <span>{statusLabel}</span>
+            </Badge>
+          </div>
+
+          <div className="absolute top-2 right-2 z-10">
+            <Badge variant="secondary" className="flex items-center gap-1">
+              {preview.kind === 'video' ? (
+                <Video className="h-3 w-3" />
+              ) : preview.kind === 'image' ? (
+                <Image className="h-3 w-3" />
+              ) : (
+                <FileText className="h-3 w-3" />
+              )}
+              <span>{mediaLabel}</span>
+            </Badge>
+          </div>
+
+          {preview.kind === 'video' ? (
+            <div className="relative h-full w-full">
+              <video
+                src={preview.url}
+                className="h-full w-full object-cover"
+                muted
+                playsInline
+                preload="metadata"
+              />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="rounded-full bg-black/60 p-2">
+                  <Play className="h-4 w-4 text-white" />
+                </div>
+              </div>
+            </div>
+          ) : preview.kind === 'image' ? (
+            <img
+              src={preview.url}
+              alt={previewAlt}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="bg-muted flex h-full w-full items-center justify-center">
+              <FileText className="text-muted-foreground h-8 w-8" />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <div className="line-clamp-2 text-sm font-semibold">
+            {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
+          </div>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span>
+              {isScheduled && draft.scheduledAt
+                ? `Scheduled ${formatShortDateTime(draft.scheduledAt)}`
+                : `Edited ${formatShortDateTime(draft.updatedAt || draft.createdAt)}`}
+            </span>
+            {draft.campaignName && (
+              <span className="inline-flex items-center gap-1">
+                <span
+                  className={cn('h-2 w-2 rounded-full border', !draft.campaignColor && 'bg-muted')}
+                  style={draft.campaignColor ? { backgroundColor: draft.campaignColor } : undefined}
+                />
+                <span className="max-w-[200px] truncate">{draft.campaignName}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export default function Drafts() {
   const { selectedBrand } = useBrandStore();
-  const [sortBy, setSortBy] = useState<SortOption>('lastModifiedDesc');
-  const [showScheduledDrafts, setShowScheduledDrafts] = useState(true);
-  const [showUnscheduledDrafts, setShowUnscheduledDrafts] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  const [typeFilter, setTypeFilter] = useState<DraftTypeFilter>('all');
+  const [sortField, setSortField] = useState<DraftSortField>('lastModified');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const brandId = selectedBrand?.id;
 
   const { openSidebar } = useRightSidebarRouter();
+  const search = useDebounce(searchInput, 350);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['drafts', brandId],
     queryFn: async () => {
       if (!brandId) return { content: [] as Content[] };
@@ -37,21 +200,52 @@ export default function Drafts() {
       return res as { content: Content[] };
     },
     enabled: !!brandId,
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
   });
 
   const filteredSortedDrafts = useMemo(() => {
-    const drafts = (data?.content || []).filter((d) => {
-      const isScheduled = !!d.scheduledAt;
-      if (isScheduled && !showScheduledDrafts) return false;
-      if (!isScheduled && !showUnscheduledDrafts) return false;
-      return true;
+    const normalizedSearch = search.trim().toLowerCase();
+    const drafts = (data?.content || [])
+      .filter((draft) => {
+        const isScheduled = Boolean(draft.scheduledAt);
+        if (typeFilter === 'scheduled' && !isScheduled) return false;
+        if (typeFilter === 'unscheduled' && isScheduled) return false;
+        return true;
+      })
+      .filter((draft) => {
+        if (!normalizedSearch) return true;
+        const caption = (draft.caption || '').toLowerCase();
+        const campaignName = (draft.campaignName || '').toLowerCase();
+        return caption.includes(normalizedSearch) || campaignName.includes(normalizedSearch);
+      });
+
+    const multiplier = sortDirection === 'asc' ? 1 : -1;
+    return [...drafts].sort((a, b) => {
+      const aTime =
+        sortField === 'created'
+          ? new Date(a.createdAt).getTime()
+          : new Date(a.updatedAt || a.createdAt).getTime();
+      const bTime =
+        sortField === 'created'
+          ? new Date(b.createdAt).getTime()
+          : new Date(b.updatedAt || b.createdAt).getTime();
+      if (aTime === bTime) return a.id.localeCompare(b.id) * multiplier;
+      return (aTime - bTime) * multiplier;
     });
-    return drafts.sort((a, b) => {
-      const aTime = new Date(a.updatedAt || a.createdAt).getTime();
-      const bTime = new Date(b.updatedAt || b.createdAt).getTime();
-      return sortBy === 'lastModifiedDesc' ? bTime - aTime : aTime - bTime;
-    });
-  }, [data, showScheduledDrafts, showUnscheduledDrafts, sortBy]);
+  }, [data?.content, search, sortDirection, sortField, typeFilter]);
+
+  const groupedDrafts = useMemo(() => {
+    const groupDirection = sortField === 'created' ? sortDirection : 'desc';
+    return groupDraftsByCreatedMonth(filteredSortedDrafts, groupDirection);
+  }, [filteredSortedDrafts, sortDirection, sortField]);
+
+  const resetControls = () => {
+    setSearchInput('');
+    setTypeFilter('all');
+    setSortField('lastModified');
+    setSortDirection('desc');
+  };
 
   if (!selectedBrand) {
     return (
@@ -65,103 +259,134 @@ export default function Drafts() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        {/* Sort */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
-          <span className="text-muted-foreground text-sm">Sort by</span>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-            <SelectTrigger className="h-9 w-full sm:w-[220px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="lastModifiedDesc">Last Modified Newest</SelectItem>
-              <SelectItem value="lastModifiedAsc">Last Modified Oldest</SelectItem>
-            </SelectContent>
-          </Select>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search drafts by caption or campaign"
+              className="pl-9"
+            />
+          </div>
+
+          <Tabs
+            value={typeFilter}
+            onValueChange={(value) => setTypeFilter(value as DraftTypeFilter)}
+            className="shrink-0"
+          >
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+              <TabsTrigger value="unscheduled">Unscheduled</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="flex w-full items-center sm:w-auto">
+              <Select value={sortField} onValueChange={(v) => setSortField(v as DraftSortField)}>
+                <SelectTrigger className="h-10 w-full rounded-r-none sm:w-[220px]">
+                  <SelectValue placeholder="Sort drafts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lastModified">Last modified</SelectItem>
+                  <SelectItem value="created">Created date</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                className="h-10 rounded-l-none border-l-0"
+                onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                aria-label={`Sort ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+              >
+                {sortDirection === 'asc' ? (
+                  <ArrowUp className="h-4 w-4" />
+                ) : (
+                  <ArrowDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            <Button onClick={() => openSidebar('post-create')} className="w-full sm:w-auto">
+              <PencilLine className="mr-2 h-4 w-4" />
+              Create draft
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[260px_1fr]">
-        {/* Filters */}
-        <aside className="bg-card z-10 self-start rounded-lg border p-4 md:sticky md:top-20">
-          <h2 className="text-foreground mb-2 text-sm font-medium">Draft Types</h2>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Checkbox
-                id="drafts-all"
-                checked={showScheduledDrafts && showUnscheduledDrafts}
-                onCheckedChange={(checked) => {
-                  const value = Boolean(checked);
-                  setShowScheduledDrafts(value);
-                  setShowUnscheduledDrafts(value);
-                }}
-              />
-              <Label htmlFor="drafts-all" className="cursor-pointer">
-                All Post Types
-              </Label>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Checkbox
-                id="drafts-scheduled"
-                checked={showScheduledDrafts}
-                onCheckedChange={(checked) => setShowScheduledDrafts(Boolean(checked))}
-              />
-              <Label htmlFor="drafts-scheduled" className="cursor-pointer">
-                Scheduled Drafts
-              </Label>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Checkbox
-                id="drafts-unscheduled"
-                checked={showUnscheduledDrafts}
-                onCheckedChange={(checked) => setShowUnscheduledDrafts(Boolean(checked))}
-              />
-              <Label htmlFor="drafts-unscheduled" className="cursor-pointer">
-                Unscheduled Drafts
-              </Label>
+      <div className="relative">
+        {isFetching && !isLoading && (
+          <div className="bg-background/80 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-background flex items-center gap-2 rounded-lg border px-4 py-3 shadow-lg">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm font-medium">Updating results…</span>
             </div>
           </div>
+        )}
 
-          <div className="text-muted-foreground mt-4 text-xs">
-            Tip: Scheduled Drafts are drafts with a time set.
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 10 }).map((_, idx) => (
+              <div key={idx} className="space-y-2">
+                <Skeleton className="aspect-square rounded-lg" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            ))}
           </div>
-        </aside>
-
-        {/* Main content */}
-        <section className="space-y-4">
-          {/* Create Draft CTA */}
-          <button
-            type="button"
-            onClick={() => openSidebar('post-create')}
-            className="hover:bg-accent/40 text-primary/90 border-primary/30 group flex items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors"
-          >
-            <PencilLine className="h-5 w-5" />
-            <span className="text-sm font-medium">Create Draft</span>
-          </button>
-
-          {/* List */}
-          {isLoading ? (
-            <div className="text-muted-foreground bg-background rounded border p-4">Loading…</div>
-          ) : isError ? (
-            <div className="text-destructive bg-background rounded border p-4">
-              Failed to load drafts.{' '}
-              <Button variant="link" onClick={() => refetch()}>
-                Retry
+        ) : isError ? (
+          <div className="rounded-lg border p-6">
+            <div className="border-destructive/50 bg-destructive/10 rounded-lg border p-4">
+              <h3 className="text-destructive mb-2 font-semibold">Failed to load drafts</h3>
+              <p className="text-muted-foreground text-sm">
+                Please try again in a moment or refresh the page.
+              </p>
+              <div className="mt-4 flex gap-2">
+                <Button variant="outline" onClick={() => refetch()}>
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : filteredSortedDrafts.length === 0 ? (
+          <div className="rounded-lg border-2 border-dashed py-12 text-center">
+            <p className="text-muted-foreground">No drafts match these filters</p>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Try adjusting your search, filters, or create a new draft.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <Button variant="outline" onClick={resetControls}>
+                Reset filters
               </Button>
+              <Button onClick={() => openSidebar('post-create')}>Create draft</Button>
             </div>
-          ) : filteredSortedDrafts.length === 0 ? (
-            <div className="text-muted-foreground bg-background rounded border p-6">
-              No drafts match your filters.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2">
-              {filteredSortedDrafts.map((d) => (
-                <ContentCard key={d.id} content={d} brandId={selectedBrand.id} />
-              ))}
-            </div>
-          )}
-        </section>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {groupedDrafts.map((group) => (
+              <div key={group.key} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="text-muted-foreground h-4 w-4" />
+                  <h3 className="text-sm font-semibold">{group.label}</h3>
+                  <span className="text-muted-foreground text-xs">
+                    {group.drafts.length} drafts
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {group.drafts.map((draft) => (
+                    <DraftCard
+                      key={draft.id}
+                      draft={draft}
+                      onOpen={() => openSidebar('post', { id: draft.id })}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
