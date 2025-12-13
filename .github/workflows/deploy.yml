@@ -580,6 +580,7 @@ jobs:
           TIKTOK_CLIENT_KEY: ${{ vars.TIKTOK_CLIENT_KEY }}
           NODE_ENV: ${{ vars.NODE_ENV }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          FB_OAUTH_DEBUG: ${{ vars.FB_OAUTH_DEBUG }}
           ENABLE_MONITORING: ${{ vars.ENABLE_MONITORING }}
           # Error tracking / observability (backend)
           # Define SENTRY_BACKEND_DSN as a GitHub Actions variable (Settings → Variables → Actions).
@@ -734,6 +735,7 @@ jobs:
               --context tiktokClientSecret="$TIKTOK_CLIENT_SECRET" \
               --context nodeEnv="$NODE_ENV" \
               --context logLevel="$LOG_LEVEL" \
+              --context fbOauthDebug="$FB_OAUTH_DEBUG" \
               --context enableMonitoring="$ENABLE_MONITORING" \
               --verbose; then
               echo "CDK deployment successful for $CDK_STACK"

@@ -133,7 +133,7 @@ export class InstagramAdapter implements PlatformAdapter {
     try {
       const instagramBusinessAccountId = credentials.metadata?.instagramBusinessAccountId;
       if (!instagramBusinessAccountId) {
-        throw new Error('Instagram Business Account ID not found in credentials');
+        throw new Error('Instagram account ID not found in credentials');
       }
 
       // Step 1: Upload media to Instagram

@@ -128,6 +128,7 @@ ENABLE_MONITORING: true
 # Optional
 TURBO_TEAM: your-turbo-team
 LOG_LEVEL: info
+FB_OAUTH_DEBUG: false
 ```
 
 > The Assets CDN domain defaults to `cdn.<apex-domain>` using the same hosted zone and certificate that power the app domain. Override via CDK context (`assetsCdnDomain`, `assetsCdnHostedZoneId`, etc.) only if you need a different hostname or DNS zone.

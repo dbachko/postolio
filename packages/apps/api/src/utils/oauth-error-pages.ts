@@ -32,11 +32,11 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
     severity: 'warning',
   },
   no_business_account: {
-    icon: '💼',
-    title: 'Instagram Business Account Required',
+    icon: '📷',
+    title: 'Instagram Business or Creator Account Required',
     message: 'No Instagram Business or Creator account was found connected to your Facebook pages.',
     solutions: [
-      'Convert your Instagram account to a Business or Creator account',
+      'Convert your Instagram account to a Business or Creator account (Professional)',
       'Connect your Instagram account to a Facebook Page you manage',
       "Make sure you're logged into the correct Facebook account",
       'Verify your Facebook Page has admin permissions',
@@ -104,7 +104,7 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
       'Check your Instagram account for any violation notices',
       "Ensure your account follows Instagram's Terms of Service",
       'Verify your identity if Instagram has requested it',
-      'Try connecting a different Instagram Business account',
+      'Try connecting a different Instagram account',
     ],
     helpLink: 'https://help.instagram.com/contact/606967319425038',
     showRetry: false,
@@ -139,19 +139,21 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
 };
 
 export function getErrorConfig(error: string, errorDescription?: string): ErrorConfig {
-  if (errorDescription?.toLowerCase().includes('no instagram business account')) {
+  const description = errorDescription?.toLowerCase() || '';
+  if (
+    description.includes('no instagram business account') ||
+    description.includes('no instagram business or creator') ||
+    description.includes('no instagram professional account')
+  ) {
     return ERROR_CONFIGS.no_business_account;
   }
-  if (errorDescription?.toLowerCase().includes('rate limit')) {
+  if (description.includes('rate limit')) {
     return ERROR_CONFIGS.rate_limited;
   }
-  if (errorDescription?.toLowerCase().includes('permission')) {
+  if (description.includes('permission')) {
     return ERROR_CONFIGS.missing_permissions;
   }
-  if (
-    errorDescription?.toLowerCase().includes('restricted') ||
-    errorDescription?.toLowerCase().includes('violation')
-  ) {
+  if (description.includes('restricted') || description.includes('violation')) {
     return ERROR_CONFIGS.account_restricted;
   }
 

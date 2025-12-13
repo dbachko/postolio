@@ -71,6 +71,16 @@ export class ApiStack extends cdk.Stack {
       (this.node.tryGetContext('sentryDsn') as string | undefined) ||
       process.env.SENTRY_BACKEND_DSN;
     const prefix = `postolio-${environment}-api`;
+    const fbOauthDebug =
+      (
+        (this.node.tryGetContext('fbOauthDebug') as string | undefined) ||
+        process.env.FB_OAUTH_DEBUG ||
+        'false'
+      )
+        .toString()
+        .toLowerCase() === 'true'
+        ? 'true'
+        : 'false';
 
     // Initialized with SSM-based secret references (no cross-stack export imports)
 
@@ -503,6 +513,7 @@ export class ApiStack extends cdk.Stack {
             NODE_ENV: environment,
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+            FB_OAUTH_DEBUG: fbOauthDebug,
             // Additional environment variables that don't need to be secrets
             AWS_REGION: this.region,
             // Ensure SES is used outside of strictly 'prod' (e.g., staging/dev) when desired
