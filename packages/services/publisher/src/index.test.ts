@@ -358,7 +358,7 @@ describe('Publisher Lambda', () => {
   });
 
   describe('Campaign Blocking', () => {
-    it('should treat missing campaign record as inactive and skip publishing', async () => {
+    it('should skip publishing when campaign state is unavailable (missing from DynamoDB)', async () => {
       // Arrange: Mock DynamoDB schedule with a campaignId
       dynamoMock.on(QueryCommand).resolves({
         Items: [
@@ -379,18 +379,6 @@ describe('Publisher Lambda', () => {
       // Simulate missing campaign record in DynamoDB cache
       getCampaignByContentIdMock.mockResolvedValueOnce(null);
       getCampaignByIdMock.mockResolvedValueOnce(null);
-
-      // isCampaignActive should be called with a non-null inferred campaign and return false
-      isCampaignActiveMock.mockImplementationOnce((campaign) => {
-        expect(campaign).toBeTruthy();
-        expect(campaign).toMatchObject({
-          campaignId: 'campaign-001',
-          status: 'paused',
-        });
-        return false;
-      });
-
-      getCampaignBlockReasonMock.mockReturnValueOnce('Campaign is paused (inferred)');
 
       // Mock skip event
       eventBridgeMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
@@ -423,6 +411,10 @@ describe('Publisher Lambda', () => {
       const eventCall = eventBridgeMock.commandCalls(PutEventsCommand)[0];
       expect(eventCall.args[0].input.Entries?.[0].DetailType).toBe('post.skipped');
       expect(eventCall.args[0].input.Entries?.[0].Detail).toContain('campaign');
+      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain(
+        'Campaign state unavailable (missing from DynamoDB)'
+      );
+      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain('"campaignStatus":"unknown"');
 
       // Should not call token service or Instagram API
       expect(fetchMock).not.toHaveBeenCalled();

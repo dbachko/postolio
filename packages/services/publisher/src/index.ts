@@ -68,26 +68,78 @@ export const handler = async (
       schedule.contentId || event.scheduleId
     );
 
+    const scheduleCampaignId =
+      typeof (schedule as Record<string, unknown>).campaignId === 'string'
+        ? ((schedule as Record<string, unknown>).campaignId as string)
+        : undefined;
+
     let validatedCampaign: DynamoCampaign | null = campaignFromSchedule;
 
-    // SAFETY: If the schedule references a campaign but we cannot load it from DynamoDB,
-    // treat the campaign as inactive rather than allowing publishing with unknown state.
-    if (!validatedCampaign && schedule.campaignId) {
-      validatedCampaign = {
-        pk: `CAMPAIGN#${schedule.campaignId}`,
-        sk: 'METADATA',
-        campaignId: schedule.campaignId,
-        status: 'paused',
-        brandId: schedule.brandId || 'unknown',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    // Fallback: if the schedule references a campaign, attempt a direct lookup by campaignId.
+    if (!validatedCampaign && scheduleCampaignId) {
+      validatedCampaign = await getCampaignById(scheduleCampaignId);
+    }
 
-      logger.warn('Campaign missing from DynamoDB; treating as inactive for publishing safety', {
+    // SAFETY: If the schedule references a campaign but we cannot load it from DynamoDB,
+    // block publishing with an explicit reason (avoid misreporting campaign state).
+    if (!validatedCampaign && scheduleCampaignId) {
+      const blockReason = 'Campaign state unavailable (missing from DynamoDB)';
+      logger.warn('Skipping publish - campaign state unavailable', {
         scheduleId: event.scheduleId,
         contentId: schedule.contentId,
-        campaignId: schedule.campaignId,
+        campaignId: scheduleCampaignId,
+        blockReason,
       });
+
+      await updateScheduleStatus(docClient, event.scheduleId, 'skipped', blockReason);
+
+      try {
+        await schedulerClient.send(
+          new DeleteScheduleCommand({
+            Name: event.scheduleId,
+            GroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
+          })
+        );
+        logger.info('Deleted EventBridge schedule for missing campaign state', {
+          scheduleId: event.scheduleId,
+          campaignId: scheduleCampaignId,
+        });
+      } catch (deleteError) {
+        logger.warn('Failed to delete EventBridge schedule for missing campaign state', {
+          scheduleId: event.scheduleId,
+          error: deleteError,
+        });
+      }
+
+      try {
+        await eventBridge.putEvents({
+          Entries: [
+            {
+              Source: 'postolio.platform',
+              DetailType: 'post.skipped',
+              Time: new Date(),
+              Detail: JSON.stringify({
+                scheduleId: event.scheduleId,
+                contentId: schedule.contentId,
+                brandId: schedule.brandId,
+                campaignId: scheduleCampaignId,
+                campaignStatus: 'unknown',
+                reason: blockReason,
+                skippedAt: new Date().toISOString(),
+              }),
+              EventBusName: process.env.EVENT_BUS_NAME || 'default',
+            },
+          ],
+        });
+        logger.info('Emitted post.skipped event to EventBridge');
+      } catch (emitErr) {
+        logger.warn('Failed to emit post.skipped event', { error: emitErr });
+      }
+
+      metrics.addMetric('ContentSkipped', MetricUnit.Count, 1);
+      metrics.addMetric('ContentSkipped_CampaignStateUnavailable', MetricUnit.Count, 1);
+      metrics.publishStoredMetrics();
+      return;
     }
 
     if (validatedCampaign) {

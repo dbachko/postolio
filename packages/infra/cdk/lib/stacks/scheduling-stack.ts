@@ -686,6 +686,19 @@ export class SchedulingStack extends cdk.Stack {
     });
     schedulerEventsRule.addTarget(new targets.LambdaFunction(statusSyncFunction));
 
+    // Keep DynamoDB campaign state in sync (publisher relies on it for gating).
+    // The schedule-management Lambda has a dedicated campaign event handler.
+    const campaignEventsRule = new events.Rule(this, 'CampaignEventsRule', {
+      ruleName: `${prefix}-campaign-events-rule`,
+      description: 'Forward campaign lifecycle events to schedule-management for DynamoDB sync',
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['postolio.campaign'],
+        detailType: ['campaign.created', 'campaign.status.changed'],
+      },
+    });
+    campaignEventsRule.addTarget(new targets.LambdaFunction(scheduleManagementFunction));
+
     // ==================== Function URLs ====================
     const scheduleManagementUrl = scheduleManagementFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
