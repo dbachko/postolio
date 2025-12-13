@@ -21,11 +21,11 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
   // Attach or replace primary asset for content
   fastify.post<{
     Params: { contentId: string };
-    Body: { assetId: string; usageContext?: string };
+    Body: { assetId: string };
   }>('/:contentId/asset', { preHandler: fastify.authenticate }, async (request, reply) => {
     const userId = request.user!.id;
     const { contentId } = request.params;
-    const { assetId, usageContext } = request.body;
+    const { assetId } = request.body;
 
     if (!assetId) {
       return reply.code(400).send({ error: 'assetId is required' });
@@ -54,11 +54,11 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
       // Verify asset belongs to the same brand
       const asset = await verifyAssetOwnership(assetId, content.brand.id);
 
-      // Attach asset to content (updates primaryAsset* and post_media_assets)
+      // Attach asset to content (displayOrder 0)
       await attachAssetToContent({
         contentId,
         asset,
-        usageContext: usageContext || 'primary',
+        displayOrder: 0,
       });
 
       const updatedContent = await prisma.content.findUnique({
@@ -66,24 +66,26 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           caption: true,
-          primaryAssetCdnUrl: true,
-          primaryAssetId: true,
-          primaryAssetWidth: true,
-          primaryAssetHeight: true,
+          hashtags: true,
           status: true,
           createdAt: true,
           updatedAt: true,
           scheduledAt: true,
           postedAt: true,
           brandId: true,
+          campaignId: true,
+          schedulingError: true,
           generationParams: true,
-          mediaType: true,
           contentType: true,
-          videoUrl: true,
+          shareToFeed: true,
           firstComment: true,
           firstCommentStatus: true,
           firstCommentPostedAt: true,
           firstCommentError: true,
+          mediaAssets: {
+            select: { assetId: true, displayOrder: true },
+            orderBy: { displayOrder: 'asc' },
+          },
         },
       });
 
@@ -135,16 +137,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
       // If no assets provided, clear media and primary asset
       if (assetIds.length === 0) {
         await prisma.$transaction(async (tx) => {
-          await tx.postMediaAsset.deleteMany({ where: { contentId } });
-          await tx.content.update({
-            where: { id: contentId },
-            data: {
-              primaryAssetId: null,
-              primaryAssetCdnUrl: null,
-              primaryAssetWidth: null,
-              primaryAssetHeight: null,
-            },
-          });
+          await tx.contentMediaAsset.deleteMany({ where: { contentId } });
         });
       } else {
         // Fetch all assets in a single batch request
@@ -192,32 +185,14 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         // Replace media set transactionally
         await prisma.$transaction(async (tx) => {
           // Clear existing join rows
-          await tx.postMediaAsset.deleteMany({ where: { contentId } });
-
-          // Primary asset (first in ordered list)
-          const primary = validAssets[0];
-          await attachAssetToContent({
-            contentId,
-            asset: primary,
-            usageContext: 'primary',
-            prisma: tx,
+          await tx.contentMediaAsset.deleteMany({ where: { contentId } });
+          await tx.contentMediaAsset.createMany({
+            data: validAssets.map((asset, idx) => ({
+              contentId,
+              assetId: asset.id,
+              displayOrder: idx,
+            })),
           });
-
-          // Additional carousel assets, if any
-          for (let i = 1; i < validAssets.length; i++) {
-            const asset = validAssets[i];
-            await tx.postMediaAsset.create({
-              data: {
-                contentId,
-                assetId: asset.id,
-                cdnUrl: asset.url,
-                displayOrder: i,
-                usageContext: `carousel_${i}`,
-                width: asset.width ?? null,
-                height: asset.height ?? null,
-              },
-            });
-          }
         });
       }
 
@@ -227,24 +202,25 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          primaryAssetCdnUrl: true,
-          primaryAssetId: true,
-          primaryAssetWidth: true,
-          primaryAssetHeight: true,
           status: true,
           createdAt: true,
           updatedAt: true,
           scheduledAt: true,
           postedAt: true,
           brandId: true,
+          campaignId: true,
+          schedulingError: true,
           generationParams: true,
-          mediaType: true,
           contentType: true,
-          videoUrl: true,
+          shareToFeed: true,
           firstComment: true,
           firstCommentStatus: true,
           firstCommentPostedAt: true,
           firstCommentError: true,
+          mediaAssets: {
+            select: { assetId: true, displayOrder: true },
+            orderBy: { displayOrder: 'asc' },
+          },
         },
       });
 

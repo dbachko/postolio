@@ -1302,15 +1302,19 @@ class InstagramService {
         where: { id: matchingDraft.id },
         select: {
           generationParams: true,
-          primaryAssetCdnUrl: true,
-          primaryAssetId: true,
           campaignId: true,
           scheduledAt: true,
+          mediaAssets: {
+            select: { assetId: true, displayOrder: true },
+            orderBy: { displayOrder: 'asc' },
+            take: 1,
+          },
         },
       });
       const existingParams = (current?.generationParams as Record<string, unknown>) || {};
 
-      const finalHasImage = Boolean(current?.primaryAssetCdnUrl || importedAsset);
+      const hasExistingMedia = Boolean(current?.mediaAssets?.length);
+      const finalHasImage = hasExistingMedia || Boolean(importedAsset);
       await prisma.content.update({
         where: { id: matchingDraft.id },
         data: {
@@ -1340,8 +1344,12 @@ class InstagramService {
         reason: 'matched draft/scheduled by time/caption',
       });
 
-      if (importedAsset && !current?.primaryAssetCdnUrl) {
-        await attachAssetToContent({ contentId: matchingDraft.id, asset: importedAsset });
+      if (importedAsset && !hasExistingMedia) {
+        await attachAssetToContent({
+          contentId: matchingDraft.id,
+          asset: importedAsset,
+          displayOrder: 0,
+        });
       }
       // Ensure ContentPublication exists
       try {

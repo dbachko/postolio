@@ -107,16 +107,7 @@ model Content {
   brandId              String
   campaignId           String?
   schedulingError      String?
-  primaryAssetId       String? // Asset service identifier
-  primaryAssetCdnUrl   String? // Cached CDN URL for fast reads
-  primaryAssetWidth    Int?
-  primaryAssetHeight   Int?
-  mediaType            String               @default("image") // 'image' | 'video' (carousels = image + multiple mediaAssets; reels = contentType='reel' + mediaType='video')
   contentType          String               @default("post") // 'post' | 'reel' | 'story'
-  videoUrl             String? // CDN URL for video content
-  videoDuration        Int? // Duration in seconds (for videos/reels)
-  videoThumbnail       String? // S3 key for video thumbnail
-  aspectRatio          String? // e.g., "9:16", "16:9", "1:1", "4:5"
   shareToFeed          Boolean? // For reels: show in both feed and Reels tab
   thumbOffset          Int? // Optional thumbnail offset in milliseconds
   firstComment         String? // Optional first comment text (max 2200 chars)
@@ -125,7 +116,7 @@ model Content {
   firstCommentError    String? // Error message if comment failed
   brand                Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign             Campaign?            @relation(fields: [campaignId], references: [id])
-  mediaAssets          PostMediaAsset[]
+  mediaAssets          ContentMediaAsset[]
   publications         ContentPublication[]
 
   @@index([brandId, status])
@@ -178,23 +169,18 @@ model Campaign {
   @@map("campaigns")
 }
 
-model PostMediaAsset {
-  id           String   @id @default(cuid())
+model ContentMediaAsset {
   contentId    String
-  assetId      String
-  cdnUrl       String
   displayOrder Int      @default(0)
-  usageContext String   @default("primary")
-  width        Int?
-  height       Int?
+  assetId      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
-  @@unique([contentId, usageContext])
+  @@id([contentId, displayOrder])
   @@index([contentId])
-  @@map("post_media_assets")
+  @@map("content_media_assets")
 }
 
 // CampaignDraft model removed; drafts feature fully deprecated

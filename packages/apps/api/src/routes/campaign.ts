@@ -95,7 +95,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     frequency: z.string().min(1),
     themes: z.array(z.string()).min(1),
     // Style is optional; brand profile projection now drives tone/voice
-    style: z.string().optional(),
+    style: z.union([z.string(), z.array(z.string())]).optional(),
     postingTime: z.string().regex(/^\d{2}:\d{2}$/),
     priority: z.number().int().min(1).max(10).optional(),
     // Accept goals as single string or array from the wizard; normalize later
@@ -250,6 +250,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Convert date strings to Date objects with timezone awareness
         const goalsText = Array.isArray(finalGoals) ? finalGoals.join('; ') : finalGoals;
+        const styleText = Array.isArray(body.style)
+          ? body.style
+              .filter((s): s is string => typeof s === 'string')
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+              .join('; ')
+          : body.style?.trim();
 
         const config: CampaignConfig = {
           name: body.name,
@@ -260,7 +267,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           },
           frequency: body.frequency,
           themes: body.themes,
-          ...(body.style && body.style.trim().length > 0 ? { style: body.style } : {}),
+          ...(styleText && styleText.length > 0 ? { style: styleText } : {}),
           postingTime: body.postingTime,
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           // Wizard-enhanced fields

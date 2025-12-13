@@ -1,24 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { determineMediaType } from '../scheduler-adapter.js';
+import { deriveScheduleMediaType } from '../scheduler-adapter.js';
 
-describe('determineMediaType', () => {
-  it('returns video when mediaType is explicitly video even if extension looks image', () => {
-    expect(determineMediaType('https://cdn.test/path/photo.jpg', 'post', 'video')).toBe('video');
+describe('deriveScheduleMediaType', () => {
+  it('returns video for reels', () => {
+    expect(deriveScheduleMediaType('reel', [])).toBe('video');
   });
 
-  it('returns video when the path/extension is a video while mediaType is image (carousel child)', () => {
-    expect(determineMediaType('https://cdn.test/path/clip.mp4', 'post', 'image')).toBe('video');
+  it('returns video for a single video asset', () => {
+    expect(deriveScheduleMediaType('post', [{ type: 'video' }])).toBe('video');
   });
 
-  it('returns image when mediaType is image and the path is image', () => {
-    expect(determineMediaType('https://cdn.test/path/photo.jpg', 'post', 'image')).toBe('image');
+  it('returns image for image posts by default', () => {
+    expect(deriveScheduleMediaType('post', [{ type: 'image' }])).toBe('image');
   });
 
-  it('returns video for reel assets when the path is video', () => {
-    expect(determineMediaType('https://cdn.test/path/reel.mov', 'reel', undefined)).toBe('video');
+  it('returns image for carousels of images', () => {
+    expect(deriveScheduleMediaType('post', [{ type: 'image' }, { type: 'image' }])).toBe('image');
   });
 
-  it('defaults to image when no hints and no video extension', () => {
-    expect(determineMediaType('https://cdn.test/path/asset.png', 'post', undefined)).toBe('image');
+  it('defaults to image when no assets', () => {
+    expect(deriveScheduleMediaType('post', [])).toBe('image');
   });
 });

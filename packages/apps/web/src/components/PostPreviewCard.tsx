@@ -3,16 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone } from 'date-fns-tz';
-import { CheckCircle2, Clock, AlertTriangle, ExternalLink, CalendarClock } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ExternalLink,
+  Trash2,
+} from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
 import { toast } from 'sonner';
-import { Copy, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 import { getPostStatusBorderColor, getPostStatusTextClass } from '@/utils/post-status-colors';
+import { getMediaBadgeType } from '@/utils/media-type';
+import { MediaTypeBadge } from '@/components/MediaTypeBadge';
+import type { AssetType } from '@/features/assets/api/client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,10 +46,16 @@ interface PostPreviewCardProps {
   item: CalendarItem;
   timezone: string;
   onReschedule?: (item: CalendarItem) => void;
+  primaryAsset?: AssetType | null;
 }
 
 // Lightweight preview card shown inside the Month grid
-export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCardProps) {
+export function PostPreviewCard({
+  item,
+  timezone,
+  onReschedule,
+  primaryAsset,
+}: PostPreviewCardProps) {
   const navigate = useNavigate();
   const { openSidebar } = useRightSidebarRouter();
 
@@ -68,13 +84,27 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
   }, [item, timezone]);
 
   const [imageReady, setImageReady] = useState(false);
-  const imageUrl = (item as any)?.imageUrl;
+  const previewUrl = useMemo(() => {
+    if (!primaryAsset) return null;
+    if (primaryAsset.fileType === 'video') {
+      return primaryAsset.thumbnailUrl || primaryAsset.url || null;
+    }
+    return primaryAsset.thumbnailUrl || primaryAsset.url || null;
+  }, [primaryAsset]);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
 
+  const mediaBadgeType = getMediaBadgeType({
+    contentType: (item as any)?.contentType,
+    mediaAssets: (item as any)?.mediaAssets,
+    mediaAssetCount: (item as any)?.mediaAssetCount,
+    primaryAssetFileType: primaryAsset?.fileType ?? null,
+  });
+  const showMediaBadge = item.type !== 'placeholder';
+
   useEffect(() => {
     setImageReady(false);
-  }, [imageUrl]);
+  }, [previewUrl]);
 
   useEffect(() => {
     if (!cardRef.current) return;
@@ -167,13 +197,19 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                 handleOpen();
               }
             }}
-            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-3 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
+            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-3 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
             style={{ borderColor }}
           >
+            {showMediaBadge ? (
+              <MediaTypeBadge
+                type={mediaBadgeType}
+                className="pointer-events-none absolute top-2 right-2 z-10"
+              />
+            ) : null}
             <div className="bg-muted relative w-14 shrink-0 self-stretch overflow-hidden rounded-md">
               {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
               <img
-                src={getPostImageOrPlaceholder(imageUrl)}
+                src={getPostImageOrPlaceholder(previewUrl)}
                 alt=""
                 onLoad={() => setImageReady(true)}
                 onError={() => setImageReady(true)}
@@ -209,7 +245,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                   </Tooltip>
                 </TooltipProvider>
 
-                <div className="flex min-w-0 items-center gap-1">
+                <div className="flex min-w-0 items-center gap-1 pr-7">
                   {item.campaignName ? (
                     <a
                       href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
@@ -247,9 +283,15 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                 handleOpen();
               }
             }}
-            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
+            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
             style={{ borderColor }}
           >
+            {showMediaBadge ? (
+              <MediaTypeBadge
+                type={mediaBadgeType}
+                className="pointer-events-none absolute top-2 right-2 z-10"
+              />
+            ) : null}
             {/* Top row: time/status + campaign */}
             <div className="flex items-center justify-between gap-2">
               <TooltipProvider>
@@ -274,7 +316,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                 </Tooltip>
               </TooltipProvider>
 
-              <div className="flex min-w-0 items-center gap-1">
+              <div className="flex min-w-0 items-center gap-1 pr-7">
                 {item.campaignName ? (
                   <a
                     href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
@@ -300,7 +342,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
               <div className="bg-muted relative h-[2.75em] w-[2.75em] shrink-0 overflow-hidden rounded-md">
                 {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
                 <img
-                  src={getPostImageOrPlaceholder(imageUrl)}
+                  src={getPostImageOrPlaceholder(previewUrl)}
                   alt=""
                   onLoad={() => setImageReady(true)}
                   onError={() => setImageReady(true)}

@@ -416,7 +416,7 @@ async function main() {
     schedulingError?: string | null;
     withImage?: boolean;
   }) {
-    const { campaign, status, caption, when, themeHint, schedulingError, withImage } = opts;
+    const { campaign, status, caption, when, themeHint, schedulingError } = opts;
     const baseTime =
       when === 'past'
         ? new Date(now.getTime() - days(rng(1, 21)))
@@ -440,21 +440,6 @@ async function main() {
       scheduledAt = new Date(baseTime.getTime() - hours(rng(2, 12)));
     }
 
-    const assetSeed = Math.random().toString(36).slice(2, 7);
-    const assetData = withImage
-      ? {
-          primaryAssetId: `seed-${campaign.id}-${assetSeed}`,
-          primaryAssetCdnUrl: `${POST_SEED_IMAGE_BASE}/1080/1080?random=${campaign.id}-${assetSeed}`,
-          primaryAssetWidth: 1080,
-          primaryAssetHeight: 1080,
-        }
-      : {
-          primaryAssetId: null as string | null,
-          primaryAssetCdnUrl: null as string | null,
-          primaryAssetWidth: null as number | null,
-          primaryAssetHeight: null as number | null,
-        };
-
     campaignContentPayload.push({
       brandId: brand.id,
       campaignId: campaign.id,
@@ -468,7 +453,6 @@ async function main() {
       scheduledAt,
       postedAt,
       schedulingError: err,
-      ...assetData,
     });
   }
 
@@ -676,10 +660,6 @@ async function main() {
     hashtags: string[];
     status: ContentStatus;
     scheduledAt?: Date | null;
-    primaryAssetId?: string | null;
-    primaryAssetCdnUrl?: string | null;
-    primaryAssetWidth?: number | null;
-    primaryAssetHeight?: number | null;
     campaignId?: string | null;
     postedAt?: Date | null;
     schedulingError?: string | null;
@@ -695,10 +675,6 @@ async function main() {
       hashtags: ['#postolio', '#dev', '#demo'],
       status: isScheduled ? ('scheduled' as ContentStatus) : ('draft' as ContentStatus),
       scheduledAt,
-      primaryAssetId: null,
-      primaryAssetCdnUrl: null,
-      primaryAssetWidth: null,
-      primaryAssetHeight: null,
       campaignId: null,
     });
   }
@@ -712,10 +688,6 @@ async function main() {
       status: 'published',
       scheduledAt: new Date(Date.now() - days(3)),
       postedAt: new Date(Date.now() - days(2)),
-      primaryAssetId: null,
-      primaryAssetCdnUrl: null,
-      primaryAssetWidth: null,
-      primaryAssetHeight: null,
       campaignId: null,
     },
     {
@@ -726,10 +698,6 @@ async function main() {
       scheduledAt: new Date(Date.now() - days(1)),
       postedAt: null,
       schedulingError: 'Network error while posting',
-      primaryAssetId: null,
-      primaryAssetCdnUrl: null,
-      primaryAssetWidth: null,
-      primaryAssetHeight: null,
       campaignId: null,
     },
     {
@@ -739,10 +707,6 @@ async function main() {
       status: 'skipped',
       scheduledAt: new Date(Date.now() - days(2)),
       postedAt: null,
-      primaryAssetId: null,
-      primaryAssetCdnUrl: null,
-      primaryAssetWidth: null,
-      primaryAssetHeight: null,
       campaignId: null,
     },
   ];
@@ -1042,7 +1006,6 @@ async function main() {
     const publishedAt = new Date(now.getTime() - days(daysAgo));
     const scheduledAt = new Date(publishedAt.getTime() - hours(rng(12, 48)));
 
-    const assetSeed = Math.random().toString(36).slice(2, 7);
     const theme = pick(themes);
     const caption = pick(captionTemplates);
 
@@ -1053,10 +1016,6 @@ async function main() {
       status: 'published',
       scheduledAt,
       postedAt: publishedAt,
-      primaryAssetId: `hist-${brand.id}-${assetSeed}`,
-      primaryAssetCdnUrl: `${POST_SEED_IMAGE_BASE}/1080/1080?random=hist-${i}`,
-      primaryAssetWidth: 1080,
-      primaryAssetHeight: 1080,
       campaignId: null,
     });
   }

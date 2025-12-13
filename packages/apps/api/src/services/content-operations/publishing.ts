@@ -8,6 +8,7 @@ import { ConnectorFactory } from '../connectors/index.js';
 import type { PlatformName } from '@postolio/connectors';
 import { logger as baseLogger } from '@postolio/logger';
 import { fetchTokensFromService } from '../../utils/token-service-client.js';
+import { getAssetsClient } from '../assets-media.js';
 
 const prisma = getDatabaseClient();
 const logger = baseLogger.child({ module: 'publishing' });
@@ -45,7 +46,14 @@ export async function publishContent(
     // Get content with brand and campaign
     const content = await prisma.content.findUnique({
       where: { id: contentId },
-      include: { brand: true, campaign: true },
+      include: {
+        brand: true,
+        campaign: true,
+        mediaAssets: {
+          select: { assetId: true, displayOrder: true },
+          orderBy: { displayOrder: 'asc' },
+        },
+      },
     });
 
     if (!content) {
@@ -134,20 +142,51 @@ export async function publishContent(
     // Reels and stories are identified via contentType; mediaType remains the raw format.
     const isReel = content.contentType === 'reel';
     const isStory = content.contentType === 'story';
+    const primaryAssetId = content.mediaAssets?.[0]?.assetId ?? null;
+    if (!primaryAssetId) {
+      return {
+        success: false,
+        error: 'Content has no attached media assets',
+        retryable: false,
+      };
+    }
+
+    const assetsClient = getAssetsClient();
+    const [primaryAsset] = await assetsClient.getBatchAssets([primaryAssetId]);
+    if (!primaryAsset) {
+      return {
+        success: false,
+        error: 'Primary media asset could not be found',
+        retryable: false,
+      };
+    }
+
+    const isVideo = primaryAsset.fileType === 'video' || isReel;
     const instagramMediaType = isReel
       ? ('REELS' as const)
       : isStory
         ? ('STORIES' as const)
-        : content.mediaType === 'video'
+        : isVideo
           ? ('VIDEO' as const)
           : ('IMAGE' as const);
+    const thumbnailCandidate = (primaryAsset as any)?.thumbnailUrl;
+    const imageUrl =
+      primaryAsset.fileType === 'image'
+        ? primaryAsset.url
+        : typeof thumbnailCandidate === 'string'
+          ? thumbnailCandidate
+          : undefined;
+    const mediaUrl = primaryAsset.url;
 
     const publishResult = await connector.publish(
       {
         caption: content.caption || '',
-        imageUrl: content.primaryAssetCdnUrl || undefined,
-        mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
+        imageUrl,
+        mediaUrl,
         mediaType: instagramMediaType,
+        thumbOffset: typeof content.thumbOffset === 'number' ? content.thumbOffset : undefined,
+        shareToFeed:
+          typeof content.shareToFeed === 'boolean' ? Boolean(content.shareToFeed) : undefined,
       },
       {
         accessToken: tokens.accessToken,

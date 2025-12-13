@@ -62,6 +62,9 @@ vi.mock('../../config/database.js', () => {
       create: vi.fn(),
       findMany: vi.fn(),
     },
+    contentMediaAsset: {
+      create: vi.fn(),
+    },
     brand: {
       findFirst: vi.fn(),
     },
@@ -93,6 +96,31 @@ vi.mock('../../utils/token-service-client.js', () => ({
       refreshToken: 'mock-refresh-token',
     })
   ),
+}));
+
+vi.mock('../../services/assets-media.js', () => ({
+  getAssetsClient: vi.fn(() => ({
+    getBatchAssets: vi.fn(async (assetIds: string[]) =>
+      assetIds.map((assetId) => ({
+        id: assetId,
+        brandId: 'brand-123',
+        fileType: 'image',
+        url: 'https://cdn.example.com/image.jpg',
+        s3Key: `assets/${assetId}`,
+        width: 1080,
+        height: 1080,
+      }))
+    ),
+    importFromUrl: vi.fn(async () => ({
+      id: 'imported-asset-1',
+      brandId: 'brand-123',
+      fileType: 'image',
+      url: 'https://cdn.example.com/imported.jpg',
+      s3Key: 'assets/imported-asset-1',
+      width: 1080,
+      height: 1080,
+    })),
+  })),
 }));
 
 describe('Social Platform Routes', () => {
@@ -248,8 +276,11 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         caption: 'Test post',
         hashtags: ['test', 'instagram'],
-        primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
         status: 'scheduled',
+        contentType: 'post',
+        shareToFeed: null,
+        thumbOffset: null,
+        mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
         campaignId: null,
         brand: {
           id: 'brand-123',
@@ -341,7 +372,10 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         caption: 'Test',
         hashtags: ['test'],
-        primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
+        contentType: 'post',
+        shareToFeed: null,
+        thumbOffset: null,
+        mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
         brand: { id: 'brand-123', userId: 'user-123' },
         campaignId: null,
         campaign: null,
@@ -377,8 +411,11 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         caption: 'Test post',
         hashtags: ['test', 'instagram'],
-        primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
         status: 'scheduled',
+        contentType: 'post',
+        shareToFeed: null,
+        thumbOffset: null,
+        mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
         campaignId: 'campaign-123',
         brand: {
           id: 'brand-123',

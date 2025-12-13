@@ -8,13 +8,14 @@ import { CampaignEditDialog } from '@/components/CampaignEditDialog';
 import { ContentCard } from '@/components/ContentCard';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Campaign } from '@/lib/api';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
 // Week 3: Enhanced campaign analytics components
 import { CampaignTimeline } from '@/components/analytics/CampaignTimeline';
 import { useQuery } from '@tanstack/react-query';
 import { analytics } from '@/lib/api';
+import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 
 interface Props {
   campaign?: Campaign;
@@ -55,6 +56,13 @@ export function CampaignDetails({
     retry: false,
     refetchOnWindowFocus: false,
   });
+
+  const primaryAssetIds = useMemo(
+    () => (campaign?.content ?? []).map((item) => item.primaryAssetId),
+    [campaign?.content]
+  );
+  const assetsQuery = useAssetsByIds(primaryAssetIds);
+  const assetsById = assetsQuery.data ?? {};
 
   useEffect(() => {
     let mounted = true;
@@ -260,7 +268,12 @@ export function CampaignDetails({
           ) : Array.isArray(campaign.content) && campaign.content.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {campaign.content.map((item) => (
-                <ContentCard key={item.id} content={item as any} brandId={campaign.brandId} />
+                <ContentCard
+                  key={item.id}
+                  content={item as any}
+                  brandId={campaign.brandId}
+                  primaryAsset={item.primaryAssetId ? assetsById[item.primaryAssetId] : null}
+                />
               ))}
             </div>
           ) : (

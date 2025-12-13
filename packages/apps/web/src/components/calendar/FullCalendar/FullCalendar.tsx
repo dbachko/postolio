@@ -18,6 +18,7 @@ import { RescheduleManager } from './components/RescheduleManager';
 import { isTouchDevice } from './utils/device';
 import { CALENDAR_VIEW_MAP } from './constants';
 import type { CalendarEvent, PlaceholderItem, RescheduleState } from './types';
+import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 
 export interface FullCalendarProps {
   brandId: string;
@@ -52,6 +53,9 @@ function FullCalendarImpl({
   const items = useCalendarItems(content, placeholders);
   const filters = useCalendarFilters();
   const events = useFilteredEvents(items, filters, tzRef.current);
+
+  const primaryAssetIds = useMemo(() => content.map((item) => item.primaryAssetId), [content]);
+  const { data: assetsById } = useAssetsByIds(primaryAssetIds);
 
   const calendarView = CALENDAR_VIEW_MAP[view] ?? 'month';
   const calendarDate = calendarView === 'agenda' ? new Date() : date;
@@ -136,6 +140,7 @@ function FullCalendarImpl({
               timezone={tzRef.current}
               brandId={brandId}
               onReschedule={(item) => setReschedule({ open: true, item })}
+              assetsById={assetsById}
             />
           ),
         }}

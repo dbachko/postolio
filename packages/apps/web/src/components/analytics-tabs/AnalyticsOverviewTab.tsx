@@ -12,6 +12,7 @@ import { formatNumber, formatPercent } from '@/utils/formatNumber';
 import { Eye, Heart, Users, FileText, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { analytics, content as contentApi } from '../../lib/api';
+import { assetsApi } from '@/features/assets/api/client';
 import { BrandHealthScore as BrandHealthScoreComponent } from '../analytics/BrandHealthScore';
 import { KPICard } from '../analytics/KPICard';
 import { TopPostsGrid } from '../analytics/TopPostsGrid';
@@ -114,19 +115,43 @@ export function AnalyticsOverviewTab({
         .filter((p: any) => !p.thumbnailUrl && !topPostThumbs[p.contentId])
         .slice(0, 10);
       if (toFetch.length === 0) return;
-      const results: Record<string, string> = {};
+      const contentIdToPrimaryAssetId: Record<string, string> = {};
+
       await Promise.all(
         toFetch.map(async (p: any) => {
           try {
             const res = await contentApi.getPostDetail(p.contentId);
             const raw = (res as any)?.data ?? res;
-            const url = raw?.imageUrl;
-            if (url) results[p.contentId] = url;
+            const primaryAssetId = raw?.primaryAssetId;
+            if (typeof primaryAssetId === 'string' && primaryAssetId.length > 0) {
+              contentIdToPrimaryAssetId[p.contentId] = primaryAssetId;
+            }
           } catch {
             // ignore
           }
         })
       );
+
+      const uniqueAssetIds = Array.from(new Set(Object.values(contentIdToPrimaryAssetId)));
+      if (uniqueAssetIds.length === 0) return;
+
+      let assets: Record<string, any> = {};
+      try {
+        const batch = await assetsApi.getBatchAssets(uniqueAssetIds);
+        assets = batch.assets || {};
+      } catch {
+        assets = {};
+      }
+
+      const results: Record<string, string> = {};
+      for (const [contentId, assetId] of Object.entries(contentIdToPrimaryAssetId)) {
+        const asset = assets[assetId] || null;
+        const url = asset?.thumbnailUrl || asset?.url || null;
+        if (typeof url === 'string' && url.length > 0) {
+          results[contentId] = url;
+        }
+      }
+
       if (!cancelled && Object.keys(results).length) {
         setTopPostThumbs((prev) => ({ ...prev, ...results }));
       }
@@ -390,7 +415,7 @@ export function AnalyticsOverviewTab({
           <TopPostsGrid
             posts={(report.topPosts || []).map((p: any) => ({
               ...p,
-              thumbnailUrl: p.thumbnailUrl || p.imageUrl || topPostThumbs[p.contentId],
+              thumbnailUrl: p.thumbnailUrl || topPostThumbs[p.contentId],
             }))}
             loading={loading}
             onPostClick={(postId) => {

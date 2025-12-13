@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -27,13 +27,27 @@ export function ImageUploader({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
-  // Update preview when value changes
-  React.useEffect(() => {
-    if (value && !selectedFile) {
-      setPreviewUrl(value);
+  // Keep preview in sync with controlled value prop
+  useEffect(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
     }
-  }, [value, selectedFile]);
+    setPreviewUrl(value || '');
+    setSelectedFile(null);
+  }, [value]);
+
+  // Clean up object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const validateFile = useCallback(
     (file: File): string | null => {
@@ -65,7 +79,12 @@ export function ImageUploader({
       }
 
       // Create preview URL
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
       const objectUrl = URL.createObjectURL(file);
+      objectUrlRef.current = objectUrl;
       setPreviewUrl(objectUrl);
       setSelectedFile(file);
 
@@ -80,6 +99,10 @@ export function ImageUploader({
           // Revert preview on error
           setPreviewUrl(value || '');
           setSelectedFile(null);
+          if (objectUrlRef.current) {
+            URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+          }
         } finally {
           setIsUploading(false);
         }
@@ -129,6 +152,10 @@ export function ImageUploader({
 
   const handleRemoveImage = useCallback(() => {
     // Clear all state
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
     setPreviewUrl('');
     setSelectedFile(null);
     setError(null);

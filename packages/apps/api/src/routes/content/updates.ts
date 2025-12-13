@@ -11,20 +11,20 @@ import { schedulerService } from '../../services/scheduler.js';
 import { buildContentResponse } from '../../services/content-response-builder.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
+import { getAssetsClient } from '../../services/assets-media.js';
 import {
   validateContentPayload,
   type ContentType as ValidationContentType,
   type MediaType as ValidationMediaType,
 } from '@postolio/content-validation';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
+import type { AssetRecord } from '@postolio/assets-client';
 
 const prisma = getDatabaseClient();
 
 interface UpdateContentBody {
   contentId: string;
   caption?: string;
-  videoUrl?: string;
-  mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
   scheduledAt?: string;
   shareToFeed?: boolean;
@@ -41,7 +41,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       const contentId = request.params.contentId;
-      const { caption, videoUrl, mediaType, contentType, scheduledAt, shareToFeed, firstComment } =
+      const { caption, contentType, scheduledAt, shareToFeed, firstComment } =
         request.body as Partial<UpdateContentBody>;
 
       // Verify user owns the content and it's editable (not published)
@@ -61,6 +61,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           },
           campaign: {
             select: { id: true, status: true },
+          },
+          mediaAssets: {
+            select: { assetId: true, displayOrder: true },
+            orderBy: { displayOrder: 'asc' },
           },
         },
       });
@@ -82,9 +86,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       interface MutableContentUpdate {
         caption?: string;
         hashtags?: string[];
-        primaryAssetCdnUrl?: string | null;
-        videoUrl?: string | null;
-        mediaType?: ValidationMediaType;
         contentType?: ValidationContentType;
         scheduledAt?: Date | null;
         status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
@@ -97,38 +98,74 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         content.contentType ||
         'post') as ValidationContentType;
 
-      // Normalize mediaType to the new model:
-      // If not provided, infer from existing content, falling back to image/video by contentType.
-      let effectiveMediaType: ValidationMediaType;
-      if (mediaType) {
-        effectiveMediaType = mediaType;
-      } else if (content.mediaType === 'video') {
-        effectiveMediaType = 'video';
-      } else if (content.mediaType === 'image') {
-        effectiveMediaType = 'image';
-      } else {
-        effectiveMediaType = effectiveContentType === 'reel' ? 'video' : 'image';
-      }
       const effectiveCaption =
         caption !== undefined
           ? caption
           : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
-      const effectiveImage = content.primaryAssetCdnUrl || '';
-      const effectiveVideo = videoUrl !== undefined ? videoUrl : content.videoUrl || undefined;
-      const mediaAssets: { key: string; type: 'image' | 'video' }[] = [];
-      if (effectiveVideo) {
-        mediaAssets.push({ key: effectiveVideo, type: 'video' });
-      } else if (effectiveImage) {
-        mediaAssets.push({ key: effectiveImage, type: 'image' });
+
+      const joinMediaAssets = (content.mediaAssets ?? [])
+        .map((asset) => ({
+          assetId: asset.assetId,
+          displayOrder: asset.displayOrder,
+        }))
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+      const assetIds = joinMediaAssets
+        .map((asset) => asset.assetId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+      let resolvedAssets: (AssetRecord | null)[] = [];
+      if (assetIds.length > 0) {
+        try {
+          const assetsClient = getAssetsClient();
+          resolvedAssets = await assetsClient.getBatchAssets(assetIds);
+        } catch (error) {
+          request.log.error(
+            { err: error, contentId, assetCount: assetIds.length },
+            'Failed to fetch media assets'
+          );
+          return reply
+            .code(400)
+            .send({ error: 'Failed to fetch linked media assets. Please try again.' });
+        }
       }
+
+      const missingAssets = resolvedAssets
+        .map((asset, idx) => (!asset ? assetIds[idx] : null))
+        .filter((id): id is string => Boolean(id));
+      if (missingAssets.length > 0) {
+        return reply.code(400).send({
+          error: 'Some linked media assets could not be found',
+          details: missingAssets,
+        });
+      }
+
+      const resolvedById = new Map(
+        (resolvedAssets.filter(Boolean) as AssetRecord[]).map((asset) => [asset.id, asset])
+      );
+      const mediaAssetsForValidation: { key: string; type: 'image' | 'video' }[] = joinMediaAssets
+        .map((asset) => {
+          const resolved = resolvedById.get(asset.assetId);
+          if (!resolved) return null;
+          return {
+            key: resolved.id,
+            type: resolved.fileType === 'video' ? 'video' : 'image',
+          };
+        })
+        .filter((asset): asset is { key: string; type: 'image' | 'video' } => Boolean(asset));
+
+      const mediaTypeHint: ValidationMediaType =
+        effectiveContentType === 'reel'
+          ? 'video'
+          : mediaAssetsForValidation.some((asset) => asset.type === 'video')
+            ? 'video'
+            : 'image';
 
       const validation = validateContentPayload({
         platform: 'instagram',
         contentType: effectiveContentType,
-        mediaType: effectiveMediaType,
+        mediaType: mediaTypeHint,
         caption: effectiveCaption,
-        mediaAssets,
-        videoUrl: effectiveVideo || undefined,
+        mediaAssets: mediaAssetsForValidation,
       });
 
       if (!validation.ok) {
@@ -142,14 +179,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         const normalizedCaption = effectiveCaption.trim();
         updateData.caption = normalizedCaption;
         updateData.hashtags = extractHashtagsFromCaption(normalizedCaption);
-      }
-      // NOTE: imageUrl is intentionally not applied to primaryAssetCdnUrl anymore.
-      // Media changes must go through /upload-image or /:contentId/asset to keep assetId and join table in sync.
-      if (videoUrl !== undefined) {
-        updateData.videoUrl = videoUrl || null;
-      }
-      if (mediaType !== undefined) {
-        updateData.mediaType = mediaType;
       }
       if (contentType !== undefined) {
         updateData.contentType = contentType;
@@ -359,20 +388,26 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           caption: true,
-          primaryAssetCdnUrl: true,
+          hashtags: true,
           status: true,
           scheduledAt: true,
           postedAt: true,
           createdAt: true,
           updatedAt: true,
           brandId: true,
-          mediaType: true,
           contentType: true,
-          videoUrl: true,
+          campaignId: true,
+          schedulingError: true,
+          generationParams: true,
+          shareToFeed: true,
           firstComment: true,
           firstCommentStatus: true,
           firstCommentPostedAt: true,
           firstCommentError: true,
+          mediaAssets: {
+            select: { assetId: true, displayOrder: true },
+            orderBy: { displayOrder: 'asc' },
+          },
         },
       });
 

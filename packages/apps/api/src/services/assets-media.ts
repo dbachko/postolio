@@ -23,7 +23,7 @@ export interface AssetUploadMetadata {
 export interface AttachAssetParams {
   contentId: string;
   asset: AssetRecord;
-  usageContext?: string;
+  displayOrder?: number;
   prisma?: PrismaClient | Prisma.TransactionClient;
 }
 
@@ -130,39 +130,24 @@ export async function verifyAssetOwnership(assetId: string, brandId: string): Pr
 
 export async function attachAssetToContent(params: AttachAssetParams): Promise<void> {
   const prisma = params.prisma ?? getDatabaseClient();
-  const usageContext = params.usageContext ?? 'primary';
   const asset = params.asset;
+  const displayOrder = params.displayOrder ?? 0;
 
-  await prisma.content.update({
-    where: { id: params.contentId },
-    data: {
-      primaryAssetId: asset.id,
-      primaryAssetCdnUrl: asset.url,
-      primaryAssetWidth: asset.width ?? null,
-      primaryAssetHeight: asset.height ?? null,
-    },
-  });
-  await prisma.postMediaAsset.upsert({
+  await prisma.contentMediaAsset.upsert({
     where: {
-      contentId_usageContext: {
+      contentId_displayOrder: {
         contentId: params.contentId,
-        usageContext,
+        displayOrder,
       },
     },
     update: {
       assetId: asset.id,
-      cdnUrl: asset.url,
-      width: asset.width ?? null,
-      height: asset.height ?? null,
       updatedAt: new Date(),
     },
     create: {
       contentId: params.contentId,
-      usageContext,
+      displayOrder,
       assetId: asset.id,
-      cdnUrl: asset.url,
-      width: asset.width ?? null,
-      height: asset.height ?? null,
     },
   });
 }

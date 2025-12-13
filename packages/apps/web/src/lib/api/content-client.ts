@@ -1,5 +1,5 @@
 import type { HttpRequest } from '../http/http';
-import type { InstagramContentType, InstagramMediaType } from '@postolio/content-validation';
+import type { InstagramContentType } from '@postolio/content-validation';
 import { assetsApi } from '@/features/assets/api/client';
 
 export class ContentClient {
@@ -11,8 +11,6 @@ export class ContentClient {
     caption: string;
     imageFile?: File;
     assetIds?: string[]; // Array of asset IDs (single image or carousel)
-    videoUrl?: string; // CDN URL for uploaded video
-    mediaType?: InstagramMediaType;
     contentType?: InstagramContentType;
     campaignId?: string;
     scheduledAt?: string;
@@ -25,9 +23,7 @@ export class ContentClient {
     };
     if (data.campaignId) body.campaignId = data.campaignId;
     if (data.scheduledAt) body.scheduledAt = data.scheduledAt;
-    if (data.mediaType) body.mediaType = data.mediaType;
     if (data.contentType) body.contentType = data.contentType;
-    if (data.videoUrl) body.videoUrl = data.videoUrl;
     if (data.assetIds) body.assetIds = data.assetIds;
     if (data.shareToFeed !== undefined) body.shareToFeed = data.shareToFeed;
     if (data.firstComment) body.firstComment = data.firstComment;
@@ -178,12 +174,11 @@ export class ContentClient {
     return this.request(`/api/content/${postId}/publish`, { method: 'POST' });
   }
 
-  attachAsset(contentId: string, assetId: string, usageContext?: string) {
+  attachAsset(contentId: string, assetId: string) {
     return this.request(`/api/content/${contentId}/asset`, {
       method: 'POST',
       body: JSON.stringify({
         assetId,
-        ...(usageContext ? { usageContext } : {}),
       }),
     });
   }

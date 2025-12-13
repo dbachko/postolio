@@ -48,7 +48,7 @@ export function CampaignWizard() {
       (Array.isArray(s.goals) && s.goals.length > 0) ||
       !!s.timeline ||
       (Array.isArray(s.themes) && s.themes.length > 0) ||
-      (s.style && s.style.trim().length > 0) ||
+      (Array.isArray(s.style) && s.style.length > 0) ||
       (s.frequency && s.frequency.trim().length > 0) ||
       s.promotionDetails != null ||
       s.contentPillars != null ||

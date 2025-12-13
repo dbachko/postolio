@@ -2,15 +2,23 @@ import type { MouseEventHandler } from 'react';
 import { PostPreviewCard } from '@/components/PostPreviewCard';
 import type { CalendarItem } from '@/types/calendar';
 import type { CalendarEvent } from '../types';
+import type { AssetType } from '@/features/assets/api/client';
 
 interface EventRendererProps {
   event: CalendarEvent;
   timezone: string;
   brandId: string;
   onReschedule: (item: CalendarItem) => void;
+  assetsById?: Record<string, AssetType | null>;
 }
 
-export function EventRenderer({ event, timezone, brandId, onReschedule }: EventRendererProps) {
+export function EventRenderer({
+  event,
+  timezone,
+  brandId,
+  onReschedule,
+  assetsById,
+}: EventRendererProps) {
   const rawResource = event.resource as unknown as Record<string, unknown> | undefined;
   if (rawResource?.type === 'more') {
     return null;
@@ -26,9 +34,18 @@ export function EventRenderer({ event, timezone, brandId, onReschedule }: EventR
     return <div className="text-sm">{event.title}</div>;
   }
 
+  const primaryAssetId =
+    (cardItem as any)?.primaryAssetId || (cardItem as any)?.mediaAssets?.[0]?.assetId || null;
+  const primaryAsset = primaryAssetId ? (assetsById?.[primaryAssetId] ?? null) : null;
+
   return (
     <div onClick={handleClick}>
-      <PostPreviewCard item={cardItem} timezone={timezone} onReschedule={onReschedule} />
+      <PostPreviewCard
+        item={cardItem}
+        timezone={timezone}
+        onReschedule={onReschedule}
+        primaryAsset={primaryAsset}
+      />
     </div>
   );
 }
@@ -52,7 +69,6 @@ function buildCardItem(resource: CalendarEvent['resource'], brandId: string): Ca
       message: toStringOrDefault(record.message, '', ''),
       caption: toStringOrDefault(record.caption, '', ''),
       hashtags: Array.isArray(record.hashtags) ? (record.hashtags as unknown[]).map(String) : [],
-      imageUrl: undefined,
       brandId: toStringOrDefault(record.brandId, brandId, brandId),
       createdAt: toStringOrDefault(record.createdAt, resource.scheduledAt, nowIso),
       postedAt: undefined,

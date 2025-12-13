@@ -11,7 +11,6 @@ export interface Placeholder {
   message: string;
   caption: string;
   hashtags: string[];
-  imageUrl: undefined;
   brandId: string;
   createdAt: string;
   postedAt: undefined;

@@ -210,7 +210,11 @@ export function Step7Review() {
                   </Badge>
                 ))}
               </div>
-              <div className="text-muted-foreground">{summary.style || '—'}</div>
+              <div className="text-muted-foreground">
+                {Array.isArray(summary.style) && summary.style.length > 0
+                  ? summary.style.join('; ')
+                  : '—'}
+              </div>
             </div>
             <Button variant="outline" onClick={() => setStep(2)}>
               Edit

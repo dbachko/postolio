@@ -26,6 +26,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
+import type { Asset } from '@/features/assets/api/client';
 import { content as contentApi, type Content } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -42,6 +44,21 @@ type DraftGroup = {
   sortValue: number;
   drafts: Content[];
 };
+
+type DraftPreview =
+  | {
+      kind: 'video';
+      url: string;
+      posterUrl: string | null;
+    }
+  | {
+      kind: 'image';
+      url: string;
+    }
+  | {
+      kind: 'text';
+      url: null;
+    };
 
 const formatMonthLabel = (date: string) =>
   new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(new Date(date));
@@ -82,16 +99,33 @@ const groupDraftsByCreatedMonth = (drafts: Content[], direction: SortDirection):
   );
 };
 
-const getDraftPreview = (draft: Content) => {
-  const imageUrl = draft.primaryAssetCdnUrl || draft.imageUrl || null;
-  const videoUrl = draft.videoUrl || null;
-  if (videoUrl) return { kind: 'video' as const, url: videoUrl };
-  if (imageUrl) return { kind: 'image' as const, url: imageUrl };
-  return { kind: 'text' as const, url: null };
+const getDraftPreview = (primaryAsset: Asset | null): DraftPreview => {
+  if (!primaryAsset) {
+    return { kind: 'text', url: null };
+  }
+
+  if (primaryAsset.fileType === 'video') {
+    return {
+      kind: 'video',
+      url: primaryAsset.url,
+      posterUrl: primaryAsset.thumbnailUrl ?? null,
+    };
+  }
+
+  const url = primaryAsset.thumbnailUrl || primaryAsset.url;
+  return { kind: 'image', url };
 };
 
-function DraftCard({ draft, onOpen }: { draft: Content; onOpen: () => void }) {
-  const preview = getDraftPreview(draft);
+function DraftCard({
+  draft,
+  primaryAsset,
+  onOpen,
+}: {
+  draft: Content;
+  primaryAsset: Asset | null;
+  onOpen: () => void;
+}) {
+  const preview = getDraftPreview(primaryAsset);
   const isScheduled = Boolean(draft.scheduledAt);
   const statusVariant = isScheduled ? 'info' : 'secondary';
   const statusLabel = isScheduled ? 'Scheduled' : 'Draft';
@@ -129,6 +163,7 @@ function DraftCard({ draft, onOpen }: { draft: Content; onOpen: () => void }) {
             <div className="relative h-full w-full">
               <video
                 src={preview.url}
+                poster={preview.posterUrl || undefined}
                 className="h-full w-full object-cover"
                 muted
                 playsInline
@@ -246,6 +281,9 @@ export default function Drafts() {
     setSortField('lastModified');
     setSortDirection('desc');
   };
+
+  const assetsQuery = useAssetsByIds(filteredSortedDrafts.map((d) => d.primaryAssetId));
+  const assetsById = assetsQuery.data ?? {};
 
   if (!selectedBrand) {
     return (
@@ -379,6 +417,9 @@ export default function Drafts() {
                     <DraftCard
                       key={draft.id}
                       draft={draft}
+                      primaryAsset={
+                        draft.primaryAssetId ? (assetsById[draft.primaryAssetId] ?? null) : null
+                      }
                       onOpen={() => openSidebar('post', { id: draft.id })}
                     />
                   ))}

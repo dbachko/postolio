@@ -1,14 +1,14 @@
 import { useMemo } from 'react';
-import { Label } from '../../ui/label';
-import { Card, CardContent } from '../../ui/card';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Input } from '../../ui/input';
-import { Checkbox } from '../../ui/checkbox';
-import { styleOptions, styleMeta } from '../../../constants/campaign';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { styleOptions, styleMeta } from '@/constants/campaign';
 
 interface StyleCardGroupProps {
-  value: string;
-  onChange: (value: string) => void;
+  value: string[];
+  onChange: (value: string[]) => void;
   brandStyles?: Array<{ emoji: string; title: string; description: string }>;
 }
 
@@ -37,65 +37,52 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
   const brandStyleOptions = allStyles.filter((s) => 'isBrandStyle' in s && s.isBrandStyle);
   const universalStyleOptions = allStyles.filter((s) => !('isBrandStyle' in s) || !s.isBrandStyle);
 
-  const splitTokens = (
-    input: string | undefined | null,
-    opts?: { preserveWhitespace?: boolean }
-  ): string[] => {
-    if (!input) return [];
-    const parts = input.split(/[;\n]/);
-    if (opts?.preserveWhitespace) {
-      return parts.filter((s) => s.length > 0);
+  const recognizedSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const opt of allStyles) {
+      set.add(opt.value);
+      set.add(opt.label);
+      if ('fullDescription' in opt && typeof opt.fullDescription === 'string') {
+        set.add(opt.fullDescription);
+      }
     }
-    return parts.map((s) => s.trim()).filter(Boolean);
-  };
+    return set;
+  }, [allStyles]);
 
-  const tokens = splitTokens(value);
-  const rawTokens = splitTokens(value, { preserveWhitespace: true });
+  const normalizedValue = useMemo(() => {
+    const trimmed = (value || []).map((v) => v.trim()).filter((v) => v.length > 0);
+    const recognized = trimmed.filter((v) => recognizedSet.has(v));
+    const custom = trimmed.filter((v) => !recognizedSet.has(v)).join('; ');
+    return { recognized, custom };
+  }, [recognizedSet, value]);
 
   const isOptSelected = (opt: any): boolean => {
-    const candidates = [opt.value, opt.label];
-    if ('fullDescription' in opt && typeof opt.fullDescription === 'string') {
-      candidates.push(opt.fullDescription);
-    }
-    const labels = candidates.filter(Boolean);
-    return tokens.some((t) => labels.includes(t));
+    const canonical =
+      opt.isBrandStyle && typeof opt.fullDescription === 'string' ? opt.fullDescription : opt.value;
+    return normalizedValue.recognized.includes(canonical);
+  };
+
+  const emitNext = (recognized: string[], custom: string) => {
+    const nextCustom = custom.trim();
+    const isCustomRecognized = nextCustom.length > 0 && recognizedSet.has(nextCustom);
+    const finalCustom = isCustomRecognized ? '' : nextCustom;
+    const uniqueRecognized = Array.from(new Set(recognized));
+    const next = finalCustom.length > 0 ? [...uniqueRecognized, finalCustom] : uniqueRecognized;
+    onChange(next);
   };
 
   const toggleOption = (opt: any) => {
-    const selected = isOptSelected(opt);
-    const next = tokens.slice();
-    // Remove any existing representations of this option
-    const toRemove = [opt.value, opt.label];
-    if ('fullDescription' in opt && typeof opt.fullDescription === 'string') {
-      toRemove.push(opt.fullDescription);
-    }
-    const filtered = next.filter((t) => !toRemove.includes(t));
-    if (!selected) {
-      // Prefer descriptive text for brand styles; stable value for universal
-      const toAdd =
-        opt.isBrandStyle && typeof opt.fullDescription === 'string'
-          ? opt.fullDescription
-          : opt.value;
-      filtered.push(toAdd);
-    }
-    onChange(filtered.join('; '));
+    const canonical =
+      opt.isBrandStyle && typeof opt.fullDescription === 'string' ? opt.fullDescription : opt.value;
+    const selected = normalizedValue.recognized.includes(canonical);
+    const nextRecognized = selected
+      ? normalizedValue.recognized.filter((v) => v !== canonical)
+      : [...normalizedValue.recognized, canonical];
+    emitNext(nextRecognized, normalizedValue.custom);
   };
 
-  const recognizedSet = new Set<string>();
-  for (const opt of allStyles) {
-    recognizedSet.add(opt.value);
-    recognizedSet.add(opt.label);
-    if ('fullDescription' in opt && typeof opt.fullDescription === 'string')
-      recognizedSet.add(opt.fullDescription);
-  }
-  const customParts = rawTokens
-    .map((t) => (t.trim().length ? t : ''))
-    .filter((t) => t && !recognizedSet.has(t));
-  const customText = customParts.join('; ');
   const onCustomChange = (text: string) => {
-    const recognized = rawTokens.filter((t) => recognizedSet.has(t.trim()));
-    const extras = text ? [text] : [];
-    onChange([...recognized, ...extras].filter(Boolean).join('; '));
+    emitNext(normalizedValue.recognized, text);
   };
 
   return (
@@ -221,7 +208,7 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
               <Input
                 type="text"
                 placeholder="Describe extra style…"
-                value={customText}
+                value={normalizedValue.custom}
                 onChange={(e) => onCustomChange(e.target.value)}
               />
               <p className="text-muted-foreground mt-1 text-xs">

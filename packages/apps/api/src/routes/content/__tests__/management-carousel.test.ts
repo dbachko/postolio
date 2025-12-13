@@ -42,27 +42,34 @@ vi.mock('../../../services/regeneration-queue.js', () => ({
 
 // Minimal in-memory Prisma mock for this suite
 vi.mock('../../../config/database.js', () => {
+  const contents: any[] = [];
   const prisma = {
     content: {
       create: vi.fn(async (args: any) => {
         const select = args?.select;
         const data = args?.data ?? {};
         const base = {
-          id: 'content-1',
+          id: `content-${contents.length + 1}`,
           caption: data.caption,
           hashtags: data.hashtags ?? [],
-          primaryAssetCdnUrl: null,
-          primaryAssetId: null,
-          primaryAssetHeight: null,
-          primaryAssetWidth: null,
           status: data.status ?? 'draft',
           brandId: data.brandId,
           generationParams: data.generationParams,
           createdAt: new Date(),
-          mediaType: data.mediaType ?? 'image',
+          updatedAt: new Date(),
           contentType: data.contentType ?? 'post',
-          videoUrl: data.videoUrl ?? null,
+          shareToFeed: data.shareToFeed ?? null,
+          campaignId: data.campaignId ?? null,
+          schedulingError: data.schedulingError ?? null,
+          scheduledAt: data.scheduledAt ?? null,
+          postedAt: data.postedAt ?? null,
+          firstComment: data.firstComment ?? null,
+          firstCommentStatus: data.firstCommentStatus ?? null,
+          firstCommentPostedAt: data.firstCommentPostedAt ?? null,
+          firstCommentError: data.firstCommentError ?? null,
+          mediaAssets: [],
         };
+        contents.push(base);
         if (!select) return base;
         const picked: any = {};
         for (const key of Object.keys(select)) {
@@ -71,6 +78,18 @@ vi.mock('../../../config/database.js', () => {
         return picked;
       }),
       update: vi.fn(),
+      findUnique: vi.fn(async (args: any) => {
+        const id = args?.where?.id as string;
+        const record = contents.find((c) => c.id === id) ?? null;
+        if (!record) return null;
+        const select = args?.select;
+        if (!select) return record;
+        const picked: any = {};
+        for (const key of Object.keys(select)) {
+          if (select[key]) picked[key] = (record as any)[key];
+        }
+        return picked;
+      }),
     },
     brand: {
       findFirst: vi.fn(async () => ({
@@ -79,8 +98,10 @@ vi.mock('../../../config/database.js', () => {
         name: 'Test Brand',
       })),
     },
-    postMediaAsset: {
-      create: vi.fn(),
+    contentMediaAsset: {
+      createMany: vi.fn(async () => ({ count: 1 })),
+      upsert: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
     },
     $transaction: vi.fn(async (fn: (tx: any) => Promise<unknown>) => fn(prisma)),
   } as any;
@@ -106,6 +127,7 @@ vi.mock('../../../services/assets-media.js', () => {
       assetIds.map((assetId) => ({
         id: assetId,
         brandId: 'brand-1',
+        fileType: 'image',
         url: `https://cdn.example.com/assets/${assetId}.jpg`,
         width: 1080,
         height: 1080,

@@ -9,11 +9,12 @@ import { CommentsSidebar } from '@/components/inbox/CommentsSidebar';
 import { CommentCard } from '@/components/inbox/CommentCard';
 import { toast } from 'sonner';
 import { CheckCheck } from 'lucide-react';
+import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 
 type InboxItem = {
   postId: string;
   caption: string | null;
-  imageUrl: string | null;
+  primaryAssetId: string | null;
   permalink: string | null;
   postedAt: string | null;
   totalComments: number;
@@ -43,6 +44,8 @@ export default function InboxComments() {
   });
 
   const items = useMemo(() => (inboxData?.items || []) as InboxItem[], [inboxData]);
+  const primaryAssetIds = useMemo(() => items.map((item) => item.primaryAssetId), [items]);
+  const { data: assetsById } = useAssetsByIds(primaryAssetIds);
 
   // Default select first item with new activity
   useEffect(() => {
@@ -112,6 +115,12 @@ export default function InboxComments() {
     [items, selectedPostId]
   );
 
+  const selectedPreviewUrl = useMemo(() => {
+    if (!selectedItem?.primaryAssetId) return null;
+    const asset = assetsById?.[selectedItem.primaryAssetId] ?? null;
+    return asset?.thumbnailUrl || asset?.url || null;
+  }, [assetsById, selectedItem?.primaryAssetId]);
+
   const saveReply = async (title: string, body: string) => {
     if (!brandId) return;
     try {
@@ -171,7 +180,11 @@ export default function InboxComments() {
                 items={items.map((i) => ({
                   postId: i.postId,
                   caption: i.caption,
-                  imageUrl: i.imageUrl,
+                  previewUrl: i.primaryAssetId
+                    ? assetsById?.[i.primaryAssetId]?.thumbnailUrl ||
+                      assetsById?.[i.primaryAssetId]?.url ||
+                      null
+                    : null,
                   postedAt: i.postedAt,
                   newCount: i.newCount,
                 }))}
@@ -194,12 +207,8 @@ export default function InboxComments() {
             )}
             {selectedItem && (
               <div className="mb-4 flex items-center gap-3">
-                {selectedItem.imageUrl ? (
-                  <img
-                    src={selectedItem.imageUrl}
-                    alt=""
-                    className="h-14 w-14 rounded object-cover"
-                  />
+                {selectedPreviewUrl ? (
+                  <img src={selectedPreviewUrl} alt="" className="h-14 w-14 rounded object-cover" />
                 ) : (
                   <div className="bg-muted h-14 w-14 rounded" />
                 )}

@@ -49,11 +49,14 @@ export class RetentionManager {
     assetsUnlinked: number;
   }> {
     const totalContent = await prisma.content.count();
-    const assetsLinked = await prisma.postMediaAsset.count();
+    const assetsLinked = await prisma.contentMediaAsset.count();
+    const contentWithNoAssets = await prisma.content.count({
+      where: { mediaAssets: { none: {} } },
+    });
     return {
       totalContent,
       assetsLinked,
-      assetsUnlinked: Math.max(0, totalContent - assetsLinked),
+      assetsUnlinked: contentWithNoAssets,
     };
   }
 

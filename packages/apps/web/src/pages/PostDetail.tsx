@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, memo, useEffect, useRef } from 'react';
+import { useState, memo, useEffect, useRef, useMemo } from 'react';
 import { content as contentApi, analytics } from '../lib/api';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
@@ -38,6 +38,7 @@ import { PostSaveIndicator, type SaveStatus } from '../components/PostSaveIndica
 import { PostLearningFeedback } from '../components/PostLearningFeedback';
 import { ImageUploader } from '../components/ImageUploader';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
+import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,10 +54,13 @@ import {
 interface PostDetailData {
   id: string;
   caption: string;
-  imageUrl?: string;
-  videoUrl?: string;
   contentType?: string;
-  mediaType?: string;
+  primaryAssetId?: string | null;
+  mediaAssetCount?: number | null;
+  mediaAssets?: Array<{
+    assetId: string;
+    displayOrder: number;
+  }>;
   status: string;
   brandId: string;
   brand: {
@@ -109,7 +113,6 @@ interface PostInsights {
 
 interface FormData {
   caption: string;
-  imageUrl: string;
   scheduledAt: string;
 }
 
@@ -119,7 +122,6 @@ const buildFormStateFromPost = (post: PostDetailData, timezone: string): FormDat
 
   return {
     caption: post.caption || '',
-    imageUrl: post.imageUrl || '',
     scheduledAt: post.scheduledAt
       ? formatInTimeZone(new Date(post.scheduledAt), effectiveTimezone, "yyyy-MM-dd'T'HH:mm")
       : '',
@@ -180,13 +182,11 @@ export default function PostDetail() {
   const editingInitializedRef = useRef(false);
   const [formData, setFormData] = useState<FormData>({
     caption: '',
-    imageUrl: '',
     scheduledAt: '',
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const objectUrlRef = useRef<string | null>(null);
   const formInitializedRef = useRef(false);
   const [learningFeedback, setLearningFeedback] = useState<{
     isVisible: boolean;
@@ -221,25 +221,40 @@ export default function PostDetail() {
       const response = await contentApi.getPostDetail(postId!);
       const raw = response.data as any;
       return {
-        ...raw,
-        videoUrl: raw.videoUrl || undefined,
+        id: raw.id,
+        caption: raw.caption || '',
         contentType: raw.contentType || undefined,
-        mediaType: raw.mediaType || undefined,
-        brandId: raw.brand?.id,
-        brand: raw.brand || { id: '', name: '' },
+        primaryAssetId: raw.primaryAssetId ?? null,
+        mediaAssetCount: raw.mediaAssetCount ?? null,
+        mediaAssets: raw.mediaAssets || undefined,
+        status: raw.status,
+        brandId: raw.brandId || raw.brand?.id || '',
+        brand: raw.brand || { id: raw.brandId || '', name: '' },
         scheduledAt: raw.scheduledAt || undefined,
         postedAt: raw.postedAt || undefined,
-        imageUrl: raw.imageUrl || undefined,
         instagramPermalink: raw.instagramPermalink || undefined,
         generationParams: raw.generationParams ? { ...raw.generationParams } : undefined,
         schedulingError: raw.schedulingError || undefined,
         campaign: raw.campaign ? { ...raw.campaign } : undefined,
+        createdAt: raw.createdAt,
+        updatedAt: raw.updatedAt,
       };
     },
     enabled: !!postId,
     refetchInterval: 30000,
     staleTime: 10000,
   });
+
+  const mediaAssetIds = useMemo(() => {
+    return (post?.mediaAssets || []).map((asset) => asset.assetId);
+  }, [post?.mediaAssets]);
+  const { data: assetsById } = useAssetsByIds(mediaAssetIds);
+
+  const primaryAsset = useMemo(() => {
+    const primaryId = post?.primaryAssetId;
+    if (!primaryId) return null;
+    return assetsById?.[primaryId] ?? null;
+  }, [assetsById, post?.primaryAssetId]);
 
   // Resolve brand timezone when post loads
   useEffect(() => {
@@ -269,13 +284,13 @@ export default function PostDetail() {
     staleTime: 30000,
   });
 
-  const selectedPublicationId = (() => {
+  const selectedPublicationId = useMemo(() => {
     const pubs = publicationsQuery.data?.data || [];
     if (!pubs.length) return undefined;
     // Prefer Instagram for backward compatibility, but any platform works
     const preferred = pubs.find((p: any) => p.platform === 'instagram');
     return (preferred || pubs[0])?.id as string | undefined;
-  })();
+  }, [publicationsQuery.data?.data]);
 
   const latestQuery = useQuery<{ success: boolean; data: any } | undefined>({
     queryKey: ['v2-latest', selectedPublicationId],
@@ -288,7 +303,7 @@ export default function PostDetail() {
     staleTime: 30000,
   });
 
-  const insights: PostInsights | undefined = (() => {
+  const insights = useMemo<PostInsights | undefined>(() => {
     const latest = latestQuery.data?.data;
     if (!latest) return undefined;
     return {
@@ -303,7 +318,7 @@ export default function PostDetail() {
       },
       lastUpdated: latest.lastUpdated || new Date().toISOString(),
     };
-  })();
+  }, [latestQuery.data?.data]);
 
   // Default to editing mode when the post loads, unless it's published (then keep disabled)
   useEffect(() => {
@@ -350,23 +365,12 @@ export default function PostDetail() {
     }
   }, [brandTimezone, timezone, post, isEditing]);
 
-  // Clean up object URL on unmount
-  useEffect(() => {
-    return () => {
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-    };
-  }, []);
-
   // Update post mutation with learning feedback
   const { mutate: mutateContent, isPending: isSaving } = useMutation({
     mutationFn: async (data: {
       contentId: string;
       caption?: string;
       hashtags?: string[];
-      imageUrl?: string;
       scheduledAt?: string | null;
     }) => {
       if (!data.caption || data.caption.trim().length === 0) {
@@ -432,13 +436,7 @@ export default function PostDetail() {
         )
       : '';
 
-    const formImage = formData.imageUrl || '';
-    const postImage = post.imageUrl || '';
-
-    const formChanged =
-      trimmedCaption !== originalCaption ||
-      formImage !== postImage ||
-      scheduledValue !== originalScheduled;
+    const formChanged = trimmedCaption !== originalCaption || scheduledValue !== originalScheduled;
 
     setHasChanges(formChanged);
   }, [formData, post, brandTimezone, timezone]);
@@ -452,68 +450,53 @@ export default function PostDetail() {
   };
 
   const handleImageChange = async (fileOrUrl: string | File) => {
-    if (typeof fileOrUrl === 'string') {
-      // Direct URL update
-      setFormData((prev) => ({ ...prev, imageUrl: fileOrUrl }));
-    } else {
-      // File upload
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-      }
-      const objectUrl = URL.createObjectURL(fileOrUrl);
-      objectUrlRef.current = objectUrl;
-      setFormData((prev) => ({ ...prev, imageUrl: objectUrl }));
+    if (!postId) return;
+    if (!post?.brandId) {
+      toast.error('Missing brand information for upload');
+      return;
+    }
 
-      // Upload to server
-      if (postId) {
-        setSaveStatus('saving');
-        try {
-          if (!post?.brandId) {
-            throw new Error('Missing brand information for upload');
-          }
-          const response = await contentApi.uploadContentImage(postId, post.brandId, fileOrUrl);
-          if (response.success && response.content) {
-            const newImageUrl = response.content.imageUrl || objectUrl;
-            setFormData((prev) => ({
-              ...prev,
-              imageUrl: newImageUrl,
-            }));
-            setSaveStatus('saved');
-            setLastSaved(new Date());
-
-            // Clean up object URL
-            if (objectUrlRef.current) {
-              URL.revokeObjectURL(objectUrlRef.current);
-              objectUrlRef.current = null;
-            }
-
-            // Update cache
-            queryClient.setQueryData(['post', postId], (oldData: PostDetailData | undefined) => {
-              if (!oldData) return oldData;
-              return {
-                ...oldData,
-                imageUrl: response.content.imageUrl,
-              };
-            });
-
-            setTimeout(() => {
-              setSaveStatus('idle');
-            }, 2000);
-          }
-        } catch (error) {
-          console.error('Failed to upload image:', error);
-          setSaveStatus('error');
-          toast.error('Failed to upload image');
-          // Revert to previous image
-          setFormData((prev) => ({
-            ...prev,
-            imageUrl: post?.imageUrl || '',
-          }));
-          setTimeout(() => {
-            setSaveStatus('idle');
-          }, 3000);
+    setSaveStatus('saving');
+    try {
+      // Clear media
+      if (typeof fileOrUrl === 'string' && fileOrUrl.trim().length === 0) {
+        const response = await contentApi.updateMedia(postId, []);
+        const next = (response as any)?.content || {};
+        queryClient.setQueryData(['post', postId], (oldData: PostDetailData | undefined) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            primaryAssetId: next.primaryAssetId ?? null,
+            mediaAssets: next.mediaAssets ?? [],
+            mediaAssetCount: next.mediaAssetCount ?? 0,
+            updatedAt: next.updatedAt || oldData.updatedAt,
+          };
+        });
+      } else {
+        const response = await contentApi.uploadContentImage(postId, post.brandId, fileOrUrl);
+        if (response.success && response.content) {
+          const next = response.content as any;
+          queryClient.setQueryData(['post', postId], (oldData: PostDetailData | undefined) => {
+            if (!oldData) return oldData;
+            return {
+              ...oldData,
+              primaryAssetId: next.primaryAssetId ?? oldData.primaryAssetId ?? null,
+              mediaAssets: next.mediaAssets ?? oldData.mediaAssets,
+              mediaAssetCount: next.mediaAssetCount ?? oldData.mediaAssetCount,
+              updatedAt: next.updatedAt || oldData.updatedAt,
+            };
+          });
         }
       }
+
+      setSaveStatus('saved');
+      setLastSaved(new Date());
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Failed to update post media:', error);
+      setSaveStatus('error');
+      toast.error('Failed to update post media');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   };
 
@@ -544,12 +527,10 @@ export default function PostDetail() {
     const payload: {
       contentId: string;
       caption: string;
-      imageUrl?: string;
       scheduledAt?: string | null;
     } = {
       contentId: postId,
       caption: trimmedCaption,
-      imageUrl: formData.imageUrl || undefined,
     };
 
     if (scheduledAtPayload !== undefined) {
@@ -572,12 +553,6 @@ export default function PostDetail() {
       setFormData(buildFormStateFromPost(post, brandTimezone || timezone));
       setHasChanges(false);
       formInitializedRef.current = true;
-    }
-
-    // Clean up object URL
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
     }
   };
 
@@ -709,6 +684,36 @@ export default function PostDetail() {
     );
   }
 
+  const primaryPreviewUrl =
+    primaryAsset?.fileType === 'video'
+      ? primaryAsset.thumbnailUrl || null
+      : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
+  const isPrimaryVideo = post.contentType === 'reel' || primaryAsset?.fileType === 'video';
+  const primaryVideoUrl = primaryAsset?.fileType === 'video' ? primaryAsset.url : null;
+  const primaryPosterUrl = primaryAsset?.thumbnailUrl || undefined;
+  const publications = (publicationsQuery.data?.data || []) as any[];
+  const publicationButtons = publications
+    .filter((pub) => Boolean(pub?.permalink))
+    .map((pub: any) => {
+      const platformConfig = getPlatformConfig(pub.platform as Platform);
+      return (
+        <Button
+          key={pub.id}
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(pub.permalink, '_blank')}
+          className="text-xs sm:text-sm"
+        >
+          {pub.platform === 'instagram' ? (
+            <Instagram className="mr-1 h-4 w-4 sm:mr-2" />
+          ) : (
+            <ExternalLink className="mr-1 h-4 w-4 sm:mr-2" />
+          )}
+          <span className="hidden sm:inline">View on</span> {platformConfig.displayName}
+        </Button>
+      );
+    });
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -756,33 +761,7 @@ export default function PostDetail() {
               schedulingError={post.schedulingError || null}
               scheduledAt={post.scheduledAt || undefined}
             />
-            {(() => {
-              const pubs = publicationsQuery.data?.data || [];
-              if (!pubs.length) return null;
-
-              // Show button for each published platform
-              return pubs.map((pub: any) => {
-                if (!pub.permalink) return null;
-                const platformConfig = getPlatformConfig(pub.platform as Platform);
-
-                return (
-                  <Button
-                    key={pub.id}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(pub.permalink, '_blank')}
-                    className="text-xs sm:text-sm"
-                  >
-                    {pub.platform === 'instagram' ? (
-                      <Instagram className="mr-1 h-4 w-4 sm:mr-2" />
-                    ) : (
-                      <ExternalLink className="mr-1 h-4 w-4 sm:mr-2" />
-                    )}
-                    <span className="hidden sm:inline">View on</span> {platformConfig.displayName}
-                  </Button>
-                );
-              });
-            })()}
+            {publicationButtons}
           </div>
         </div>
       </div>
@@ -867,14 +846,30 @@ export default function PostDetail() {
               <div className="space-y-6">
                 {/* Image Upload */}
                 <div className="space-y-2">
-                  <Label>Post Image</Label>
-                  <ImageUploader
-                    className="w-full max-w-[260px]"
-                    value={formData.imageUrl || undefined}
-                    onChange={handleImageChange}
-                    maxSizeInMB={10}
-                    acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
-                  />
+                  <Label>Post Media</Label>
+                  {isPrimaryVideo ? (
+                    <div className="bg-muted overflow-hidden rounded-lg">
+                      {primaryVideoUrl ? (
+                        <video
+                          src={primaryVideoUrl}
+                          poster={primaryPosterUrl}
+                          className="h-auto max-h-[250px] w-full object-cover"
+                          controls
+                          preload="metadata"
+                        />
+                      ) : (
+                        <div className="h-48 w-full" />
+                      )}
+                    </div>
+                  ) : (
+                    <ImageUploader
+                      className="w-full max-w-[260px]"
+                      value={primaryPreviewUrl || undefined}
+                      onChange={handleImageChange}
+                      maxSizeInMB={10}
+                      acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
+                    />
+                  )}
                 </div>
 
                 {/* Caption Editor */}
@@ -891,15 +886,17 @@ export default function PostDetail() {
               <>
                 {/* Media */}
                 <div className="bg-muted mb-4 overflow-hidden rounded-lg">
-                  {post.videoUrl ? (
+                  {isPrimaryVideo && primaryVideoUrl ? (
                     <video
-                      src={post.videoUrl}
+                      src={primaryVideoUrl}
+                      poster={primaryPosterUrl}
                       className="h-auto max-h-[250px] w-full object-cover"
                       controls
+                      preload="metadata"
                     />
                   ) : (
                     <img
-                      src={getPostImageOrPlaceholder(post.imageUrl)}
+                      src={getPostImageOrPlaceholder(primaryPreviewUrl)}
                       alt="Post content"
                       className="h-auto max-h-[250px] w-full object-cover"
                       loading="lazy"

@@ -150,6 +150,10 @@ export const assetsApi = {
     return httpGet(`${API_BASE_URL}/${id}`);
   },
 
+  async getBatchAssets(assetIds: string[]): Promise<{ assets: Record<string, Asset | null> }> {
+    return httpPost(`${API_BASE_URL}/batch`, { assetIds });
+  },
+
   async getUsage(assetIds: string[], brandId: string): Promise<{ usage: AssetUsageEntry[] }> {
     return httpPost(`${API_BASE_URL}/usage`, { assetIds, brandId });
   },

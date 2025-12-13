@@ -192,6 +192,23 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       !!searchQuery,
     [campaigns, statuses, contentTypes, dateRange, searchQuery]
   );
+  const activeFilterCount = useMemo(() => {
+    return (
+      (campaigns.length > 0 ? 1 : 0) +
+      (statuses.length > 0 ? 1 : 0) +
+      (contentTypes.length !== 2 ? 1 : 0) +
+      (dateRange.start || dateRange.end ? 1 : 0) +
+      (searchQuery ? 1 : 0)
+    );
+  }, [
+    campaigns.length,
+    contentTypes.length,
+    dateRange.end,
+    dateRange.start,
+    searchQuery,
+    statuses.length,
+  ]);
+  const isFiltersActive = showFilters || hasAnyActiveFilters;
   const { filteredItems } = useFilteredContent(allItems as any);
   useEffect(() => {
     try {
@@ -231,6 +248,11 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     setCurrentDate(t);
     setParam('date', format(t, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
   };
+
+  const calendarDisabled = useMemo(() => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    return params.get('calendar') === 'off' || params.get('disableCalendar') === '1';
+  }, []);
 
   // Add a stable fallback color for items without a campaign color
   return (
@@ -294,44 +316,26 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 <SelectItem value="schedule">Schedule</SelectItem>
               </SelectContent>
             </Select>
-            {(() => {
-              const hasActive =
-                campaigns.length > 0 ||
-                statuses.length > 0 ||
-                contentTypes.length !== 2 ||
-                !!dateRange.start ||
-                !!dateRange.end ||
-                !!searchQuery;
-              const count =
-                (campaigns.length > 0 ? 1 : 0) +
-                (statuses.length > 0 ? 1 : 0) +
-                (contentTypes.length !== 2 ? 1 : 0) +
-                (dateRange.start || dateRange.end ? 1 : 0) +
-                (searchQuery ? 1 : 0);
-              const active = showFilters || hasActive;
-              return (
-                <Button
-                  variant={active ? 'default' : 'outline'}
-                  size="sm"
-                  aria-pressed={active}
-                  onClick={() => setShowFilters((s) => !s)}
-                  className="relative"
+            <Button
+              variant={isFiltersActive ? 'default' : 'outline'}
+              size="sm"
+              aria-pressed={isFiltersActive}
+              onClick={() => setShowFilters((s) => !s)}
+              className="relative"
+            >
+              Filters
+              {hasAnyActiveFilters && (
+                <span
+                  className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                    isFiltersActive
+                      ? 'bg-background text-foreground ring-ring ring-1'
+                      : 'bg-foreground text-background'
+                  }`}
                 >
-                  Filters
-                  {hasActive && (
-                    <span
-                      className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
-                        active
-                          ? 'bg-background text-foreground ring-ring ring-1'
-                          : 'bg-foreground text-background'
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </Button>
-              );
-            })()}
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
             {/* Export */}
             <CalendarExport
               content={filteredItems.map((item: any) => ({
@@ -372,32 +376,23 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
       {/* FullCalendar (no extra wrapper card/border) */}
       <div className="p-2">
-        {(() => {
-          const params = new URLSearchParams(
-            typeof window !== 'undefined' ? window.location.search : ''
-          );
-          const disable = params.get('calendar') === 'off' || params.get('disableCalendar') === '1';
-          if (disable) {
-            return (
-              <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
-            );
-          }
-          return (
-            <ErrorBoundary
-              fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
-            >
-              <FullCalendar
-                brandId={brandId}
-                brandTimezone={brandTimezone}
-                view={viewMode}
-                date={currentDate}
-                content={content}
-                placeholders={placeholders}
-                theme="monarch"
-              />
-            </ErrorBoundary>
-          );
-        })()}
+        {calendarDisabled ? (
+          <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
+        ) : (
+          <ErrorBoundary
+            fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
+          >
+            <FullCalendar
+              brandId={brandId}
+              brandTimezone={brandTimezone}
+              view={viewMode}
+              date={currentDate}
+              content={content}
+              placeholders={placeholders}
+              theme="monarch"
+            />
+          </ErrorBoundary>
+        )}
       </div>
     </div>
   );

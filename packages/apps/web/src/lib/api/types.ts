@@ -23,13 +23,12 @@ export interface Content {
   id: string;
   caption: string;
   primaryAssetId?: string | null;
-  imageUrl?: string | null;
-  primaryAssetCdnUrl?: string | null;
-  primaryAssetWidth?: number | null;
-  primaryAssetHeight?: number | null;
-  mediaType?: string | null;
   contentType?: string | null;
-  videoUrl?: string | null;
+  mediaAssets?: Array<{
+    assetId: string;
+    displayOrder: number;
+  }> | null;
+  mediaAssetCount?: number | null;
   shareToFeed?: boolean | null;
   firstComment?: string | null;
   firstCommentStatus?: 'pending' | 'posted' | 'failed' | 'retrying' | null;

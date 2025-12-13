@@ -68,23 +68,31 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             source: 'user_upload',
           });
         }
-        await attachAssetToContent({ contentId, asset });
+        await attachAssetToContent({ contentId, asset, displayOrder: 0 });
 
         const updatedContent = await prisma.content.findUnique({
           where: { id: contentId },
           select: {
             id: true,
             caption: true,
-            primaryAssetCdnUrl: true,
-            primaryAssetId: true,
             status: true,
             scheduledAt: true,
             createdAt: true,
             updatedAt: true,
+            brandId: true,
+            campaignId: true,
+            schedulingError: true,
+            hashtags: true,
+            contentType: true,
+            shareToFeed: true,
             firstComment: true,
             firstCommentStatus: true,
             firstCommentPostedAt: true,
             firstCommentError: true,
+            mediaAssets: {
+              select: { assetId: true, displayOrder: true },
+              orderBy: { displayOrder: 'asc' },
+            },
           },
         });
 

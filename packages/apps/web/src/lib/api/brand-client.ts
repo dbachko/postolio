@@ -14,7 +14,7 @@ export class BrandClient {
       items: Array<{
         postId: string;
         caption: string | null;
-        imageUrl: string | null;
+        primaryAssetId: string | null;
         permalink: string | null;
         postedAt: string | null;
         totalComments: number;

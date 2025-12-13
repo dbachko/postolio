@@ -1,7 +1,7 @@
 /**
  * Content Response Builder Service
  * Provides standardized response formatting for content endpoints
- * Centralizes CDN URL building and response structure
+ * Centralizes response structure for content endpoints
  */
 
 /**
@@ -10,7 +10,6 @@
 export interface ContentBase {
   id: string;
   caption: string;
-  primaryAssetCdnUrl: string | null;
   status: string;
   createdAt: Date;
 }
@@ -19,22 +18,24 @@ export interface ContentBase {
  * Extended content fields with additional metadata
  */
 export interface ContentWithMetadata extends ContentBase {
+  hashtags?: string[];
   updatedAt?: Date;
   scheduledAt?: Date | null;
   postedAt?: Date | null;
   brandId?: string;
+  campaignId?: string | null;
+  schedulingError?: string | null;
   generationParams?: unknown;
-  primaryAssetId?: string | null;
-  primaryAssetWidth?: number | null;
-  primaryAssetHeight?: number | null;
-  mediaType?: string | null;
   contentType?: string | null;
-  videoUrl?: string | null;
   shareToFeed?: boolean | null;
   firstComment?: string | null;
   firstCommentStatus?: string | null;
   firstCommentPostedAt?: Date | null;
   firstCommentError?: string | null;
+  mediaAssets?: Array<{
+    assetId: string;
+    displayOrder: number;
+  }>;
 }
 
 /**
@@ -43,22 +44,28 @@ export interface ContentWithMetadata extends ContentBase {
 export interface ContentResponse {
   id: string;
   caption: string;
-  imageUrl: string | null;
+  hashtags?: string[];
   status: string;
   createdAt: Date;
   updatedAt?: Date;
   scheduledAt?: Date | null;
   postedAt?: Date | null;
   brandId?: string;
+  campaignId?: string | null;
+  schedulingError?: string | null;
   generationParams?: unknown;
-  mediaType?: string | null;
   contentType?: string | null;
-  videoUrl?: string | null;
   shareToFeed?: boolean | null;
   firstComment?: string | null;
   firstCommentStatus?: string | null;
   firstCommentPostedAt?: Date | null;
   firstCommentError?: string | null;
+  mediaAssets?: Array<{
+    assetId: string;
+    displayOrder: number;
+  }>;
+  mediaAssetCount?: number;
+  primaryAssetId?: string | null;
 }
 
 /**
@@ -75,12 +82,14 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   const response: ContentResponse = {
     id: content.id,
     caption: content.caption,
-    imageUrl: content.primaryAssetCdnUrl || null,
     status: content.status,
     createdAt: content.createdAt,
   };
 
   // Add optional fields if present
+  if (content.hashtags !== undefined) {
+    response.hashtags = content.hashtags;
+  }
   if (content.updatedAt !== undefined) {
     response.updatedAt = content.updatedAt;
   }
@@ -93,17 +102,17 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   if (content.brandId !== undefined) {
     response.brandId = content.brandId;
   }
+  if (content.campaignId !== undefined) {
+    response.campaignId = content.campaignId;
+  }
+  if (content.schedulingError !== undefined) {
+    response.schedulingError = content.schedulingError;
+  }
   if (content.generationParams !== undefined) {
     response.generationParams = content.generationParams;
   }
-  if (content.mediaType !== undefined) {
-    response.mediaType = content.mediaType;
-  }
   if (content.contentType !== undefined) {
     response.contentType = content.contentType;
-  }
-  if (content.videoUrl !== undefined) {
-    response.videoUrl = content.videoUrl;
   }
   if (content.shareToFeed !== undefined) {
     response.shareToFeed = content.shareToFeed;
@@ -119,6 +128,11 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   }
   if (content.firstCommentError !== undefined) {
     response.firstCommentError = content.firstCommentError;
+  }
+  if (content.mediaAssets !== undefined) {
+    response.mediaAssets = content.mediaAssets;
+    response.mediaAssetCount = content.mediaAssets.length;
+    response.primaryAssetId = content.mediaAssets[0]?.assetId ?? null;
   }
 
   return response;
@@ -148,14 +162,12 @@ export function buildContentListResponse(contents: ContentWithMetadata[]): Conte
 export function buildSimpleContentResponse(content: ContentBase): {
   id: string;
   caption: string;
-  imageUrl: string | null;
   status: string;
   createdAt: Date;
 } {
   return {
     id: content.id,
     caption: content.caption,
-    imageUrl: content.primaryAssetCdnUrl || null,
     status: content.status,
     createdAt: content.createdAt,
   };
@@ -170,7 +182,6 @@ export function buildSimpleContentResponse(content: ContentBase): {
 export function buildSimpleContentListResponse(contents: ContentBase[]): Array<{
   id: string;
   caption: string;
-  imageUrl: string | null;
   status: string;
   createdAt: Date;
 }> {

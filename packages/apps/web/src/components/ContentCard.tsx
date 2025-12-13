@@ -8,14 +8,23 @@ import { useTimezone } from '../contexts/TimezoneContext';
 // import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
 import { StatusBadge } from './StatusBadge';
 import { AlertTriangle } from 'lucide-react';
+import { getMediaBadgeType } from '@/utils/media-type';
+import { MediaTypeBadge } from '@/components/MediaTypeBadge';
+import type { AssetType } from '@/features/assets/api/client';
 
 interface ContentCardProps {
   content: Content;
   brandId: string;
   isOptimistic?: boolean;
+  primaryAsset?: AssetType | null;
 }
 
-export function ContentCard({ content, brandId, isOptimistic = false }: ContentCardProps) {
+export function ContentCard({
+  content,
+  brandId,
+  isOptimistic = false,
+  primaryAsset = null,
+}: ContentCardProps) {
   const [localStatus, setLocalStatus] = useState(content.status);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { timezone, getBrandTimezone } = useTimezone();
@@ -58,6 +67,16 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
   // Removed manual schedule and publish actions from cards per design update
 
   const isConnected = connectionStatus === 'connected';
+  const mediaBadgeType = getMediaBadgeType({
+    contentType: content.contentType,
+    mediaAssets: content.mediaAssets,
+    mediaAssetCount: content.mediaAssetCount,
+    primaryAssetFileType: primaryAsset?.fileType ?? null,
+  });
+  const previewUrl =
+    primaryAsset?.fileType === 'video'
+      ? primaryAsset.thumbnailUrl || null
+      : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
 
   return (
     <div
@@ -66,18 +85,21 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
       }`}
       onClick={() => navigate(`/posts/${content.id}`)}
     >
-      {content.imageUrl && (
-        <div className="aspect-w-16 aspect-h-9">
+      <div className="aspect-w-16 aspect-h-9 bg-muted relative">
+        {previewUrl ? (
           <OptimizedImage
-            src={content.imageUrl}
-            cdnUrl={content.imageUrl}
+            src={previewUrl}
+            cdnUrl={previewUrl}
             fallbackUrl={undefined}
-            alt="Generated content"
+            alt="Post preview"
             className="h-48 w-full object-cover"
             aspectRatio="landscape"
           />
-        </div>
-      )}
+        ) : (
+          <div className="h-48 w-full" />
+        )}
+        <MediaTypeBadge type={mediaBadgeType} className="absolute top-2 right-2" />
+      </div>
 
       <div className="p-4">
         {/* Stale data indicator */}

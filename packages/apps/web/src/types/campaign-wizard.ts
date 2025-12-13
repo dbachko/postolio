@@ -28,7 +28,7 @@ export interface CampaignWizardState {
   goals: string[];
   timeline: Timeline | null;
   themes: string[];
-  style: string;
+  style: string[];
   imageSource: ImageSource | null; // NEW: Image source preference
   frequency: string; // allow custom schedules
   postingTime: string; // HH:mm

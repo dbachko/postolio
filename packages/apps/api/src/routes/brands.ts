@@ -1,5 +1,4 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getAssetsClient } from '../services/assets-media.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
 import { getRedisClient } from '../services/redis.js';
@@ -205,6 +204,11 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             include: {
               campaign: { select: { id: true, name: true, color: true } },
               publications: { select: { platform: true, permalink: true } },
+              mediaAssets: {
+                select: { assetId: true, displayOrder: true },
+                orderBy: { displayOrder: 'asc' },
+              },
+              _count: { select: { mediaAssets: true } },
             },
             orderBy: { scheduledAt: 'asc' },
           });
@@ -223,6 +227,11 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
               },
               include: {
                 campaign: { select: { id: true, name: true, color: true } },
+                mediaAssets: {
+                  select: { assetId: true, displayOrder: true },
+                  orderBy: { displayOrder: 'asc' },
+                },
+                _count: { select: { mediaAssets: true } },
               },
               orderBy: { scheduledAt: 'asc' },
             });
@@ -249,45 +258,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           placeholders = [];
         }
 
-        const assetIds = Array.from(
-          new Set(
-            content
-              .map((item) => item.primaryAssetId)
-              .filter((id): id is string => typeof id === 'string' && id.length > 0)
-          )
-        );
-
-        const assetPreviewMap = new Map<
-          string,
-          { thumbnailUrl: string | null; url: string | null; fileType: string | null }
-        >();
-
-        if (assetIds.length > 0) {
-          try {
-            const assetsClient = getAssetsClient();
-            const chunkSize = 50;
-            for (let i = 0; i < assetIds.length; i += chunkSize) {
-              const chunk = assetIds.slice(i, i + chunkSize);
-              const assets = await assetsClient.getBatchAssets(chunk);
-              assets.forEach((asset) => {
-                if (!asset) return;
-                const fileType = (asset as any)?.fileType || (asset as any)?.file_type || null;
-                const thumb = (asset as any)?.thumbnailUrl || null;
-                assetPreviewMap.set(asset.id, {
-                  thumbnailUrl: thumb,
-                  url: (asset as any)?.url || null,
-                  fileType,
-                });
-              });
-            }
-          } catch (e) {
-            request.log.warn(
-              { err: e, assetCount: assetIds.length },
-              'Failed to load asset previews for calendar'
-            );
-          }
-        }
-
         // Map to response format with CDN URLs and campaign colors
         const contentWithUrls = content.map((item) => {
           const pubs = hasPublications ? item.publications || [] : [];
@@ -295,31 +265,27 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           const primaryPermalink = hasPublications
             ? ig?.permalink || pubs[0]?.permalink || null
             : null;
-          const assetPreview = item.primaryAssetId
-            ? assetPreviewMap.get(item.primaryAssetId) || null
-            : null;
-          const mediaType = (item.mediaType || '').toLowerCase();
-          const assetType = (assetPreview?.fileType || '').toLowerCase();
-          const isVideo = mediaType === 'video' || assetType === 'video';
-          const previewImage =
-            assetPreview?.thumbnailUrl ||
-            (!isVideo ? assetPreview?.url : null) ||
-            (isVideo ? null : item.primaryAssetCdnUrl) ||
-            null;
+          const normalizedMediaAssets = Array.isArray((item as any).mediaAssets)
+            ? ((item as any).mediaAssets as Array<{ assetId: string; displayOrder: number }>)
+            : [];
+          const primaryAssetId = normalizedMediaAssets[0]?.assetId ?? null;
 
           return {
             id: item.id,
             caption: item.caption,
             hashtags: item.hashtags,
-            imageUrl: previewImage,
             status: item.status,
             scheduledAt: item.scheduledAt,
             postedAt: item.postedAt,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
             brandId: item.brandId,
-            primaryAssetId: item.primaryAssetId,
-            mediaType: item.mediaType,
+            contentType: item.contentType,
+            shareToFeed: (item as any).shareToFeed ?? null,
+            schedulingError: (item as any).schedulingError ?? null,
+            primaryAssetId,
+            mediaAssets: normalizedMediaAssets,
+            mediaAssetCount: (item as any)?._count?.mediaAssets ?? null,
             campaignId: item.campaignId,
             campaignName: item.campaign?.name,
             campaignColor: item.campaign?.color,
@@ -373,7 +339,16 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             permalink: true,
             publishedAt: true,
             content: {
-              select: { id: true, caption: true, primaryAssetCdnUrl: true, postedAt: true },
+              select: {
+                id: true,
+                caption: true,
+                postedAt: true,
+                mediaAssets: {
+                  select: { assetId: true, displayOrder: true },
+                  orderBy: { displayOrder: 'asc' },
+                  take: 1,
+                },
+              },
             },
           },
         });
@@ -423,7 +398,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             return {
               postId: pub.content?.id || '',
               caption: pub.content?.caption || null,
-              imageUrl: pub.content?.primaryAssetCdnUrl || null,
+              primaryAssetId: pub.content?.mediaAssets?.[0]?.assetId ?? null,
               permalink: pub.permalink || null,
               postedAt: pub.content?.postedAt || pub.publishedAt || null,
               totalComments,
@@ -521,13 +496,17 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             id: true,
             caption: true,
             hashtags: true,
-            primaryAssetCdnUrl: true,
             status: true,
             scheduledAt: true,
             postedAt: true,
             createdAt: true,
             updatedAt: true,
             shareToFeed: true,
+            mediaAssets: {
+              select: { assetId: true, displayOrder: true },
+              orderBy: { displayOrder: 'asc' },
+              take: 1,
+            },
             publications: { select: { platform: true, permalink: true } },
           },
           orderBy: { updatedAt: 'desc' },
@@ -542,7 +521,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             id: item.id,
             caption: item.caption,
             hashtags: item.hashtags,
-            imageUrl: item.primaryAssetCdnUrl,
+            primaryAssetId: item.mediaAssets?.[0]?.assetId ?? null,
             status: item.status,
             scheduledAt: item.scheduledAt,
             postedAt: item.postedAt,

@@ -1,4 +1,5 @@
 import { getDatabaseClient } from '../config/database.js';
+import { getAssetsClient } from './assets-media.js';
 
 const prisma = getDatabaseClient();
 
@@ -28,32 +29,10 @@ const DEMO_IMAGE_FILES = [
   'post-checklist.png',
 ];
 
-function getDemoAssetUrlByIndex(index: number): string | null {
+function getDemoAssetS3KeyByIndex(index: number): string | null {
   if (!DEMO_IMAGE_FILES.length) return null;
   const fileName = DEMO_IMAGE_FILES[index % DEMO_IMAGE_FILES.length];
-  const s3Key = `${DEMO_ASSETS_PREFIX}/${fileName}`;
-
-  // Derive CDN URL similarly to assets-api getAssetUrl helper.
-  const cdnDomain =
-    process.env.ASSETS_CDN_DOMAIN?.trim() ||
-    process.env.CDN_DOMAIN?.trim() ||
-    (process.env.ASSETS_S3_BUCKET
-      ? `https://${process.env.ASSETS_S3_BUCKET}.s3.amazonaws.com`
-      : process.env.S3_BUCKET
-        ? `https://${process.env.S3_BUCKET}.s3.amazonaws.com`
-        : undefined);
-
-  if (!cdnDomain) {
-    // Fallback: treat s3Key as a relative path; frontend will likely ignore missing URLs.
-    return s3Key;
-  }
-
-  const normalizedDomain = cdnDomain.replace(/\/+$/, '');
-  const domainWithProtocol = /^https?:\/\//i.test(normalizedDomain)
-    ? normalizedDomain
-    : `https://${normalizedDomain}`;
-  const normalizedKey = s3Key.replace(/^\/+/, '');
-  return `${domainWithProtocol}/${normalizedKey}`;
+  return `${DEMO_ASSETS_PREFIX}/${fileName}`;
 }
 
 /**
@@ -67,7 +46,7 @@ function getDemoAssetUrlByIndex(index: number): string | null {
  * - If the brand already has campaigns or content, nothing is created.
  */
 export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Promise<void> {
-  const { brandId, includeAnalytics = true } = options;
+  const { brandId, userId, includeAnalytics = true } = options;
 
   const [campaignCount, contentCount] = await Promise.all([
     prisma.campaign.count({ where: { brandId } }),
@@ -81,6 +60,37 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
 
   const now = new Date();
   const days = (n: number) => 24 * 60 * 60 * 1000 * n;
+
+  // Create demo assets in the assets service so demo posts can reference real asset IDs.
+  const demoAssetIdsByIndex = new Map<number, string>();
+  try {
+    const assetsClient = getAssetsClient();
+    await Promise.all(
+      DEMO_IMAGE_FILES.map(async (fileName, idx) => {
+        const s3Key = getDemoAssetS3KeyByIndex(idx);
+        if (!s3Key) return;
+        try {
+          const result = await assetsClient.createAsset({
+            brandId,
+            uploadedBy: userId,
+            fileName,
+            s3Key,
+            fileSize: 250_000,
+            mimeType: 'image/png',
+            fileType: 'image',
+            width: 1080,
+            height: 1080,
+            tags: ['demo'],
+          });
+          demoAssetIdsByIndex.set(idx, result.asset.id);
+        } catch {
+          // Non-fatal: demo can still function with content-only data.
+        }
+      })
+    );
+  } catch {
+    // Non-fatal: demo can still function with content-only data.
+  }
 
   // Primary campaign showcasing an "up and running" brand
   const launchCampaign = await prisma.campaign.create({
@@ -157,9 +167,6 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
           ? evergreenCampaign.id
           : null;
 
-    const cdnUrl =
-      typeof input.imageIndex === 'number' ? getDemoAssetUrlByIndex(input.imageIndex) : null;
-
     return {
       brandId,
       campaignId,
@@ -172,10 +179,8 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
         isDemo: true,
         seed: 'demo-workspace',
       } as any,
-      mediaType: 'image',
       contentType: 'post',
-      primaryAssetId: null,
-      primaryAssetCdnUrl: cdnUrl,
+      demoImageIndex: typeof input.imageIndex === 'number' ? input.imageIndex : null,
     };
   };
 
@@ -218,9 +223,27 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
     }),
   ];
 
-  await prisma.content.createMany({
-    data: posts,
-  });
+  for (const post of posts) {
+    const { demoImageIndex, ...postData } = post;
+
+    const created = await prisma.content.create({
+      data: postData,
+      select: { id: true },
+    });
+
+    if (typeof demoImageIndex === 'number') {
+      const assetId = demoAssetIdsByIndex.get(demoImageIndex) ?? null;
+      if (assetId) {
+        await prisma.contentMediaAsset.create({
+          data: {
+            contentId: created.id,
+            displayOrder: 0,
+            assetId,
+          },
+        });
+      }
+    }
+  }
 
   // Optional: seed lightweight analytics so demo analytics pages feel alive.
   if (!includeAnalytics) {

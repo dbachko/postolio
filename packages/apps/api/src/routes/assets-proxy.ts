@@ -3,6 +3,7 @@ import {
   AssetsServiceClient,
   DeleteAssetResponse,
   ListAssetsResponse,
+  type AssetRecord,
 } from '@postolio/assets-client';
 import { config } from '../config/env-validation.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -105,7 +106,7 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const ownsBrand = await ensureBrandOwned(body.brandId, userId);
-      if (!ownsBrand) {
+      if (!ownsBrand.owns) {
         return reply.code(404).send({ error: 'Brand not found' });
       }
 
@@ -234,7 +235,7 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Brand not found' });
       }
 
-      const usage = await prisma.postMediaAsset.groupBy({
+      const usage = await prisma.contentMediaAsset.groupBy({
         by: ['assetId'],
         _count: { _all: true },
         where: {
@@ -257,6 +258,55 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       request.log.error(formatError(error), 'Failed to check asset usage');
       return reply.code(500).send({ error: 'Failed to check asset usage' });
+    }
+  });
+
+  // Batch fetch assets (used by UI to resolve assetId -> metadata)
+  fastify.post<{
+    Body: {
+      assetIds?: string[];
+    };
+  }>('/batch', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { assetIds } = request.body;
+
+      const normalizedIds = Array.isArray(assetIds)
+        ? Array.from(
+            new Set(
+              assetIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+            )
+          )
+        : [];
+
+      if (normalizedIds.length === 0) {
+        return reply.code(400).send({ error: 'assetIds is required' });
+      }
+
+      const assets = await assetsClient.getBatchAssets(normalizedIds);
+      const presentAssets = assets.filter(Boolean) as AssetRecord[];
+      const uniqueBrandIds = Array.from(new Set(presentAssets.map((asset) => asset.brandId)));
+
+      const ownedBrandIds = new Set<string>();
+      for (const brandId of uniqueBrandIds) {
+        const { owns } = await ensureBrandOwned(brandId, userId);
+        if (owns) ownedBrandIds.add(brandId);
+      }
+
+      const assetsById: Record<string, AssetRecord | null> = {};
+      normalizedIds.forEach((assetId, idx) => {
+        const asset = assets[idx] ?? null;
+        if (!asset) {
+          assetsById[assetId] = null;
+          return;
+        }
+        assetsById[assetId] = ownedBrandIds.has(asset.brandId) ? asset : null;
+      });
+
+      return reply.send({ assets: assetsById });
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to batch fetch assets');
+      return reply.code(500).send({ error: 'Failed to fetch assets' });
     }
   });
 

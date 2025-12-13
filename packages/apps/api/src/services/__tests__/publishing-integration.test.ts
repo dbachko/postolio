@@ -55,6 +55,22 @@ vi.mock('../../utils/token-service-client.ts', () => ({
   })),
 }));
 
+vi.mock('../assets-media.js', () => ({
+  getAssetsClient: vi.fn(() => ({
+    getBatchAssets: vi.fn(async (assetIds: string[]) =>
+      assetIds.map((assetId) => ({
+        id: assetId,
+        brandId: 'brand-123',
+        fileType: 'image',
+        url: 'https://cdn.example.com/image.jpg',
+        s3Key: `assets/${assetId}`,
+        width: 1080,
+        height: 1080,
+      }))
+    ),
+  })),
+}));
+
 // Import after mocks
 const { getDatabaseClient } = await import('../../config/database.js');
 const { ConnectorFactory, __mockConnector } = await import('../connectors/index.js' as any);
@@ -74,7 +90,10 @@ describe('publishContent (connector integration)', () => {
       brandId: 'brand-123',
       caption: 'Test caption',
       hashtags: ['test'],
-      primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
+      contentType: 'post',
+      shareToFeed: null,
+      thumbOffset: null,
+      mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
       brand: {
         id: 'brand-123',
         userId: 'user-123',
@@ -131,7 +150,10 @@ describe('publishContent (connector integration)', () => {
       brandId: 'brand-123',
       caption: 'Test caption',
       hashtags: ['test'],
-      primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
+      contentType: 'post',
+      shareToFeed: null,
+      thumbOffset: null,
+      mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
       brand: {
         id: 'brand-123',
         userId: 'user-123',

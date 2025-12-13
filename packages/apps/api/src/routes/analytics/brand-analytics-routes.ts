@@ -3,6 +3,7 @@ import { getDatabaseClient } from '../../config/database.js';
 import { getRedisClient } from '../../services/redis.js';
 import { calculateBrandHealthScore } from '../../services/brand-health-score.js';
 import { assertBrandOwnership } from '../../services/ownership.js';
+import { getAssetsClient } from '../../services/assets-media.js';
 
 const prisma = getDatabaseClient();
 
@@ -234,25 +235,63 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           content: {
             select: {
               caption: true,
-              primaryAssetCdnUrl: true,
+              mediaAssets: {
+                select: { assetId: true, displayOrder: true },
+                orderBy: { displayOrder: 'asc' },
+                take: 1,
+              },
             },
           },
         },
       });
 
+      const primaryAssetIds = pubs
+        .map((p) => p.content?.mediaAssets?.[0]?.assetId)
+        .filter((id): id is string => Boolean(id));
+      const uniquePrimaryAssetIds = Array.from(new Set(primaryAssetIds));
+      const assetsById = new Map<string, any>();
+      if (uniquePrimaryAssetIds.length > 0) {
+        try {
+          const assetsClient = getAssetsClient();
+          const assets = await assetsClient.getBatchAssets(uniquePrimaryAssetIds);
+          assets.forEach((asset) => {
+            if (asset?.id) assetsById.set(asset.id, asset);
+          });
+        } catch (error) {
+          fastify.log.warn(
+            { err: error, brandId },
+            'Failed to fetch asset thumbnails for analytics'
+          );
+        }
+      }
+
       const data = pubs
         .filter((p) => p.metricsLatest)
-        .map((p) => ({
-          publicationId: p.id,
-          platform: p.platform,
-          contentId: p.contentId,
-          permalink: p.permalink,
-          publishedAt: p.publishedAt,
-          metrics: p.metricsLatest,
-          caption: p.content?.caption || undefined,
-          thumbnailUrl: p.content?.primaryAssetCdnUrl || undefined,
-          imageUrl: p.content?.primaryAssetCdnUrl || undefined,
-        }));
+        .map((p) => {
+          const primaryAssetId = p.content?.mediaAssets?.[0]?.assetId;
+          const asset = primaryAssetId ? assetsById.get(primaryAssetId) : null;
+          const thumbnailCandidate = asset?.thumbnailUrl;
+          const thumbnailUrl =
+            typeof thumbnailCandidate === 'string' && thumbnailCandidate.length > 0
+              ? thumbnailCandidate
+              : asset?.fileType === 'image' && typeof asset?.url === 'string'
+                ? asset.url
+                : undefined;
+          const imageUrl =
+            asset?.fileType === 'image' && typeof asset?.url === 'string' ? asset.url : undefined;
+
+          return {
+            publicationId: p.id,
+            platform: p.platform,
+            contentId: p.contentId,
+            permalink: p.permalink,
+            publishedAt: p.publishedAt,
+            metrics: p.metricsLatest,
+            caption: p.content?.caption || undefined,
+            thumbnailUrl,
+            imageUrl,
+          };
+        });
 
       return reply.send({ success: true, data });
     } catch (error) {
@@ -591,13 +630,37 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
             content: {
               select: {
                 caption: true,
-                primaryAssetCdnUrl: true,
+                mediaAssets: {
+                  select: { assetId: true, displayOrder: true },
+                  orderBy: { displayOrder: 'asc' },
+                  take: 1,
+                },
               },
             },
           },
         }),
         prisma.contentPublication.count({ where }),
       ]);
+
+      const primaryAssetIds = posts
+        .map((p) => p.content.mediaAssets?.[0]?.assetId)
+        .filter((id): id is string => Boolean(id));
+      const uniquePrimaryAssetIds = Array.from(new Set(primaryAssetIds));
+      const assetsById = new Map<string, any>();
+      if (uniquePrimaryAssetIds.length > 0) {
+        try {
+          const assetsClient = getAssetsClient();
+          const assets = await assetsClient.getBatchAssets(uniquePrimaryAssetIds);
+          assets.forEach((asset) => {
+            if (asset?.id) assetsById.set(asset.id, asset);
+          });
+        } catch (error) {
+          fastify.log.warn(
+            { err: error, brandId },
+            'Failed to fetch asset thumbnails for analytics'
+          );
+        }
+      }
 
       const data = posts.map((p) => {
         const m = p.metricsLatest || {
@@ -610,12 +673,22 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           engagement: 0,
           engagementRate: 0,
         };
+        const primaryAssetId = p.content.mediaAssets?.[0]?.assetId;
+        const asset = primaryAssetId ? assetsById.get(primaryAssetId) : null;
+        const thumbnailCandidate = asset?.thumbnailUrl;
+        const thumbnailUrl =
+          typeof thumbnailCandidate === 'string' && thumbnailCandidate.length > 0
+            ? thumbnailCandidate
+            : asset?.fileType === 'image' && typeof asset?.url === 'string'
+              ? asset.url
+              : null;
+
         return {
           publicationId: p.id,
           contentId: p.contentId,
           platform: p.platform,
           caption: p.content.caption,
-          thumbnailUrl: p.content.primaryAssetCdnUrl,
+          thumbnailUrl,
           permalink: p.permalink,
           publishedAt: p.publishedAt,
           metrics: m,

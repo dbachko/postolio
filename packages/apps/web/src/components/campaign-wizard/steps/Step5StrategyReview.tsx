@@ -156,7 +156,8 @@ export function Step5StrategyReview() {
           Array.isArray(wizard.themes) && wizard.themes.length > 0
             ? wizard.themes
             : ['awareness', 'product'],
-        style: wizard.style || 'modern',
+        style:
+          Array.isArray(wizard.style) && wizard.style.length ? wizard.style.join('; ') : 'modern',
         frequency: wizard.frequency as 'daily' | 'every2days' | '3weekly',
         postingTime: wizard.postingTime,
         promotionDetails: wizard.promotionDetails || undefined,

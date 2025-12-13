@@ -43,7 +43,7 @@ vi.mock('../../services/regeneration-queue.js', () => ({
 const dbState = {
   brands: [] as Array<{ id: string; userId: string; name: string; styleProfile?: unknown }>,
   contents: [] as Array<any>,
-  postMediaAssets: [] as Array<any>,
+  contentMediaAssets: [] as Array<any>,
 };
 
 // Mock Prisma client used by the API
@@ -78,13 +78,8 @@ vi.mock('../../config/database.js', () => {
           scheduledAt: data.scheduledAt ?? null,
           createdAt: now,
           updatedAt: now,
-          primaryAssetId: null,
-          primaryAssetCdnUrl: null,
-          primaryAssetWidth: null,
-          primaryAssetHeight: null,
-          mediaType: data.mediaType ?? 'image',
           contentType: data.contentType ?? 'post',
-          videoUrl: data.videoUrl ?? null,
+          shareToFeed: data.shareToFeed ?? null,
           generationParams: data.generationParams ?? null,
         };
         dbState.contents.push(record);
@@ -112,28 +107,27 @@ vi.mock('../../config/database.js', () => {
         return dbState.contents.find((c) => c.id === id) ?? null;
       }),
     },
-    postMediaAsset: {
+    contentMediaAsset: {
       upsert: vi.fn(async (args: any) => {
-        const where = args?.where?.contentId_usageContext;
+        const where = args?.where?.contentId_displayOrder;
         const contentId = where?.contentId as string;
-        const usageContext = where?.usageContext as string;
-        const existingIndex = dbState.postMediaAssets.findIndex(
-          (p) => p.contentId === contentId && p.usageContext === usageContext
+        const displayOrder = where?.displayOrder as number;
+        const existingIndex = dbState.contentMediaAssets.findIndex(
+          (p) => p.contentId === contentId && p.displayOrder === displayOrder
         );
         if (existingIndex >= 0) {
-          dbState.postMediaAssets[existingIndex] = {
-            ...dbState.postMediaAssets[existingIndex],
+          dbState.contentMediaAssets[existingIndex] = {
+            ...dbState.contentMediaAssets[existingIndex],
             ...args.update,
           };
-          return dbState.postMediaAssets[existingIndex];
+          return dbState.contentMediaAssets[existingIndex];
         }
         const created = {
-          id: `pma-${dbState.postMediaAssets.length + 1}`,
           ...args.create,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-        dbState.postMediaAssets.push(created);
+        dbState.contentMediaAssets.push(created);
         return created;
       }),
     },
@@ -191,7 +185,7 @@ describe('Content generation + asset attach integration', () => {
     // Reset in-memory DB between tests
     dbState.brands.length = 0;
     dbState.contents.length = 0;
-    dbState.postMediaAssets.length = 0;
+    dbState.contentMediaAssets.length = 0;
 
     dbState.brands.push({
       id: 'brand-1',
@@ -234,16 +228,11 @@ describe('Content generation + asset attach integration', () => {
     expect(dbState.contents.length).toBe(1);
     const created = dbState.contents[0];
 
-    // Synchronous asset import + attach should have populated primaryAssetId
-    expect(created.primaryAssetId).toBe('asset-1');
-    expect(created.primaryAssetCdnUrl).toBe('https://cdn.example.com/assets/asset-1.jpg');
-
-    // And a corresponding PostMediaAsset row for usageContext "primary"
-    const primaryMedia = dbState.postMediaAssets.find(
-      (p) => p.contentId === created.id && p.usageContext === 'primary'
+    // Synchronous asset import + attach should have created a ContentMediaAsset row for displayOrder 0
+    const primaryMedia = dbState.contentMediaAssets.find(
+      (p) => p.contentId === created.id && p.displayOrder === 0
     );
     expect(primaryMedia).toBeDefined();
     expect(primaryMedia?.assetId).toBe('asset-1');
-    expect(primaryMedia?.cdnUrl).toBe('https://cdn.example.com/assets/asset-1.jpg');
   });
 });

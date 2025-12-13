@@ -9,6 +9,8 @@ import { fetchTokensFromService } from '../utils/token-service-client.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { APIError } from '@postolio/errors';
+import { getAssetsClient } from '../services/assets-media.js';
+import type { AssetRecord } from '@postolio/assets-client';
 
 const logger = baseLogger.child({ module: 'social-platform-routes' });
 
@@ -235,7 +237,14 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
         // Get content with brand and campaign
         const content = await prisma.content.findUnique({
           where: { id: contentId },
-          include: { brand: true, campaign: true },
+          include: {
+            brand: true,
+            campaign: true,
+            mediaAssets: {
+              select: { assetId: true, displayOrder: true },
+              orderBy: { displayOrder: 'asc' },
+            },
+          },
         });
 
         if (!content) {
@@ -361,21 +370,46 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           // Internally, carousels are modeled as image posts with multiple assets.
           // Reels are identified purely via contentType === 'reel' (mediaType remains 'video').
           const isReel = content.contentType === 'reel';
+          const primaryAssetId = content.mediaAssets?.[0]?.assetId ?? null;
+          if (!primaryAssetId) {
+            return reply.code(400).send({
+              error: 'media_required',
+              message: 'Content has no attached media assets',
+            });
+          }
+          const assetsClient = getAssetsClient();
+          const [primaryAsset] = await assetsClient.getBatchAssets([primaryAssetId]);
+          if (!primaryAsset) {
+            return reply.code(400).send({
+              error: 'media_not_found',
+              message: 'Primary media asset could not be found',
+            });
+          }
+
+          const isVideo = primaryAsset.fileType === 'video' || isReel;
           const instagramMediaType = isReel
             ? ('REELS' as const)
-            : content.mediaType === 'video'
+            : isVideo
               ? ('VIDEO' as const)
               : ('IMAGE' as const);
           const shareToFeed =
             isReel && typeof (content as any).shareToFeed === 'boolean'
               ? Boolean((content as any).shareToFeed)
               : undefined;
+          const thumbnailCandidate = (primaryAsset as any)?.thumbnailUrl;
+          const imageUrl =
+            primaryAsset.fileType === 'image'
+              ? primaryAsset.url
+              : typeof thumbnailCandidate === 'string'
+                ? thumbnailCandidate
+                : undefined;
+          const mediaUrl = primaryAsset.url;
 
           publishResult = await connector.publish(
             {
               caption: content.caption || '',
-              imageUrl: content.primaryAssetCdnUrl || undefined,
-              mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
+              imageUrl,
+              mediaUrl,
               mediaType: instagramMediaType,
               ...(shareToFeed !== undefined ? { shareToFeed } : {}),
             },
@@ -686,17 +720,51 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           // Create content record (imported from platform)
           let content;
           try {
+            let importedAsset: AssetRecord | null = null;
+            if (post.mediaUrl) {
+              try {
+                const assetsClient = getAssetsClient();
+                const isVideo = post.mediaType === 'VIDEO';
+                const fileType = isVideo ? 'video' : 'image';
+                importedAsset = await assetsClient.importFromUrl({
+                  brandId,
+                  uploadedBy: userId,
+                  sourceUrl: post.mediaUrl,
+                  fileName: `${externalPostId}.${isVideo ? 'mp4' : 'jpg'}`,
+                  mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
+                  fileType,
+                  title: `Imported from ${platform}`,
+                });
+              } catch (assetErr: any) {
+                failedCount++;
+                errors.push(
+                  `Post ${externalPostId}: failed to import media - ${assetErr?.message || String(assetErr)}`
+                );
+                continue;
+              }
+            }
+
             content = await prisma.content.create({
               data: {
                 brandId,
                 caption: post.caption,
                 hashtags: extractHashtagsFromCaption(post.caption),
-                primaryAssetCdnUrl: post.mediaUrl,
                 status: 'published',
+                postedAt: post.postedAt ? new Date(post.postedAt) : new Date(),
                 createdAt: post.postedAt ? new Date(post.postedAt) : new Date(),
                 updatedAt: new Date(),
               },
             });
+
+            if (importedAsset) {
+              await prisma.contentMediaAsset.create({
+                data: {
+                  contentId: content.id,
+                  assetId: importedAsset.id,
+                  displayOrder: 0,
+                },
+              });
+            }
           } catch (err: any) {
             failedCount++;
             errors.push(

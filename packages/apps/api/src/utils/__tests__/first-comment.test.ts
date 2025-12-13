@@ -10,7 +10,6 @@ describe('firstComment handling in content management', () => {
     const body: CreateManualContentBody = {
       brandId: 'brand-1',
       caption: 'Test caption',
-      mediaType: 'image',
       contentType: 'post',
       assetIds: ['asset-1'],
       firstComment: '  This is my first comment  ',
@@ -24,7 +23,6 @@ describe('firstComment handling in content management', () => {
     const body = {
       brandId: 'brand-1',
       caption: 'Test caption',
-      mediaType: 'image',
       contentType: 'post',
       assetIds: ['asset-1'],
       // Intentionally wrong type
@@ -43,7 +41,6 @@ describe('firstComment handling in content management', () => {
     const body: CreateManualContentBody = {
       brandId: 'brand-1',
       caption: 'Test caption',
-      mediaType: 'image',
       contentType: 'post',
       assetIds: ['asset-1'],
       firstComment: 'x'.repeat(2201),
@@ -57,39 +54,42 @@ describe('firstComment handling in content management', () => {
   });
 
   it('trims and persists firstComment in createContentInTransaction', async () => {
+    let storedFirstComment: string | null = null;
     const contentCreate = vi.fn(async (args: any) => {
-      const { data, select } = args;
-      const base = {
-        id: 'content-1',
-        caption: data.caption,
-        primaryAssetCdnUrl: null,
-        primaryAssetId: null,
-        primaryAssetHeight: null,
-        primaryAssetWidth: null,
-        status: data.status ?? 'draft',
-        brandId: data.brandId,
-        generationParams: data.generationParams,
-        createdAt: new Date(),
-        mediaType: data.mediaType ?? 'image',
-        contentType: data.contentType ?? 'post',
-        videoUrl: data.videoUrl ?? null,
-        shareToFeed: data.shareToFeed ?? null,
-        firstComment: data.firstComment ?? null,
-      };
-      if (!select) return base;
-      const picked: any = {};
-      for (const key of Object.keys(select)) {
-        if (select[key]) picked[key] = (base as any)[key];
-      }
-      return picked;
+      storedFirstComment = args?.data?.firstComment ?? null;
+      return { id: 'content-1' };
     });
+    const contentFindUnique = vi.fn(async () => ({
+      id: 'content-1',
+      caption: 'Test caption',
+      hashtags: [],
+      status: 'draft',
+      brandId: 'brand-1',
+      campaignId: null,
+      schedulingError: null,
+      generationParams: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      scheduledAt: null,
+      postedAt: null,
+      contentType: 'post',
+      shareToFeed: null,
+      firstComment: storedFirstComment,
+      firstCommentStatus: null,
+      firstCommentPostedAt: null,
+      firstCommentError: null,
+      mediaAssets: [],
+    }));
 
     const prismaMock = {
       content: {
         create: contentCreate,
+        findUnique: contentFindUnique,
       },
-      postMediaAsset: {
-        create: vi.fn(),
+      contentMediaAsset: {
+        createMany: vi.fn(),
+        upsert: vi.fn(),
+        deleteMany: vi.fn(),
       },
       $transaction: vi.fn(async (fn: (tx: any) => Promise<unknown>) => fn(prismaMock)),
     } as any;
@@ -98,15 +98,12 @@ describe('firstComment handling in content management', () => {
       {
         brandId: 'brand-1',
         caption: 'Test caption',
-        mediaType: 'image',
         contentType: 'post',
-        videoUrl: undefined,
         campaignId: undefined,
         scheduledAt: undefined,
         shareToFeed: undefined,
         firstComment: '  This is my first comment  ',
-        resolvedAsset: null,
-        resolvedCarouselAssets: null,
+        resolvedAssets: [],
       },
       prismaMock
     );

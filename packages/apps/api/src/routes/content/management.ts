@@ -20,6 +20,7 @@ import {
   validateRequestBody,
   verifyBrandAndCampaign,
   resolveAssets,
+  validateInstagramContentForCreate,
   createContentInTransaction,
   handleScheduling,
   type CreateManualContentBody,
@@ -53,12 +54,27 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(assetResult.code || 500).send({ error: assetResult.error });
         }
 
+        const assetsForValidation = assetResult.resolvedAssets ?? [];
+        const validation = validateInstagramContentForCreate({
+          caption: body.caption,
+          contentType: body.contentType ?? 'post',
+          assets: assetsForValidation,
+        });
+        if (!validation.ok) {
+          return reply.code(400).send(validation.error);
+        }
+
         // Create content in transaction
         const content = await createContentInTransaction(
           {
-            ...body,
-            resolvedAsset: assetResult.resolvedAsset,
-            resolvedCarouselAssets: assetResult.resolvedCarouselAssets,
+            brandId: body.brandId,
+            caption: body.caption,
+            contentType: body.contentType,
+            campaignId: body.campaignId,
+            scheduledAt: body.scheduledAt,
+            shareToFeed: body.shareToFeed,
+            firstComment: body.firstComment,
+            resolvedAssets: assetResult.resolvedAssets ?? [],
           },
           prisma
         );
@@ -112,17 +128,25 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             id: true,
             caption: true,
-            primaryAssetCdnUrl: true,
+            contentType: true,
             status: true,
             createdAt: true,
             updatedAt: true,
             scheduledAt: true,
             brandId: true,
             generationParams: true,
+            campaignId: true,
+            schedulingError: true,
+            mediaAssets: {
+              select: { assetId: true, displayOrder: true },
+              orderBy: { displayOrder: 'asc' },
+            },
             firstComment: true,
             firstCommentStatus: true,
             firstCommentPostedAt: true,
             firstCommentError: true,
+            hashtags: true,
+            shareToFeed: true,
           },
           // For draft review, default to last modified first
           orderBy: { updatedAt: 'desc' },

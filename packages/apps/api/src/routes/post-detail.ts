@@ -9,7 +9,6 @@ import {
 import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js';
 import crypto from 'crypto';
 import { getRedisClient } from '../services/redis.js';
-import { getAssetsClient } from '../services/assets-media.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 
 const prisma = getDatabaseClient();
@@ -17,17 +16,6 @@ const prisma = getDatabaseClient();
 interface PostDetailParams {
   postId: string;
 }
-
-const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.mpeg', '.mpg', '.avi', '.qt'];
-
-const inferFileTypeFromUrl = (url?: string | null): 'image' | 'video' => {
-  if (!url) return 'image';
-  const lower = url.toLowerCase();
-  if (VIDEO_EXTENSIONS.some((ext) => lower.includes(ext))) {
-    return 'video';
-  }
-  return 'image';
-};
 
 const postDetailRoutes: FastifyPluginAsync = async (app) => {
   // Add authentication middleware to all routes
@@ -54,10 +42,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           id: true,
           caption: true,
           hashtags: true,
-          primaryAssetCdnUrl: true,
-          mediaType: true,
           contentType: true,
-          videoUrl: true,
           shareToFeed: true,
           status: true,
           scheduledAt: true,
@@ -73,7 +58,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           firstCommentPostedAt: true,
           firstCommentError: true,
           mediaAssets: {
-            select: { cdnUrl: true, usageContext: true, displayOrder: true, assetId: true },
+            select: { assetId: true, displayOrder: true },
             orderBy: { displayOrder: 'asc' },
           },
           brand: {
@@ -100,58 +85,11 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       // Check user has access to this post via brand ownership
       await assertBrandOwnership(userId, post.brandId);
 
-      // Build CDN URL and map to public response format
-      const mediaAssets = (post as any).mediaAssets as
-        | { cdnUrl: string; usageContext: string; displayOrder: number }[]
-        | undefined;
-      let mediaAssetsWithType = mediaAssets ?? [];
-      const assetIds = (mediaAssets || [])
-        .map((asset: any) => asset?.assetId)
-        .filter((id: string | null | undefined): id is string => Boolean(id));
-
-      if (assetIds.length > 0) {
-        try {
-          const assetsClient = getAssetsClient();
-          const fetchedAssets = await assetsClient.getBatchAssets(assetIds);
-          const typeById = new Map<string, 'image' | 'video'>();
-          fetchedAssets.forEach((asset) => {
-            if (asset?.id) {
-              typeById.set(asset.id, asset.fileType === 'video' ? 'video' : 'image');
-            }
-          });
-
-          mediaAssetsWithType = (mediaAssets || []).map((asset: any) => ({
-            ...asset,
-            fileType: typeById.get(asset.assetId) || inferFileTypeFromUrl(asset.cdnUrl),
-          }));
-        } catch (err) {
-          request.log.warn(
-            { err, postId, assetCount: mediaAssets?.length },
-            'Failed to enrich media asset types; continuing without type metadata'
-          );
-          mediaAssetsWithType = mediaAssets || [];
-        }
-      } else if (mediaAssets?.length) {
-        mediaAssetsWithType = mediaAssets.map((asset: any) => ({
-          ...asset,
-          fileType: inferFileTypeFromUrl(asset.cdnUrl),
-        }));
-      }
-
-      const primaryAssetUrl =
-        post.primaryAssetCdnUrl ||
-        mediaAssets?.find((asset) => asset.usageContext === 'primary')?.cdnUrl ||
-        mediaAssets?.[0]?.cdnUrl ||
-        null;
-
       const postWithUrl = {
         id: post.id,
         caption: post.caption,
         hashtags: post.hashtags,
-        imageUrl: primaryAssetUrl,
-        mediaType: post.mediaType,
         contentType: post.contentType,
-        videoUrl: post.videoUrl,
         shareToFeed: post.shareToFeed,
         status: post.status,
         brandId: post.brandId,
@@ -172,7 +110,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         schedulingError: post.schedulingError,
         brand: post.brand,
         campaign: post.campaign,
-        mediaAssets: mediaAssetsWithType ?? [],
+        mediaAssets: post.mediaAssets ?? [],
+        mediaAssetCount: post.mediaAssets?.length ?? 0,
+        primaryAssetId: post.mediaAssets?.[0]?.assetId ?? null,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
       };

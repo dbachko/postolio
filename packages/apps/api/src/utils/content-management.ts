@@ -5,7 +5,7 @@
 import { Prisma } from '@postolio/database';
 
 import { schedulerService } from '../services/scheduler.js';
-import { attachAssetToContent, getAssetsClient } from '../services/assets-media.js';
+import { getAssetsClient } from '../services/assets-media.js';
 import { assertBrandOwnership, assertCampaignAccess } from '../services/ownership.js';
 import {
   validateContentPayload,
@@ -14,14 +14,13 @@ import {
 } from '@postolio/content-validation';
 import { extractHashtagsFromCaption } from './hashtag-extractor.js';
 import { haveUniformAspectRatio } from './aspect-ratio.js';
+import type { AssetRecord } from '@postolio/assets-client';
 
 export interface CreateManualContentBody {
   brandId: string;
   caption: string;
   assetIds?: string[]; // Asset IDs from Assets database (single image or carousel)
-  mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
-  videoUrl?: string;
   campaignId?: string;
   scheduledAt?: string;
   shareToFeed?: boolean;
@@ -37,30 +36,42 @@ export interface ApproveContentBody {
  * Validates the request body for content creation
  */
 export function validateRequestBody(body: CreateManualContentBody) {
-  const normalizedContentType: ValidationContentType = body.contentType ?? 'post';
-  const normalizedMediaType: ValidationMediaType = body.mediaType ?? 'image';
-
-  const mediaAssets =
-    body.assetIds?.map((id) => ({
-      key: id,
-      type: (normalizedMediaType === 'video' ? 'video' : 'image') as ValidationMediaType,
-    })) || [];
-
-  const validation = validateContentPayload({
-    platform: 'instagram',
-    contentType: normalizedContentType,
-    mediaType: normalizedMediaType,
-    caption: body.caption,
-    videoUrl: body.videoUrl,
-    mediaAssets,
-  });
-
-  if (!validation.ok) {
+  if (!body || typeof body !== 'object') {
     return {
       ok: false,
       error: {
-        error: validation.errors[0]?.message || 'Invalid content',
-        details: validation.errors,
+        error: 'Invalid request body',
+        details: ['Request body must be an object'],
+      },
+    };
+  }
+
+  if (!body.brandId || typeof body.brandId !== 'string') {
+    return {
+      ok: false,
+      error: {
+        error: 'brandId is required',
+        details: ['brandId is required'],
+      },
+    };
+  }
+
+  if (body.caption == null || typeof body.caption !== 'string') {
+    return {
+      ok: false,
+      error: {
+        error: 'caption is required',
+        details: ['caption is required'],
+      },
+    };
+  }
+
+  if (body.assetIds !== undefined && !Array.isArray(body.assetIds)) {
+    return {
+      ok: false,
+      error: {
+        error: 'assetIds must be an array if provided',
+        details: ['assetIds must be an array if provided'],
       },
     };
   }
@@ -84,6 +95,72 @@ export function validateRequestBody(body: CreateManualContentBody) {
         },
       };
     }
+  }
+
+  return { ok: true };
+}
+
+export function validateInstagramContentForCreate(params: {
+  caption: string;
+  contentType: ValidationContentType;
+  assets: AssetRecord[];
+}): { ok: true } | { ok: false; error: { error: string; details: unknown } } {
+  const normalizedContentType: ValidationContentType = params.contentType ?? 'post';
+  const assets = params.assets ?? [];
+
+  if (normalizedContentType === 'reel') {
+    if (assets.length !== 1 || assets[0]?.fileType !== 'video') {
+      return {
+        ok: false,
+        error: {
+          error: 'Reels require exactly one video asset',
+          details: ['contentType=reel requires one asset with fileType=video'],
+        },
+      };
+    }
+  }
+
+  if (assets.length > 1) {
+    const nonImages = assets.filter((a) => a.fileType !== 'image');
+    if (nonImages.length > 0) {
+      return {
+        ok: false,
+        error: {
+          error: 'Carousels currently support images only',
+          details: ['Attach one video for video posts, or images for carousels'],
+        },
+      };
+    }
+  }
+
+  const mediaAssets = assets.map((asset) => ({
+    key: asset.id,
+    type: (asset.fileType === 'video' ? 'video' : 'image') as ValidationMediaType,
+  }));
+
+  const mediaTypeHint: ValidationMediaType =
+    normalizedContentType === 'reel'
+      ? 'video'
+      : assets.length === 1 && assets[0]?.fileType === 'video'
+        ? 'video'
+        : 'image';
+
+  const validation = validateContentPayload({
+    platform: 'instagram',
+    contentType: normalizedContentType,
+    mediaType: mediaTypeHint,
+    caption: params.caption,
+    mediaAssets,
+  });
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      error: {
+        error: validation.errors[0]?.message || 'Invalid content',
+        details: validation.errors,
+      },
+    };
   }
 
   return { ok: true };
@@ -115,11 +192,10 @@ export async function resolveAssets(
   success: boolean;
   code?: number;
   error?: string;
-  resolvedAsset?: any;
-  resolvedCarouselAssets?: any;
+  resolvedAssets: AssetRecord[];
 }> {
   if (!assetIds || assetIds.length === 0) {
-    return { success: true, resolvedAsset: null, resolvedCarouselAssets: null };
+    return { success: true, resolvedAssets: [] };
   }
 
   const assetsClient = getAssetsClient();
@@ -136,6 +212,7 @@ export async function resolveAssets(
         success: false,
         code: 404,
         error: `Assets not found: ${missingAssets.join(', ')}`,
+        resolvedAssets: [],
       };
     }
 
@@ -147,6 +224,7 @@ export async function resolveAssets(
         success: false,
         code: 400,
         error: 'All assets must belong to the same brand as the content',
+        resolvedAssets: [],
       };
     }
 
@@ -157,41 +235,21 @@ export async function resolveAssets(
         code: 400,
         error:
           'All carousel items must have the same aspect ratio. Please crop or resize your media so they match.',
+        resolvedAssets: [],
       };
     }
 
-    if (assetIds.length === 1) {
-      const asset = validAssets[0];
-      return {
-        success: true,
-        resolvedAsset: {
-          id: asset.id,
-          url: asset.url,
-          brandId: asset.brandId,
-          width: asset.width ?? null,
-          height: asset.height ?? null,
-        },
-        resolvedCarouselAssets: null,
-      };
-    } else {
-      return {
-        success: true,
-        resolvedAsset: null,
-        resolvedCarouselAssets: validAssets.map((asset) => ({
-          id: asset.id,
-          url: asset.url,
-          brandId: asset.brandId,
-          width: asset.width ?? null,
-          height: asset.height ?? null,
-        })),
-      };
-    }
+    return {
+      success: true,
+      resolvedAssets: validAssets,
+    };
   } catch (error) {
     request.log.error(error);
     return {
       success: false,
       code: 400,
       error: 'Failed to fetch assets. Please try again.',
+      resolvedAssets: [],
     };
   }
 }
@@ -203,15 +261,12 @@ export async function createContentInTransaction(
   params: {
     brandId: string;
     caption: string;
-    mediaType?: string;
     contentType?: string;
-    videoUrl?: string;
     campaignId?: string;
     scheduledAt?: string;
     shareToFeed?: boolean;
     firstComment?: string;
-    resolvedAsset: any;
-    resolvedCarouselAssets: any;
+    resolvedAssets: AssetRecord[];
   },
   prismaClient: any
 ) {
@@ -227,83 +282,53 @@ export async function createContentInTransaction(
         brandId: params.brandId,
         campaignId: resolvedCampaignId,
         scheduledAt: params.scheduledAt ? new Date(params.scheduledAt) : null,
-        mediaType: params.mediaType || 'image',
         contentType: params.contentType || 'post',
-        videoUrl: params.videoUrl || null,
         shareToFeed: params.shareToFeed ?? null,
         firstComment: params.firstComment ? params.firstComment.trim() : null,
         generationParams: Prisma.JsonNull,
       },
       select: {
         id: true,
-        caption: true,
-        primaryAssetCdnUrl: true,
-        primaryAssetId: true,
-        primaryAssetHeight: true,
-        primaryAssetWidth: true,
-        status: true,
-        brandId: true,
-        generationParams: true,
-        createdAt: true,
-        mediaType: true,
-        contentType: true,
-        videoUrl: true,
-        shareToFeed: true,
-        firstComment: true,
       },
     });
 
-    if (params.resolvedAsset) {
-      await attachAssetToContent({
-        contentId: created.id,
-        asset: params.resolvedAsset,
-        prisma: tx,
+    if (params.resolvedAssets.length > 0) {
+      await tx.contentMediaAsset.createMany({
+        data: params.resolvedAssets.map((asset, idx) => ({
+          contentId: created.id,
+          assetId: asset.id,
+          displayOrder: idx,
+        })),
       });
-      return {
-        ...created,
-        primaryAssetId: params.resolvedAsset.id,
-        primaryAssetCdnUrl: params.resolvedAsset.url,
-        primaryAssetWidth: params.resolvedAsset.width,
-        primaryAssetHeight: params.resolvedAsset.height,
-      };
     }
 
-    if (params.resolvedCarouselAssets && params.resolvedCarouselAssets.length > 0) {
-      const firstAsset = params.resolvedCarouselAssets[0];
-
-      for (let i = 0; i < params.resolvedCarouselAssets.length; i++) {
-        const asset = params.resolvedCarouselAssets[i];
-        await tx.postMediaAsset.create({
-          data: {
-            contentId: created.id,
-            assetId: asset.id,
-            cdnUrl: asset.url,
-            displayOrder: i,
-            usageContext: i === 0 ? 'primary' : `carousel_${i}`,
-          },
-        });
-      }
-
-      await tx.content.update({
-        where: { id: created.id },
-        data: {
-          primaryAssetId: firstAsset.id,
-          primaryAssetCdnUrl: firstAsset.url,
-          primaryAssetWidth: firstAsset.width,
-          primaryAssetHeight: firstAsset.height,
+    return tx.content.findUnique({
+      where: { id: created.id },
+      select: {
+        id: true,
+        caption: true,
+        hashtags: true,
+        status: true,
+        brandId: true,
+        campaignId: true,
+        schedulingError: true,
+        generationParams: true,
+        createdAt: true,
+        updatedAt: true,
+        scheduledAt: true,
+        postedAt: true,
+        contentType: true,
+        shareToFeed: true,
+        firstComment: true,
+        firstCommentStatus: true,
+        firstCommentPostedAt: true,
+        firstCommentError: true,
+        mediaAssets: {
+          select: { assetId: true, displayOrder: true },
+          orderBy: { displayOrder: 'asc' },
         },
-      });
-
-      return {
-        ...created,
-        primaryAssetId: firstAsset.id,
-        primaryAssetCdnUrl: firstAsset.url,
-        primaryAssetWidth: firstAsset.width,
-        primaryAssetHeight: firstAsset.height,
-      };
-    }
-
-    return created;
+      },
+    });
   });
 }
 

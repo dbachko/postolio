@@ -32,7 +32,7 @@ const initialState: CampaignWizardState = {
   goals: [],
   timeline: null,
   themes: [],
-  style: '',
+  style: [],
   imageSource: null, // NEW: Image source preference
   frequency: '',
   postingTime: '12:00',
