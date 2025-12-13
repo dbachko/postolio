@@ -37,12 +37,13 @@ COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 
 # Ensure turbo cache directories exist
-RUN mkdir -p packages/libs/database/.turbo packages/libs/connectors/.turbo packages/services/analytics-ingestor/.turbo
+RUN mkdir -p packages/libs/database/.turbo packages/libs/connectors/.turbo packages/libs/observability/.turbo packages/services/analytics-ingestor/.turbo
 
 # Build required libs then the ingestor
 RUN pnpm --filter=@postolio/aws build \
   && pnpm --filter=@postolio/database build \
   && pnpm --filter=@postolio/errors build \
+  && pnpm --filter=@postolio/observability build \
   && pnpm --filter=@postolio/connectors build \
   && pnpm --filter=@postolio/analytics-ingestor build
 

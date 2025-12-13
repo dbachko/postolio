@@ -1,4 +1,6 @@
 import { memo, useState, useCallback, useMemo } from 'react';
+import { startOfDay, isBefore } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
@@ -92,11 +94,18 @@ function FullCalendarImpl({
       if (typeof window === 'undefined') return;
 
       try {
-        const local = new Date(value);
+        const brandTz = tzRef.current;
+        const clickedLocal = toZonedTime(value, brandTz);
+        const todayLocal = startOfDay(toZonedTime(new Date(), brandTz));
+        if (isBefore(startOfDay(clickedLocal), todayLocal)) {
+          return;
+        }
+
+        const local = new Date(clickedLocal);
         if (calendarView === 'month') {
           local.setHours(10, 0, 0, 0);
         }
-        const utcISO = convertLocalToUTC(local).toISOString();
+        const utcISO = convertLocalToUTC(local, brandTz).toISOString();
         const url = new URL(window.location.href);
         url.searchParams.set('scheduledAt', utcISO);
         window.history.replaceState({}, '', url.toString());
@@ -105,7 +114,7 @@ function FullCalendarImpl({
         console.error(error);
       }
     },
-    [calendarView, openSidebar]
+    [calendarView, openSidebar, tzRef]
   );
 
   return (
