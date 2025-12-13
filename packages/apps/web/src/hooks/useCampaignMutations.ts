@@ -1,12 +1,37 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { campaign as campaignApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 export function useCampaignMutations(refetchCampaigns: () => void) {
+  const queryClient = useQueryClient();
+
   const startCampaignMutation = useMutation({
     mutationFn: (campaignId: string) => campaignApi.startCampaign(campaignId),
-    onSuccess: () => {
-      toast.success('Campaign started successfully!');
+    onSuccess: (data: any, campaignId) => {
+      const updatedCampaign =
+        data && typeof data === 'object' && 'campaign' in data ? (data as any).campaign : null;
+
+      // Ensure details view flips to "Pause" immediately (avoid stale GET caches / timing issues).
+      if (updatedCampaign && typeof updatedCampaign === 'object') {
+        queryClient.setQueryData(['campaign', campaignId], (old: any) => {
+          if (old && typeof old === 'object' && 'campaign' in old) {
+            return { ...old, campaign: { ...(old as any).campaign, ...updatedCampaign } };
+          }
+          return { success: true, campaign: updatedCampaign };
+        });
+        queryClient.setQueryData(['urlCampaign', campaignId], (old: any) => {
+          if (old && typeof old === 'object' && 'campaign' in old) {
+            return { ...old, campaign: { ...(old as any).campaign, ...updatedCampaign } };
+          }
+          return { success: true, campaign: updatedCampaign };
+        });
+      } else {
+        // Fallback: still force a refresh of the campaign detail query.
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+        queryClient.invalidateQueries({ queryKey: ['urlCampaign', campaignId] });
+      }
+
+      toast.success(data?.message || 'Campaign started successfully!');
       refetchCampaigns();
     },
     onError: (error) => {
@@ -18,8 +43,28 @@ export function useCampaignMutations(refetchCampaigns: () => void) {
   const pauseCampaignMutation = useMutation({
     mutationFn: (campaignId: string) =>
       campaignApi.updateCampaign(campaignId, { status: 'paused' }),
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, campaignId) => {
       toast.success(data.message || 'Campaign paused successfully!');
+      const updatedCampaign =
+        data && typeof data === 'object' && 'campaign' in data ? (data as any).campaign : null;
+
+      if (updatedCampaign && typeof updatedCampaign === 'object') {
+        queryClient.setQueryData(['campaign', campaignId], (old: any) => {
+          if (old && typeof old === 'object' && 'campaign' in old) {
+            return { ...old, campaign: { ...(old as any).campaign, ...updatedCampaign } };
+          }
+          return { success: true, campaign: updatedCampaign };
+        });
+        queryClient.setQueryData(['urlCampaign', campaignId], (old: any) => {
+          if (old && typeof old === 'object' && 'campaign' in old) {
+            return { ...old, campaign: { ...(old as any).campaign, ...updatedCampaign } };
+          }
+          return { success: true, campaign: updatedCampaign };
+        });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+        queryClient.invalidateQueries({ queryKey: ['urlCampaign', campaignId] });
+      }
       refetchCampaigns();
     },
   });

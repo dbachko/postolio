@@ -631,6 +631,9 @@ importers:
       '@postolio/aws':
         specifier: workspace:^
         version: link:../../libs/aws
+      '@postolio/observability':
+        specifier: workspace:^
+        version: link:../../libs/observability
       '@postolio/service-parameters':
         specifier: workspace:^
         version: link:../../libs/service-parameters

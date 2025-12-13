@@ -57,6 +57,7 @@
     "@aws-sdk/client-ssm": "^3.932.0",
     "@aws-sdk/core": "^3.932.0",
     "@postolio/aws": "workspace:^",
+    "@postolio/observability": "workspace:^",
     "@postolio/service-parameters": "workspace:^",
     "@prisma/adapter-pg": "^6.19.0",
     "@smithy/core": "^3.18.5",

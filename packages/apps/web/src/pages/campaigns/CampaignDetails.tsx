@@ -49,9 +49,11 @@ export function CampaignDetails({
 
   // Week 3: Fetch enhanced campaign metrics
   const metricsQuery = useQuery({
-    queryKey: ['campaign-metrics-enhanced', campaign?.id],
+    queryKey: ['campaign-metrics', campaign?.id],
     queryFn: () => analytics.getCampaignMetrics(campaign!.id),
     enabled: !!campaign?.id,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {

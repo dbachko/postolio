@@ -23,6 +23,8 @@ export function CampaignAnalytics({ campaignId, campaignName, timezone }: Campai
     queryKey: ['campaign-metrics', campaignId],
     queryFn: () => analytics.getCampaignMetrics(campaignId),
     enabled: !!campaignId,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch optimization recommendations
@@ -30,6 +32,8 @@ export function CampaignAnalytics({ campaignId, campaignName, timezone }: Campai
     queryKey: ['campaign-recommendations', campaignId],
     queryFn: () => analytics.getCampaignRecommendations(campaignId),
     enabled: !!campaignId,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch ROI data
@@ -37,6 +41,8 @@ export function CampaignAnalytics({ campaignId, campaignName, timezone }: Campai
     queryKey: ['campaign-roi', campaignId],
     queryFn: () => analytics.getCampaignROI(campaignId),
     enabled: !!campaignId,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   if (metricsQuery.isLoading) {
