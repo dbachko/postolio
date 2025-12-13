@@ -19,11 +19,15 @@ import { logger as baseLogger } from '@postolio/logger';
 
 const PlatformSchema = z.enum(['instagram', 'facebook', 'twitter', 'linkedin', 'youtube']);
 const ScheduleStatusSchema = z.enum([
+  'draft',
+  'pending',
   'scheduled',
   'processing',
   'published',
   'failed',
+  'skipped',
   'cancelled',
+  'canceled',
 ]);
 const ContentTypeSchema = z.enum(['post', 'reel', 'story']); // User-facing content type
 // Pure media format; reels are modeled as contentType === 'reel' + mediaType === 'video'
@@ -356,32 +360,70 @@ export class ContentSchedulerClient {
     this.client.interceptors.request.use(sigv4Interceptor);
 
     // Initialize circuit breaker
-    this.circuitBreaker = new CircuitBreaker(
-      async (fn: () => Promise<unknown>) => {
-        await fn();
+    this.circuitBreaker = new CircuitBreaker(async (fn: () => Promise<unknown>) => fn(), {
+      timeout: 30000,
+      errorThresholdPercentage: 50,
+      resetTimeout: 30000,
+      rollingCountTimeout: 10000,
+      rollingCountBuckets: 10,
+      name: 'ContentSchedulerClient',
+      // Do not trip the breaker on client errors (non-429 4xx)
+      errorFilter: (err: unknown) => {
+        if (axios.isAxiosError(err) && err.response) {
+          const status = err.response.status;
+          // Treat <500 (except 429) as filtered (won't count as failure)
+          return status < 500 && status !== 429;
+        }
+        return false;
       },
-      {
-        timeout: 30000,
-        errorThresholdPercentage: 50,
-        resetTimeout: 30000,
-        rollingCountTimeout: 10000,
-        rollingCountBuckets: 10,
-        name: 'ContentSchedulerClient',
-        // Do not trip the breaker on client errors (non-429 4xx)
-        errorFilter: (err: unknown) => {
-          if (axios.isAxiosError(err) && err.response) {
-            const status = err.response.status;
-            // Treat <500 (except 429) as filtered (won't count as failure)
-            return status < 500 && status !== 429;
-          }
-          return false;
-        },
-        ...this.config.circuitBreakerOptions,
-      }
-    );
+      ...this.config.circuitBreakerOptions,
+    });
 
     // Circuit breaker event handlers
     this.setupCircuitBreakerEvents();
+  }
+
+  private parseScheduleResponseData(
+    scheduleData: unknown,
+    context: { path: string; status: number }
+  ): Schedule {
+    try {
+      return ScheduleSchema.parse(scheduleData);
+    } catch (parseError) {
+      const size = this.safeSize(scheduleData);
+      this.log('error', 'scheduler.response.parse_failed', {
+        baseURL: this.config.baseURL,
+        path: context.path,
+        status: context.status,
+        size,
+        body: size < 2048 ? scheduleData : undefined,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        zodErrors: parseError instanceof z.ZodError ? (parseError.issues as unknown[]) : undefined,
+      });
+
+      // If the response has scheduleId, try to return it anyway for backward compatibility
+      if (scheduleData && typeof scheduleData === 'object' && 'scheduleId' in scheduleData) {
+        this.log('warn', 'scheduler.response.schema_mismatch_with_id', {
+          scheduleId: (scheduleData as { scheduleId: string }).scheduleId,
+        });
+        return scheduleData as Schedule;
+      }
+
+      // If the response doesn't have scheduleId, use the contentId as a fallback
+      if (scheduleData && typeof scheduleData === 'object' && !('scheduleId' in scheduleData)) {
+        const data = scheduleData as Record<string, unknown>;
+        const fallbackId = (data.id as string) || (data.contentId as string) || randomUUID();
+        this.log('warn', 'scheduler.response.schema_mismatch_without_id', {
+          fallbackScheduleId: fallbackId,
+        });
+        return {
+          ...data,
+          scheduleId: fallbackId,
+        } as Schedule;
+      }
+
+      throw parseError;
+    }
   }
 
   /**
@@ -465,44 +507,10 @@ export class ContentSchedulerClient {
       const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
       const scheduleData = responseBody.data;
 
-      // Validate and return response
-      try {
-        return ScheduleSchema.parse(scheduleData);
-      } catch (parseError) {
-        const size = this.safeSize(scheduleData);
-        this.log('error', 'scheduler.response.parse_failed', {
-          baseURL: this.config.baseURL,
-          path: 'schedules',
-          status: response.status,
-          size,
-          body: size < 2048 ? scheduleData : undefined,
-          error: parseError instanceof Error ? parseError.message : String(parseError),
-          zodErrors:
-            parseError instanceof z.ZodError ? (parseError.issues as unknown[]) : undefined,
-        });
-
-        // If the response has scheduleId, try to return it anyway for backward compatibility
-        if (scheduleData && typeof scheduleData === 'object' && 'scheduleId' in scheduleData) {
-          this.log('warn', 'scheduler.response.schema_mismatch_with_id', {
-            scheduleId: (scheduleData as { scheduleId: string }).scheduleId,
-          });
-          return scheduleData as Schedule;
-        }
-
-        // If the response doesn't have scheduleId, use the contentId as a fallback
-        if (scheduleData && typeof scheduleData === 'object' && !('scheduleId' in scheduleData)) {
-          const data = scheduleData as Record<string, unknown>;
-          const fallbackId = (data.id as string) || (data.contentId as string) || randomUUID();
-          this.log('warn', 'scheduler.response.schema_mismatch_without_id', {
-            fallbackScheduleId: fallbackId,
-          });
-          return {
-            ...data,
-            scheduleId: fallbackId,
-          } as Schedule;
-        }
-        throw parseError;
-      }
+      return this.parseScheduleResponseData(scheduleData, {
+        path: 'schedules',
+        status: response.status,
+      });
     });
   }
 
@@ -522,7 +530,10 @@ export class ContentSchedulerClient {
 
       // Unwrap response: Lambda returns {success: true, data: schedule, timestamp}
       const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
-      return ScheduleSchema.parse(responseBody.data);
+      return this.parseScheduleResponseData(responseBody.data, {
+        path: `schedules/${id}`,
+        status: response.status,
+      });
     });
   }
 
@@ -647,13 +658,15 @@ export class ContentSchedulerClient {
     processing: number;
   }> {
     // Fetch counts for each status in parallel
-    const statuses: ScheduleStatus[] = [
+    const statuses = [
       'scheduled',
       'published',
       'failed',
       'cancelled',
+      'canceled',
       'processing',
-    ];
+    ] as const;
+    type StatStatus = (typeof statuses)[number];
 
     const results = await Promise.all(
       statuses.map((status) =>
@@ -666,11 +679,12 @@ export class ContentSchedulerClient {
     );
 
     // Build stats object from parallel results
-    const stats: Record<ScheduleStatus, number> = {
+    const stats: Record<StatStatus, number> = {
       scheduled: 0,
       published: 0,
       failed: 0,
       cancelled: 0,
+      canceled: 0,
       processing: 0,
     };
 
@@ -679,7 +693,13 @@ export class ContentSchedulerClient {
       stats[status] = result ? (result.total ?? 0) : 0;
     });
 
-    return stats;
+    return {
+      scheduled: stats.scheduled,
+      published: stats.published,
+      failed: stats.failed,
+      cancelled: stats.cancelled + stats.canceled,
+      processing: stats.processing,
+    };
   }
 
   // ==================== Private Methods ====================
