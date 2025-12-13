@@ -50,6 +50,9 @@ runs:
         echo "Building service-parameters..."
         pnpm --filter=@postolio/service-parameters build
 
+        echo "Building observability..."
+        pnpm --filter=@postolio/observability build
+
         echo "Building database (may fail, continuing)..."
         pnpm --filter=@postolio/database build || {
           echo "Database build failed, continuing without it..."
