@@ -1,6 +1,5 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useNavigate } from 'react-router-dom';
 import { CampaignsList } from '@/components/CampaignsList';
 import {
@@ -12,6 +11,13 @@ import {
 } from '@/components/ui/select';
 import type { Campaign } from '@/lib/api';
 import { useState, useMemo } from 'react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowDown, ArrowUp, Plus, Search } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
+
+type CampaignStatusFilter = 'all' | 'active' | 'paused' | 'completed' | 'preview';
+type CampaignSortField = 'created' | 'name';
+type SortDirection = 'asc' | 'desc';
 
 interface Props {
   campaigns: Campaign[] | undefined;
@@ -39,14 +45,21 @@ export function CampaignDashboard({
   const navigate = useNavigate();
 
   // Filtering and sorting
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('recent');
+  const [searchInput, setSearchInput] = useState('');
+  const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>('all');
+  const [sortField, setSortField] = useState<CampaignSortField>('created');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const search = useDebounce(searchInput, 300);
 
   // Filter and sort campaigns
   const filteredAndSortedCampaigns = useMemo(() => {
     if (!campaigns) return [];
 
-    let filtered = campaigns;
+    const normalizedSearch = search.trim().toLowerCase();
+    let filtered = campaigns.filter((campaign) => {
+      if (!normalizedSearch) return true;
+      return campaign.name.toLowerCase().includes(normalizedSearch);
+    });
 
     // Apply status filter
     if (statusFilter !== 'all') {
@@ -54,76 +67,96 @@ export function CampaignDashboard({
     }
 
     // Apply sorting
-    const sorted = [...filtered];
-    switch (sortBy) {
-      case 'recent':
-        sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case 'oldest':
-        sorted.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        break;
-      case 'name':
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      default:
-        break;
-    }
+    const multiplier = sortDirection === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortField === 'name') {
+        const diff = a.name.localeCompare(b.name);
+        if (diff !== 0) return diff * multiplier;
+        return a.id.localeCompare(b.id) * multiplier;
+      }
 
-    return sorted;
-  }, [campaigns, statusFilter, sortBy]);
+      const aTime = new Date(a.createdAt).getTime();
+      const bTime = new Date(b.createdAt).getTime();
+      if (aTime === bTime) return a.id.localeCompare(b.id) * multiplier;
+      return (aTime - bTime) * multiplier;
+    });
+  }, [campaigns, search, sortDirection, sortField, statusFilter]);
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="pt-4">
-          {/* Filters / Sort on left, Create on right */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="preview">Preview</SelectItem>
-                </SelectContent>
-              </Select>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search campaigns"
+              className="pl-9"
+            />
+          </div>
 
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Sort by" />
+          <Tabs
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as CampaignStatusFilter)}
+            className="shrink-0"
+          >
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="paused">Paused</TabsTrigger>
+              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="preview">Preview</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="flex w-full items-center sm:w-auto">
+              <Select value={sortField} onValueChange={(v) => setSortField(v as CampaignSortField)}>
+                <SelectTrigger className="h-10 w-full rounded-r-none sm:w-[200px]">
+                  <SelectValue placeholder="Sort campaigns" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="recent">Most Recent</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
-                  <SelectItem value="name">Name (A-Z)</SelectItem>
+                  <SelectItem value="created">Created date</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                className="h-10 rounded-l-none border-l-0"
+                onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                aria-label={`Sort ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+              >
+                {sortDirection === 'asc' ? (
+                  <ArrowUp className="h-4 w-4" />
+                ) : (
+                  <ArrowDown className="h-4 w-4" />
+                )}
+              </Button>
             </div>
 
-            <Button size="sm" className="gap-2" onClick={() => navigate('/campaigns/create')}>
+            <Button
+              className="w-full gap-2 sm:w-auto"
+              onClick={() => navigate('/campaigns/create')}
+            >
               <Plus className="h-4 w-4" />
               Create Campaign
             </Button>
           </div>
+        </div>
+      </div>
 
-          {/* Campaigns List */}
-          <CampaignsList
-            campaigns={filteredAndSortedCampaigns}
-            onViewCampaignDetails={onViewCampaignDetails}
-            onStartCampaign={onStartCampaign}
-            onPauseCampaign={onPauseCampaign}
-            onDeleteCampaign={onDeleteCampaign}
-            startCampaignLoading={!!startCampaignLoading}
-            startCampaignLoadingId={startCampaignLoadingId || null}
-            pauseCampaignLoading={!!pauseCampaignLoading}
-            deleteCampaignLoading={!!deleteCampaignLoading}
-          />
-        </CardContent>
-      </Card>
+      <CampaignsList
+        campaigns={filteredAndSortedCampaigns}
+        onViewCampaignDetails={onViewCampaignDetails}
+        onStartCampaign={onStartCampaign}
+        onPauseCampaign={onPauseCampaign}
+        onDeleteCampaign={onDeleteCampaign}
+        startCampaignLoading={!!startCampaignLoading}
+        startCampaignLoadingId={startCampaignLoadingId || null}
+        pauseCampaignLoading={!!pauseCampaignLoading}
+        deleteCampaignLoading={!!deleteCampaignLoading}
+      />
     </div>
   );
 }
