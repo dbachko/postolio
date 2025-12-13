@@ -1,33 +1,18 @@
-import { type ReactNode, useMemo } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone } from 'date-fns-tz';
-import {
-  MoreHorizontal,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  Pencil,
-  ExternalLink,
-  CalendarClock,
-} from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, ExternalLink, CalendarClock } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
 import { toast } from 'sonner';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Copy, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Button } from '@/components/ui/button';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
+import { getPostStatusBorderColor, getPostStatusTextClass } from '@/utils/post-status-colors';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +24,13 @@ import {
   AlertDialogTrigger,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 interface PostPreviewCardProps {
   item: CalendarItem;
@@ -75,6 +67,26 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
     return { status, displayTime, campaignColor };
   }, [item, timezone]);
 
+  const [imageReady, setImageReady] = useState(false);
+  const imageUrl = (item as any)?.imageUrl;
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    setImageReady(false);
+  }, [imageUrl]);
+
+  useEffect(() => {
+    if (!cardRef.current) return;
+    const el = cardRef.current;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width ?? 0;
+      setIsWide(width >= 200);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const handleOpen = () => {
     // Navigate to post details or create from placeholder
     if (item.type === 'placeholder') {
@@ -83,16 +95,6 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
       return;
     }
     openSidebar('post', { id: (item as any).id });
-  };
-
-  // Visual styles by status (subtle tints)
-  const statusStyles: Record<string, string> = {
-    draft: 'bg-muted hover:bg-accent/50',
-    scheduled: 'bg-info/10 hover:bg-info/15',
-    published: 'bg-success/10 hover:bg-success/15',
-    failed: 'bg-destructive/10 hover:bg-destructive/15',
-    skipped: 'bg-warning/10 hover:bg-warning/15',
-    placeholder: 'bg-warning/10 hover:bg-warning/15',
   };
 
   const iconByStatus: Record<string, ReactNode> = {
@@ -104,18 +106,9 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
     placeholder: <Clock className="h-3.5 w-3.5" />,
   };
 
-  // Campaign accent removed - no longer using left border
-  const campaignAccent: Record<string, string> = {};
-
   // Status-tinted border to match calendar cards
-  const borderColor = (() => {
-    if (status === 'failed') return 'var(--destructive)';
-    if (status === 'published') return 'var(--success)';
-    if (status === 'scheduled') return 'var(--info)';
-    if (status === 'placeholder' || status === 'skipped')
-      return 'color-mix(in oklch, var(--warning) 55%, var(--border))';
-    return 'var(--border)';
-  })();
+  const borderColor = getPostStatusBorderColor(status);
+  const statusTextClass = getPostStatusTextClass(status);
 
   // Mutations
   const queryClient = useQueryClient();
@@ -160,200 +153,234 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleOpen();
-        }
-      }}
-      className={`hover:bg-muted group h-[var(--calendar-card-h)] w-full rounded-md border px-2 py-2 text-left shadow-sm transition-colors ${
-        statusStyles[status] || statusStyles.draft
-      }`}
-      style={{ ...campaignAccent, borderColor }}
-    >
-      {/* Top row: status icon + time, and tiny image thumbnail if present */}
-      <div className="mb-1 flex items-start justify-between">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className={`flex items-center gap-1.5 text-[11px] leading-none ${
-                  status === 'published'
-                    ? 'text-success'
-                    : status === 'scheduled'
-                      ? 'text-info'
-                      : status === 'placeholder'
-                        ? 'text-warning'
-                        : status === 'failed'
-                          ? 'text-destructive'
-                          : status === 'skipped'
-                            ? 'text-warning'
-                            : 'text-muted-foreground'
-                }`}
-              >
-                {iconByStatus[status]}
-                {displayTime && <span className="font-medium">{displayTime}</span>}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <span className="capitalize">{status === 'placeholder' ? 'Future AI' : status}</span>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <div className="ml-2 h-6 w-8 shrink-0 overflow-hidden rounded-sm">
-          {/* Use native img to avoid pulling in heavier components; fallback to placeholder */}
-          <img
-            src={getPostImageOrPlaceholder((item as any)?.imageUrl)}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-            decoding="async"
-          />
-        </div>
-      </div>
-
-      {/* Caption, clamped to two lines */}
-      <div className="text-foreground line-clamp-2 text-[12px] leading-snug">
-        {(item as any)?.caption || ''}
-      </div>
-
-      {/* Campaign badge (clickable) */}
-      {item.campaignName ? (
-        <div className="mt-1">
-          <a
-            href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
-            onClick={(e) => {
-              if (!item.campaignId) return;
-              e.stopPropagation();
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {isWide ? (
+          <div
+            ref={cardRef}
+            role="button"
+            tabIndex={0}
+            onClick={handleOpen}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleOpen();
+              }
             }}
-            className="inline-flex max-w-full items-center gap-2 rounded-full px-2 py-0.5 text-[11px] font-medium"
-            style={{
-              backgroundColor: campaignColor || 'hsl(var(--muted))',
-              color: campaignColor ? 'white' : 'hsl(var(--foreground))',
-            }}
-            title={item.campaignName}
+            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-3 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
+            style={{ borderColor }}
           >
-            <span className="truncate">{item.campaignName}</span>
-          </a>
-        </div>
-      ) : null}
+            <div className="bg-muted relative w-14 shrink-0 self-stretch overflow-hidden rounded-md">
+              {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
+              <img
+                src={getPostImageOrPlaceholder(imageUrl)}
+                alt=""
+                onLoad={() => setImageReady(true)}
+                onError={() => setImageReady(true)}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity ${
+                  imageReady ? 'opacity-100' : 'opacity-0'
+                }`}
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
 
-      {/* Bottom row: edit (hidden for published) + menu */}
-      <div className="mt-1 flex items-center justify-between">
-        <div>
-          {status !== 'published' && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center p-1.5"
-                    aria-label="Edit post"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (item.type === 'placeholder') {
-                        const params = new URLSearchParams();
-                        if ((item as any).campaignId)
-                          params.set('campaignId', (item as any).campaignId);
-                        if ((item as any).scheduledAt)
-                          params.set('scheduledAt', (item as any).scheduledAt);
-                        openSidebar('post-create');
-                      } else {
-                        openSidebar('post', { id: (item as any).id });
-                      }
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Edit post</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <span
-              className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex cursor-pointer rounded p-1.5 focus:outline-none focus-visible:ring-2"
-              title="More options"
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem
-              onClick={() => openSidebar('post', { id: (item as any).id })}
-              className="gap-2"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open Post
-            </DropdownMenuItem>
-            {item.type !== 'placeholder' && (item as any)?.status !== 'published' && (
-              <DropdownMenuItem
-                onClick={() => onReschedule && onReschedule(item)}
-                className="gap-2"
-              >
-                <CalendarClock className="h-4 w-4" />
-                Reschedule
-              </DropdownMenuItem>
-            )}
-            {item.type !== 'placeholder' && (item as any)?.status === 'scheduled' && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem className="gap-2">
-                    <Clock className="h-4 w-4" />
-                    Unschedule to Draft
-                  </DropdownMenuItem>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      We’ll cancel the scheduled publish time and move this post back to Drafts. It
-                      will no longer publish automatically.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={unscheduleMutation.isPending}>
-                      Cancel
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => unscheduleMutation.mutate((item as any).id)}
-                      disabled={unscheduleMutation.isPending}
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={`flex shrink-0 items-center gap-1.5 text-[11px] leading-none whitespace-nowrap ${statusTextClass}`}
+                      >
+                        {iconByStatus[status]}
+                        {displayTime ? (
+                          <span>{displayTime}</span>
+                        ) : (
+                          <span className="italic">No time</span>
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span className="capitalize">
+                        {status === 'placeholder' ? 'Future AI' : status}
+                      </span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <div className="flex min-w-0 items-center gap-1">
+                  {item.campaignName ? (
+                    <a
+                      href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
+                      onClick={(e) => {
+                        if (!item.campaignId) return;
+                        e.stopPropagation();
+                      }}
+                      className="inline-flex max-w-[10rem] min-w-0 items-center gap-2 overflow-hidden rounded-full px-2 py-0.5 text-[11px] font-medium text-ellipsis whitespace-nowrap"
+                      style={{
+                        backgroundColor: campaignColor || 'hsl(var(--muted))',
+                        color: campaignColor ? 'white' : 'hsl(var(--foreground))',
+                      }}
+                      title={item.campaignName}
                     >
-                      Unschedule and move to Drafts
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-            {item.type !== 'placeholder' && (
-              <DropdownMenuItem onClick={handleDuplicate} className="gap-2">
-                <Copy className="h-4 w-4" />
-                Duplicate as Draft
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            {item.type !== 'placeholder' && (
-              <DropdownMenuItem
-                className="text-destructive gap-2"
-                onClick={() => deleteMutation.mutate((item as any).id)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
+                      <span className="block min-w-0 truncate">{item.campaignName}</span>
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="text-foreground line-clamp-1 min-h-[1.4em] text-[12px] leading-snug">
+                {(item as any)?.caption || '\u00A0'}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            ref={cardRef}
+            role="button"
+            tabIndex={0}
+            onClick={handleOpen}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleOpen();
+              }
+            }}
+            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
+            style={{ borderColor }}
+          >
+            {/* Top row: time/status + campaign */}
+            <div className="flex items-center justify-between gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={`flex shrink-0 items-center gap-1.5 text-[11px] leading-none whitespace-nowrap ${statusTextClass}`}
+                    >
+                      {iconByStatus[status]}
+                      {displayTime ? (
+                        <span>{displayTime}</span>
+                      ) : (
+                        <span className="italic">No time</span>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <span className="capitalize">
+                      {status === 'placeholder' ? 'Future AI' : status}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <div className="flex min-w-0 items-center gap-1">
+                {item.campaignName ? (
+                  <a
+                    href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
+                    onClick={(e) => {
+                      if (!item.campaignId) return;
+                      e.stopPropagation();
+                    }}
+                    className="inline-flex max-w-[8.5rem] min-w-0 items-center gap-2 overflow-hidden rounded-full px-2 py-0.5 text-[11px] font-medium text-ellipsis whitespace-nowrap"
+                    style={{
+                      backgroundColor: campaignColor || 'hsl(var(--muted))',
+                      color: campaignColor ? 'white' : 'hsl(var(--foreground))',
+                    }}
+                    title={item.campaignName}
+                  >
+                    <span className="block min-w-0 truncate">{item.campaignName}</span>
+                  </a>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Second row: image + caption */}
+            <div className="flex min-w-0 items-start gap-3 text-[12px] leading-snug">
+              <div className="bg-muted relative h-[2.75em] w-[2.75em] shrink-0 overflow-hidden rounded-md">
+                {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
+                <img
+                  src={getPostImageOrPlaceholder(imageUrl)}
+                  alt=""
+                  onLoad={() => setImageReady(true)}
+                  onError={() => setImageReady(true)}
+                  className={`absolute inset-0 h-full w-full object-cover transition-opacity ${
+                    imageReady ? 'opacity-100' : 'opacity-0'
+                  }`}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+
+              <div className="text-foreground line-clamp-2 min-w-0 flex-1">
+                {(item as any)?.caption || ''}
+              </div>
+            </div>
+          </div>
+        )}
+      </ContextMenuTrigger>
+
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem
+          onSelect={() => openSidebar('post', { id: (item as any).id })}
+          className="gap-2"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open Post
+        </ContextMenuItem>
+        {item.type !== 'placeholder' && (item as any)?.status !== 'published' && (
+          <ContextMenuItem onSelect={() => onReschedule && onReschedule(item)} className="gap-2">
+            <CalendarClock className="h-4 w-4" />
+            Reschedule
+          </ContextMenuItem>
+        )}
+        {item.type !== 'placeholder' && (item as any)?.status === 'scheduled' && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <ContextMenuItem className="gap-2">
+                <Clock className="h-4 w-4" />
+                Unschedule to Draft
+              </ContextMenuItem>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  We’ll cancel the scheduled publish time and move this post back to Drafts. It will
+                  no longer publish automatically.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={unscheduleMutation.isPending}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => unscheduleMutation.mutate((item as any).id)}
+                  disabled={unscheduleMutation.isPending}
+                >
+                  Unschedule and move to Drafts
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+        {item.type !== 'placeholder' && (
+          <ContextMenuItem onSelect={handleDuplicate} className="gap-2">
+            <Copy className="h-4 w-4" />
+            Duplicate as Draft
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        {item.type !== 'placeholder' && (
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive gap-2"
+            onSelect={() => deleteMutation.mutate((item as any).id)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </ContextMenuItem>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

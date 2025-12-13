@@ -66,9 +66,8 @@ export function AgendaView<E extends CalendarEventBase>({
       const idx = indexByKey.get(k);
       if (idx != null) result[idx].items.push(e);
     }
-    const nonEmpty = result.filter((g) => g.items.length > 0);
-    if (nonEmpty.length > 0) {
-      return nonEmpty;
+    if (filtered.length > 0) {
+      return result;
     }
 
     // If there are no events at all, show today's date as a fallback
@@ -86,19 +85,26 @@ export function AgendaView<E extends CalendarEventBase>({
         const dateClasses = ['pc-agenda-date'];
         if (isToday) dateClasses.push('pc-agenda-date--today');
         return (
-          <div key={g.date.toISOString()} className="pc-agenda-group">
-            <div className={dateClasses.join(' ')}>{localizer.format(g.date, 'LLL d, yyyy')}</div>
-            <div className="pc-agenda-items">
-              {g.items.map((e) => (
-                <div key={e.id} className="pc-agenda-item">
-                  {EventComp ? (
-                    <EventComp event={e} />
+          <div
+            key={g.date.toISOString()}
+            className={`pc-agenda-group${g.items.length > 0 ? 'pc-agenda-group--has-items' : ''}`}
+          >
+            <div className={dateClasses.join(' ')}>{localizer.format(g.date, 'EEEE, LLLL d')}</div>
+            {g.items.length > 0 ? (
+              <div className="pc-agenda-items">
+                {g.items.map((e) =>
+                  EventComp ? (
+                    <EventComp key={e.id} event={e} />
                   ) : (
-                    <span className="pc-title">{e.title || 'Event'}</span>
-                  )}
-                </div>
-              ))}
-            </div>
+                    <span key={e.id} className="pc-title">
+                      {e.title || 'Event'}
+                    </span>
+                  )
+                )}
+              </div>
+            ) : (
+              <div className="pc-agenda-empty">No content</div>
+            )}
             <CreateCta date={g.date} />
           </div>
         );
