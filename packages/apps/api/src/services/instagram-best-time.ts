@@ -1,10 +1,13 @@
 import axios from 'axios';
+import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import { redisService } from './redis.js';
 import { TimezoneService } from './timezone.js';
 import { PublisherCredentialsService } from './publisher-credentials.js';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
+const bestTimeLogger = baseLogger.child({ module: 'instagram-best-time' });
 
 type Heatmap = number[][]; // 7 rows (Sun..Sat), 24 cols (0..23)
 
@@ -29,6 +32,49 @@ export interface BestTimePayload {
 
 const CACHE_PREFIX = 'ig_best_time:';
 const DEFAULT_TTL = parseInt(process.env.BEST_TIME_TTL_SECONDS || '86400', 10); // 24h
+const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
+
+function getGraphError(err: unknown): {
+  code?: number;
+  subcode?: number;
+  type?: string;
+  message?: string;
+  fbtraceId?: string;
+} | null {
+  const maybeAny = err as any;
+  const graphError = maybeAny?.response?.data?.error;
+  if (!graphError || typeof graphError !== 'object') return null;
+
+  return {
+    code: typeof graphError.code === 'number' ? graphError.code : undefined,
+    subcode: typeof graphError.error_subcode === 'number' ? graphError.error_subcode : undefined,
+    type: typeof graphError.type === 'string' ? graphError.type : undefined,
+    message: typeof graphError.message === 'string' ? graphError.message : undefined,
+    fbtraceId: typeof graphError.fbtrace_id === 'string' ? graphError.fbtrace_id : undefined,
+  };
+}
+
+function getInsightsUnavailableNote(err: unknown): string {
+  const graphError = getGraphError(err);
+  const msg = (graphError?.message || '').toLowerCase();
+
+  if (msg.includes('followers') && msg.includes('100')) {
+    return 'Insights unavailable: requires ≥100 followers for `online_followers`';
+  }
+
+  // Meta often reports missing scopes as OAuth/permission errors.
+  if (
+    graphError?.code === 10 ||
+    msg.includes('permissions error') ||
+    msg.includes('permission') ||
+    msg.includes('requires') ||
+    msg.includes('scope')
+  ) {
+    return 'Insights unavailable: missing `instagram_manage_insights` permission (reconnect Instagram)';
+  }
+
+  return 'Insights unavailable: Instagram Graph API error';
+}
 
 function emptyHeatmap(): Heatmap {
   return Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
@@ -98,29 +144,42 @@ export class InstagramBestTimeService {
 
     // Try insights → history → heuristic
     let payload: BestTimePayload | null = null;
+    const fallbackNotes: string[] = [];
     try {
       payload = await this.computeFromInsights(brandId, timezone);
+      if (!payload) {
+        fallbackNotes.push(
+          'Insights unavailable: no `online_followers` data (may require ≥100 followers)'
+        );
+      }
     } catch (err) {
       // Log and continue to next strategy; insights may be unavailable
       // (e.g., <100 followers or missing permissions)
-      console.error(
-        `[InstagramBestTimeService] computeFromInsights failed for brandId=${brandId}:`,
-        err
-      );
+      const graphError = getGraphError(err);
+      fallbackNotes.push(getInsightsUnavailableNote(err));
+      bestTimeLogger.warn('computeFromInsights failed; falling back', {
+        brandId,
+        graphError,
+        ...formatError(err),
+      });
     }
     if (!payload) {
       try {
         payload = await this.computeFromHistory(brandId, timezone);
       } catch (err) {
         // Log and fall back to heuristic if history is insufficient or errors occur
-        console.error(
-          `[InstagramBestTimeService] computeFromHistory failed for brandId=${brandId}:`,
-          err
-        );
+        bestTimeLogger.warn('computeFromHistory failed; falling back', {
+          brandId,
+          ...formatError(err),
+        });
       }
     }
     if (!payload) {
       payload = this.computeHeuristic(brandId, timezone);
+    }
+
+    if (fallbackNotes.length) {
+      payload.notes = [...(payload.notes || []), ...fallbackNotes];
     }
 
     // Cache result
@@ -139,7 +198,7 @@ export class InstagramBestTimeService {
     }
 
     // Call IG insights API for online_followers (v24.0)
-    const url = `https://graph.facebook.com/v24.0/${credentials.accountId}/insights`;
+    const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${credentials.accountId}/insights`;
     const params = new URLSearchParams({
       metric: 'online_followers',
       metric_type: 'time_series',
