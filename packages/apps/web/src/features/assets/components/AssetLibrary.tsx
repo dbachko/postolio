@@ -337,7 +337,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
             />
             <Button
               onClick={() => openSidebar('asset-upload', { id: brandId })}
-              className="w-full sm:w-auto"
+              className="h-10 w-full sm:w-auto"
             >
               <Upload className="mr-2 h-4 w-4" />
               Upload

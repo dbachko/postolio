@@ -254,118 +254,119 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     return params.get('calendar') === 'off' || params.get('disableCalendar') === '1';
   }, []);
 
-  // Add a stable fallback color for items without a campaign color
   return (
-    <div className="space-y-4">
-      {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
-      <div className="bg-card rounded-lg border px-3 py-2 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          {/* Left: Navigation + current month */}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={handlePrevious} aria-label="Previous">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleToday}>
-              Today
-            </Button>
-            <Button variant="outline" size="icon" onClick={handleNext} aria-label="Next">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <span className="text-foreground ml-2 text-sm font-medium">
-              {format(currentDate, 'MMMM yyyy')}
-            </span>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handlePrevious}
+            aria-label="Previous"
+            className="h-10 w-10"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={handleToday} className="h-10">
+            Today
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleNext}
+            aria-label="Next"
+            className="h-10 w-10"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <span className="text-foreground ml-2 min-w-0 truncate text-sm font-semibold">
+            {format(currentDate, 'MMMM yyyy')}
+          </span>
+        </div>
 
-          {/* Right: view dropdown + Filters + Export (wraps below on mobile) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={brandTimezone}
-              onValueChange={(tz) => {
-                setBrandTimezone(tz);
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-[220px]">
-                <span className="truncate text-left">
-                  {brandTimezoneLabel} ({brandTimezone})
-                </span>
-              </SelectTrigger>
-              <SelectContent className="max-h-80">
-                {timezoneOptions.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>
-                    {tz.label} ({getTimezoneAbbr(tz.value)} ·{' '}
-                    {formatGmtOffset(getTimezoneOffset(tz.value))})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={viewMode}
-              onValueChange={(v) => {
-                const next = v as ViewMode;
-                setViewMode(next);
-                setParam('view', next);
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-[140px]">
-                <SelectValue placeholder="View" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="month">Month</SelectItem>
-                <SelectItem value="week">Week</SelectItem>
-                <SelectItem value="three-day">3 Days</SelectItem>
-                <SelectItem value="schedule">Schedule</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant={isFiltersActive ? 'default' : 'outline'}
-              size="sm"
-              aria-pressed={isFiltersActive}
-              onClick={() => setShowFilters((s) => !s)}
-              className="relative"
-            >
-              Filters
-              {hasAnyActiveFilters && (
-                <span
-                  className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
-                    isFiltersActive
-                      ? 'bg-background text-foreground ring-ring ring-1'
-                      : 'bg-foreground text-background'
-                  }`}
-                >
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
-            {/* Export */}
-            <CalendarExport
-              content={filteredItems.map((item: any) => ({
-                id: item.id,
-                type: item.type,
-                caption: item.caption || '',
-                hashtags: item.hashtags || [],
-                status: item.status,
-                scheduledAt: item.scheduledAt || undefined,
-                postedAt: item.postedAt || undefined,
-                campaignId: item.campaignId || undefined,
-                permalink: item.permalink || undefined,
-              }))}
-              brandName={brandName || 'Brand'}
-              dateRange={dateRange}
-            />
+        <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+          <Select
+            value={brandTimezone}
+            onValueChange={(tz) => {
+              setBrandTimezone(tz);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue className="truncate text-left">
+                {brandTimezoneLabel} ({brandTimezone})
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="max-h-80">
+              {timezoneOptions.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label} ({getTimezoneAbbr(tz.value)} ·{' '}
+                  {formatGmtOffset(getTimezoneOffset(tz.value))})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={viewMode}
+            onValueChange={(v) => {
+              const next = v as ViewMode;
+              setViewMode(next);
+              setParam('view', next);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[140px]">
+              <SelectValue placeholder="View" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Month</SelectItem>
+              <SelectItem value="week">Week</SelectItem>
+              <SelectItem value="three-day">3 Days</SelectItem>
+              <SelectItem value="schedule">Schedule</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant={isFiltersActive ? 'default' : 'outline'}
+            aria-pressed={isFiltersActive}
+            onClick={() => setShowFilters((s) => !s)}
+            className="relative h-10"
+          >
+            Filters
             {hasAnyActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => clearAll()}
-                aria-label="Clear all filters"
-                className="text-muted-foreground hover:text-foreground"
+              <span
+                className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                  isFiltersActive
+                    ? 'bg-background text-foreground ring-ring ring-1'
+                    : 'bg-foreground text-background'
+                }`}
               >
-                Clear
-              </Button>
+                {activeFilterCount}
+              </span>
             )}
-
-            {/* New Post button removed (exists in tab navigation) */}
-          </div>
+          </Button>
+          <CalendarExport
+            content={filteredItems.map((item: any) => ({
+              id: item.id,
+              type: item.type,
+              caption: item.caption || '',
+              hashtags: item.hashtags || [],
+              status: item.status,
+              scheduledAt: item.scheduledAt || undefined,
+              postedAt: item.postedAt || undefined,
+              campaignId: item.campaignId || undefined,
+              permalink: item.permalink || undefined,
+            }))}
+            brandName={brandName || 'Brand'}
+            dateRange={dateRange}
+          />
+          {hasAnyActiveFilters && (
+            <Button
+              variant="ghost"
+              onClick={() => clearAll()}
+              aria-label="Clear all filters"
+              className="text-muted-foreground hover:text-foreground h-10"
+            >
+              Clear
+            </Button>
+          )}
         </div>
       </div>
 
@@ -375,25 +376,23 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       {/* Filter results summary removed for cleaner filtered state */}
 
       {/* FullCalendar (no extra wrapper card/border) */}
-      <div className="p-2">
-        {calendarDisabled ? (
-          <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
-        ) : (
-          <ErrorBoundary
-            fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
-          >
-            <FullCalendar
-              brandId={brandId}
-              brandTimezone={brandTimezone}
-              view={viewMode}
-              date={currentDate}
-              content={content}
-              placeholders={placeholders}
-              theme="monarch"
-            />
-          </ErrorBoundary>
-        )}
-      </div>
+      {calendarDisabled ? (
+        <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
+      ) : (
+        <ErrorBoundary
+          fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
+        >
+          <FullCalendar
+            brandId={brandId}
+            brandTimezone={brandTimezone}
+            view={viewMode}
+            date={currentDate}
+            content={content}
+            placeholders={placeholders}
+            theme="monarch"
+          />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }

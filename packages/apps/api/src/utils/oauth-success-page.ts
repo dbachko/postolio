@@ -33,6 +33,16 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
     return num.toString();
   };
 
+  const appUrl = (process.env.APP_URL || 'https://postolio.example').replace(/\/+$/, '');
+  const fallbackUrl = `${appUrl}/dashboard`;
+  const parentOrigin = (() => {
+    try {
+      return new URL(appUrl).origin;
+    } catch {
+      return '*';
+    }
+  })();
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -399,7 +409,7 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
             </ul>
           </div>
 
-          <button class="button" onclick="closeWindow()">
+          <button id="continue-button" type="button" class="button">
             Continue to Dashboard
           </button>
 
@@ -413,6 +423,9 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
         </div>
 
         <script>
+          const fallbackUrl = ${JSON.stringify(fallbackUrl)};
+          const parentOrigin = ${JSON.stringify(parentOrigin)};
+
           if (typeof window !== 'undefined' && window.gtag) {
             window.gtag('event', 'oauth_success', {
               'event_category': 'instagram',
@@ -432,21 +445,28 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
                     // Parent window should refetch data via authenticated API instead
                     // This prevents XSS via malicious data in Instagram profile fields
                   }
-                }, window.location.origin);
+                }, parentOrigin);
               } catch (e) {
               }
             }
           }
 
+          function closeOrRedirect() {
+            try {
+              window.close();
+            } catch (e) {
+            }
+
+            setTimeout(() => {
+              if (!window.closed) {
+                window.location.href = fallbackUrl;
+              }
+            }, 150);
+          }
+
           function closeWindow() {
             notifyParent();
-            setTimeout(() => {
-              if (window.opener) {
-                window.close();
-              } else {
-                window.location.href = '/brands';
-              }
-            }, 100);
+            closeOrRedirect();
           }
 
           let countdown = 5;
@@ -464,6 +484,7 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
           }
 
           updateCountdown();
+          document.getElementById('continue-button')?.addEventListener('click', closeWindow);
           notifyParent();
         </script>
       </body>

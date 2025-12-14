@@ -52,7 +52,7 @@ export function CalendarExport(props: CalendarExportProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" disabled={isExporting || contentCount === 0}>
+          <Button variant="outline" disabled={isExporting || contentCount === 0} className="h-10">
             {isExporting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

@@ -60,8 +60,7 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
       <Button
         variant={hasActiveFilters ? 'default' : 'outline'}
         onClick={() => setIsOpen(!isOpen)}
-        className="gap-2"
-        size="sm"
+        className="h-10 gap-2"
       >
         <Filter className="h-4 w-4" />
         Filters

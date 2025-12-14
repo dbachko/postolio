@@ -4,6 +4,9 @@ import { EmailVerificationBanner } from './EmailVerificationBanner';
 import { DemoModeBanner } from './DemoModeBanner';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,14 +25,17 @@ import {
 } from '@/components/ui/command';
 import {
   Building2,
+  ChevronDown,
   Grid3X3,
   Home,
   LogOut,
+  Megaphone,
   Plus,
   Search,
   Settings,
   Shield,
   Sparkles,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
@@ -62,6 +68,7 @@ export function AppLayout({ children }: LayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -237,15 +244,62 @@ export function AppLayout({ children }: LayoutProps) {
               </Button>
 
               {/* Primary action: New Post */}
-              <Button
-                size="sm"
-                className="mr-0 hidden h-9 gap-2 pr-2 pl-3 sm:inline-flex"
-                onClick={() => openSidebar('post-create')}
-                aria-label="Create new post"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                New Post
-              </Button>
+              <ButtonGroup className="hidden sm:inline-flex">
+                <Button
+                  size="sm"
+                  className="h-9 gap-2 pr-2 pl-3"
+                  onClick={() => openSidebar('post-create')}
+                  aria-label="Create new post"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New Post
+                </Button>
+                <Popover open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <Button size="icon" className="h-9 w-9" aria-label="Open create actions menu">
+                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 rounded-xl p-0 text-sm">
+                    <div className="px-4 py-3">
+                      <div className="text-sm font-medium">Create</div>
+                      <div className="text-muted-foreground text-xs">
+                        {selectedBrand ? `For ${selectedBrand.name}` : 'Choose a brand to begin.'}
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="p-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start"
+                        disabled={!selectedBrand}
+                        onClick={() => {
+                          setCreateMenuOpen(false);
+                          navigate('/campaigns/create');
+                        }}
+                      >
+                        <Megaphone className="h-4 w-4" aria-hidden="true" />
+                        New Campaign
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start"
+                        disabled={!selectedBrand}
+                        onClick={() => {
+                          if (!selectedBrand) return;
+                          setCreateMenuOpen(false);
+                          openSidebar('asset-upload', { id: selectedBrand.id });
+                        }}
+                      >
+                        <Upload className="h-4 w-4" aria-hidden="true" />
+                        Upload Asset
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </ButtonGroup>
               <Button
                 size="icon"
                 className="mr-2 h-9 w-9 sm:mr-0 sm:hidden"

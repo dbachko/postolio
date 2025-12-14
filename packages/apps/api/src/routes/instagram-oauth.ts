@@ -212,6 +212,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           'pages_read_engagement',
           'pages_manage_posts',
           'business_management',
+          'instagram_basic',
           'instagram_content_publish',
         ].join(',');
 
@@ -264,6 +265,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         sendErrorPage(reply, {
           error: providerError,
           errorDescription: providerErrorDescription || 'An error occurred during authorization',
+          retryUrl: '/brands',
         });
         return;
       }
@@ -275,6 +277,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         sendErrorPage(reply, {
           error: 'invalid_state',
           errorDescription: 'Missing authorization parameters. Please try connecting again.',
+          retryUrl: '/brands',
         });
         return;
       }
@@ -295,6 +298,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           error: 'invalid_oauth_state',
           errorDescription:
             'Invalid or expired authorization session. Please try connecting again.',
+          retryUrl: '/brands',
         });
         return;
       }
@@ -311,6 +315,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         sendErrorPage(reply, {
           error: 'invalid_oauth_state',
           errorDescription: 'Your authorization session has expired. Please try connecting again.',
+          retryUrl: '/brands',
         });
         return;
       }
@@ -371,6 +376,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           error: classified.code === 'default' ? 'token_exchange_failed' : classified.code,
           errorDescription: classified.description,
           technicalDetails: redactOauthSensitiveDetails(errorText),
+          retryUrl: '/brands',
         });
         return;
       }
@@ -500,10 +506,10 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           errorDescription:
             'No Instagram Business or Creator account was found connected to your Facebook pages.',
           technicalDetails: `Pages scanned: ${pages.length}. No instagram_business_account or connected_instagram_account fields were returned.`,
+          retryUrl: '/brands',
         });
         return;
       }
-
       const instagramAccountId =
         pageWithInstagram.instagram_business_account?.id ||
         pageWithInstagram.connected_instagram_account?.id;
@@ -531,6 +537,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           error: 'default',
           errorDescription: 'Incomplete account data returned from Facebook. Please try again.',
           technicalDetails: `instagramAccountId: ${instagramAccountId ? 'present' : 'missing'}, pageAccessToken: ${pageAccessToken ? 'present' : 'missing'}`,
+          retryUrl: '/brands',
         });
         return;
       }
@@ -569,6 +576,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           error: classified.code === 'default' ? 'default' : classified.code,
           errorDescription: classified.description,
           technicalDetails: redactOauthSensitiveDetails(errorText),
+          retryUrl: '/brands',
         });
         return;
       }
@@ -762,6 +770,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         error: 'default',
         errorDescription: 'Failed to process Instagram connection. Please try again.',
         technicalDetails: message,
+        retryUrl: '/brands',
       });
       return;
     }

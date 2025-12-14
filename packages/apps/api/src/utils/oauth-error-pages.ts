@@ -1,4 +1,5 @@
 import { FastifyReply } from 'fastify';
+import { isDevelopmentEnv } from './env-mode.js';
 
 interface ErrorPageOptions {
   error: string;
@@ -34,10 +35,11 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
   no_business_account: {
     icon: '📷',
     title: 'Instagram Business or Creator Account Required',
-    message: 'No Instagram Business or Creator account was found connected to your Facebook pages.',
+    message:
+      'No Instagram Business or Creator (Professional) account was found connected to your Facebook pages.',
     solutions: [
       'Convert your Instagram account to a Business or Creator account (Professional)',
-      'Connect your Instagram account to a Facebook Page you manage',
+      'Connect your Instagram account to a Facebook Page you manage (Accounts Center / Meta Business Suite)',
       "Make sure you're logged into the correct Facebook account",
       'Verify your Facebook Page has admin permissions',
     ],
@@ -185,8 +187,23 @@ export function generateErrorPage(options: ErrorPageOptions): string {
       .replace(/'/g, '&#039;');
   };
 
-  const sanitizedTechnicalDetails =
-    process.env.NODE_ENV === 'dev' ? options.technicalDetails : undefined;
+  const appUrl = (process.env.APP_URL || 'https://postolio.example').replace(/\/+$/, '');
+  const retryUrlRaw = options.retryUrl?.trim();
+  const retryUrl = retryUrlRaw
+    ? /^https?:\/\//i.test(retryUrlRaw)
+      ? retryUrlRaw
+      : `${appUrl}${retryUrlRaw.startsWith('/') ? '' : '/'}${retryUrlRaw}`
+    : `${appUrl}/brands`;
+
+  const parentOrigin = (() => {
+    try {
+      return new URL(appUrl).origin;
+    } catch {
+      return '*';
+    }
+  })();
+
+  const sanitizedTechnicalDetails = isDevelopmentEnv() ? options.technicalDetails : undefined;
 
   const sanitizedErrorCode = options.errorCode?.replace(/[a-f0-9]{32,}/gi, '[REDACTED]');
 
@@ -387,7 +404,6 @@ export function generateErrorPage(options: ErrorPageOptions): string {
 
           .details-content {
             margin-top: 12px;
-            display: none;
             font-size: 12px;
             color: #4b5563;
             background: #f9fafb;
@@ -398,8 +414,16 @@ export function generateErrorPage(options: ErrorPageOptions): string {
             white-space: pre-wrap;
           }
 
-          .details-content.show {
-            display: block;
+          .details-toggle::-webkit-details-marker {
+            display: none;
+          }
+
+          .toggle-arrow {
+            transition: transform 0.15s ease;
+          }
+
+          details[open] .toggle-arrow {
+            transform: rotate(180deg);
           }
 
           .footer {
@@ -428,10 +452,10 @@ export function generateErrorPage(options: ErrorPageOptions): string {
           <div class="actions">
             ${
               config.showRetry
-                ? `<button class="button button-primary" onclick="retryConnection()">Try Again</button>`
+                ? `<button id="retry-button" type="button" class="button button-primary">Try Again</button>`
                 : ''
             }
-            <button class="button button-secondary" onclick="closeWindow()">
+            <button id="close-button" type="button" class="button button-secondary">
               Close Window
             </button>
           </div>
@@ -449,18 +473,18 @@ export function generateErrorPage(options: ErrorPageOptions): string {
           ${
             sanitizedTechnicalDetails
               ? `
-            <div class="technical-details">
-              <button class="details-toggle" onclick="toggleDetails()">
+            <details class="technical-details">
+              <summary class="details-toggle">
                 <span>Technical details</span>
-                <span id="toggle-arrow">▼</span>
-              </button>
-              <div class="details-content" id="details">
+                <span class="toggle-arrow">▼</span>
+              </summary>
+              <div class="details-content">
                 <strong>Error:</strong> ${escapeHtml(options.error)}<br>
                 ${sanitizedErrorCode ? `<strong>Code:</strong> ${escapeHtml(sanitizedErrorCode)}<br>` : ''}
                 ${options.errorDescription ? `<strong>Description:</strong> ${escapeHtml(options.errorDescription)}<br>` : ''}
                 ${sanitizedTechnicalDetails ? `<strong>Details:</strong> ${escapeHtml(sanitizedTechnicalDetails)}` : ''}
               </div>
-            </div>
+            </details>
           `
               : ''
           }
@@ -471,66 +495,78 @@ export function generateErrorPage(options: ErrorPageOptions): string {
         </div>
 
         <script>
+          const retryUrl = ${JSON.stringify(retryUrl)};
+          const parentOrigin = ${JSON.stringify(parentOrigin)};
+          const error = ${JSON.stringify(options.error || '')};
+          const errorDescription = ${JSON.stringify(options.errorDescription || '')};
+          const errorCode = ${JSON.stringify(options.errorCode || '')};
+
           if (typeof window !== 'undefined' && window.gtag) {
             window.gtag('event', 'oauth_error', {
-              'event_category': 'instagram',
-              'event_label': '${escapeHtml(options.error)}',
-              'value': 0
+              event_category: 'instagram',
+              event_label: error,
+              value: 0
             });
           }
 
           function notifyParent() {
             if (window.opener && !window.opener.closed) {
               try {
-                window.opener.postMessage({
-                  type: 'INSTAGRAM_OAUTH_ERROR',
-                  data: {
-                    success: false,
-                    error: '${escapeHtml(options.error)}',
-                    errorDescription: '${escapeHtml(options.errorDescription || '')}',
-                    errorCode: '${escapeHtml(options.errorCode || '')}'
-                  }
-                }, window.location.origin);
+                window.opener.postMessage(
+                  {
+                    type: 'INSTAGRAM_OAUTH_ERROR',
+                    data: {
+                      success: false,
+                      error,
+                      errorDescription,
+                      errorCode
+                    }
+                  },
+                  parentOrigin
+                );
               } catch (e) {
               }
             }
           }
 
+          function closeOrRedirect() {
+            try {
+              window.close();
+            } catch (e) {
+            }
+
+            setTimeout(() => {
+              if (!window.closed) {
+                window.location.href = retryUrl;
+              }
+            }, 150);
+          }
+
           function closeWindow() {
             notifyParent();
-            setTimeout(() => {
-              if (window.opener) {
-                window.close();
-              } else {
-                window.location.href = '/';
-              }
-            }, 100);
+            closeOrRedirect();
           }
 
           function retryConnection() {
             notifyParent();
-            if (window.opener && !window.opener.closed) {
-              window.close();
-            } else {
-              window.location.href = '/brands';
+            try {
+              if (window.opener && !window.opener.closed) {
+                window.opener.focus();
+              }
+            } catch (e) {
             }
-          }
-
-          function toggleDetails() {
-            const details = document.getElementById('details');
-            const arrow = document.getElementById('toggle-arrow');
-            if (details.classList.contains('show')) {
-              details.classList.remove('show');
-              arrow.textContent = '▼';
-            } else {
-              details.classList.add('show');
-              arrow.textContent = '▲';
-            }
+            closeOrRedirect();
           }
 
           setTimeout(() => {
-            closeWindow();
+            try {
+              window.close();
+            } catch (e) {
+            }
           }, 30000);
+
+          document.getElementById('close-button')?.addEventListener('click', closeWindow);
+          document.getElementById('retry-button')?.addEventListener('click', retryConnection);
 
           notifyParent();
         </script>
