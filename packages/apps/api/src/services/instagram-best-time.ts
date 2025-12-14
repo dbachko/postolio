@@ -58,8 +58,18 @@ function getInsightsUnavailableNote(err: unknown): string {
   const graphError = getGraphError(err);
   const msg = (graphError?.message || '').toLowerCase();
 
-  if (msg.includes('followers') && msg.includes('100')) {
+  // Meta may require a minimum follower count before returning `online_followers`.
+  // Be careful: many Graph API errors use "(#100)" for invalid params, so do not
+  // infer follower thresholds from "100" alone.
+  if (
+    msg.includes('followers') &&
+    (msg.includes('100 followers') || (msg.includes('at least 100') && msg.includes('followers')))
+  ) {
     return 'Insights unavailable: requires ≥100 followers for `online_followers`';
+  }
+
+  if (msg.includes('incompatible') && msg.includes('metric') && msg.includes('type')) {
+    return 'Insights unavailable: Instagram Graph API rejected the request parameters';
   }
 
   // Meta often reports missing scopes as OAuth/permission errors.
@@ -149,7 +159,7 @@ export class InstagramBestTimeService {
       payload = await this.computeFromInsights(brandId, timezone);
       if (!payload) {
         fallbackNotes.push(
-          'Insights unavailable: no `online_followers` data (may require ≥100 followers)'
+          'Insights unavailable: no `online_followers` data returned (Meta may require ≥100 followers)'
         );
       }
     } catch (err) {
@@ -201,7 +211,6 @@ export class InstagramBestTimeService {
     const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${credentials.accountId}/insights`;
     const params = new URLSearchParams({
       metric: 'online_followers',
-      metric_type: 'time_series',
       period: 'lifetime',
       access_token: credentials.accessToken,
     });
