@@ -108,7 +108,7 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
   return (
     <div className="flex h-full flex-col">
       {/* Header matches top nav height and stays visible */}
-      <div className="bg-card sticky top-0 z-10 flex h-14 items-center justify-between border-b px-4">
+      <div className="bg-card sticky top-0 z-30 flex h-14 items-center justify-between border-b px-4">
         <Breadcrumb aria-label="right-sidebar-title">
           <BreadcrumbList>
             <BreadcrumbItem>

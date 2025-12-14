@@ -26,7 +26,7 @@ export function NotificationsSidebar() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="bg-card sticky top-0 z-10 flex h-14 items-center justify-between border-b px-4">
+      <div className="bg-card sticky top-0 z-30 flex h-14 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">
           <Breadcrumb aria-label="right-sidebar-title">
             <BreadcrumbList>

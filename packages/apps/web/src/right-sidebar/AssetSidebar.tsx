@@ -345,7 +345,7 @@ export function AssetSidebar({
     () =>
       cn(
         'bg-card flex h-14 items-center justify-between border-b px-4',
-        layout === 'sidebar' ? 'sticky top-0 z-10' : 'rounded-t'
+        layout === 'sidebar' ? 'sticky top-0 z-30' : 'rounded-t'
       ),
     [layout]
   );

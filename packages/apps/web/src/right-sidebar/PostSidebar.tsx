@@ -17,7 +17,7 @@ import { MultiImageUploader, type AssetReference } from '@/components/MultiImage
 import { VideoUploader } from '@/components/VideoUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import type { PostStatus } from '@/components/PostStatusCard';
-import { PostSidebarStatusPanel } from './PostSidebarStatusPanel';
+import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -42,6 +42,7 @@ import {
   Zap,
   AlertTriangle,
   ChevronDown,
+  Instagram,
   Megaphone,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -65,6 +66,7 @@ import AssetPicker from '@/features/assets/components/AssetPicker';
 import { Switch } from '@/components/ui/switch';
 import { assetsApi } from '@/features/assets/api/client';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -778,8 +780,8 @@ export function PostSidebar({
   const headerClass = useMemo(
     () =>
       cn(
-        'bg-card flex h-12 items-center justify-between border-b px-4',
-        layout === 'sidebar' ? 'sticky top-0 z-10' : 'rounded-t'
+        'bg-card flex h-14 items-center justify-between border-b px-4',
+        layout === 'sidebar' ? 'sticky top-0 z-30' : 'rounded-t'
       ),
     [layout]
   );
@@ -816,41 +818,67 @@ export function PostSidebar({
     <div className={containerClass} role="complementary" aria-labelledby="right-sidebar-title">
       {showHeader ? (
         <div className={headerClass}>
-          {id ? (
-            <Breadcrumb aria-label="right-sidebar-title">
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  {isLoading ? (
-                    <BreadcrumbPage>Loading…</BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink asChild>
-                      <Link to={disabled ? `/posts/${id}` : `/posts/${id}?edit=1`}>
-                        {disabled ? 'View Post' : 'Edit Post'}
-                      </Link>
-                    </BreadcrumbLink>
-                  )}
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          ) : (
-            <Breadcrumb aria-label="right-sidebar-title">
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  {layout === 'sidebar' ? (
-                    <BreadcrumbLink asChild>
-                      <Link to="/posts/create" onClick={handleOpenCreatePage}>
-                        Create New Post
-                      </Link>
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>Create New Post</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          )}
+          <div className="min-w-0">
+            {id ? (
+              <Breadcrumb aria-label="right-sidebar-title">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    {isLoading ? (
+                      <BreadcrumbPage>Loading…</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink asChild>
+                        <Link to={disabled ? `/posts/${id}` : `/posts/${id}?edit=1`}>
+                          {disabled ? 'View Post' : 'Edit Post'}
+                        </Link>
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            ) : (
+              <Breadcrumb aria-label="right-sidebar-title">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    {layout === 'sidebar' ? (
+                      <BreadcrumbLink asChild>
+                        <Link to="/posts/create" onClick={handleOpenCreatePage}>
+                          Create New Post
+                        </Link>
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage>Create New Post</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            )}
+          </div>
           {layout === 'sidebar' ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              {id && !isLoading && post ? (
+                <>
+                  <PostStatusBadge
+                    status={(post.status as PostStatus) || 'draft'}
+                    generationParams={post.generationParams}
+                    schedulingError={post.schedulingError || null}
+                    scheduledAt={post.scheduledAt}
+                    className="shrink-0 whitespace-nowrap"
+                  />
+                  {post.status === 'published' && post.instagramPermalink ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 whitespace-nowrap"
+                      onClick={() => window.open(post.instagramPermalink, '_blank')}
+                    >
+                      <Instagram className="h-4 w-4 sm:mr-1" />
+                      <span className="hidden sm:inline">View on Instagram</span>
+                      <span className="sr-only sm:hidden">View on Instagram</span>
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1234,14 +1262,11 @@ export function PostSidebar({
           </div>
         ) : (
           <div className="space-y-4">
-            <PostSidebarStatusPanel
-              status={(post.status as PostStatus) || 'draft'}
-              processing={Boolean(post.generationParams?.processing?.active)}
-              schedulingError={post.schedulingError || null}
-              instagramPermalink={post.instagramPermalink}
-              brandTimezone={brandTimezone}
-              scheduledAt={post.scheduledAt}
-            />
+            {post.status === 'failed' && post.schedulingError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{post.schedulingError}</AlertDescription>
+              </Alert>
+            ) : null}
 
             <div className="space-y-2">
               <Label>{isVideoMedia ? 'Video' : 'Post Media'}</Label>
