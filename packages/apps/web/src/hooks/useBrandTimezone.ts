@@ -21,7 +21,7 @@ export function useBrandTimezone(): { brandTimezone: string; brandId: string | u
 
     if (!brandId) return undefined;
 
-    (async () => {
+    const resolveBrandTimezone = async () => {
       try {
         const tz = await getBrandTimezone(brandId);
         if (!cancelled && tz) setBrandTimezone(tz);
@@ -29,7 +29,8 @@ export function useBrandTimezone(): { brandTimezone: string; brandId: string | u
         console.warn('[useBrandTimezone] Failed to resolve brand timezone, using fallback', error);
         if (!cancelled) setBrandTimezone(fallbackTz);
       }
-    })();
+    };
+    void resolveBrandTimezone();
 
     return () => {
       cancelled = true;

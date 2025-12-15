@@ -66,7 +66,7 @@ export function CampaignDetails({
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const resolveBrandTimezone = async () => {
       if (!campaign?.brandId) return;
       try {
         const tz = await getBrandTimezone(campaign.brandId);
@@ -74,7 +74,8 @@ export function CampaignDetails({
       } catch {
         if (mounted) setBrandTimezone(userTz);
       }
-    })();
+    };
+    void resolveBrandTimezone();
     return () => {
       mounted = false;
     };

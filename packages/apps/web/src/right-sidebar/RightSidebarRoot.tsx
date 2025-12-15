@@ -81,7 +81,7 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   // Load profile width when sidebar opens. Prefer localStorage to avoid flicker; sync server to LS if needed.
   useEffect(() => {
     let active = true;
-    (async () => {
+    const syncWidth = async () => {
       if (!open || !persistedType) return;
       // LocalStorage first for instant UX
       try {
@@ -131,7 +131,8 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
       } catch (_e) {
         // ignore
       }
-    })();
+    };
+    void syncWidth();
     return () => {
       active = false;
     };

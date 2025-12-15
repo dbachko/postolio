@@ -55,14 +55,15 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const resolveBrandTimezone = async () => {
       try {
         const tz = await getBrandTimezone(brandId);
         if (mounted && tz) setBrandTimezone(tz);
       } catch {
         if (mounted) setBrandTimezone(userTz);
       }
-    })();
+    };
+    void resolveBrandTimezone();
     return () => {
       mounted = false;
     };

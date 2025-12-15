@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, TrendingUp, TrendingDown } from 'lucide-react';
@@ -23,7 +24,36 @@ interface AudienceInsightsProps {
   loading?: boolean;
 }
 
+function normalizeFollowerTimeline(
+  timeline: Array<{ date: string; followers: number }> | undefined
+): Array<{ date: string; followers: number }> {
+  try {
+    const byDay = new Map<string, { date: string; followers: number }>();
+    for (const point of timeline || []) {
+      const dateObj = new Date(point.date);
+      const dayKey = isNaN(dateObj.getTime())
+        ? String(point.date).slice(0, 10)
+        : dateObj.toISOString().slice(0, 10);
+
+      const existing = byDay.get(dayKey);
+      if (!existing || point.followers >= existing.followers) {
+        byDay.set(dayKey, { date: dayKey, followers: point.followers });
+      }
+    }
+
+    const arr = Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
+    return arr.slice(Math.max(0, arr.length - 30));
+  } catch {
+    return timeline || [];
+  }
+}
+
 export function AudienceInsights({ audienceData, loading }: AudienceInsightsProps) {
+  const normalizedTimeline = useMemo(
+    () => normalizeFollowerTimeline(audienceData?.followerGrowth?.timeline),
+    [audienceData?.followerGrowth?.timeline]
+  );
+
   if (loading) {
     return (
       <Card>
@@ -71,29 +101,6 @@ export function AudienceInsights({ audienceData, loading }: AudienceInsightsProp
   const growthColor = isPositiveGrowth
     ? 'text-green-600 dark:text-green-400'
     : 'text-red-600 dark:text-red-400';
-
-  // Normalize follower growth timeline by collapsing duplicate dates and sorting asc
-  const normalizedTimeline = (() => {
-    try {
-      const byDay = new Map<string, { date: string; followers: number }>();
-      for (const p of followerGrowth.timeline || []) {
-        const d = new Date(p.date);
-        const dayKey = isNaN(d.getTime())
-          ? String(p.date).slice(0, 10)
-          : d.toISOString().slice(0, 10);
-        const existing = byDay.get(dayKey);
-        // Keep the max followers for the day (or last seen)
-        if (!existing || p.followers >= existing.followers) {
-          byDay.set(dayKey, { date: dayKey, followers: p.followers });
-        }
-      }
-      const arr = Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
-      // Limit to last 30 data points to avoid overly long charts
-      return arr.slice(Math.max(0, arr.length - 30));
-    } catch {
-      return followerGrowth.timeline || [];
-    }
-  })();
 
   return (
     <Card>

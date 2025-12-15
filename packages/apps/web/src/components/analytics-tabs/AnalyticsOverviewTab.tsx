@@ -498,7 +498,7 @@ function V2Charts({ brandId }: { brandId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const loadCharts = async () => {
       setLoading(true);
       setErr(null);
       try {
@@ -512,7 +512,8 @@ function V2Charts({ brandId }: { brandId: string }) {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+    void loadCharts();
     return () => {
       cancelled = true;
     };

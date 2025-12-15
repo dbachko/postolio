@@ -36,14 +36,15 @@ export function ContentCard({
   // Resolve brand timezone (fallback to user tz)
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const resolveBrandTimezone = async () => {
       try {
         const tz = await getBrandTimezone(brandId);
         if (mounted && tz) setBrandTimezone(tz);
       } catch {
         if (mounted) setBrandTimezone(timezone);
       }
-    })();
+    };
+    void resolveBrandTimezone();
     return () => {
       mounted = false;
     };

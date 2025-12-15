@@ -120,7 +120,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     }
 
     // Create a new request
-    const requestPromise = (async () => {
+    const fetchBrandTimezone = async () => {
       try {
         const data = await brandApi.getBrandTimezone(brandId);
         const brandTz = data.timezone || timezone;
@@ -140,7 +140,8 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
         console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error);
         return timezone;
       }
-    })();
+    };
+    const requestPromise = fetchBrandTimezone();
 
     // Store the promise to deduplicate concurrent requests (synchronous operation)
     inFlightRequestsRef.current.set(brandId, requestPromise);

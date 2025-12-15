@@ -235,7 +235,7 @@ export function PostSidebar({
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const resolveBrandTimezone = async () => {
       const brandId = post?.brand?.id;
       if (!brandId) return;
       try {
@@ -244,7 +244,8 @@ export function PostSidebar({
       } catch {
         if (mounted) setBrandTimezone(timezone);
       }
-    })();
+    };
+    void resolveBrandTimezone();
     return () => {
       mounted = false;
     };

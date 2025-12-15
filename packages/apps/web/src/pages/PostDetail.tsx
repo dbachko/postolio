@@ -259,7 +259,7 @@ export default function PostDetail() {
   // Resolve brand timezone when post loads
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const resolveBrandTimezone = async () => {
       const brandId = post?.brand?.id;
       if (!brandId) return;
 
@@ -270,7 +270,8 @@ export default function PostDetail() {
         console.error('[PostDetail] Failed to fetch brand timezone:', error);
         if (mounted) setBrandTimezone(timezone);
       }
-    })();
+    };
+    void resolveBrandTimezone();
     return () => {
       mounted = false;
     };

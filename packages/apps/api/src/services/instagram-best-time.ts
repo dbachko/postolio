@@ -35,6 +35,7 @@ const DEFAULT_TTL = parseInt(process.env.BEST_TIME_TTL_SECONDS || '86400', 10); 
 const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
 const DEFAULT_SLOTS_PER_DAY = parseInt(process.env.BEST_TIME_SLOTS_PER_DAY || '2', 10);
 const DEFAULT_MIN_GAP_HOURS = parseInt(process.env.BEST_TIME_MIN_GAP_HOURS || '1', 10);
+const DEFAULT_WINDOW_MINUTES = parseInt(process.env.BEST_TIME_WINDOW_MINUTES || '30', 10);
 
 function getGraphError(err: unknown): {
   code?: number;
@@ -483,29 +484,59 @@ export class InstagramBestTimeService {
   private rankTopWindows(
     heatmap: Heatmap,
     timezone: string,
-    windowMinutes = 60,
+    windowMinutes = DEFAULT_WINDOW_MINUTES,
     topN = DEFAULT_SLOTS_PER_DAY * 7
   ) {
     const slotsPerDay = Math.max(1, DEFAULT_SLOTS_PER_DAY);
     const minGapHours = Math.max(1, DEFAULT_MIN_GAP_HOURS);
+    const minGapMinutes = minGapHours * 60;
     const targetCount = Math.max(1, topN);
 
-    type Candidate = { day: number; hour: number; score: number };
+    type Candidate = {
+      day: number;
+      hour: number;
+      minute: number;
+      minuteOfDay: number;
+      score: number;
+    };
 
     const dayHourRanks: Candidate[][] = [];
     for (let d = 0; d < 7; d++) {
       const hours: Candidate[] = [];
-      for (let h = 0; h < 24; h++) hours.push({ day: d, hour: h, score: heatmap[d][h] });
-      hours.sort((a, b) => b.score - a.score);
+      for (let h = 0; h < 24; h++) {
+        const scoreOnHour = heatmap[d][h];
+        const nextHour = heatmap[d][(h + 1) % 24];
+        const scoreHalfHour = (scoreOnHour + nextHour) / 2;
+
+        hours.push({
+          day: d,
+          hour: h,
+          minute: 0,
+          minuteOfDay: h * 60,
+          score: scoreOnHour,
+        });
+        hours.push({
+          day: d,
+          hour: h,
+          minute: 30,
+          minuteOfDay: h * 60 + 30,
+          score: +scoreHalfHour.toFixed(4),
+        });
+      }
+      hours.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.minute !== b.minute) return b.minute - a.minute; // prefer :30 over :00 when tied
+        return a.hour - b.hour;
+      });
       dayHourRanks[d] = hours;
     }
 
     const pickedByDay = new Map<number, Candidate[]>();
     const usedHoursGlobal = new Set<number>();
 
-    const isTooClose = (hourA: number, hourB: number) => {
-      const diff = Math.abs(hourA - hourB);
-      return Math.min(diff, 24 - diff) < minGapHours;
+    const isTooClose = (minuteA: number, minuteB: number) => {
+      const diff = Math.abs(minuteA - minuteB);
+      return Math.min(diff, 24 * 60 - diff) < minGapMinutes;
     };
 
     const pickForDay = (day: number, preferUnusedGlobalHour: boolean): Candidate | null => {
@@ -513,13 +544,13 @@ export class InstagramBestTimeService {
       const ranks = dayHourRanks[day] || [];
       for (const c of ranks) {
         if (preferUnusedGlobalHour && usedHoursGlobal.has(c.hour)) continue;
-        if (already.some((p) => isTooClose(p.hour, c.hour))) continue;
+        if (already.some((p) => isTooClose(p.minuteOfDay, c.minuteOfDay))) continue;
         return c;
       }
       if (!preferUnusedGlobalHour) return null;
       // Relax global uniqueness if needed.
       for (const c of ranks) {
-        if (already.some((p) => isTooClose(p.hour, c.hour))) continue;
+        if (already.some((p) => isTooClose(p.minuteOfDay, c.minuteOfDay))) continue;
         return c;
       }
       return null;
@@ -562,7 +593,7 @@ export class InstagramBestTimeService {
     return picked.map((p) => {
       const localStart = new Date(sunday);
       localStart.setDate(sunday.getDate() + p.day);
-      localStart.setHours(p.hour, 0, 0, 0);
+      localStart.setHours(p.hour, p.minute, 0, 0);
       // Build ISO in local TZ via TimezoneService formatting and also UTC
       const utc = TimezoneService.toUTC(localStart, timezone);
       const startUTC = utc.toISOString();

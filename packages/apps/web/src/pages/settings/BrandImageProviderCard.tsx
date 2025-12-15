@@ -38,6 +38,12 @@ export default function BrandImageProviderCard({
 
   const providers = providersData?.providers || [];
   const defaultProvider = providersData?.default;
+  const defaultProviderLabel = defaultProvider
+    ? providers.find((p) => p.name === defaultProvider)?.displayName || defaultProvider
+    : null;
+  const selectedProviderDetails = selectedProvider
+    ? providers.find((p) => p.name === selectedProvider) || null
+    : null;
 
   return (
     <Card>
@@ -74,7 +80,7 @@ export default function BrandImageProviderCard({
                 {selectedProvider
                   ? providers.find((p) => p.name === selectedProvider)?.displayName ||
                     selectedProvider
-                  : `Use system default${defaultProvider ? ` (${providers.find((p) => p.name === defaultProvider)?.displayName || defaultProvider})` : ''}`}
+                  : `Use system default${defaultProviderLabel ? ` (${defaultProviderLabel})` : ''}`}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -83,9 +89,7 @@ export default function BrandImageProviderCard({
                   <Sparkles className="h-4 w-4" />
                   Use system default
                   {defaultProvider && (
-                    <span className="text-muted-foreground text-xs">
-                      ({providers.find((p) => p.name === defaultProvider)?.displayName})
-                    </span>
+                    <span className="text-muted-foreground text-xs">({defaultProviderLabel})</span>
                   )}
                 </div>
               </SelectItem>
@@ -101,27 +105,21 @@ export default function BrandImageProviderCard({
         </div>
 
         {/* Show selected provider details */}
-        {selectedProvider && (
+        {selectedProviderDetails && (
           <div className="bg-muted rounded-lg p-3 text-sm">
-            {(() => {
-              const provider = providers.find((p) => p.name === selectedProvider);
-              if (!provider) return null;
-              return (
-                <div className="space-y-1">
-                  <div className="font-medium">{provider.displayName}</div>
-                  <div className="text-muted-foreground text-xs">
-                    Speed: {provider.pricing.speedEstimate}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {provider.pricing.features.slice(0, 3).map((feature: string) => (
-                      <span key={feature} className="bg-background rounded-md px-2 py-0.5 text-xs">
-                        {feature}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="space-y-1">
+              <div className="font-medium">{selectedProviderDetails.displayName}</div>
+              <div className="text-muted-foreground text-xs">
+                Speed: {selectedProviderDetails.pricing.speedEstimate}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {selectedProviderDetails.pricing.features.slice(0, 3).map((feature: string) => (
+                  <span key={feature} className="bg-background rounded-md px-2 py-0.5 text-xs">
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
