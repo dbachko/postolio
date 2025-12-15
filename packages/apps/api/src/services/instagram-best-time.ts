@@ -33,6 +33,8 @@ export interface BestTimePayload {
 const CACHE_PREFIX = 'ig_best_time:';
 const DEFAULT_TTL = parseInt(process.env.BEST_TIME_TTL_SECONDS || '86400', 10); // 24h
 const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
+const DEFAULT_SLOTS_PER_DAY = parseInt(process.env.BEST_TIME_SLOTS_PER_DAY || '2', 10);
+const DEFAULT_MIN_GAP_HOURS = parseInt(process.env.BEST_TIME_MIN_GAP_HOURS || '1', 10);
 
 function getGraphError(err: unknown): {
   code?: number;
@@ -119,12 +121,40 @@ function smoothHeatmap(hm: Heatmap): Heatmap {
   return out;
 }
 
+function smoothHeatmapHoursOnly(hm: Heatmap): Heatmap {
+  const out = emptyHeatmap();
+  for (let d = 0; d < 7; d++) {
+    for (let h = 0; h < 24; h++) {
+      const prev = hm[d][(h + 23) % 24];
+      const curr = hm[d][h];
+      const next = hm[d][(h + 1) % 24];
+      out[d][h] = (prev + 2 * curr + next) / 4;
+    }
+  }
+  return out;
+}
+
+function parseOnlineFollowersDayValue(value: Record<string, number> | number[]): number[] | null {
+  if (Array.isArray(value) && value.length >= 24) {
+    return Array.from({ length: 24 }, (_, h) => Number(value[h] ?? 0));
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const obj = value as Record<string, number>;
+    return Array.from({ length: 24 }, (_, h) => Number(obj[String(h)] ?? 0));
+  }
+  return null;
+}
+
 export class InstagramBestTimeService {
   private key(brandId: string) {
     return `${CACHE_PREFIX}${brandId}`;
   }
 
-  async getRecommendations(brandId: string, force = false): Promise<BestTimePayload> {
+  async getRecommendations(
+    brandId: string,
+    force = false,
+    topWindowsLimit?: number
+  ): Promise<BestTimePayload> {
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: {
@@ -149,7 +179,10 @@ export class InstagramBestTimeService {
 
     if (!force) {
       const cached = await redisService.get(cacheKey);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached) as BestTimePayload;
+        return this.applyTopWindowsLimit(parsed, topWindowsLimit);
+      }
     }
 
     // Try insights → history → heuristic
@@ -194,7 +227,26 @@ export class InstagramBestTimeService {
 
     // Cache result
     await redisService.set(cacheKey, JSON.stringify(payload), payload.ttlSeconds);
-    return payload;
+    return this.applyTopWindowsLimit(payload, topWindowsLimit);
+  }
+
+  private applyTopWindowsLimit(
+    payload: BestTimePayload,
+    topWindowsLimit?: number
+  ): BestTimePayload {
+    const limit =
+      typeof topWindowsLimit === 'number' && Number.isFinite(topWindowsLimit)
+        ? Math.floor(topWindowsLimit)
+        : undefined;
+    if (!limit || limit <= 0) return payload;
+    return {
+      ...payload,
+      topWindows: payload.topWindows.slice(0, limit),
+      notes:
+        limit < payload.topWindows.length
+          ? [...(payload.notes || []), `Top windows truncated to ${limit}`]
+          : payload.notes,
+    };
   }
 
   private async computeFromInsights(
@@ -231,30 +283,52 @@ export class InstagramBestTimeService {
     const values = entry?.values as InsightValueItem[] | undefined;
     if (!Array.isArray(values) || values.length === 0) return null;
 
-    // Aggregate across days into hour-of-day array
-    const hours = Array.from({ length: 24 }, () => 0);
-    let countDays = 0;
+    // Build weekday heatmap using end_time to group values by day-of-week.
+    // `end_time` is the end of the period; subtract a small delta to land inside that day.
+    const hm = emptyHeatmap();
+    const counts = emptyHeatmap();
+
+    const overallHours = Array.from({ length: 24 }, () => 0);
+    let overallCountDays = 0;
+
     for (const v of values) {
-      const val = v?.value;
-      if (Array.isArray(val) && val.length >= 24) {
-        for (let h = 0; h < 24; h++) hours[h] += Number(val[h] ?? 0);
-        countDays++;
-      } else if (val && typeof val === 'object' && !Array.isArray(val)) {
-        const obj = val as Record<string, number>;
-        for (let h = 0; h < 24; h++) hours[h] += Number(obj[String(h)] ?? 0);
-        countDays++;
+      const parsed = parseOnlineFollowersDayValue(v?.value);
+      if (!parsed) continue;
+
+      for (let h = 0; h < 24; h++) overallHours[h] += parsed[h];
+      overallCountDays++;
+
+      if (!v?.end_time) continue;
+      const endTime = new Date(v.end_time);
+      if (Number.isNaN(endTime.getTime())) continue;
+      const local = TimezoneService.toLocal(new Date(endTime.getTime() - 1000), timezone);
+      const day = local.getDay(); // 0=Sun..6=Sat
+
+      for (let h = 0; h < 24; h++) {
+        hm[day][h] += parsed[h];
+        counts[day][h] += 1;
       }
     }
-    if (countDays === 0) return null;
-    // Average per hour
-    for (let h = 0; h < 24; h++) hours[h] = hours[h] / countDays;
 
-    // Build heatmap: duplicate hour-of-day pattern across week; then smooth/normalize
-    const hm = emptyHeatmap();
+    if (overallCountDays === 0) return null;
+    for (let h = 0; h < 24; h++) overallHours[h] = overallHours[h] / overallCountDays;
+
+    // Average per weekday bucket; fill missing weekdays with the overall profile.
     for (let d = 0; d < 7; d++) {
-      for (let h = 0; h < 24; h++) hm[d][h] = hours[h];
+      let hasAny = false;
+      for (let h = 0; h < 24; h++) {
+        if (counts[d][h] > 0) {
+          hm[d][h] = hm[d][h] / counts[d][h];
+          hasAny = true;
+        }
+      }
+      if (!hasAny) {
+        for (let h = 0; h < 24; h++) hm[d][h] = overallHours[h];
+      }
     }
-    const smoothed = smoothHeatmap(hm);
+
+    // Smooth within the day only to avoid washing out weekday differences.
+    const smoothed = smoothHeatmapHoursOnly(hm);
     const normalized = normalizeHeatmap(smoothed);
     const top = this.rankTopWindows(normalized, timezone);
 
@@ -268,8 +342,12 @@ export class InstagramBestTimeService {
       ttlSeconds: DEFAULT_TTL,
       heatmap: normalized,
       topWindows: top,
-      notes: ['Insights-based', 'Averaged across last 30 days', 'Smoothed 3×3'],
+      notes: ['Insights-based', 'Averaged across last 30 days by weekday', 'Smoothed (hours only)'],
     };
+    payload.notes = [
+      ...(payload.notes || []),
+      `Top windows: ${Math.max(1, DEFAULT_SLOTS_PER_DAY)}/day, ≥${Math.max(1, DEFAULT_MIN_GAP_HOURS)}h apart`,
+    ];
     return payload;
   }
 
@@ -362,7 +440,12 @@ export class InstagramBestTimeService {
       ttlSeconds: DEFAULT_TTL,
       heatmap: normalized,
       topWindows: top,
-      notes: ['History-based', `Sample=${rows.length}`, 'Weighted likes + comments (+reach)'],
+      notes: [
+        'History-based',
+        `Sample=${rows.length}`,
+        'Weighted likes + comments (+reach)',
+        `Top windows: ${Math.max(1, DEFAULT_SLOTS_PER_DAY)}/day, ≥${Math.max(1, DEFAULT_MIN_GAP_HOURS)}h apart`,
+      ],
     };
   }
 
@@ -390,26 +473,85 @@ export class InstagramBestTimeService {
       ttlSeconds: DEFAULT_TTL,
       heatmap: normalized,
       topWindows: top,
-      notes: ['Heuristic defaults'],
+      notes: [
+        'Heuristic defaults',
+        `Top windows: ${Math.max(1, DEFAULT_SLOTS_PER_DAY)}/day, ≥${Math.max(1, DEFAULT_MIN_GAP_HOURS)}h apart`,
+      ],
     };
   }
 
-  private rankTopWindows(heatmap: Heatmap, timezone: string, windowMinutes = 60, topN = 6) {
-    // Rank by score; pick highest distinct (day,hour)
-    const candidates: Array<{ day: number; hour: number; score: number }> = [];
-    for (let d = 0; d < 7; d++)
-      for (let h = 0; h < 24; h++) candidates.push({ day: d, hour: h, score: heatmap[d][h] });
-    candidates.sort((a, b) => b.score - a.score);
+  private rankTopWindows(
+    heatmap: Heatmap,
+    timezone: string,
+    windowMinutes = 60,
+    topN = DEFAULT_SLOTS_PER_DAY * 7
+  ) {
+    const slotsPerDay = Math.max(1, DEFAULT_SLOTS_PER_DAY);
+    const minGapHours = Math.max(1, DEFAULT_MIN_GAP_HOURS);
+    const targetCount = Math.max(1, topN);
 
-    const picked: typeof candidates = [];
-    const used = new Set<string>();
-    for (const c of candidates) {
-      const key = `${c.day}-${c.hour}`;
-      if (used.has(key)) continue;
-      picked.push(c);
-      used.add(key);
-      if (picked.length >= topN) break;
+    type Candidate = { day: number; hour: number; score: number };
+
+    const dayHourRanks: Candidate[][] = [];
+    for (let d = 0; d < 7; d++) {
+      const hours: Candidate[] = [];
+      for (let h = 0; h < 24; h++) hours.push({ day: d, hour: h, score: heatmap[d][h] });
+      hours.sort((a, b) => b.score - a.score);
+      dayHourRanks[d] = hours;
     }
+
+    const pickedByDay = new Map<number, Candidate[]>();
+    const usedHoursGlobal = new Set<number>();
+
+    const isTooClose = (hourA: number, hourB: number) => {
+      const diff = Math.abs(hourA - hourB);
+      return Math.min(diff, 24 - diff) < minGapHours;
+    };
+
+    const pickForDay = (day: number, preferUnusedGlobalHour: boolean): Candidate | null => {
+      const already = pickedByDay.get(day) || [];
+      const ranks = dayHourRanks[day] || [];
+      for (const c of ranks) {
+        if (preferUnusedGlobalHour && usedHoursGlobal.has(c.hour)) continue;
+        if (already.some((p) => isTooClose(p.hour, c.hour))) continue;
+        return c;
+      }
+      if (!preferUnusedGlobalHour) return null;
+      // Relax global uniqueness if needed.
+      for (const c of ranks) {
+        if (already.some((p) => isTooClose(p.hour, c.hour))) continue;
+        return c;
+      }
+      return null;
+    };
+
+    // Pass 1: pick a primary time for each day, preferring distinct hours globally.
+    const dayBest = Array.from({ length: 7 }, (_, d) => ({ day: d, best: dayHourRanks[d]?.[0] }))
+      .filter((x) => x.best)
+      .sort((a, b) => (b.best?.score ?? 0) - (a.best?.score ?? 0));
+
+    for (const { day } of dayBest) {
+      const chosen = pickForDay(day, true);
+      if (!chosen) continue;
+      pickedByDay.set(day, [chosen]);
+      usedHoursGlobal.add(chosen.hour);
+    }
+
+    // Pass 2: add additional slots per day (spaced by minGapHours).
+    for (let slot = 2; slot <= slotsPerDay; slot++) {
+      for (let day = 0; day < 7; day++) {
+        const chosen = pickForDay(day, false);
+        if (!chosen) continue;
+        const list = pickedByDay.get(day) || [];
+        list.push(chosen);
+        pickedByDay.set(day, list);
+      }
+    }
+
+    const picked = Array.from(pickedByDay.values())
+      .flat()
+      .sort((a, b) => b.score - a.score)
+      .slice(0, targetCount);
 
     // Format output with local and UTC start times on the upcoming week reference
     const now = new Date();

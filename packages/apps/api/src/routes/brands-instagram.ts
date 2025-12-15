@@ -78,13 +78,19 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params as { brandId: string };
       const userId = request.user!.id;
-      const { force } = request.query as { force?: string };
+      const { force, count } = request.query as { force?: string; count?: string };
 
       const brand = await assertBrandOwnership(userId, brandId);
       await assertInstagramConnected(brand.id);
 
       try {
-        const rec = await instagramBestTimeService.getRecommendations(brand.id, force === 'true');
+        const parsedCount =
+          typeof count === 'string' && count.trim() ? Math.max(1, parseInt(count, 10)) : undefined;
+        const rec = await instagramBestTimeService.getRecommendations(
+          brand.id,
+          force === 'true',
+          parsedCount
+        );
         return reply.send(rec);
       } catch (error) {
         request.log.error({ err: error }, 'Failed to get best-time recommendations');
@@ -100,11 +106,14 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params as { brandId: string };
       const userId = request.user!.id;
+      const { count } = request.query as { count?: string };
       const brand = await assertBrandOwnership(userId, brandId);
       await assertInstagramConnected(brand.id);
 
       try {
-        const rec = await instagramBestTimeService.getRecommendations(brand.id, true);
+        const parsedCount =
+          typeof count === 'string' && count.trim() ? Math.max(1, parseInt(count, 10)) : undefined;
+        const rec = await instagramBestTimeService.getRecommendations(brand.id, true, parsedCount);
         return reply.send({ success: true, recommendations: rec });
       } catch (error) {
         request.log.error({ err: error }, 'Failed to refresh best-time recommendations');
