@@ -248,13 +248,24 @@ export const generateInstagramContent: ContentGenerator = async (
             finalPrompt = `${finalPrompt}${motifText}${compText}${paletteText}, 1:1, Instagram-ready, no text, no watermark`;
           }
 
-          const imageUrl = await generateBrandContentImage(finalPrompt, brandContext, brandName);
+          const imageResult = await generateBrandContentImage(
+            finalPrompt,
+            brandContext,
+            brandName,
+            {
+              preferredProvider: request.imageProvider,
+              brandId: request.brandId,
+              campaignId: request.campaignId,
+            }
+          );
+          const imageUrl = imageResult.imageUrl;
           contentLogger.info('Generated image for content post', {
             brandId: request.brandId,
             index,
             promptPreview: finalPrompt?.substring(0, 50) ?? '',
             imagePreview: imageUrl ? imageUrl.substring(0, 80) : 'none',
             hasImage: Boolean(imageUrl),
+            imageProvider: imageResult.provider,
           });
 
           if (imageUrl) {
@@ -262,8 +273,9 @@ export const generateInstagramContent: ContentGenerator = async (
               ...item,
               imageUrl,
               imageMetadata: {
-                source: imageUrl.includes('dalle') ? 'dalle3' : 'midjourney',
+                source: imageResult.provider,
                 originalPrompt: finalPrompt,
+                assetId: imageResult.metadata.assetId,
               },
             };
           }

@@ -323,7 +323,7 @@ interface ImageMetadata {
   contentId: string;
   brandId: string;
   generatedAt: Date;
-  source: 'dalle3' | 'midjourney';
+  source: 'dalle3' | 'gemini';
   originalPrompt: string;
   retentionPolicy: 'content-linked' | 'campaign-linked' | 'user-linked';
   complianceFlags: {
@@ -549,7 +549,7 @@ interface RegionalRetentionPolicy {
 interface S3ObjectTags {
   Brand: string; // Brand ID for cost attribution
   Campaign: string; // Campaign ID for ROI tracking
-  Source: 'dalle3' | 'midjourney';
+  Source: 'dalle3' | 'gemini';
   CreatedAt: string; // ISO timestamp
   Region: string; // User's region for compliance
 }

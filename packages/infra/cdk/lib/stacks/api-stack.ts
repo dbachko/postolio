@@ -30,6 +30,9 @@ export interface ApiStackProps extends cdk.StackProps, OAuthConfig {
   hostedZoneName?: string;
   useExternalDns?: boolean;
   openaiApiKey?: string;
+  googleGenerativeAiApiKey?: string;
+  defaultImageProvider?: string;
+  imageFallbackOrder?: string;
   imageTag?: string;
   // Optional overrides for Brand Analysis DynamoDB integration (to avoid stack coupling)
   // Option 1: Direct table names
@@ -65,6 +68,9 @@ export class ApiStack extends cdk.Stack {
       hostedZoneName,
       useExternalDns,
       openaiApiKey,
+      googleGenerativeAiApiKey,
+      defaultImageProvider,
+      imageFallbackOrder,
       imageTag,
     } = props;
     const sentryDsn =
@@ -545,6 +551,11 @@ export class ApiStack extends cdk.Stack {
             DB_SETUP_STRATEGY: 'skip',
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
+            ...(googleGenerativeAiApiKey && {
+              GOOGLE_GENERATIVE_AI_API_KEY: googleGenerativeAiApiKey,
+            }),
+            ...(defaultImageProvider && { DEFAULT_IMAGE_PROVIDER: defaultImageProvider }),
+            ...(imageFallbackOrder && { IMAGE_FALLBACK_ORDER: imageFallbackOrder }),
             ...oauthEnvVars,
             // Signup gating (optional; server falls back to defaults if unset)
             ...(process.env.AUTH_SIGNUPS_MODE && {

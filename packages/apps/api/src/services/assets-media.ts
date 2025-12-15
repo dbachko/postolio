@@ -98,8 +98,8 @@ function deriveAssetTags(metadata: AssetUploadMetadata): string[] | undefined {
       collected.add(HIDDEN_ASSET_TAG);
     }
     if (
-      normalizedSource.includes('midjourney') ||
       normalizedSource.includes('dalle') ||
+      normalizedSource.includes('gemini') ||
       normalizedSource.includes('ai')
     ) {
       collected.add(AI_GENERATED_TAG);
@@ -126,6 +126,32 @@ export async function verifyAssetOwnership(assetId: string, brandId: string): Pr
     throw new Error('Asset does not belong to this brand or could not be found');
   }
   return result.asset;
+}
+
+export async function resolveGeneratedImageAsset(
+  imageUrl: string,
+  imageMetadata:
+    | {
+        source: string;
+        originalPrompt: string;
+        assetId?: string;
+      }
+    | undefined,
+  metadata: AssetUploadMetadata
+): Promise<AssetRecord> {
+  if (imageMetadata?.assetId) {
+    return verifyAssetOwnership(imageMetadata.assetId, metadata.brandId);
+  }
+
+  const mergedMetadata: AssetUploadMetadata = {
+    ...metadata,
+    ...(imageMetadata?.source && !metadata.source ? { source: imageMetadata.source } : {}),
+    ...(imageMetadata?.originalPrompt && !metadata.originalPrompt
+      ? { originalPrompt: imageMetadata.originalPrompt }
+      : {}),
+  };
+
+  return importImageFromExternalUrl(imageUrl, mergedMetadata);
 }
 
 export async function attachAssetToContent(params: AttachAssetParams): Promise<void> {

@@ -1,11 +1,78 @@
 import type { HttpRequest } from '../http/http';
 
+import type { ImageProvider } from '@/types/campaign-wizard';
+
+type BrandImageProviderPreference = {
+  imageProvider: ImageProvider | null;
+  defaultProvider: ImageProvider | null;
+};
+
+type ImageAnalyticsResponse = {
+  overall: {
+    totalGenerated: number;
+    totalCost: number;
+    avgCostPerImage: number;
+  };
+  byProvider: Record<
+    string,
+    {
+      count: number;
+      totalCost: number;
+      totalTime: number;
+      avgCost: number;
+      avgTime: number;
+    }
+  >;
+  recentLogs: Array<{
+    id: string;
+    provider: string;
+    cost: number;
+    generationTime: number;
+    status: string;
+    createdAt: string;
+  }>;
+};
+
 export class BrandClient {
   constructor(private request: HttpRequest) {}
 
   // Timezone
   getBrandTimezone(brandId: string) {
     return this.request(`/api/brands/${brandId}/timezone`);
+  }
+
+  updateBrandTimezone(brandId: string, timezone: string | null) {
+    return this.request(`/api/brands/${brandId}/timezone`, {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone }),
+    });
+  }
+
+  // Image Provider
+  getBrandImageProvider(brandId: string): Promise<BrandImageProviderPreference> {
+    return this.request(
+      `/api/image-providers/${brandId}/preference`
+    ) as Promise<BrandImageProviderPreference>;
+  }
+
+  updateBrandImageProvider(brandId: string, imageProvider: ImageProvider | null) {
+    return this.request(`/api/image-providers/${brandId}/preference`, {
+      method: 'POST',
+      body: JSON.stringify({ imageProvider }),
+    });
+  }
+
+  getImageAnalytics(
+    brandId: string,
+    options?: { startDate?: string; endDate?: string }
+  ): Promise<ImageAnalyticsResponse> {
+    const params = new URLSearchParams();
+    if (options?.startDate) params.set('startDate', options.startDate);
+    if (options?.endDate) params.set('endDate', options.endDate);
+    const qs = params.toString();
+    return this.request(
+      `/api/image-providers/${brandId}/analytics${qs ? `?${qs}` : ''}`
+    ) as Promise<ImageAnalyticsResponse>;
   }
 
   // Inbox: Comments overview
@@ -22,13 +89,6 @@ export class BrandClient {
         newCount: number;
       }>;
     }>;
-  }
-
-  updateBrandTimezone(brandId: string, timezone: string | null) {
-    return this.request(`/api/brands/${brandId}/timezone`, {
-      method: 'PATCH',
-      body: JSON.stringify({ timezone }),
-    });
   }
 
   // CRUD

@@ -22,6 +22,8 @@ import { useBrandStore } from '../../stores/brandStore';
 import { useAuthStore } from '../../stores/authStore';
 import { auth as authApi, brand as brandApi } from '../../lib/api';
 import BrandTimezoneCard from './BrandTimezoneCard';
+import BrandImageProviderCard from './BrandImageProviderCard';
+import type { ImageProvider } from '@/types/campaign-wizard';
 
 export default function TimezoneSettingsTab() {
   const { timezone, isAutoDetected, setTimezone } = useTimezone();
@@ -31,6 +33,7 @@ export default function TimezoneSettingsTab() {
   const [localTimezone, setLocalTimezone] = useState(timezone);
   const [autoDetect, setAutoDetect] = useState(isAutoDetected);
   const [brandTimezone, setBrandTimezone] = useState<string | null>(null);
+  const [brandImageProvider, setBrandImageProvider] = useState<ImageProvider | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [detectedTimezone] = useState(getUserTimezone());
   const [weekStart, setWeekStart] = useState<'monday' | 'sunday'>(
@@ -51,6 +54,22 @@ export default function TimezoneSettingsTab() {
     };
 
     void fetchBrandTimezone();
+  }, [selectedBrand]);
+
+  // Load brand-specific image provider if a brand is selected
+  useEffect(() => {
+    if (!selectedBrand) return;
+
+    const fetchBrandImageProvider = async () => {
+      try {
+        const response = await brandApi.getBrandImageProvider(selectedBrand.id);
+        setBrandImageProvider(response.imageProvider || null);
+      } catch (error) {
+        console.error('Failed to fetch brand image provider:', error);
+      }
+    };
+
+    void fetchBrandImageProvider();
   }, [selectedBrand]);
 
   const handleTimezoneChange = (value: string) => {
@@ -99,10 +118,26 @@ export default function TimezoneSettingsTab() {
     }
   };
 
+  const handleSaveBrandImageProvider = async () => {
+    if (!selectedBrand) return;
+
+    setIsSaving(true);
+    try {
+      await brandApi.updateBrandImageProvider(selectedBrand.id, brandImageProvider);
+      toast.success('Brand image provider saved successfully');
+    } catch (error) {
+      toast.error('Failed to save brand image provider');
+      console.error('Error saving brand image provider:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleResetToDefault = () => {
     setAutoDetect(true);
     setLocalTimezone(detectedTimezone);
     setBrandTimezone(null);
+    setBrandImageProvider(null);
   };
 
   const handleSaveWeekStart = async () => {
@@ -243,6 +278,17 @@ export default function TimezoneSettingsTab() {
           isSaving={isSaving}
           onBrandTimezoneChange={setBrandTimezone}
           onSave={handleSaveBrandTimezone}
+        />
+      )}
+
+      {/* Brand-specific Image Provider Settings */}
+      {selectedBrand && (
+        <BrandImageProviderCard
+          brandName={selectedBrand.name}
+          selectedProvider={brandImageProvider}
+          isSaving={isSaving}
+          onProviderChange={setBrandImageProvider}
+          onSave={handleSaveBrandImageProvider}
         />
       )}
 

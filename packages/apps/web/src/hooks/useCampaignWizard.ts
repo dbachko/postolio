@@ -34,6 +34,7 @@ const initialState: CampaignWizardState = {
   themes: [],
   style: [],
   imageSource: null, // NEW: Image source preference
+  imageProvider: null, // NEW: Image generation provider (for AI images)
   frequency: '',
   postingTime: '12:00',
   priority: 5,

@@ -1,12 +1,14 @@
 import { type ContentStatus } from '@postolio/database';
+import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import { TimezoneService } from './timezone.js';
 import { generateInstagramContent } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
 import { computeUpcomingSlots } from './slot-utils.js';
-import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
+import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 
 const prisma = getDatabaseClient();
+const slidingWindowLogger = baseLogger.child({ module: 'campaign-sliding-window' });
 
 /**
  * Sliding window generation for campaign content.
@@ -240,10 +242,13 @@ export class CampaignSlidingWindowService {
         ? selectedSlots.slice(0, maxGenerate as number)
         : selectedSlots;
 
-    console.log(
-      `[SlidingWindow] Generating content for ${effectiveSlots.length} slots (requested max: ${maxGenerate}, available: ${selectedSlots.length})`,
-      { campaignId, brandId: campaign.brandId }
-    );
+    slidingWindowLogger.info('Generating campaign window content for selected slots', {
+      campaignId,
+      brandId: campaign.brandId,
+      slots: effectiveSlots.length,
+      maxGenerate,
+      availableSlots: selectedSlots.length,
+    });
 
     // Generate and schedule content for selected slots
     let generated = 0;
@@ -343,25 +348,27 @@ export class CampaignSlidingWindowService {
         const { imageUrl, imageMetadata } = post;
 
         try {
-          const asset = await importImageFromExternalUrl(imageUrl, {
+          const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
             contentId: createdId,
             brandId: campaign.brandId,
             campaignId: campaign.id,
-            source: imageMetadata.source,
-            originalPrompt: imageMetadata.originalPrompt,
           });
           await attachAssetToContent({ contentId: createdId, asset });
-          console.log(`[SlidingWindow] Asset imported and attached for content ${createdId}`, {
+          slidingWindowLogger.info('Asset imported and attached for content', {
             campaignId,
+            contentId: createdId,
             assetId: asset.id,
           });
         } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          console.error(
-            `[SlidingWindow] Failed to import asset for content ${createdId}; leaving post without media`,
+          slidingWindowLogger.error(
+            'Failed to import asset for content; leaving post without media',
             {
               campaignId,
-              error: { name: err.name, message: err.message },
+              contentId: createdId,
+              error:
+                error instanceof Error
+                  ? { name: error.name, message: error.message }
+                  : String(error),
             }
           );
         }

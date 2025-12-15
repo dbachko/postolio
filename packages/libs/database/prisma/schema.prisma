@@ -183,6 +183,30 @@ model ContentMediaAsset {
   @@map("content_media_assets")
 }
 
+/// Image generation logging for multi-provider tracking
+model ImageGenerationLog {
+  id             String   @id @default(cuid())
+  brandId        String
+  campaignId     String?
+  contentId      String?
+  provider       String // 'dalle-3', 'gemini-2.5-flash', etc.
+  prompt         String   @db.Text
+  imageUrl       String
+  cost           Decimal  @db.Decimal(10, 4) // USD
+  generationTime Int // milliseconds
+  size           String // '1024x1024'
+  quality        String? // 'standard' | 'hd'
+  status         String   @default("success") // 'success' | 'fallback'
+  failedProvider String? // If fallback was used
+  metadata       Json? // Provider-specific metadata
+  createdAt      DateTime @default(now())
+
+  @@index([brandId, createdAt])
+  @@index([campaignId])
+  @@index([provider, createdAt])
+  @@map("image_generation_logs")
+}
+
 // CampaignDraft model removed; drafts feature fully deprecated
 
 enum ContentStatus {

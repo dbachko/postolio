@@ -82,8 +82,9 @@ export function Step7Review() {
         contentPillars: state.contentPillars || undefined,
         goals: Array.isArray(state.goals) ? state.goals : undefined,
         seasonalityAssist: state.seasonalityAssist,
+        imageProvider: state.imageProvider || undefined,
       } as const;
-      const response = (await campaignApi.createCampaign(payload as any)) as {
+      const response = (await campaignApi.createCampaign(payload)) as {
         success: boolean;
         campaign: { id: string; name: string; status: string };
       };

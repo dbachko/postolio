@@ -10,7 +10,7 @@ import {
   type ContentGenerationRequest,
 } from '../../services/content-generator.js';
 import { buildSimpleContentListResponse } from '../../services/content-response-builder.js';
-import { importImageFromExternalUrl, attachAssetToContent } from '../../services/assets-media.js';
+import { resolveGeneratedImageAsset, attachAssetToContent } from '../../services/assets-media.js';
 import { verifyBrandOwnership } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
 import { assertBrandOwnership } from '../../services/ownership.js';
@@ -86,25 +86,19 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
               const { imageUrl, imageMetadata } = content;
 
               try {
-                const asset = await importImageFromExternalUrl(imageUrl, {
+                const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
                   contentId,
                   brandId,
-                  source: imageMetadata.source,
-                  originalPrompt: imageMetadata.originalPrompt,
                 });
                 await attachAssetToContent({ contentId, asset });
-                console.log(`[ContentGen] Asset imported for content ${contentId}`, {
-                  brandId,
-                  assetId: asset.id,
-                });
+                request.log.info(
+                  { brandId, contentId, assetId: asset.id },
+                  'Asset imported for content'
+                );
               } catch (error) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                console.error(
-                  `[ContentGen] Failed to import asset for content ${contentId}; leaving post without media`,
-                  {
-                    brandId,
-                    error: { name: err.name, message: err.message },
-                  }
+                request.log.error(
+                  { err: error, brandId, contentId },
+                  'Failed to import asset for content; leaving post without media'
                 );
               }
             }

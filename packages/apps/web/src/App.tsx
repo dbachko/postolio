@@ -29,7 +29,7 @@ import NotFound from './pages/NotFound';
 import { EmailVerify } from './pages/EmailVerify';
 import { PasswordReset } from './pages/PasswordReset';
 import TzRenderTest from './pages/TzRenderTest';
-import { useEffect, lazy, Suspense, useRef } from 'react';
+import { useEffect, lazy, Suspense, useRef, type ComponentType } from 'react';
 import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationsPage from './pages/Notifications';
@@ -500,6 +500,8 @@ const router = createBrowserRouter([
 
 function App() {
   const { checkAuth } = useAuthStore();
+  type ThemeProviderProps = React.ComponentProps<typeof ThemeProvider>;
+  const ThemeProviderShim = ThemeProvider as unknown as ComponentType<ThemeProviderProps>;
 
   useEffect(() => {
     // Skip auth check in minimal timezone render route to avoid API dependency in E2E
@@ -513,7 +515,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ConnectionStatusProvider>
           <TimezoneProvider>
-            <ThemeProvider
+            <ThemeProviderShim
               attribute="class"
               enableSystem
               defaultTheme="system"
@@ -523,7 +525,7 @@ function App() {
               <ThemeBootstrapper />
               <RouterProvider router={router} />
               <Toaster position="bottom-left" />
-            </ThemeProvider>
+            </ThemeProviderShim>
           </TimezoneProvider>
         </ConnectionStatusProvider>
       </QueryClientProvider>

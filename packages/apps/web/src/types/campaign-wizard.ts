@@ -9,6 +9,8 @@ export type CampaignType =
 
 export type ImageSource = 'ai' | 'assets' | 'mix';
 
+export type ImageProvider = 'dalle-3' | 'gemini-2.5-flash' | 'gemini-3-pro';
+
 export interface PromotionDetails {
   discountPercentage?: number;
   promoCode?: string;
@@ -30,6 +32,7 @@ export interface CampaignWizardState {
   themes: string[];
   style: string[];
   imageSource: ImageSource | null; // NEW: Image source preference
+  imageProvider: ImageProvider | null; // NEW: Image generation provider (for AI images)
   frequency: string; // allow custom schedules
   postingTime: string; // HH:mm
   priority: number;

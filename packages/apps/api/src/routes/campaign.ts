@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
 import { regenerationService } from '../services/regeneration-queue.js';
 import { TimezoneService } from '../services/timezone.js';
+import { IMAGE_PROVIDERS } from '../services/image-providers/types.js';
 import {
   AnalyzeGoalSchema,
   GenerateStrategySchema,
@@ -122,6 +123,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           .min(1),
       })
       .optional(),
+    // Image provider selection (optional - falls back to brand or system default)
+    imageProvider: z.enum(IMAGE_PROVIDERS).optional(),
   });
 
   type ConfigureBody = z.infer<typeof ConfigureSchema>;
@@ -278,6 +281,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           ...(body.seasonalityAssist !== undefined
             ? { seasonalityAssist: body.seasonalityAssist }
             : {}),
+          ...(body.imageProvider ? { imageProvider: body.imageProvider } : {}),
         };
 
         // Validate campaign configuration

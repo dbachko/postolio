@@ -269,7 +269,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
               <YAxis
                 tick={{ fontSize: 12 }}
                 className="text-muted-foreground"
-                tickFormatter={(value) => formatValue(value, selectedMetric)}
+                tickFormatter={(value: number) => formatValue(value, selectedMetric)}
               />
               <RechartsTooltip
                 contentStyle={{

@@ -162,15 +162,19 @@ vi.mock('../../services/assets-media.js', async () => {
   const actual = await vi.importActual<typeof import('../../services/assets-media.js')>(
     '../../services/assets-media.js'
   );
+  const mockAsset = {
+    id: 'asset-1',
+    url: 'https://cdn.example.com/assets/asset-1.jpg',
+    width: 1080,
+    height: 1080,
+  } as any;
   return {
     ...actual,
     importImageFromExternalUrl: vi.fn(async (_imageUrl: string, _metadata: any) => {
-      return {
-        id: 'asset-1',
-        url: 'https://cdn.example.com/assets/asset-1.jpg',
-        width: 1080,
-        height: 1080,
-      } as any;
+      return mockAsset;
+    }),
+    resolveGeneratedImageAsset: vi.fn(async (_imageUrl: string, _imageMetadata: any) => {
+      return mockAsset;
     }),
   };
 });

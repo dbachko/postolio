@@ -1,4 +1,5 @@
 import type { GeneratedContent } from '../content-generator.js';
+import type { ImageProvider } from '../image-providers/types.js';
 
 export interface CampaignConfig {
   name?: string; // Optional: Auto-generated if not provided
@@ -10,6 +11,7 @@ export interface CampaignConfig {
   frequency: string; // 'daily', 'every2days', '3weekly', etc.
   themes: string[];
   style?: string;
+  imageProvider?: ImageProvider;
   postingTime: string; // HH:MM format
   priority?: number; // 1=highest, 5=normal, 10=lowest
   // Wizard-enhanced (Phase 1) optional fields

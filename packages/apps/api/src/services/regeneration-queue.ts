@@ -1,8 +1,11 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { prisma } from '../config/database.js';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
+import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import { createRedisClient } from './redis.js';
+import { logger as baseLogger } from '@postolio/logger';
+
+const regenerationLogger = baseLogger.child({ module: 'regeneration-queue' });
 
 // Fixed batch size as per product decision
 const BATCH_SIZE = 5;
@@ -54,9 +57,10 @@ const regenerationWorker = new Worker(
   async (job: Job<RegenerationJobData>) => {
     const { campaignId, contentIds, regenerationParams } = job.data;
 
-    console.log(
-      `Starting regeneration job for campaign ${campaignId} with ${contentIds.length} items`
-    );
+    regenerationLogger.info('Starting regeneration job', {
+      campaignId,
+      itemCount: contentIds.length,
+    });
 
     const results = {
       completed: 0,
@@ -131,25 +135,27 @@ const regenerationWorker = new Worker(
             const { imageUrl, imageMetadata } = newContent;
 
             try {
-              const asset = await importImageFromExternalUrl(imageUrl, {
+              const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
                 contentId,
                 brandId: existingContent.brandId,
                 campaignId: existingContent.campaignId || undefined,
-                source: imageMetadata.source,
-                originalPrompt: imageMetadata.originalPrompt,
               });
               await attachAssetToContent({ contentId, asset });
-              console.log(`[RegenerationQueue] Asset imported for content ${contentId}`, {
+              regenerationLogger.info('Asset imported for regenerated content', {
+                contentId,
                 brandId: existingContent.brandId,
                 assetId: asset.id,
               });
             } catch (error) {
-              const err = error instanceof Error ? error : new Error(String(error));
-              console.error(
-                `[RegenerationQueue] Failed to import asset for content ${contentId}; leaving post without media`,
+              regenerationLogger.error(
+                'Failed to import asset for regenerated content; leaving post without media',
                 {
+                  contentId,
                   brandId: existingContent.brandId,
-                  error: { name: err.name, message: err.message },
+                  error:
+                    error instanceof Error
+                      ? { name: error.name, message: error.message }
+                      : String(error),
                 }
               );
             }
@@ -161,7 +167,7 @@ const regenerationWorker = new Worker(
           results.failed++;
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           results.errors.push(`Content ${contentId}: ${errorMessage}`);
-          console.error(`Failed to regenerate content ${contentId}:`, error);
+          regenerationLogger.error('Failed to regenerate content', { contentId, err: error });
           return { contentId, status: 'failed', error: errorMessage };
         }
       });
@@ -173,7 +179,11 @@ const regenerationWorker = new Worker(
       const progress = Math.floor(((i + batch.length) / contentIds.length) * 100);
       await job.updateProgress(progress);
 
-      console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} completed. Progress: ${progress}%`);
+      regenerationLogger.debug('Regeneration batch completed', {
+        campaignId,
+        batch: Math.floor(i / BATCH_SIZE) + 1,
+        progress,
+      });
     }
 
     // Update campaign status if regeneration completed
@@ -203,9 +213,11 @@ const regenerationWorker = new Worker(
       });
     }
 
-    console.log(
-      `Regeneration job completed for campaign ${campaignId}. Completed: ${results.completed}, Failed: ${results.failed}`
-    );
+    regenerationLogger.info('Regeneration job completed', {
+      campaignId,
+      completed: results.completed,
+      failed: results.failed,
+    });
 
     return {
       campaignId,
@@ -243,9 +255,11 @@ export class RegenerationService {
     // Estimate time based on content count (approximately 5-10 seconds per item)
     const estimatedTime = Math.ceil(contentIds.length * 7.5); // seconds
 
-    console.log(
-      `Queued regeneration job ${job.id} for campaign ${campaignId} with ${contentIds.length} items`
-    );
+    regenerationLogger.info('Queued regeneration job', {
+      jobId: job.id,
+      campaignId,
+      itemCount: contentIds.length,
+    });
 
     return {
       jobId: job.id as string,
@@ -300,7 +314,7 @@ export class RegenerationService {
 
       return result;
     } catch (error) {
-      console.error(`Error getting job progress for ${jobId}:`, error);
+      regenerationLogger.error('Error getting job progress', { jobId, err: error });
       return null;
     }
   }
@@ -325,7 +339,7 @@ export class RegenerationService {
       }
       return false;
     } catch (error) {
-      console.error(`Error canceling job ${jobId}:`, error);
+      regenerationLogger.error('Error canceling job', { jobId, err: error });
       return false;
     }
   }

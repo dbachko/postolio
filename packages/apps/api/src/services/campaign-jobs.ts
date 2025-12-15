@@ -1,14 +1,16 @@
 import { getDatabaseClient } from '../config/database.js';
+import { logger as baseLogger } from '@postolio/logger';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
   type GeneratedContent,
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
-import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
+import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 
 const prisma = getDatabaseClient();
+const campaignJobsLogger = baseLogger.child({ module: 'campaign-jobs' });
 
 export interface CampaignJob {
   campaignId: string;
@@ -24,7 +26,7 @@ class CampaignJobService {
   async startCampaignPreviewGeneration(campaignId: string, userId: string): Promise<void> {
     try {
       if (this.runningJobs.has(campaignId)) {
-        console.log(`Campaign preview generation already running for ${campaignId}`);
+        campaignJobsLogger.info('Campaign preview generation already running', { campaignId });
         return;
       }
 
@@ -33,13 +35,19 @@ class CampaignJobService {
       // Start the background job
       this.generateCampaignPreviewAsync(campaignId, userId)
         .catch((error) => {
-          console.error(`Campaign preview generation failed for ${campaignId}:`, error);
+          campaignJobsLogger.error('Campaign preview generation failed', {
+            campaignId,
+            err: error,
+          });
         })
         .finally(() => {
           this.runningJobs.delete(campaignId);
         });
     } catch (error) {
-      console.error(`Error initiating campaign preview generation for ${campaignId}:`, error);
+      campaignJobsLogger.error('Error initiating campaign preview generation', {
+        campaignId,
+        err: error,
+      });
       this.runningJobs.delete(campaignId);
       throw error;
     }
@@ -50,7 +58,7 @@ class CampaignJobService {
    */
   private async generateCampaignPreviewAsync(campaignId: string, userId: string): Promise<void> {
     try {
-      console.log(`Starting async campaign preview generation for ${campaignId}`);
+      campaignJobsLogger.info('Starting async campaign preview generation', { campaignId });
 
       // Update status to show progress
       await prisma.campaign.update({
@@ -167,14 +175,12 @@ class CampaignJobService {
 
       // Save new preview posts to database
       for (const post of examplePosts) {
-        console.log(
-          'Saving post to database:',
-          JSON.stringify({
-            caption: post.caption?.substring(0, 50) + '...',
-            hashtags: post.hashtags?.length || 0,
-            hasImageUrl: !!post.imageUrl,
-          })
-        );
+        campaignJobsLogger.debug('Saving preview post to database', {
+          campaignId,
+          captionPreview: `${post.caption?.substring(0, 50) ?? ''}...`,
+          hashtags: post.hashtags?.length || 0,
+          hasImageUrl: !!post.imageUrl,
+        });
 
         const created = await prisma.content.create({
           data: {
@@ -201,27 +207,26 @@ class CampaignJobService {
           const { imageUrl, imageMetadata } = post;
 
           try {
-            const asset = await importImageFromExternalUrl(imageUrl, {
+            const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
               contentId,
               brandId: campaign.brandId,
               campaignId: campaign.id,
-              source: imageMetadata.source,
-              originalPrompt: imageMetadata.originalPrompt,
             });
             await attachAssetToContent({ contentId, asset });
-            console.log(`[Preview] Asset imported for content ${contentId}`, {
+            campaignJobsLogger.info('Preview asset imported for content', {
               campaignId: campaign.id,
+              contentId,
               assetId: asset.id,
             });
           } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error(
-              `[Preview] Failed to import asset for content ${contentId}; leaving post without media`,
-              {
-                campaignId: campaign.id,
-                error: { name: err.name, message: err.message },
-              }
-            );
+            campaignJobsLogger.error('Preview asset import failed; leaving post without media', {
+              campaignId: campaign.id,
+              contentId,
+              error:
+                error instanceof Error
+                  ? { name: error.name, message: error.message }
+                  : String(error),
+            });
           }
         }
 
@@ -236,7 +241,10 @@ class CampaignJobService {
             } as unknown as Record<string, unknown>);
           }
         } catch (e) {
-          console.warn('Broadcast content-created (draft) failed or skipped:', e);
+          campaignJobsLogger.warn('Broadcast content-created (draft) failed or skipped', {
+            campaignId: campaign.id,
+            err: e,
+          });
         }
       }
 
@@ -262,12 +270,15 @@ class CampaignJobService {
           );
         }
       } catch (e) {
-        console.warn('Failed to broadcast campaign preview-ready status; continuing', e);
+        campaignJobsLogger.warn('Failed to broadcast campaign preview-ready status; continuing', {
+          campaignId,
+          err: e,
+        });
       }
 
-      console.log(`Campaign preview generation completed for ${campaignId}`);
+      campaignJobsLogger.info('Campaign preview generation completed', { campaignId });
     } catch (error) {
-      console.error(`Campaign preview generation failed for ${campaignId}:`, error);
+      campaignJobsLogger.error('Campaign preview generation failed', { campaignId, err: error });
 
       const failed = await prisma.campaign.update({
         where: { id: campaignId },
@@ -285,7 +296,10 @@ class CampaignJobService {
           });
         }
       } catch (e) {
-        console.warn('Failed to broadcast campaign failed status; continuing', e);
+        campaignJobsLogger.warn('Failed to broadcast campaign failed status; continuing', {
+          campaignId,
+          err: e,
+        });
       }
     }
   }

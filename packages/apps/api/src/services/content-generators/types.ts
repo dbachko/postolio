@@ -1,3 +1,5 @@
+import type { ImageProvider } from '../image-providers/types.js';
+
 export interface ContentGenerationRequest {
   brandId: string;
   count: number;
@@ -5,6 +7,8 @@ export interface ContentGenerationRequest {
   style?: string | undefined;
   // Optional: link generation to a specific campaign so we can include context
   campaignId?: string | undefined;
+  // Optional: specify image provider (falls back to brand or system default)
+  imageProvider?: ImageProvider | undefined;
 }
 
 export interface GeneratedContent {
@@ -16,6 +20,7 @@ export interface GeneratedContent {
   imageMetadata?: {
     source: string;
     originalPrompt: string;
+    assetId?: string;
   };
 }
 

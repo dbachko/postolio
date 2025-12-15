@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -56,19 +56,28 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
     return { recognized, custom };
   }, [recognizedSet, value]);
 
+  const [customDraft, setCustomDraft] = useState(normalizedValue.custom);
+  const [isEditingCustom, setIsEditingCustom] = useState(false);
+
+  useEffect(() => {
+    if (isEditingCustom) return;
+    setCustomDraft(normalizedValue.custom);
+  }, [isEditingCustom, normalizedValue.custom]);
+
   const isOptSelected = (opt: any): boolean => {
     const canonical =
       opt.isBrandStyle && typeof opt.fullDescription === 'string' ? opt.fullDescription : opt.value;
     return normalizedValue.recognized.includes(canonical);
   };
 
-  const emitNext = (recognized: string[], custom: string) => {
+  const emitNext = (recognized: string[], custom: string): { emittedCustom: string } => {
     const nextCustom = custom.trim();
     const isCustomRecognized = nextCustom.length > 0 && recognizedSet.has(nextCustom);
     const finalCustom = isCustomRecognized ? '' : nextCustom;
     const uniqueRecognized = Array.from(new Set(recognized));
     const next = finalCustom.length > 0 ? [...uniqueRecognized, finalCustom] : uniqueRecognized;
     onChange(next);
+    return { emittedCustom: finalCustom };
   };
 
   const toggleOption = (opt: any) => {
@@ -78,11 +87,16 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
     const nextRecognized = selected
       ? normalizedValue.recognized.filter((v) => v !== canonical)
       : [...normalizedValue.recognized, canonical];
-    emitNext(nextRecognized, normalizedValue.custom);
+    emitNext(nextRecognized, customDraft);
   };
 
   const onCustomChange = (text: string) => {
-    emitNext(normalizedValue.recognized, text);
+    const { emittedCustom } = emitNext(normalizedValue.recognized, text);
+    if (!emittedCustom) {
+      setCustomDraft('');
+      return;
+    }
+    setCustomDraft(text);
   };
 
   return (
@@ -208,7 +222,13 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
               <Input
                 type="text"
                 placeholder="Describe extra style…"
-                value={normalizedValue.custom}
+                value={customDraft}
+                onFocus={() => setIsEditingCustom(true)}
+                onBlur={() => {
+                  setIsEditingCustom(false);
+                  const { emittedCustom } = emitNext(normalizedValue.recognized, customDraft);
+                  setCustomDraft(emittedCustom);
+                }}
                 onChange={(e) => onCustomChange(e.target.value)}
               />
               <p className="text-muted-foreground mt-1 text-xs">

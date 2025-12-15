@@ -5,8 +5,9 @@ import TimezoneSettingsTab from './settings/TimezoneSettingsTab';
 import AccountSettingsTab from './settings/AccountSettingsTab';
 import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
 import AppearanceSettingsTab from './settings/AppearanceSettingsTab';
+import ImageAnalytics from './settings/ImageAnalytics';
 
-type SettingsTab = 'timezone' | 'account' | 'notifications' | 'appearance';
+type SettingsTab = 'timezone' | 'account' | 'notifications' | 'appearance' | 'analytics';
 
 export function Settings() {
   const location = useLocation();
@@ -16,7 +17,13 @@ export function Settings() {
   const activeTab: SettingsTab = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab') as SettingsTab | null;
-    if (tab === 'account' || tab === 'notifications' || tab === 'appearance' || tab === 'timezone')
+    if (
+      tab === 'account' ||
+      tab === 'notifications' ||
+      tab === 'appearance' ||
+      tab === 'timezone' ||
+      tab === 'analytics'
+    )
       return tab;
     return 'timezone';
   }, [location.search]);
@@ -45,11 +52,12 @@ export function Settings() {
   return (
     <div className="w-full">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="timezone">Timezone</TabsTrigger>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timezone">
@@ -66,6 +74,10 @@ export function Settings() {
 
         <TabsContent value="appearance">
           <AppearanceSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <ImageAnalytics />
         </TabsContent>
       </Tabs>
     </div>

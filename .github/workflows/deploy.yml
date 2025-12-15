@@ -567,6 +567,7 @@ jobs:
         working-directory: packages/infra/cdk
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
           LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
@@ -721,6 +722,9 @@ jobs:
               --context corsOrigin="${{ vars.VITE_API_URL }}" \
               --context authMagicLinkEnabled="${{ vars.AUTH_MAGIC_LINK_ENABLED }}" \
               --context openaiApiKey="$OPENAI_API_KEY" \
+              --context googleGenerativeAiApiKey="$GOOGLE_GENERATIVE_AI_API_KEY" \
+              --context defaultImageProvider="${{ vars.DEFAULT_IMAGE_PROVIDER }}" \
+              --context imageFallbackOrder="${{ vars.IMAGE_FALLBACK_ORDER }}" \
               --context sentryDsn="$SENTRY_BACKEND_DSN" \
               --context googleClientId="$GOOGLE_CLIENT_ID" \
               --context googleClientSecret="$GOOGLE_CLIENT_SECRET" \

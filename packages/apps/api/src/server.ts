@@ -52,6 +52,7 @@ import onboardingRoutes from './routes/onboarding.js';
 import instagramWebhookRoutes from './routes/instagram-webhook.js';
 import dmAutomationRoutes from './routes/dm-automation.js';
 import savedRepliesRoutes from './routes/saved-replies.js';
+import imageProviderRoutes from './routes/image-providers.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import type { Redis } from 'ioredis';
@@ -272,6 +273,9 @@ export function buildFastify(): FastifyInstance {
 
   // Saved Replies API
   app.register(savedRepliesRoutes, { prefix: '/api' });
+
+  // Image Providers API
+  app.register(imageProviderRoutes, { prefix: '/api/image-providers' });
 
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload

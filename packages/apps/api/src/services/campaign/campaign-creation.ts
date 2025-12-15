@@ -11,7 +11,7 @@ import {
 } from '../campaign-coordination.js';
 import { TimezoneService } from '../timezone.js';
 import { generateCampaignName } from '../../utils/campaign-naming.js';
-import { importImageFromExternalUrl, attachAssetToContent } from '../assets-media.js';
+import { resolveGeneratedImageAsset, attachAssetToContent } from '../assets-media.js';
 import { getDatabaseClient } from '../../config/database.js';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 import { logger as baseLogger } from '@postolio/logger';
@@ -24,6 +24,7 @@ import {
   isValidCampaignFrequency,
 } from './campaign-frequency.js';
 import type { CampaignConfig, CampaignPreview } from './campaign-types.js';
+import type { ImageProvider } from '../image-providers/types.js';
 
 const prisma = getDatabaseClient();
 const logger = baseLogger.child({ module: 'campaign-creation-service' });
@@ -173,6 +174,7 @@ export class CampaignCreationService {
             frequency: config.frequency,
             themes: config.themes,
             ...(config.style && config.style.trim().length > 0 ? { style: config.style } : {}),
+            ...(config.imageProvider ? { imageProvider: config.imageProvider } : {}),
             postingTime: config.postingTime,
             estimatedPosts,
             durationDays,
@@ -258,6 +260,7 @@ export class CampaignCreationService {
       const config = (campaign.config ?? {}) as {
         style?: string;
         themes?: string[];
+        imageProvider?: ImageProvider;
         estimatedPosts?: number;
         frequency?: string;
         durationDays?: number;
@@ -273,6 +276,8 @@ export class CampaignCreationService {
           count: 1,
           theme,
           style: config.style,
+          campaignId: campaign.id,
+          imageProvider: config.imageProvider,
         })
       );
 
@@ -300,6 +305,8 @@ export class CampaignCreationService {
           count: 1,
           theme: (config.themes || [])[0],
           style: config.style,
+          campaignId: campaign.id,
+          imageProvider: config.imageProvider,
         });
 
         if (!additionalContent.length) {
@@ -382,12 +389,10 @@ export class CampaignCreationService {
           const { imageUrl, imageMetadata } = post;
 
           try {
-            const asset = await importImageFromExternalUrl(imageUrl, {
+            const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
               contentId,
               brandId: campaign.brandId,
               campaignId: campaign.id,
-              source: imageMetadata.source,
-              originalPrompt: imageMetadata.originalPrompt,
             });
             await attachAssetToContent({ contentId, asset });
             logger.info('[CampaignPreview] Asset imported for content', {

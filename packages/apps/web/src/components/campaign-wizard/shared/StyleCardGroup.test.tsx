@@ -41,4 +41,23 @@ describe('StyleCardGroup', () => {
     expect(screen.getByTestId('value').textContent).toBe(JSON.stringify(['modern']));
     expect(input.value).toBe('');
   });
+
+  it('allows spaces while typing custom style', () => {
+    render(<Harness initial={[]} />);
+
+    const input = screen.getByPlaceholderText('Describe extra style…') as HTMLInputElement;
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'soft ' } });
+
+    // Input keeps the trailing space so the user can continue typing.
+    expect(input.value).toBe('soft ');
+
+    // Stored value trims trailing whitespace.
+    expect(screen.getByTestId('value').textContent).toBe(JSON.stringify(['soft']));
+
+    fireEvent.change(input, { target: { value: 'soft pastels' } });
+    expect(input.value).toBe('soft pastels');
+    expect(screen.getByTestId('value').textContent).toBe(JSON.stringify(['soft pastels']));
+  });
 });

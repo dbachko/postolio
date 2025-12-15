@@ -1,6 +1,6 @@
 import { logger as baseLogger } from '@postolio/logger';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
+import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
@@ -269,11 +269,9 @@ class RollingContentService {
           const { imageUrl, imageMetadata } = content;
 
           try {
-            const asset = await importImageFromExternalUrl(imageUrl, {
+            const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
               contentId,
               brandId,
-              source: imageMetadata.source,
-              originalPrompt: imageMetadata.originalPrompt,
             });
             await attachAssetToContent({ contentId, asset });
             rollingLogger.info(`[RollingContent] Asset imported for content ${contentId}`, {
@@ -281,12 +279,14 @@ class RollingContentService {
               assetId: asset.id,
             });
           } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
             rollingLogger.error(
               `[RollingContent] Failed to import asset for content ${contentId}; leaving post without media`,
               {
                 brandId,
-                error: { name: err.name, message: err.message },
+                error:
+                  error instanceof Error
+                    ? { name: error.name, message: error.message }
+                    : String(error),
               }
             );
           }
