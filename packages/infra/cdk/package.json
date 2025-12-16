@@ -14,8 +14,8 @@
     "destroy": "cdk destroy",
     "diff": "cdk diff",
     "synth": "cdk synth",
-    "postinstall": "npm run prepare:layers",
-    "prepare:layers": "cd lib/layers/powertools/nodejs && npm install && cd -"
+    "postinstall": "npm --loglevel=error run prepare:layers",
+    "prepare:layers": "cd lib/layers/powertools/nodejs && npm ci --no-audit --fund=false --loglevel=error && cd -"
   },
   "devDependencies": {
     "@aws-lambda-powertools/logger": "^2.28.1",
