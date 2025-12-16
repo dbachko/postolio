@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
 import { MetricsCard } from '../analytics/MetricsCard';
 import { MultiMetricTimeSeriesChart } from '../analytics/MultiMetricTimeSeriesChart';
 import { HashtagAnalysis } from '../analytics/HashtagAnalysis';
-import { ActivityHeatmap } from '../analytics/ActivityHeatmap';
 import { AudienceInsights } from '../analytics/AudienceInsights';
 import { PostsPerformanceTable } from '../analytics/PostsPerformanceTable';
 import { Eye, Users } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { analytics } from '@/lib/api';
+import { PreferredPostingTime } from '@/components/PreferredPostingTime';
 import type {
   InstagramHashtag,
   InstagramAudienceInsights,
@@ -46,46 +44,6 @@ export function AnalyticsInstagramTab({
   igPostsPagination,
   onPostsPageChange,
 }: AnalyticsInstagramTabProps) {
-  const [audienceLoading, setAudienceLoading] = useState(false);
-  const [resolvedAudience, setResolvedAudience] = useState<InstagramAudienceInsights | null>(
-    igAudience
-  );
-
-  useEffect(() => {
-    setResolvedAudience(igAudience);
-  }, [igAudience]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchAudience = async () => {
-      if (!brandId) return;
-      if (igLoading) return;
-      if (resolvedAudience?.activityHeatmap) return;
-
-      setAudienceLoading(true);
-      try {
-        const res = await analytics.getBrandAudience(brandId);
-        if (cancelled) return;
-        setResolvedAudience(res?.data || null);
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Failed to load Instagram audience insights:', err);
-        }
-      } finally {
-        if (!cancelled) {
-          setAudienceLoading(false);
-        }
-      }
-    };
-
-    fetchAudience();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, igLoading, resolvedAudience?.activityHeatmap]);
-
   const hasPosts = igPostsDetailed.length > 0;
   const allOverviewZero = (igOverview?.reach ?? 0) === 0 && (igOverview?.profile_views ?? 0) === 0;
   const allPostMetricsZero =
@@ -99,8 +57,6 @@ export function AnalyticsInstagramTab({
   const hasSeries = igSeries && igSeries.length > 0;
   const showIngestionNotice =
     !igLoading && hasPosts && allOverviewZero && allPostMetricsZero && !hasSeries;
-
-  const showBestPostingTimes = Boolean(resolvedAudience?.activityHeatmap);
 
   return (
     <div className="space-y-6">
@@ -182,11 +138,7 @@ export function AnalyticsInstagramTab({
           />
 
           {/* Preferred Posting Times */}
-          <ActivityHeatmap
-            heatmap={showBestPostingTimes ? resolvedAudience!.activityHeatmap! : []}
-            bestTimes={resolvedAudience?.bestPostingTimes}
-            loading={igLoading || audienceLoading}
-          />
+          {brandId ? <PreferredPostingTime brandId={brandId} /> : null}
         </>
       )}
     </div>
