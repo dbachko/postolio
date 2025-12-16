@@ -914,6 +914,11 @@ class InstagramService {
 
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
+      const accessToken = credentials.accessToken;
+      const accountId = credentials.accountId;
+      if (!accessToken || !accountId) {
+        throw new Error('Failed to get Instagram credentials');
+      }
       const cacheKey = `instagram:audience_demographics:${String(credentials.accountId)}`;
       const cacheTtlSeconds = 6 * 60 * 60;
 
@@ -933,48 +938,136 @@ class InstagramService {
 
       await this.checkRateLimit(String(credentials.accountId));
 
-      const metrics = [
-        'audience_gender_age',
-        'audience_country',
-        'audience_city',
-        'audience_locale',
-      ];
-      const url = fbGraph(
-        `${credentials.accountId}/insights?metric=${metrics.join(',')}&period=lifetime&access_token=${credentials.accessToken}`
-      );
+      const demographicsMetric = 'follower_demographics';
+      const timeframe = 'this_month';
 
-      const response = await axios.get(url);
-      const rows: Array<any> = Array.isArray(response.data?.data) ? response.data.data : [];
+      const parseDemographicBreakdown = (
+        rows: Array<any>,
+        breakdownDimension: 'age' | 'gender' | 'country' | 'city'
+      ): Record<string, number> => {
+        const row = rows.find((r) => r && r.name === demographicsMetric) || rows[0];
 
-      const getValueMap = (metricName: string): Record<string, number> => {
-        const row = rows.find((r) => r && r.name === metricName);
-        const raw =
-          row?.values?.[0]?.value ?? row?.total_value?.value ?? row?.value ?? row?.values ?? null;
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const breakdowns = row?.total_value?.breakdowns;
+        if (Array.isArray(breakdowns)) {
+          const map: Record<string, number> = {};
+          for (const breakdown of breakdowns) {
+            const keys: string[] = Array.isArray(breakdown?.dimension_keys)
+              ? breakdown.dimension_keys.map((k: unknown) => String(k))
+              : [];
+            const idx = keys.indexOf(breakdownDimension);
+            if (idx < 0) continue;
 
-        const map: Record<string, number> = {};
-        for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-          const num = Number(value);
-          if (!isFinite(num) || isNaN(num) || num <= 0) continue;
-          map[String(key)] = num;
+            const results: Array<any> = Array.isArray(breakdown?.results) ? breakdown.results : [];
+            for (const result of results) {
+              const dimensionValues: unknown[] = Array.isArray(result?.dimension_values)
+                ? result.dimension_values
+                : [];
+              const dimensionValue = dimensionValues[idx];
+              const key =
+                typeof dimensionValue === 'string' ? dimensionValue : String(dimensionValue ?? '');
+              const valueNum = Number(result?.value);
+              if (!key || !isFinite(valueNum) || isNaN(valueNum) || valueNum <= 0) continue;
+              map[key] = (map[key] || 0) + valueNum;
+            }
+          }
+          return map;
         }
-        return map;
+
+        const raw = row?.values?.[0]?.value ?? row?.total_value?.value ?? row?.value ?? null;
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          const map: Record<string, number> = {};
+          for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+            const num = Number(value);
+            if (!key || !isFinite(num) || isNaN(num) || num <= 0) continue;
+            map[String(key)] = (map[String(key)] || 0) + num;
+          }
+          return map;
+        }
+
+        return {};
       };
 
-      const genderAge = getValueMap('audience_gender_age');
-      const countries = getValueMap('audience_country');
-      const cities = getValueMap('audience_city');
-      const locales = getValueMap('audience_locale');
+      const fetchDemographicBreakdown = async (
+        breakdownDimension: 'age' | 'gender' | 'country' | 'city'
+      ): Promise<Record<string, number>> => {
+        const buildUrl = (breakdownKey: 'breakdowns' | 'breakdown') => {
+          const params = new URLSearchParams();
+          params.set('metric', demographicsMetric);
+          params.set('period', 'lifetime');
+          params.set('timeframe', timeframe);
+          params.set('metric_type', 'total_value');
+          params.set(breakdownKey, breakdownDimension);
+          params.set('access_token', accessToken);
+          return fbGraph(`${accountId}/insights?${params.toString()}`);
+        };
+
+        const tryRequest = async (breakdownKey: 'breakdowns' | 'breakdown') => {
+          await this.checkRateLimit(String(credentials.accountId));
+          const response = await axios.get(buildUrl(breakdownKey));
+          const rows: Array<any> = Array.isArray(response.data?.data) ? response.data.data : [];
+          return parseDemographicBreakdown(rows, breakdownDimension);
+        };
+
+        try {
+          return await tryRequest('breakdowns');
+        } catch (error: any) {
+          const fbError = error?.response?.data?.error as
+            | { message?: string; code?: number; error_subcode?: number }
+            | undefined;
+          const message =
+            (typeof fbError?.message === 'string' && fbError.message) ||
+            (error instanceof Error ? error.message : 'Unknown error');
+          const shouldRetryWithSingular =
+            /breakdowns|breakdown/i.test(String(message)) ||
+            (fbError?.code === 100 && /breakdown/i.test(String(message)));
+          if (!shouldRetryWithSingular) throw error;
+          return await tryRequest('breakdown');
+        }
+      };
+
+      const breakdowns = ['gender', 'age', 'country', 'city'] as const;
+      const settled = await Promise.allSettled(
+        breakdowns.map((dimension) => fetchDemographicBreakdown(dimension))
+      );
+
+      const maps = new Map<(typeof breakdowns)[number], Record<string, number>>();
+      let firstError: unknown | null = null;
+      for (let i = 0; i < breakdowns.length; i++) {
+        const dimension = breakdowns[i];
+        const result = settled[i];
+        if (result.status === 'fulfilled') {
+          maps.set(dimension, result.value);
+        } else if (!firstError) {
+          firstError = result.reason;
+        }
+      }
+
+      if (maps.size === 0 && firstError) {
+        throw firstError;
+      }
+
+      const genderMap = maps.get('gender') || {};
+      const ageMap = maps.get('age') || {};
+      const countries = maps.get('country') || {};
+      const cities = maps.get('city') || {};
 
       const genderTotals: Record<'M' | 'F' | 'U', number> = { M: 0, F: 0, U: 0 };
-      const ageTotals = new Map<string, number>();
+      for (const [key, value] of Object.entries(genderMap)) {
+        const normalized: 'M' | 'F' | 'U' =
+          key === 'M' || /^m(ale)?$/i.test(key)
+            ? 'M'
+            : key === 'F' || /^f(emale)?$/i.test(key)
+              ? 'F'
+              : 'U';
+        genderTotals[normalized] += Number(value) || 0;
+      }
 
-      for (const [key, value] of Object.entries(genderAge)) {
-        const [genderRaw, ageRaw] = String(key).split('.');
-        const gender: 'M' | 'F' | 'U' = genderRaw === 'M' || genderRaw === 'F' ? genderRaw : 'U';
-        const range = ageRaw || 'unknown';
-        genderTotals[gender] += value;
-        ageTotals.set(range, (ageTotals.get(range) || 0) + value);
+      const ageTotals = new Map<string, number>();
+      for (const [range, value] of Object.entries(ageMap)) {
+        const cleaned = String(range || '').trim();
+        const num = Number(value);
+        if (!cleaned || !isFinite(num) || isNaN(num) || num <= 0) continue;
+        ageTotals.set(cleaned, (ageTotals.get(cleaned) || 0) + num);
       }
 
       const toTopList = <T extends string>(
@@ -1007,8 +1100,7 @@ class InstagramService {
         genderList.length === 0 &&
         ageList.length === 0 &&
         Object.keys(countries).length === 0 &&
-        Object.keys(cities).length === 0 &&
-        Object.keys(locales).length === 0
+        Object.keys(cities).length === 0
       ) {
         return { status: 'no_data' };
       }
@@ -1020,7 +1112,7 @@ class InstagramService {
         age: ageList,
         countries: toTopList(countries, 'code', 10),
         cities: toTopList(cities, 'name', 10),
-        locales: toTopList(locales, 'locale', 10),
+        locales: [],
       };
 
       if (redisService.isConnected()) {
@@ -1036,18 +1128,28 @@ class InstagramService {
         (typeof fbError?.message === 'string' && fbError.message) ||
         (error instanceof Error ? error.message : 'Unknown error');
       const code = fbError?.code;
+      const subcode = fbError?.error_subcode;
 
       const permissionLike =
         code === 10 || /permission|insights|manage_insights|oauth/i.test(String(message));
+      const noDataLike =
+        /less than 100 followers/i.test(String(message)) ||
+        /not returned if the ig user has less than 100 followers/i.test(String(message));
+      const hideDetails = code === 100;
 
       instagramLogger.warn('Failed to fetch audience demographics', {
         code,
+        subcode,
         message,
       });
 
+      if (noDataLike) {
+        return { status: 'no_data' };
+      }
+
       return {
         status: permissionLike ? 'insufficient_permissions' : 'error',
-        errorMessage: message,
+        errorMessage: hideDetails ? undefined : message,
       };
     }
   }

@@ -194,28 +194,72 @@ export default function PostDetail() {
   });
 
   const publicationButtons = useMemo(() => {
+    const platformLabel = (platform: string) => {
+      const normalized = String(platform || '').toLowerCase();
+      const labels: Record<string, string> = {
+        instagram: 'Instagram',
+        tiktok: 'TikTok',
+        linkedin: 'LinkedIn',
+        youtube: 'YouTube',
+        facebook: 'Facebook',
+        threads: 'Threads',
+        x: 'X',
+      };
+      if (labels[normalized]) return labels[normalized];
+      if (!platform) return 'Link';
+      return platform.charAt(0).toUpperCase() + platform.slice(1);
+    };
+
     const pubs = (publicationsQuery.data?.data || []) as any[];
-    return pubs
+    const links: Array<{ key: string; platform: string; permalink: string }> = pubs
       .filter((pub) => Boolean(pub?.permalink))
-      .map((pub: any) => {
-        return (
-          <Button
-            key={pub.id}
-            variant="outline"
-            size="sm"
-            onClick={() => window.open(pub.permalink, '_blank')}
-            className="w-full justify-start gap-2"
-          >
-            {pub.platform === 'instagram' ? (
-              <Instagram className="h-4 w-4" />
-            ) : (
-              <ExternalLink className="h-4 w-4" />
-            )}
-            <span className="truncate">View on {pub.platform}</span>
-          </Button>
-        );
+      .map((pub: any) => ({
+        key: String(pub.id || `${pub.platform || 'platform'}:${pub.permalink}`),
+        platform: String(pub.platform || ''),
+        permalink: String(pub.permalink || ''),
+      }));
+
+    if (post?.status === 'published' && post.instagramPermalink) {
+      links.push({
+        key: 'post:instagramPermalink',
+        platform: 'instagram',
+        permalink: String(post.instagramPermalink),
       });
-  }, [publicationsQuery.data?.data]);
+    }
+
+    const seen = new Set<string>();
+    const deduped = links.filter((link) => {
+      const permalink = String(link.permalink || '').trim();
+      if (!permalink) return false;
+      if (seen.has(permalink)) return false;
+      seen.add(permalink);
+      return true;
+    });
+
+    deduped.sort((a, b) => {
+      const aIsIg = a.platform === 'instagram';
+      const bIsIg = b.platform === 'instagram';
+      if (aIsIg === bIsIg) return 0;
+      return aIsIg ? -1 : 1;
+    });
+
+    return deduped.map((link) => (
+      <Button
+        key={link.key}
+        variant="outline"
+        size="sm"
+        onClick={() => window.open(link.permalink, '_blank', 'noopener,noreferrer')}
+        className="w-full justify-start gap-2"
+      >
+        {link.platform === 'instagram' ? (
+          <Instagram className="h-4 w-4" />
+        ) : (
+          <ExternalLink className="h-4 w-4" />
+        )}
+        <span className="truncate">View on {platformLabel(link.platform)}</span>
+      </Button>
+    ));
+  }, [publicationsQuery.data?.data, post?.instagramPermalink, post?.status]);
 
   if (!postId) {
     return null;
@@ -261,17 +305,6 @@ export default function PostDetail() {
               ) : null}
 
               <div className="mt-4 space-y-2">
-                {post.status === 'published' && post.instagramPermalink ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start gap-2"
-                    onClick={() => window.open(post.instagramPermalink!, '_blank')}
-                  >
-                    <Instagram className="h-4 w-4" />
-                    View on Instagram
-                  </Button>
-                ) : null}
                 {publicationButtons.length ? (
                   <div className="space-y-2">{publicationButtons}</div>
                 ) : null}
