@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi, campaign as campaignApi } from '@/lib/api';
+import type { Campaign } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
@@ -9,76 +10,33 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
-import { VideoUploader } from '@/components/VideoUploader';
-import { PostCaptionEditor } from '@/components/PostCaptionEditor';
+import type { AssetReference } from '@/components/MultiImageUploader';
 import type { PostStatus } from '@/components/PostStatusCard';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
-import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ButtonGroup } from '@/components/ui/button-group';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { toUTCFromInput, getUserTimezone } from '@/lib/timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { usePostDetail, type PostDetailData } from '@/hooks/usePostDetail';
 import {
-  X,
-  Clock,
-  Save,
-  Upload,
-  Image as ImageIcon,
-  Film,
-  Zap,
-  AlertTriangle,
-  ChevronDown,
-  Instagram,
-  Megaphone,
-} from 'lucide-react';
+  PostEditorMainBody,
+  type PostEditorFormState,
+} from '@/components/post-editor/PostEditorMainBody';
+import { WriteItBar } from '@/components/post-editor/WriteItBar';
+import { Instagram, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
-import { AppEmptyState } from '@/components/AppEmptyState';
 import {
   validateContentPayload,
   type InstagramContentType,
   type InstagramMediaType,
 } from '@postolio/content-validation';
 import AssetPicker from '@/features/assets/components/AssetPicker';
-import { Switch } from '@/components/ui/switch';
 import { assetsApi } from '@/features/assets/api/client';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTrigger,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import type { Campaign } from '@/lib/api';
 
 function getScheduleBlockerMessage(params: {
   atCapacity: boolean;
@@ -105,16 +63,7 @@ function getScheduleBlockerMessage(params: {
   return null;
 }
 
-interface PostFormState {
-  caption: string;
-  carouselAssets: AssetReference[];
-  contentType: InstagramContentType;
-  scheduledAt: string;
-  shareToFeed: boolean;
-  firstComment: string;
-}
-
-const createEmptyPostFormState = (): PostFormState => ({
+const createEmptyPostFormState = (): PostEditorFormState => ({
   caption: '',
   carouselAssets: [],
   contentType: 'post',
@@ -123,47 +72,7 @@ const createEmptyPostFormState = (): PostFormState => ({
   firstComment: '',
 });
 
-interface PostDetailData {
-  id: string;
-  caption: string;
-  contentType?: string;
-  primaryAssetId?: string | null;
-  mediaAssetCount?: number | null;
-  shareToFeed?: boolean | null;
-  firstComment?: string | null;
-  firstCommentStatus?: 'pending' | 'posted' | 'failed' | 'retrying' | null;
-  firstCommentPostedAt?: string | null;
-  firstCommentError?: string | null;
-  status: string; // 'draft' | 'scheduled' | 'published' | ...
-  scheduledAt?: string;
-  postedAt?: string;
-  brandId?: string;
-  brand: { id: string; name: string };
-  mediaAssets?: Array<{
-    assetId: string;
-    displayOrder: number;
-  }>;
-  schedulingError?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-  instagramPermalink?: string;
-  generationParams?: {
-    processing?: {
-      active: boolean;
-      operation: 'scheduling';
-      startedAt: string;
-      operationId?: string;
-    };
-  };
-  campaignId?: string | null;
-  campaign?: {
-    id: string;
-    name: string;
-    status?: string;
-  } | null;
-}
-
-const formatScheduledInput = (value?: string, timezone?: string) => {
+const formatScheduledInput = (value?: string | null, timezone?: string) => {
   if (!value) return '';
   const effectiveTimezone = timezone || getUserTimezone();
   return formatInTimeZone(new Date(value), effectiveTimezone, "yyyy-MM-dd'T'HH:mm");
@@ -220,18 +129,7 @@ export function PostSidebar({
   // Determine if we're in creation mode
   const isCreating = !id;
 
-  const { data: post, isLoading } = useQuery<PostDetailData>({
-    queryKey: ['post', id],
-    queryFn: async () => {
-      const response = await contentApi.getPostDetail(id!);
-      return {
-        ...response.data,
-        brandId: response.data.brandId || response.data.brand?.id,
-      };
-    },
-    enabled: Boolean(id),
-    staleTime: 10000,
-  });
+  const { data: post, isLoading } = usePostDetail(id);
 
   useEffect(() => {
     let mounted = true;
@@ -251,7 +149,7 @@ export function PostSidebar({
     };
   }, [post?.brand?.id, getBrandTimezone, timezone]);
 
-  const [formData, setFormData] = useState<PostFormState>(() => createEmptyPostFormState());
+  const [formData, setFormData] = useState<PostEditorFormState>(() => createEmptyPostFormState());
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
   const hasScheduleTime = Boolean(formData.scheduledAt);
@@ -338,7 +236,7 @@ export function PostSidebar({
     formInitializedRef.current = true;
   }, [brandTimezone, mediaAssetsById, post, postAssetIds.length]);
 
-  const disabled = post?.status === 'published';
+  const disabled = post?.status === 'published' || Boolean(post?.postedAt);
   const isScheduled = post?.status === 'scheduled';
 
   const minScheduleInput = useMemo(
@@ -774,7 +672,13 @@ export function PostSidebar({
   };
 
   const containerClass = useMemo(
-    () => cn('flex flex-col', layout === 'sidebar' ? 'h-full shadow-lg' : 'min-h-[60vh] w-full'),
+    () =>
+      cn(
+        'flex flex-col',
+        layout === 'sidebar'
+          ? 'h-full shadow-lg'
+          : 'min-h-[60vh] w-full overflow-hidden rounded-lg border border-border bg-card'
+      ),
     [layout]
   );
 
@@ -787,8 +691,7 @@ export function PostSidebar({
     [layout]
   );
 
-  const bodyClass =
-    layout === 'sidebar' ? 'flex-1 px-4 pt-3 pb-32' : 'flex-1 overflow-y-auto px-4 py-4';
+  const bodyClass = layout === 'sidebar' ? 'flex-1 px-4 pt-3 pb-32' : 'flex-1 px-4 pt-3 pb-4';
 
   // Allow mixed media for all non-reel content; reels must remain video-only.
   const allowMixedMedia = formData.contentType !== 'reel';
@@ -828,9 +731,7 @@ export function PostSidebar({
                       <BreadcrumbPage>Loading…</BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink asChild>
-                        <Link to={disabled ? `/posts/${id}` : `/posts/${id}?edit=1`}>
-                          {disabled ? 'View Post' : 'Edit Post'}
-                        </Link>
+                        <Link to={`/posts/${id}`}>{disabled ? 'View Post' : 'Edit Post'}</Link>
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>
@@ -871,7 +772,9 @@ export function PostSidebar({
                       variant="outline"
                       size="sm"
                       className="shrink-0 whitespace-nowrap"
-                      onClick={() => window.open(post.instagramPermalink, '_blank')}
+                      onClick={() =>
+                        post.instagramPermalink && window.open(post.instagramPermalink, '_blank')
+                      }
                     >
                       <Instagram className="h-4 w-4 sm:mr-1" />
                       <span className="hidden sm:inline">View on Instagram</span>
@@ -894,779 +797,63 @@ export function PostSidebar({
       ) : null}
       {layout === 'sidebar' && showHeader ? <Separator /> : null}
       <div className={bodyClass}>
-        {isCreating ? (
-          // Creation mode
-          <div className="space-y-4">
-            {!selectedBrand ? (
-              <AppEmptyState
-                variant="minimal"
-                title="Select a brand to create this post"
-                description="Post drafts, scheduling rules, and insights are tied to the brand you choose."
-                actions={[{ label: 'Choose Brand', to: '/brands' }]}
-                className="min-h-[280px]"
-              />
-            ) : (
-              <>
-                {/* Post Type Selector */}
-                <div className="space-y-2">
-                  <Label className="text-sm">Content Type</Label>
-                  <RadioGroup
-                    value={formData.contentType}
-                    onValueChange={(value) =>
-                      setFormData((s) => {
-                        const nextType = value as InstagramContentType;
-                        if (nextType !== 'reel') {
-                          return { ...s, contentType: nextType };
-                        }
-
-                        const firstVideo = s.carouselAssets.find((asset) => asset.type === 'video');
-                        return {
-                          ...s,
-                          contentType: nextType,
-                          carouselAssets: firstVideo ? [firstVideo] : [],
-                        };
-                      })
-                    }
-                    className="flex gap-2"
-                  >
-                    <div className="flex-1">
-                      <RadioGroupItem value="post" id="type-post" className="peer sr-only" />
-                      <Label
-                        htmlFor="type-post"
-                        className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-all"
-                      >
-                        <ImageIcon className="h-3.5 w-3.5" />
-                        <span>Post</span>
-                      </Label>
-                    </div>
-                    <div className="flex-1">
-                      <RadioGroupItem value="reel" id="type-reel" className="peer sr-only" />
-                      <Label
-                        htmlFor="type-reel"
-                        className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-all"
-                      >
-                        <Film className="h-3.5 w-3.5" />
-                        <span>Reel</span>
-                      </Label>
-                    </div>
-                    <div className="flex-1">
-                      <RadioGroupItem value="story" id="type-story" className="peer sr-only" />
-                      <Label
-                        htmlFor="type-story"
-                        className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-all"
-                      >
-                        <Zap className="h-3.5 w-3.5" />
-                        <span>Story</span>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                {/* Media Upload - unified media uploader or video-only for Reels */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Upload className="h-4 w-4" />
-                    Media <span className="text-destructive">*</span>
-                  </Label>
-
-                  {/* Reels can only be video */}
-                  {formData.contentType === 'reel' ? (
-                    <div className="space-y-3">
-                      {selectedBrand?.id && (
-                        <>
-                          <VideoUploader
-                            value={
-                              formData.carouselAssets.find((asset) => asset.type === 'video')
-                                ?.url || ''
-                            }
-                            onChange={(url, meta) => {
-                              const assetId = meta?.assetId;
-                              if (url && !assetId) {
-                                toast.error('Video upload missing asset ID. Please try again.');
-                                return;
-                              }
-                              setFormData((s) => ({
-                                ...s,
-                                carouselAssets:
-                                  url && assetId ? [{ id: assetId, url, type: 'video' }] : [],
-                              }));
-                            }}
-                            brandId={selectedBrand.id}
-                            maxSizeInMB={300}
-                            acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
-                            minDurationSeconds={3}
-                            maxDurationSeconds={90}
-                            minWidth={540}
-                            minHeight={960}
-                            maxWidth={1920}
-                            maxHeight={1920}
-                            allowedAspectRatios={[
-                              { label: '9:16', width: 9, height: 16 },
-                              { label: '4:5', width: 4, height: 5 },
-                              { label: '1:1', width: 1, height: 1 },
-                            ]}
-                            headline="Drop reel video here, or click to browse"
-                            subtext="Reels: MP4/MOV/MPEG · 3–90s · max 300MB"
-                          />
-                          <ChooseFromAssetsButton onClick={() => setShowAssetPicker(true)} />
-                          <div className="border-border bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
-                            <div className="space-y-0.5">
-                              <Label htmlFor="share-to-feed-toggle" className="text-xs font-medium">
-                                Share to Feed
-                              </Label>
-                              <p className="text-muted-foreground text-xs">
-                                When enabled, this reel appears in both your feed grid and the Reels
-                                tab.
-                              </p>
-                            </div>
-                            <Switch
-                              id="share-to-feed-toggle"
-                              checked={formData.shareToFeed}
-                              onCheckedChange={(checked) =>
-                                setFormData((s) => ({ ...s, shareToFeed: checked }))
-                              }
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    /* Posts and Stories can be image(s) or video; detect media type automatically */
-                    <>
-                      {selectedBrand?.id && (
-                        <>
-                          <MultiImageUploader
-                            value={formData.carouselAssets}
-                            onChange={(assets) =>
-                              setFormData((s) => ({
-                                ...s,
-                                carouselAssets: assets,
-                              }))
-                            }
-                            brandId={selectedBrand.id}
-                            maxImages={10}
-                            maxSizeInMB={10}
-                            maxVideoSizeInMB={300}
-                            acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
-                            allowMixedMedia={allowMixedMedia}
-                            onChooseFromAssets={() => setShowAssetPicker(true)}
-                          />
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Caption - Not supported for Stories */}
-                {formData.contentType !== 'story' && (
-                  <>
-                    <PostCaptionEditor
-                      value={formData.caption}
-                      onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
-                      brandId={selectedBrand?.id}
-                      disabled={false}
-                      showIcon={true}
-                    />
-
-                    {/* First Comment (Optional) */}
-                    <Collapsible
-                      open={firstCommentOpen}
-                      onOpenChange={setFirstCommentOpen}
-                      className="space-y-2"
-                    >
-                      <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
-                        <ChevronDown
-                          className={cn(
-                            'h-4 w-4 transition-transform duration-200',
-                            firstCommentOpen && 'rotate-180'
-                          )}
-                        />
-                        Add First Comment (Optional)
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-2 pt-2">
-                        <PostCaptionEditor
-                          id="firstComment"
-                          label="First Comment"
-                          required={false}
-                          value={formData.firstComment || ''}
-                          onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
-                          brandId={selectedBrand?.id}
-                          placeholder="Add hashtags, links, or CTAs..."
-                          minHeight="min-h-24"
-                          maxLength={2200}
-                          disabled={false}
-                          showIcon={false}
-                          helperText={
-                            <span className="italic">
-                              Posts automatically when your content goes live
-                            </span>
-                          }
-                        />
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </>
-                )}
-
-                {/* Campaign Selection */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Megaphone className="h-4 w-4" />
-                    Campaign
-                  </Label>
-                  <Select
-                    value={selectedCampaign || undefined}
-                    onValueChange={setSelectedCampaign}
-                    disabled={false}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a campaign (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isLoadingCampaigns ? (
-                        <SelectItem value="__loading" disabled>
-                          Loading campaigns...
-                        </SelectItem>
-                      ) : campaigns.length === 0 ? (
-                        <SelectItem value="__empty" disabled>
-                          No campaigns found
-                        </SelectItem>
-                      ) : (
-                        campaigns.map((campaign) => (
-                          <SelectItem key={campaign.id} value={campaign.id}>
-                            {campaign.name}
-                            {campaign.status === 'paused' ? ' (paused)' : ''}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {selectedCampaignPaused && (
-                    <p className="text-muted-foreground text-xs">
-                      This campaign is paused. You can still save this post as a draft, but you
-                      can&apos;t schedule it until the campaign is resumed.
-                    </p>
-                  )}
-                </div>
-
-                {/* Action Footer: scheduler + schedule actions */}
-                {layout === 'page' && (
-                  <div className="space-y-3 pt-4">
-                    {atCapacity && (
-                      <div className="bg-muted border-border text-foreground flex items-start gap-2 rounded-md border p-3 text-xs">
-                        <AlertTriangle className="text-destructive mt-0.5 h-4 w-4 flex-shrink-0" />
-                        <div className="space-y-1">
-                          <p className="font-medium">
-                            You&apos;ve reached your plan&apos;s scheduling limit.
-                          </p>
-                          <p className="text-muted-foreground">
-                            You can still save drafts, but new scheduled posts will fail until you
-                            free up slots or{' '}
-                            <button
-                              type="button"
-                              onClick={() => (window.location.href = '/limits')}
-                              className="font-medium underline underline-offset-2"
-                            >
-                              upgrade your plan
-                            </button>
-                            .
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    <Separator />
-                    <TooltipProvider>
-                      <div className="border-border bg-card flex flex-col gap-3 rounded-md border px-3 py-2">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex flex-1 items-center gap-2">
-                            <Clock className="text-muted-foreground h-4 w-4" />
-                            <Input
-                              type="datetime-local"
-                              value={formData.scheduledAt}
-                              onChange={(e) =>
-                                setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
-                              }
-                              min={minScheduleInput}
-                              className="h-9 max-w-[220px]"
-                            />
-                            {brandTimezone && (
-                              <span className="text-muted-foreground text-xs">
-                                ({brandTimezone})
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center justify-end">
-                            <ButtonGroup>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    onClick={() => createPost('schedule')}
-                                    disabled={createScheduleDisabled}
-                                    aria-disabled={createScheduleDisabled}
-                                    className={cn(createScheduleDisabled && 'cursor-not-allowed')}
-                                  >
-                                    {isCreatingPost ? (
-                                      <>
-                                        <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                                        Creating...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Clock className="mr-2 h-4 w-4" />
-                                        Schedule
-                                      </>
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                {scheduleBlocker && (
-                                  <TooltipContent>
-                                    <p className="text-sm">{scheduleBlocker}</p>
-                                  </TooltipContent>
-                                )}
-                              </Tooltip>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="default"
-                                    className="!px-2"
-                                    aria-label="More scheduling options"
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      if (isCreatingPost || !validation.ok) return;
-                                      createPost('draft');
-                                    }}
-                                    disabled={isCreatingPost || !validation.ok}
-                                  >
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Save draft
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </ButtonGroup>
-                          </div>
-                        </div>
-                      </div>
-                    </TooltipProvider>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ) : // Editing mode
-        isLoading || !post ? (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            Loading...
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {post.status === 'failed' && post.schedulingError ? (
-              <Alert variant="destructive">
-                <AlertDescription>{post.schedulingError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            <div className="space-y-2">
-              <Label>{isVideoMedia ? 'Video' : 'Post Media'}</Label>
-              {isVideoMedia ? (
-                formData.carouselAssets.find((asset) => asset.type === 'video')?.url ? (
-                  <div className="bg-muted overflow-hidden rounded-lg">
-                    <video
-                      src={formData.carouselAssets.find((asset) => asset.type === 'video')!.url}
-                      className="h-auto max-h-[250px] w-full object-cover"
-                      controls
-                    />
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground text-sm">No video</div>
-                )
-              ) : (
-                <div className="space-y-2">
-                  {post?.brand?.id && (
-                    <MultiImageUploader
-                      value={formData.carouselAssets}
-                      onChange={(assets) =>
-                        setFormData((s) => ({
-                          ...s,
-                          carouselAssets: assets,
-                        }))
-                      }
-                      brandId={post.brand.id}
-                      maxImages={10}
-                      maxSizeInMB={10}
-                      enableUpload={false}
-                      allowMixedMedia={allowMixedMedia}
-                    />
-                  )}
-                  {!formData.carouselAssets.length && (
-                    <div className="text-muted-foreground text-sm">No image</div>
-                  )}
-                </div>
-              )}
-              {!disabled && (
-                <div className="flex flex-col gap-2">
-                  {post?.brand?.id && (
-                    <ChooseFromAssetsButton
-                      onClick={() => setShowAssetPicker(true)}
-                      size="compact"
-                      fullWidth={false}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Caption - Not supported for Stories */}
-            {formData.contentType !== 'story' && (
-              <>
-                <PostCaptionEditor
-                  value={formData.caption}
-                  onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
-                  brandId={post?.brand?.id}
-                  disabled={disabled}
-                  showIcon={true}
-                />
-
-                {/* First Comment (Optional) */}
-                <Collapsible
-                  open={firstCommentOpen}
-                  onOpenChange={setFirstCommentOpen}
-                  className="space-y-2"
-                >
-                  <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
-                    <ChevronDown
-                      className={cn(
-                        'h-4 w-4 transition-transform duration-200',
-                        firstCommentOpen && 'rotate-180'
-                      )}
-                    />
-                    Add First Comment (Optional)
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-2 pt-2">
-                    <PostCaptionEditor
-                      id="firstComment-edit"
-                      label="First Comment"
-                      required={false}
-                      value={formData.firstComment || ''}
-                      onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
-                      brandId={post?.brand?.id}
-                      placeholder="Add hashtags, links, or CTAs..."
-                      minHeight="min-h-24"
-                      maxLength={2200}
-                      disabled={disabled}
-                      showIcon={false}
-                      helperText={
-                        <span className="italic">
-                          Posts automatically when your content goes live
-                        </span>
-                      }
-                    />
-                  </CollapsibleContent>
-                </Collapsible>
-              </>
-            )}
-
-            {/* Campaign Selection */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Megaphone className="h-4 w-4" />
-                Campaign
-              </Label>
-              <Select
-                value={selectedCampaign || undefined}
-                onValueChange={setSelectedCampaign}
-                disabled={disabled}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a campaign" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isLoadingCampaigns ? (
-                    <SelectItem value="__loading" disabled>
-                      Loading campaigns...
-                    </SelectItem>
-                  ) : campaigns.length === 0 ? (
-                    <SelectItem value="__empty" disabled>
-                      No campaigns found
-                    </SelectItem>
-                  ) : (
-                    campaigns.map((campaign) => (
-                      <SelectItem key={campaign.id} value={campaign.id}>
-                        {campaign.name}
-                        {campaign.status === 'paused' ? ' (paused)' : ''}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              {selectedCampaignPaused && (
-                <p className="text-muted-foreground text-xs">
-                  This campaign is paused. You can still save this post as a draft, but you
-                  can&apos;t schedule it until the campaign is resumed.
-                </p>
-              )}
-            </div>
-
-            {/* Action Buttons (page layout only; sidebar uses sticky footer) */}
-            {layout === 'page' && !disabled && (
-              <div className="space-y-3 pt-4">
-                <Separator />
-                <TooltipProvider>
-                  <div className="border-border bg-card flex flex-col gap-3 rounded-md border px-3 py-2">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-1 items-center gap-2">
-                        <Clock className="text-muted-foreground h-4 w-4" />
-                        <Input
-                          type="datetime-local"
-                          value={formData.scheduledAt}
-                          onChange={(e) =>
-                            setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
-                          }
-                          min={minScheduleInput}
-                          className="h-9 max-w-[220px]"
-                        />
-                        {brandTimezone && (
-                          <span className="text-muted-foreground text-xs">({brandTimezone})</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {isScheduled && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" disabled={isUnscheduling}>
-                                <Clock className="mr-2 h-4 w-4" />
-                                Unschedule to Draft
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  We’ll cancel the scheduled publish time and move this post back to
-                                  Drafts. It will no longer publish automatically.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel disabled={isUnscheduling}>
-                                  Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => id && unschedulePost(id)}
-                                  disabled={isUnscheduling}
-                                >
-                                  Unschedule and move to Drafts
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                        <Button
-                          onClick={handleSaveChanges}
-                          disabled={!hasChanges || isSaving || !validation.ok}
-                        >
-                          {isSaving ? (
-                            <>
-                              <Save className="mr-2 h-4 w-4 animate-pulse" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="mr-2 h-4 w-4" />
-                              {primaryEditCtaLabel}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </TooltipProvider>
-              </div>
-            )}
-          </div>
-        )}
+        <PostEditorMainBody
+          mode={isCreating ? 'create' : 'edit'}
+          allowMixedMedia={allowMixedMedia}
+          disabled={disabled}
+          isLoading={isLoading}
+          isVideoMedia={isVideoMedia}
+          post={post}
+          selectedBrand={selectedBrand}
+          formData={formData}
+          setFormData={(updater) => setFormData((prev) => updater(prev))}
+          firstCommentOpen={firstCommentOpen}
+          setFirstCommentOpen={setFirstCommentOpen}
+          campaigns={campaigns}
+          isLoadingCampaigns={isLoadingCampaigns}
+          selectedCampaign={selectedCampaign}
+          setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
+          selectedCampaignPaused={Boolean(selectedCampaignPaused)}
+          onOpenAssetPicker={() => setShowAssetPicker(true)}
+        />
       </div>
-      {/* Sticky footer for sidebar layout: schedule time + actions */}
-      {layout === 'sidebar' && (
-        <>
-          {isCreating && selectedBrand && (
-            <div className="border-border bg-card sticky bottom-0 z-20 border-t px-4 py-3">
-              <div className="space-y-3">
-                {atCapacity && (
-                  <div className="bg-muted border-border text-foreground flex items-start gap-2 rounded-md border p-3 text-xs">
-                    <AlertTriangle className="text-destructive mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div className="space-y-1">
-                      <p className="font-medium">
-                        You&apos;ve reached your plan&apos;s scheduling limit.
-                      </p>
-                      <p className="text-muted-foreground">
-                        You can still save drafts, but new scheduled posts will fail until you free
-                        up slots or{' '}
-                        <button
-                          type="button"
-                          onClick={() => (window.location.href = '/limits')}
-                          className="font-medium underline underline-offset-2"
-                        >
-                          upgrade your plan
-                        </button>
-                        .
-                      </p>
-                    </div>
-                  </div>
-                )}
-                <TooltipProvider>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-1 items-center gap-2">
-                      <Clock className="text-muted-foreground h-4 w-4" />
-                      <Input
-                        type="datetime-local"
-                        value={formData.scheduledAt}
-                        onChange={(e) =>
-                          setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
-                        }
-                        min={minScheduleInput}
-                        className="h-9 max-w-[220px]"
-                      />
-                      {brandTimezone && (
-                        <span className="text-muted-foreground text-xs">({brandTimezone})</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-end">
-                      <ButtonGroup>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              onClick={() => createPost('schedule')}
-                              disabled={createScheduleDisabled}
-                              aria-disabled={createScheduleDisabled}
-                              className={cn(createScheduleDisabled && 'cursor-not-allowed')}
-                            >
-                              {isCreatingPost ? (
-                                <>
-                                  <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                                  Creating...
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="mr-2 h-4 w-4" />
-                                  Schedule
-                                </>
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          {scheduleBlocker && (
-                            <TooltipContent>
-                              <p className="text-sm">{scheduleBlocker}</p>
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="default"
-                              className="!px-2"
-                              aria-label="More scheduling options"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                if (isCreatingPost || !validation.ok) return;
-                                createPost('draft');
-                              }}
-                              disabled={isCreatingPost || !validation.ok}
-                            >
-                              <Save className="mr-2 h-4 w-4" />
-                              Save draft
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </ButtonGroup>
-                    </div>
-                  </div>
-                </TooltipProvider>
-              </div>
-            </div>
-          )}
-          {!isCreating && !isLoading && post && !disabled && (
-            <div className="border-border bg-card sticky bottom-0 z-20 border-t px-4 py-3">
-              <div className="space-y-3">
-                <TooltipProvider>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-1 items-center gap-2">
-                      <Clock className="text-muted-foreground h-4 w-4" />
-                      <Input
-                        type="datetime-local"
-                        value={formData.scheduledAt}
-                        onChange={(e) =>
-                          setFormData((s) => ({ ...s, scheduledAt: e.target.value }))
-                        }
-                        min={minScheduleInput}
-                        className="h-9 max-w-[220px]"
-                      />
-                      {brandTimezone && (
-                        <span className="text-muted-foreground text-xs">({brandTimezone})</span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      {isScheduled && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" disabled={isUnscheduling}>
-                              <Clock className="mr-2 h-4 w-4" />
-                              Unschedule to Draft
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                We’ll cancel the scheduled publish time and move this post back to
-                                Drafts. It will no longer publish automatically.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel disabled={isUnscheduling}>
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => id && unschedulePost(id)}
-                                disabled={isUnscheduling}
-                              >
-                                Unschedule and move to Drafts
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                      <Button
-                        onClick={handleSaveChanges}
-                        disabled={!hasChanges || isSaving || !validation.ok}
-                      >
-                        {isSaving ? (
-                          <>
-                            <Save className="mr-2 h-4 w-4 animate-pulse" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="mr-2 h-4 w-4" />
-                            {primaryEditCtaLabel}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </TooltipProvider>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      {isCreating ? (
+        selectedBrand ? (
+          <WriteItBar
+            mode="create"
+            layout={layout}
+            scheduledAt={formData.scheduledAt}
+            minScheduleInput={minScheduleInput}
+            brandTimezone={brandTimezone}
+            atCapacity={atCapacity}
+            scheduleBlocker={scheduleBlocker}
+            createScheduleDisabled={createScheduleDisabled}
+            isCreatingPost={isCreatingPost}
+            validationOk={validation.ok}
+            onScheduledAtChange={(value) => setFormData((s) => ({ ...s, scheduledAt: value }))}
+            onSchedule={() => createPost('schedule')}
+            onSaveDraft={() => createPost('draft')}
+            onUpgradePlan={() => (window.location.href = '/limits')}
+          />
+        ) : null
+      ) : !isLoading && post && !disabled ? (
+        <WriteItBar
+          mode="edit"
+          layout={layout}
+          scheduledAt={formData.scheduledAt}
+          minScheduleInput={minScheduleInput}
+          brandTimezone={brandTimezone}
+          isScheduled={isScheduled}
+          hasChanges={hasChanges}
+          isSaving={isSaving}
+          isUnscheduling={isUnscheduling}
+          validationOk={validation.ok}
+          primaryEditCtaLabel={primaryEditCtaLabel}
+          onScheduledAtChange={(value) => setFormData((s) => ({ ...s, scheduledAt: value }))}
+          onUnschedule={() => (id ? unschedulePost(id) : null)}
+          onSave={handleSaveChanges}
+        />
+      ) : null}
       {showAssetPicker && brandIdForAssets && (
         <AssetPicker
           brandId={brandIdForAssets}

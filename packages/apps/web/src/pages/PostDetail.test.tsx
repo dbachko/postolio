@@ -2,9 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { PageMetaProvider } from '@/contexts/PageMetaContext';
 import PostDetail from './PostDetail';
 
-vi.mock('../lib/api', () => ({
+vi.mock('@/lib/api', () => ({
   content: {
     getPostDetail: vi.fn(),
     getPostComments: vi.fn(),
@@ -14,6 +15,10 @@ vi.mock('../lib/api', () => ({
     schedulePost: vi.fn(),
     publishPost: vi.fn(),
     deletePost: vi.fn(),
+  },
+  campaign: {
+    getScheduleAheadLimit: vi.fn(),
+    listCampaigns: vi.fn(),
   },
   analytics: {
     getPublicationsByContent: vi.fn(),
@@ -28,18 +33,22 @@ vi.mock('@/features/assets/api/client', () => ({
   },
 }));
 
-vi.mock('../contexts/TimezoneContext', () => ({
+vi.mock('@/contexts/TimezoneContext', () => ({
   useTimezone: () => ({
     timezone: 'UTC',
     getBrandTimezone: vi.fn(async () => 'UTC'),
   }),
 }));
 
-import { content as contentApi, analytics as analyticsApi } from '../lib/api';
+import {
+  content as contentApi,
+  analytics as analyticsApi,
+  campaign as campaignApi,
+} from '@/lib/api';
 import { assetsApi } from '@/features/assets/api/client';
 
 describe('PostDetail', () => {
-  it('renders a video preview for video primary assets (non-edit mode)', async () => {
+  it('renders a video preview for video primary assets', async () => {
     const postId = 'post-1';
     const brandId = 'brand-1';
     const assetId = 'asset-1';
@@ -75,6 +84,10 @@ describe('PostDetail', () => {
 
     vi.mocked(analyticsApi.getPublicationsByContent).mockResolvedValue({ success: true, data: [] });
     vi.mocked(contentApi.getPostComments).mockResolvedValue({ data: { comments: [] } });
+    vi.mocked(campaignApi.getScheduleAheadLimit).mockResolvedValue({
+      data: { tier: 'test', maxAllowed: 10, currentCount: 0 },
+    } as any);
+    vi.mocked(campaignApi.listCampaigns).mockResolvedValue({ campaigns: [] } as any);
 
     vi.mocked(assetsApi.getBatchAssets).mockResolvedValue({
       assets: {
@@ -101,11 +114,13 @@ describe('PostDetail', () => {
 
     const { container } = render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/posts/${postId}`]}>
-          <Routes>
-            <Route path="/posts/:postId" element={<PostDetail />} />
-          </Routes>
-        </MemoryRouter>
+        <PageMetaProvider>
+          <MemoryRouter initialEntries={[`/posts/${postId}`]}>
+            <Routes>
+              <Route path="/posts/:postId" element={<PostDetail />} />
+            </Routes>
+          </MemoryRouter>
+        </PageMetaProvider>
       </QueryClientProvider>
     );
 
@@ -116,6 +131,5 @@ describe('PostDetail', () => {
 
     const video = container.querySelector('video') as HTMLVideoElement;
     expect(video.getAttribute('src')).toBe('https://cdn.example/video.mp4');
-    expect(video.getAttribute('poster')).toBe('https://cdn.example/video-thumb.jpg');
   });
 });

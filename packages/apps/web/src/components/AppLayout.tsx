@@ -45,6 +45,7 @@ import '@/right-sidebar/register';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
+import { PageMetaProvider, usePageMeta } from '@/contexts/PageMetaContext';
 import {
   allNavItems,
   isRouteActive as isRouteActiveForItem,
@@ -60,10 +61,19 @@ interface LayoutProps {
 }
 
 export function AppLayout({ children }: LayoutProps) {
+  return (
+    <PageMetaProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </PageMetaProvider>
+  );
+}
+
+function AppLayoutInner({ children }: LayoutProps) {
   const { user, logout } = useAuthStore();
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const { override: pageMetaOverride, setOverride: setPageMetaOverride } = usePageMeta();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -115,6 +125,11 @@ export function AppLayout({ children }: LayoutProps) {
   useEffect(() => {
     setMenuOpen(false);
   }, [location]);
+
+  // Clear per-page title overrides on navigation
+  useEffect(() => {
+    setPageMetaOverride(null);
+  }, [location.pathname, setPageMetaOverride]);
 
   // Handle search selection
   const handleSearchSelect = useCallback(
@@ -170,6 +185,14 @@ export function AppLayout({ children }: LayoutProps) {
     return { title, description: undefined };
   }, [location.pathname]);
 
+  const effectivePageMeta = useMemo(() => {
+    if (!pageMetaOverride) return pageMeta;
+    return {
+      title: pageMetaOverride.title ?? pageMeta.title,
+      description: pageMetaOverride.description ?? pageMeta.description,
+    };
+  }, [pageMeta, pageMetaOverride]);
+
   return (
     <div className="bg-background flex min-h-screen">
       {/* Skip to main content for accessibility */}
@@ -219,9 +242,13 @@ export function AppLayout({ children }: LayoutProps) {
               </Link>
 
               <div className="hidden min-w-0 flex-col md:flex">
-                <h1 className="text-foreground truncate text-sm font-semibold">{pageMeta.title}</h1>
-                {pageMeta.description && (
-                  <p className="text-muted-foreground truncate text-xs">{pageMeta.description}</p>
+                <h1 className="text-foreground truncate text-sm font-semibold">
+                  {effectivePageMeta.title}
+                </h1>
+                {effectivePageMeta.description && (
+                  <p className="text-muted-foreground truncate text-xs">
+                    {effectivePageMeta.description}
+                  </p>
                 )}
               </div>
             </div>
