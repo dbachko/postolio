@@ -2,9 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
-  Calendar,
   CalendarDays,
-  CheckCircle2,
   FileText,
   Image,
   Play,
@@ -30,6 +28,8 @@ import type { Content } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useDebounce } from '@/hooks/useDebounce';
+import { PostStatusTimeBadge } from '@/components/PostStatusTimeBadge';
+import { getPostStatusBorderColor } from '@/utils/post-status-colors';
 
 type PostGroup = {
   key: string;
@@ -49,7 +49,6 @@ const formatShortDateTime = (date: string) =>
   new Intl.DateTimeFormat('en', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(date));
@@ -123,22 +122,6 @@ const getPostPreview = (primaryAsset: Asset | null): PostPreview => {
   return { kind: 'image', url };
 };
 
-function getStatusBadge(status: Content['status'], scheduledAt: string | null) {
-  if (status === 'published') {
-    return { variant: 'success' as const, label: 'Published', icon: CheckCircle2 };
-  }
-  if (status === 'scheduled' && scheduledAt) {
-    return { variant: 'info' as const, label: 'Scheduled', icon: Calendar };
-  }
-  if (status === 'failed') {
-    return { variant: 'destructive' as const, label: 'Failed', icon: FileText };
-  }
-  if (status === 'skipped') {
-    return { variant: 'warning' as const, label: 'Skipped', icon: FileText };
-  }
-  return { variant: 'secondary' as const, label: 'Draft', icon: FileText };
-}
-
 function PostCard({
   post,
   primaryAsset,
@@ -149,27 +132,37 @@ function PostCard({
   onOpen: () => void;
 }) {
   const preview = getPostPreview(primaryAsset);
-  const badge = getStatusBadge(post.status, post.scheduledAt);
-  const StatusIcon = badge.icon;
+  const borderColor = getPostStatusBorderColor(post.status);
   const mediaLabel =
     preview.kind === 'video' ? 'Video' : preview.kind === 'image' ? 'Image' : 'Text';
   const previewAlt = post.caption?.trim() ? `${post.caption.trim()} preview` : 'Post media preview';
 
-  const primaryTimeLabel = post.postedAt
-    ? `Published ${formatShortDateTime(post.postedAt)}`
-    : post.scheduledAt
-      ? `Scheduled ${formatShortDateTime(post.scheduledAt)}`
-      : `Created ${formatShortDateTime(post.createdAt)}`;
+  const statusTimestamp =
+    (post.status === 'published' && post.postedAt) ||
+    (post.status === 'scheduled' && post.scheduledAt) ||
+    post.scheduledAt ||
+    post.postedAt ||
+    null;
+  const statusTimeLabel = statusTimestamp ? formatShortDateTime(statusTimestamp) : null;
+  const statusLabel = `${post.status.slice(0, 1).toUpperCase()}${post.status.slice(1)}`;
+  const lastEditedLabel = `Last edited ${formatShortDateTime(post.updatedAt || post.createdAt)}`;
 
   return (
     <button type="button" onClick={onOpen} className="w-full text-left">
       <div className="space-y-2">
-        <div className="group hover:border-border/80 relative aspect-square overflow-hidden rounded-lg border">
+        <div
+          className="group relative aspect-square overflow-hidden rounded-lg border"
+          style={{ borderColor }}
+        >
           <div className="absolute top-2 left-2 z-10">
-            <Badge variant={badge.variant} className="flex items-center gap-1">
-              <StatusIcon className="h-3 w-3" />
-              <span>{badge.label}</span>
-            </Badge>
+            <PostStatusTimeBadge
+              status={post.status}
+              variant="pill"
+              title={statusTimeLabel ? `${statusLabel} • ${statusTimeLabel}` : statusLabel}
+              aria-label={statusTimeLabel ? `${statusLabel} • ${statusTimeLabel}` : statusLabel}
+            >
+              {statusTimeLabel ?? statusLabel}
+            </PostStatusTimeBadge>
           </div>
 
           <div className="absolute top-2 right-2 z-10">
@@ -220,7 +213,7 @@ function PostCard({
             {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
           </div>
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span>{primaryTimeLabel}</span>
+            <span>{lastEditedLabel}</span>
             {post.campaignName && (
               <span className="inline-flex items-center gap-1">
                 <span

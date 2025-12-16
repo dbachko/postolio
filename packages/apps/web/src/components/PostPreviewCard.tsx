@@ -1,17 +1,9 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone } from 'date-fns-tz';
-import {
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  Clock,
-  Copy,
-  ExternalLink,
-  Trash2,
-} from 'lucide-react';
+import { CalendarClock, Clock, Copy, ExternalLink, Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
@@ -19,7 +11,8 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
-import { getPostStatusBorderColor, getPostStatusTextClass } from '@/utils/post-status-colors';
+import { PostStatusTimeBadge } from '@/components/PostStatusTimeBadge';
+import { getPostStatusBorderColor } from '@/utils/post-status-colors';
 import { getMediaBadgeType } from '@/utils/media-type';
 import { MediaTypeBadge } from '@/components/MediaTypeBadge';
 import type { AssetType } from '@/features/assets/api/client';
@@ -127,18 +120,8 @@ export function PostPreviewCard({
     openSidebar('post', { id: (item as any).id });
   };
 
-  const iconByStatus: Record<string, ReactNode> = {
-    draft: <Clock className="h-3.5 w-3.5" />,
-    scheduled: <Clock className="h-3.5 w-3.5" />,
-    published: <CheckCircle2 className="h-3.5 w-3.5" />,
-    failed: <AlertTriangle className="h-3.5 w-3.5" />,
-    skipped: <AlertTriangle className="h-3.5 w-3.5" />,
-    placeholder: <Clock className="h-3.5 w-3.5" />,
-  };
-
   // Status-tinted border to match calendar cards
   const borderColor = getPostStatusBorderColor(status);
-  const statusTextClass = getPostStatusTextClass(status);
 
   // Mutations
   const queryClient = useQueryClient();
@@ -226,16 +209,13 @@ export function PostPreviewCard({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div
-                        className={`flex shrink-0 items-center gap-1.5 text-[11px] leading-none whitespace-nowrap ${statusTextClass}`}
-                      >
-                        {iconByStatus[status]}
+                      <PostStatusTimeBadge status={status} variant="inline">
                         {displayTime ? (
                           <span>{displayTime}</span>
                         ) : (
                           <span className="italic">No time</span>
                         )}
-                      </div>
+                      </PostStatusTimeBadge>
                     </TooltipTrigger>
                     <TooltipContent>
                       <span className="capitalize">
@@ -297,16 +277,13 @@ export function PostPreviewCard({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div
-                      className={`flex shrink-0 items-center gap-1.5 text-[11px] leading-none whitespace-nowrap ${statusTextClass}`}
-                    >
-                      {iconByStatus[status]}
+                    <PostStatusTimeBadge status={status} variant="inline">
                       {displayTime ? (
                         <span>{displayTime}</span>
                       ) : (
                         <span className="italic">No time</span>
                       )}
-                    </div>
+                    </PostStatusTimeBadge>
                   </TooltipTrigger>
                   <TooltipContent>
                     <span className="capitalize">
