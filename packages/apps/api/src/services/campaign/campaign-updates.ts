@@ -1,15 +1,10 @@
 import type { CampaignStatus } from '@postolio/database';
-import {
-  campaignCoordinationService,
-  type CampaignConfigWithPriority,
-} from '../campaign-coordination.js';
 import { TimezoneService } from '../timezone.js';
 import { campaignLifecycleService } from './campaign-lifecycle.js';
 import { getDatabaseClient } from '../../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { APIError } from '@postolio/errors';
 import { ONE_DAY_MS } from './campaign-constants.js';
-import { buildConflictSummary } from './campaign-conflicts.js';
 import { validateFieldEditabilityForStatus } from './campaign-editability.js';
 import {
   calculateDurationDays,
@@ -25,7 +20,6 @@ type CampaignWithContent = Record<string, unknown>;
 // Fields that can be edited directly or via config updates
 export type EditableCampaignFields = Partial<{
   name: string;
-  priority: number;
   status: CampaignStatus;
   // Direct top-level convenience fields (backwards compat)
   themes: string[];
@@ -326,100 +320,6 @@ export class CampaignUpdatesService {
   }
 
   /**
-   * Update campaign priority and check for new conflicts
-   */
-  async updateCampaignPriority(
-    campaignId: string,
-    newPriority: number,
-    userId: string
-  ): Promise<{
-    success: boolean;
-    campaign: CampaignWithContent | null;
-    conflicts?: number;
-  }> {
-    try {
-      // Get the campaign and verify ownership
-      const campaign = await prisma.campaign.findFirst({
-        where: {
-          id: campaignId,
-          brand: { userId },
-        },
-        include: { brand: true },
-      });
-
-      if (!campaign) {
-        throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
-          campaignId,
-          userId,
-        });
-      }
-
-      // Update priority
-      const updatedCampaign = await prisma.campaign.update({
-        where: { id: campaignId },
-        data: { priority: newPriority },
-        include: {
-          brand: true,
-          content: true,
-        },
-      });
-
-      // Re-check conflicts with new priority
-      const rawConfig = campaign.config as unknown;
-      const config =
-        rawConfig && typeof rawConfig === 'object' ? (rawConfig as Record<string, unknown>) : {};
-      const durationObj =
-        config.duration && typeof config.duration === 'object'
-          ? (config.duration as { start?: string; end?: string })
-          : { start: undefined, end: undefined };
-      const coordinationConfig: CampaignConfigWithPriority = {
-        name: campaign.name,
-        brandId: campaign.brandId,
-        config: {
-          duration: {
-            start: durationObj.start || new Date().toISOString(),
-            end: durationObj.end || new Date(Date.now() + ONE_DAY_MS).toISOString(),
-          },
-          frequency: typeof config.frequency === 'string' ? config.frequency : 'daily',
-          postingTime: typeof config.postingTime === 'string' ? config.postingTime : '09:00',
-          themes: Array.isArray(config.themes) ? (config.themes as string[]) : [],
-        },
-        priority: newPriority,
-      };
-
-      const conflicts = await campaignCoordinationService.detectSchedulingConflicts(
-        coordinationConfig,
-        userId
-      );
-
-      // Update campaign config with new conflict information
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: {
-          config: {
-            ...(config as Record<string, unknown>),
-            conflicts: buildConflictSummary(conflicts),
-          },
-        },
-      });
-
-      return {
-        success: true,
-        campaign: updatedCampaign as unknown as CampaignWithContent,
-        conflicts: conflicts.length,
-      };
-    } catch (error) {
-      logger.error('Update campaign priority error', {
-        campaignId,
-        userId,
-        newPriority,
-        error,
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Validate field editability based on campaign status and field types
    */
   async validateFieldEditability(
@@ -613,9 +513,6 @@ export class CampaignUpdatesService {
       // Handle non-config fields
       if (updateData.name !== undefined) {
         updatePayload.name = updateData.name;
-      }
-      if (updateData.priority !== undefined) {
-        updatePayload.priority = updateData.priority;
       }
       if (updateData.status !== undefined) {
         updatePayload.status = updateData.status;

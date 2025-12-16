@@ -1,4 +1,3 @@
-import { campaignCoordinationService } from '../campaign-coordination.js';
 import { eventEmitter } from '../event-emitter.js';
 import { getDatabaseClient } from '../../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
@@ -135,55 +134,6 @@ export class CampaignRetrievalService {
       return campaignWithUrls;
     } catch (error) {
       logger.error('Get campaign error', { campaignId, userId, error });
-      throw error;
-    }
-  }
-
-  /**
-   * Get campaign coordination summary for a user
-   */
-  async getCampaignCoordination(userId: string): Promise<{
-    activeCampaigns: number;
-    resourceAllocation: unknown;
-    campaignsByPriority: Record<number, number>;
-    conflicts: number;
-  }> {
-    try {
-      // Get resource allocation
-      const allocation = await campaignCoordinationService.allocateGenerationResources(userId);
-
-      // Get active campaigns with priorities
-      const activeCampaigns = await prisma.campaign.findMany({
-        where: {
-          brand: { userId },
-          status: { in: ['active', 'preview'] },
-        },
-        include: { brand: true },
-        orderBy: { priority: 'asc' },
-      });
-
-      return {
-        activeCampaigns: activeCampaigns.length,
-        resourceAllocation: allocation,
-        campaignsByPriority: activeCampaigns.reduce(
-          (acc, campaign) => {
-            const priority = campaign.priority || 5;
-            acc[priority] = (acc[priority] || 0) + 1;
-            return acc;
-          },
-          {} as Record<number, number>
-        ),
-        conflicts: activeCampaigns.reduce((total, campaign) => {
-          const rawCfg = campaign.config as unknown;
-          const cfg =
-            rawCfg && typeof rawCfg === 'object'
-              ? (rawCfg as { conflicts?: { conflictCount?: number } })
-              : {};
-          return total + (cfg.conflicts?.conflictCount || 0);
-        }, 0),
-      };
-    } catch (error) {
-      logger.error('Get campaign coordination error', { userId, error });
       throw error;
     }
   }

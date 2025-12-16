@@ -98,7 +98,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     // Style is optional; brand profile projection now drives tone/voice
     style: z.union([z.string(), z.array(z.string())]).optional(),
     postingTime: z.string().regex(/^\d{2}:\d{2}$/),
-    priority: z.number().int().min(1).max(10).optional(),
     // Accept goals as single string or array from the wizard; normalize later
     goals: z.union([z.string().max(2000), z.array(z.string()).min(1)]).optional(),
     seasonalityAssist: z.boolean().optional(),
@@ -272,7 +271,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           themes: body.themes,
           ...(styleText && styleText.length > 0 ? { style: styleText } : {}),
           postingTime: body.postingTime,
-          ...(body.priority !== undefined ? { priority: body.priority } : {}),
           // Wizard-enhanced fields
           ...(body.campaignType ? { campaignType: body.campaignType } : {}),
           ...(body.promotionDetails ? { urgencyTactics: body.promotionDetails } : {}),
@@ -573,7 +571,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     frequency?: string;
     postingTime?: string;
     duration?: { start: string; end: string };
-    priority?: number;
   }
   fastify.put<{ Params: { id: string }; Body: UpdateCampaignBody }>(
     '/:id',
@@ -873,53 +870,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-
-  // Update campaign priority
-  fastify.put<{
-    Params: { id: string };
-    Body: { priority: number };
-  }>('/:id/priority', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { id } = request.params;
-      const { priority } = request.body;
-
-      if (!id) {
-        return reply.code(400).send({ error: 'Campaign ID is required' });
-      }
-
-      if (typeof priority !== 'number' || priority < 1 || priority > 10) {
-        return reply.code(400).send({ error: 'Priority must be a number between 1 and 10' });
-      }
-
-      const updatedCampaign = await campaignService.updateCampaignPriority(id, priority, userId);
-
-      return reply.send({
-        success: true,
-        message: 'Campaign priority updated successfully',
-        campaign: updatedCampaign,
-      });
-    } catch (error) {
-      request.log.error({ err: error }, 'Update campaign priority error');
-      throw error;
-    }
-  });
-
-  // Get campaign coordination summary
-  fastify.get('/coordination', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const coordination = await campaignService.getCampaignCoordination(userId);
-
-      return reply.send({
-        success: true,
-        coordination,
-      });
-    } catch (error) {
-      request.log.error({ err: error }, 'Get campaign coordination error');
-      throw error;
-    }
-  });
 
   // Regenerate campaign content (simplified without rollback)
   interface RegenerateContentBody {

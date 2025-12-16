@@ -106,33 +106,6 @@ class CampaignService {
   }
 
   /**
-   * Update campaign priority and check for new conflicts
-   */
-  async updateCampaignPriority(
-    campaignId: string,
-    newPriority: number,
-    userId: string
-  ): Promise<{
-    success: boolean;
-    campaign: Record<string, unknown> | null;
-    conflicts?: number;
-  }> {
-    return campaignUpdatesService.updateCampaignPriority(campaignId, newPriority, userId);
-  }
-
-  /**
-   * Get campaign coordination summary for a user
-   */
-  async getCampaignCoordination(userId: string): Promise<{
-    activeCampaigns: number;
-    resourceAllocation: unknown;
-    campaignsByPriority: Record<number, number>;
-    conflicts: number;
-  }> {
-    return campaignRetrievalService.getCampaignCoordination(userId);
-  }
-
-  /**
    * Validate campaign configuration
    */
   validateCampaignConfig(config: CampaignConfig): string[] {

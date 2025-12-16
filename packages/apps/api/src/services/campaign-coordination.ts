@@ -11,28 +11,13 @@ export interface SchedulingConflict {
 }
 
 export interface ConflictResolution {
-  strategy:
-    | 'adjust_lower_priority'
-    | 'suggest_alternative_time'
-    | 'defer_campaign'
-    | 'reduce_frequency';
+  strategy: 'suggest_alternative_time' | 'defer_campaign' | 'reduce_frequency';
   adjustedPostingTime?: string;
   adjustedDates?: Date[];
   message: string;
 }
 
-export interface ResourceAllocation {
-  campaigns: Array<{
-    campaignId: string;
-    priority: number;
-    allocatedSlots: number;
-    estimatedGenerationTime: number;
-  }>;
-  totalCapacity: number;
-  utilizationRate: number;
-}
-
-export interface CampaignConfigWithPriority {
+export interface CampaignConflictCheckInput {
   name?: string; // Optional: Auto-generated if not provided
   brandId: string;
   config: {
@@ -41,7 +26,6 @@ export interface CampaignConfigWithPriority {
     postingTime: string;
     themes?: string[];
   };
-  priority: number;
 }
 
 export class CampaignCoordinationService {
@@ -49,7 +33,7 @@ export class CampaignCoordinationService {
    * Detect scheduling conflicts between a new campaign and existing active campaigns
    */
   async detectSchedulingConflicts(
-    newCampaignConfig: CampaignConfigWithPriority,
+    newCampaignConfig: CampaignConflictCheckInput,
     userId: string
   ): Promise<SchedulingConflict[]> {
     const conflicts: SchedulingConflict[] = [];
@@ -122,76 +106,6 @@ export class CampaignCoordinationService {
   }
 
   /**
-   * Resolve scheduling conflicts using priority-based strategies
-   */
-  async resolveSchedulingConflict(
-    newCampaign: CampaignConfigWithPriority,
-    conflictingCampaign: CampaignConfigWithPriority,
-    _userId: string
-  ): Promise<ConflictResolution> {
-    void _userId; // reserved for future auditing/logging
-    // Higher priority = lower number (1 is highest priority)
-    if (newCampaign.priority < conflictingCampaign.priority) {
-      // New campaign has higher priority - suggest adjusting existing campaign
-      return {
-        strategy: 'adjust_lower_priority',
-        adjustedPostingTime: this.suggestAlternativeTime(conflictingCampaign.config.postingTime),
-        message: `Higher priority campaign detected. Suggest adjusting existing campaign posting time.`,
-      };
-    } else {
-      // New campaign has lower priority - suggest adjustment
-      return {
-        strategy: 'suggest_alternative_time',
-        adjustedPostingTime: this.suggestAlternativeTime(newCampaign.config.postingTime),
-        message: `Conflict detected. Suggested alternative posting time to avoid overlap.`,
-      };
-    }
-  }
-
-  /**
-   * Allocate AI generation resources across active campaigns
-   */
-  async allocateGenerationResources(userId: string): Promise<ResourceAllocation> {
-    const activeCampaigns = await prisma.campaign.findMany({
-      where: {
-        brand: { userId },
-        status: 'active',
-      },
-      include: { brand: true },
-      orderBy: { priority: 'asc' }, // Lower number = higher priority
-    });
-
-    const totalCapacity = 100; // Max posts per hour
-    let allocatedCapacity = 0;
-
-    const campaignAllocations = activeCampaigns.map((campaign) => {
-      const baseAllocation = Math.max(10, Math.floor(totalCapacity / activeCampaigns.length));
-
-      // Give priority campaigns extra allocation
-      const priorityBonus = campaign.priority === 1 ? 20 : campaign.priority === 2 ? 10 : 0;
-      const finalAllocation = Math.min(
-        baseAllocation + priorityBonus,
-        totalCapacity - allocatedCapacity
-      );
-
-      allocatedCapacity += finalAllocation;
-
-      return {
-        campaignId: campaign.id,
-        priority: campaign.priority || 999,
-        allocatedSlots: finalAllocation,
-        estimatedGenerationTime: finalAllocation * 0.5, // 0.5 minutes per post
-      };
-    });
-
-    return {
-      campaigns: campaignAllocations,
-      totalCapacity,
-      utilizationRate: allocatedCapacity / totalCapacity,
-    };
-  }
-
-  /**
    * Get overlapping post dates between two campaign configurations
    */
   private getOverlappingPostDates(
@@ -230,28 +144,6 @@ export class CampaignCoordinationService {
     if (conflictCount <= 2) return 'low';
     if (conflictCount <= 5) return 'medium';
     return 'high';
-  }
-
-  /**
-   * Suggest an alternative posting time to avoid conflicts
-   */
-  private suggestAlternativeTime(originalTime: string): string {
-    let [hours, minutes] = originalTime.split(':').map(Number);
-    // Fallbacks for invalid input
-    if (typeof hours !== 'number' || isNaN(hours)) hours = 12;
-    if (typeof minutes !== 'number' || isNaN(minutes)) minutes = 0;
-    let newHours = hours;
-
-    // Try 2 hours later, then 2 hours earlier
-    if (hours <= 21) {
-      newHours = hours + 2;
-    } else if (hours >= 3) {
-      newHours = hours - 2;
-    } else {
-      newHours = 12; // Default to noon
-    }
-
-    return `${newHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   }
 }
 

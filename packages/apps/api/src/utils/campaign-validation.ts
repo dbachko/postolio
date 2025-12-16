@@ -11,7 +11,6 @@ export interface CampaignUpdateRequest {
   startDate?: string;
   endDate?: string;
   status?: string;
-  priority?: number;
   goals?: string | string[];
   seasonalityAssist?: boolean;
 }
@@ -272,25 +271,6 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
     }
   }
 
-  // Validate priority (optional)
-  if (obj.priority !== undefined) {
-    if (typeof obj.priority !== 'number') {
-      errors.push({
-        field: 'priority',
-        message: 'Priority must be a number',
-        value: obj.priority,
-      });
-    } else if (obj.priority < 1 || obj.priority > 10) {
-      errors.push({
-        field: 'priority',
-        message: 'Priority must be between 1 (highest) and 10 (lowest)',
-        value: obj.priority,
-      });
-    } else {
-      sanitizedData.priority = obj.priority;
-    }
-  }
-
   // Check for unknown fields
   const knownFields = [
     'name',
@@ -301,7 +281,6 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
     'startDate',
     'endDate',
     'status',
-    'priority',
     'goals',
     'seasonalityAssist',
   ];

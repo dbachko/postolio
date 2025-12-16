@@ -13,7 +13,6 @@ export interface CampaignConfig {
   style?: string;
   imageProvider?: ImageProvider;
   postingTime: string; // HH:MM format
-  priority?: number; // 1=highest, 5=normal, 10=lowest
   // Wizard-enhanced (Phase 1) optional fields
   campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
   contentPillars?: unknown; // Json structure { pillars: [{ name, percentage, themes }] }

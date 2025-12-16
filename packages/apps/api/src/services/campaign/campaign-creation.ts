@@ -7,7 +7,7 @@ import {
 import { campaignJobService } from '../campaign-jobs.js';
 import {
   campaignCoordinationService,
-  type CampaignConfigWithPriority,
+  type CampaignConflictCheckInput,
 } from '../campaign-coordination.js';
 import { TimezoneService } from '../timezone.js';
 import { generateCampaignName } from '../../utils/campaign-naming.js';
@@ -16,7 +16,6 @@ import { getDatabaseClient } from '../../config/database.js';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { APIError } from '@postolio/errors';
-import { DEFAULT_CAMPAIGN_PRIORITY } from './campaign-constants.js';
 import { buildConflictSummary } from './campaign-conflicts.js';
 import {
   calculateDurationDays,
@@ -100,7 +99,7 @@ export class CampaignCreationService {
       }
 
       // Check for scheduling conflicts with other campaigns
-      const coordinationConfig: CampaignConfigWithPriority = {
+      const coordinationConfig: CampaignConflictCheckInput = {
         name: config.name,
         brandId: config.brandId,
         config: {
@@ -112,7 +111,6 @@ export class CampaignCreationService {
           postingTime: config.postingTime,
           themes: config.themes,
         },
-        priority: config.priority || DEFAULT_CAMPAIGN_PRIORITY,
       };
 
       const conflicts = await campaignCoordinationService.detectSchedulingConflicts(
@@ -152,7 +150,6 @@ export class CampaignCreationService {
           name: campaignName,
           brandId: config.brandId,
           status: 'creating',
-          priority: config.priority || DEFAULT_CAMPAIGN_PRIORITY,
           previewGenerated: false,
           color: assignedColor,
           campaignType: (config.campaignType as CampaignTypeEnum) ?? CampaignTypeEnum.custom,

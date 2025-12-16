@@ -18,19 +18,6 @@ export const getCampaignStatusColor = (status: string): string => {
   }
 };
 
-export const getPriorityLabel = (priority: number): string => {
-  const labels: Record<number, string> = {
-    1: '🔴 Urgent',
-    2: '🟠 High',
-    3: '🟡 Med-High',
-    4: '🟢 Medium',
-    5: '🔵 Normal',
-    6: '⚪ Low',
-    7: '⚫ Very Low',
-  };
-  return labels[priority] || `Priority ${priority}`;
-};
-
 export const getFrequencyLabel = (frequency: string): string => {
   const labels: Record<string, string> = {
     daily: 'Daily',

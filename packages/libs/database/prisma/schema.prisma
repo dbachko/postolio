@@ -141,7 +141,6 @@ model Campaign {
   brandId           String
   status            CampaignStatus   @default(creating)
   config            Json
-  priority          Int              @default(5)
   previewGenerated  Boolean          @default(false)
   errorMessage      String?
   // Visual identification: hex color code for calendar/timeline display
@@ -162,7 +161,6 @@ model Campaign {
   lastModifiedBy    User?            @relation(fields: [lastModifiedById], references: [id])
   content           Content[]
 
-  @@index([priority])
   @@index([status])
   @@index([campaignType])
   @@index([brandId, status])

@@ -356,7 +356,6 @@ async function main() {
         name: spec.name,
         brandId: brand.id,
         status: spec.status,
-        priority: 5,
         color: spec.color,
         campaignType: spec.campaignType || 'custom',
         previewGenerated: Boolean(spec.previewGenerated),

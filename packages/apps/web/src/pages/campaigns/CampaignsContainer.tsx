@@ -58,13 +58,6 @@ export default function CampaignsContainer() {
     <CampaignDashboard
       campaigns={campaignsQuery.data?.campaigns}
       onViewCampaignDetails={(id) => navigate(`/campaigns/${id}`)}
-      onStartCampaign={(id) => startCampaignMutation.mutate(id)}
-      onPauseCampaign={(id) => pauseCampaignMutation.mutate(id)}
-      onDeleteCampaign={(id, _name) => deleteCampaignMutation.mutate(id)}
-      startCampaignLoading={startCampaignMutation.isPending}
-      startCampaignLoadingId={(startCampaignMutation.variables as string | undefined) || null}
-      pauseCampaignLoading={pauseCampaignMutation.isPending}
-      deleteCampaignLoading={deleteCampaignMutation.isPending}
     />
   );
 
@@ -102,6 +95,16 @@ export default function CampaignsContainer() {
       fillWindowLoading={fillWindowMutation.isPending}
       startCampaignLoading={startCampaignMutation.isPending}
       startCampaignLoadingId={(startCampaignMutation.variables as string | undefined) || null}
+      onDeleteCampaign={async () => {
+        if (!selectedCampaignId) return;
+        try {
+          await deleteCampaignMutation.mutateAsync(selectedCampaignId);
+          navigate('/campaigns');
+        } catch {
+          // toast is handled in the mutation hook
+        }
+      }}
+      deleteCampaignLoading={deleteCampaignMutation.isPending}
     />
   );
 

@@ -10,19 +10,18 @@ const EDITABILITY_RULES = {
   },
   // Active campaigns allow limited edits
   active: {
-    allowedFields: ['name', 'priority'] as string[],
-    message: 'Active campaigns only allow editing name and priority',
+    allowedFields: ['name'] as string[],
+    message: 'Active campaigns only allow editing name',
   },
   // Paused campaigns allow same as active
   paused: {
-    allowedFields: ['name', 'priority'] as string[],
-    message: 'Paused campaigns only allow editing name and priority',
+    allowedFields: ['name'] as string[],
+    message: 'Paused campaigns only allow editing name',
   },
   // Failed campaigns allow all edits to recover
   failed: {
     allowedFields: [
       'name',
-      'priority',
       'config',
       'themes',
       'style',
@@ -37,7 +36,6 @@ const EDITABILITY_RULES = {
   creating: {
     allowedFields: [
       'name',
-      'priority',
       'config',
       'themes',
       'style',
@@ -51,7 +49,6 @@ const EDITABILITY_RULES = {
   preview: {
     allowedFields: [
       'name',
-      'priority',
       'config',
       'themes',
       'style',
@@ -63,8 +60,8 @@ const EDITABILITY_RULES = {
     message: 'All fields can be edited for preview campaigns',
   },
   processing: {
-    allowedFields: ['name', 'priority'] as string[],
-    message: 'Processing campaigns only allow editing name and priority',
+    allowedFields: ['name'] as string[],
+    message: 'Processing campaigns only allow editing name',
   },
 };
 

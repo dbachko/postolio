@@ -37,7 +37,6 @@ interface CampaignEditDialogProps {
 type EditableFlags = {
   all: boolean;
   name: boolean;
-  priority: boolean;
   dates: boolean;
   frequency: boolean;
   postingTime: boolean;
@@ -55,7 +54,6 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
       return {
         all: true,
         name: true,
-        priority: true,
         dates: true,
         frequency: true,
         postingTime: true,
@@ -69,20 +67,18 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
       return {
         all: false,
         name: true,
-        priority: true,
         dates: false,
         frequency: false,
         postingTime: false,
         themes: false,
         style: false,
         color: true,
-        reason: 'Active/paused campaigns only allow editing name and priority.',
+        reason: 'Active/paused campaigns only allow editing name.',
       };
     case 'completed':
       return {
         all: false,
         name: false,
-        priority: false,
         dates: false,
         frequency: false,
         postingTime: false,
@@ -95,7 +91,6 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
       return {
         all: false,
         name: true,
-        priority: true,
         dates: false,
         frequency: false,
         postingTime: false,
@@ -114,7 +109,6 @@ export function CampaignEditDialog({
   onSaved,
 }: CampaignEditDialogProps) {
   const [name, setName] = useState(campaign.name);
-  const [priority, setPriority] = useState<number>(campaign.priority || 5);
   // Predefined hex palette (Tailwind 300 tones)
   // IMPORTANT: memoize to avoid recreating each render which caused an effect loop
   const palette: string[] = useMemo(
@@ -167,7 +161,6 @@ export function CampaignEditDialog({
     if (!open) return;
     // Hydrate when dialog opens in case campaign object changed
     setName(campaign.name);
-    setPriority(campaign.priority || 5);
     setColor(
       getStoredCampaignColor(campaign.id) ||
         (campaign as any).color ||
@@ -198,9 +191,8 @@ export function CampaignEditDialog({
     try {
       const updates: Record<string, unknown> = {};
 
-      // Always allow name/priority if permitted
+      // Always allow name if permitted
       if (perms.name && name !== campaign.name) updates.name = name.trim();
-      if (perms.priority && priority !== campaign.priority) updates.priority = priority;
 
       // Config-related updates if permitted
       if (perms.dates) {
@@ -300,19 +292,6 @@ export function CampaignEditDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={!perms.name}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="priority">Priority</Label>
-            <Input
-              id="priority"
-              type="number"
-              min={1}
-              max={10}
-              value={priority}
-              onChange={(e) => setPriority(Number(e.target.value))}
-              disabled={!perms.priority}
             />
           </div>
 
@@ -530,7 +509,7 @@ export function CampaignEditDialog({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={saving || (!perms.all && !perms.name && !perms.priority)}
+            disabled={saving || (!perms.all && !perms.name && !perms.color)}
           >
             {saving ? 'Saving…' : 'Save Changes'}
           </Button>

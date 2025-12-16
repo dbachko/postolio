@@ -22,26 +22,9 @@ type SortDirection = 'asc' | 'desc';
 interface Props {
   campaigns: Campaign[] | undefined;
   onViewCampaignDetails: (id: string) => void;
-  onStartCampaign: (id: string) => void;
-  onPauseCampaign: (id: string) => void;
-  onDeleteCampaign: (id: string, name: string) => void;
-  startCampaignLoading?: boolean;
-  startCampaignLoadingId?: string | null;
-  pauseCampaignLoading?: boolean;
-  deleteCampaignLoading?: boolean;
 }
 
-export function CampaignDashboard({
-  campaigns,
-  onViewCampaignDetails,
-  onStartCampaign,
-  onPauseCampaign,
-  onDeleteCampaign,
-  startCampaignLoading,
-  startCampaignLoadingId,
-  pauseCampaignLoading,
-  deleteCampaignLoading,
-}: Props) {
+export function CampaignDashboard({ campaigns, onViewCampaignDetails }: Props) {
   const navigate = useNavigate();
 
   // Filtering and sorting
@@ -149,13 +132,6 @@ export function CampaignDashboard({
       <CampaignsList
         campaigns={filteredAndSortedCampaigns}
         onViewCampaignDetails={onViewCampaignDetails}
-        onStartCampaign={onStartCampaign}
-        onPauseCampaign={onPauseCampaign}
-        onDeleteCampaign={onDeleteCampaign}
-        startCampaignLoading={!!startCampaignLoading}
-        startCampaignLoadingId={startCampaignLoadingId || null}
-        pauseCampaignLoading={!!pauseCampaignLoading}
-        deleteCampaignLoading={!!deleteCampaignLoading}
       />
     </div>
   );

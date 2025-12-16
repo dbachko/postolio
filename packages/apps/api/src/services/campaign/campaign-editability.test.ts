@@ -20,7 +20,7 @@ describe('validateFieldEditabilityForStatus', () => {
   });
 
   it('allows limited fields for active campaigns', () => {
-    const updates: EditableCampaignFields = { name: 'New Name', priority: 2 };
+    const updates: EditableCampaignFields = { name: 'New Name' };
     expect(validateFieldEditabilityForStatus('active', updates)).toEqual({
       valid: true,
       errors: [],
@@ -34,7 +34,7 @@ describe('validateFieldEditabilityForStatus', () => {
     expect(result.errors).toEqual([
       {
         field: 'themes',
-        message: 'Cannot edit themes: Active campaigns only allow editing name and priority',
+        message: 'Cannot edit themes: Active campaigns only allow editing name',
       },
     ]);
   });

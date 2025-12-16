@@ -1,5 +1,3 @@
-export const DEFAULT_CAMPAIGN_PRIORITY = 5;
-
 export const VALID_CAMPAIGN_FREQUENCIES = ['daily', 'every2days', '3weekly'] as const;
 export type CampaignFrequency = (typeof VALID_CAMPAIGN_FREQUENCIES)[number];
 

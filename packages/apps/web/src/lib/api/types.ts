@@ -112,7 +112,6 @@ export interface CampaignConfig {
   themes: string[];
   style: string;
   postingTime: string;
-  priority?: number;
   campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
   promotionDetails?: { discountPercentage?: number; promoCode?: string; limitedQuantity?: boolean };
   contentPillars?: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
@@ -147,7 +146,6 @@ export interface Campaign {
     themes?: string[];
     style?: string;
     postingTime?: string;
-    priority?: number;
   };
   // In list views, content is omitted to reduce payload. Keep optional.
   content?: Content[];
@@ -157,7 +155,6 @@ export interface Campaign {
   publishedCount?: number;
   errorMessage?: string | null;
   previewGenerated?: boolean;
-  priority: number;
   createdAt: string;
   updatedAt: string;
   startedAt?: string | null;

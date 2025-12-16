@@ -1,343 +1,178 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type CSSProperties } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  CalendarClock,
-  Palette,
-  Tag,
-  Clock,
-  Star,
-  Pause,
-  Play,
-  Trash2,
-  Loader2,
-} from 'lucide-react';
+import { CalendarClock, Palette, Tag, Clock } from 'lucide-react';
 import type { Campaign } from '../lib/api';
 import { getStableColorFromId } from '../utils/campaign-colors';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 // import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
-import { getFrequencyLabel, getPriorityLabel, getStyleLabel } from '@/utils/campaign';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { getFrequencyLabel, getStyleLabel } from '@/utils/campaign';
 
 interface CampaignCardProps {
   campaign: Campaign;
   onViewDetails: (campaignId: string) => void;
-  onStartCampaign: (campaignId: string) => void;
-  onPauseCampaign: (campaignId: string) => void;
-  onDeleteCampaign: (campaignId: string, campaignName: string) => void;
-  startCampaignLoading?: boolean;
-  startCampaignLoadingId?: string | null;
-  pauseCampaignLoading?: boolean;
-  deleteCampaignLoading?: boolean;
 }
 
-const CampaignCard = memo(
-  ({
-    campaign,
-    onViewDetails,
-    onStartCampaign,
-    onPauseCampaign,
-    onDeleteCampaign,
-    startCampaignLoading = false,
-    startCampaignLoadingId = null,
-    pauseCampaignLoading = false,
-    deleteCampaignLoading = false,
-  }: CampaignCardProps) => {
-    // const goToContentWithFilters = useNavigateWithFilters();
-    const apiColor = (campaign as any).color as string | undefined;
-    const color = useMemo(() => {
-      const stored = getStoredCampaignColor(campaign.id);
-      return stored || apiColor || getStableColorFromId(campaign.id);
-    }, [campaign, apiColor]);
+const STATUS_COLORS: Partial<Record<Campaign['status'], string>> = {
+  // Theme-aware tokens from shadcn (`src/index.css`); avoids hard-coded palette values.
+  active: 'var(--success)',
+  completed: 'var(--muted-foreground)',
+  paused: 'var(--warning)',
+  failed: 'var(--destructive)',
+  processing: 'var(--info)',
+  creating: 'var(--chart-2)',
+  preview: 'var(--action-purple)',
+};
 
-    const canDeleteCampaign = () => {
-      // Only campaigns with status: draft, preview, creating, failed can be deleted
-      const deletableStatuses = ['draft', 'preview', 'creating', 'failed'];
-      return deletableStatuses.includes(campaign.status);
-    };
+const CampaignCard = memo(({ campaign, onViewDetails }: CampaignCardProps) => {
+  // const goToContentWithFilters = useNavigateWithFilters();
+  const apiColor = (campaign as any).color as string | undefined;
+  const color = useMemo(() => {
+    const stored = getStoredCampaignColor(campaign.id);
+    return stored || apiColor || getStableColorFromId(campaign.id);
+  }, [campaign, apiColor]);
 
-    const getDeleteTooltip = () => {
-      if (canDeleteCampaign()) {
-        return 'Delete campaign';
-      }
+  const titleStyle = useMemo(() => ({ '--campaign-color': color }) as CSSProperties, [color]);
+  const statusStyle = useMemo(() => {
+    const base = STATUS_COLORS[campaign.status] || 'var(--muted-foreground)';
+    return {
+      '--status-color': base,
+      // Use srgb mixing for more predictable hues across browsers.
+      borderColor: `color-mix(in srgb, ${base} 55%, var(--border))`,
+      backgroundColor: `color-mix(in srgb, ${base} 18%, var(--background))`,
+      color: `color-mix(in srgb, ${base} 75%, var(--foreground))`,
+    } as CSSProperties;
+  }, [campaign.status]);
 
-      // Provide clear explanations for why campaigns cannot be deleted
-      if (campaign.status === 'active') {
-        return 'Active campaigns cannot be deleted. They contain published content and serve as historical records. Pause or wait for completion if you want to stop the campaign.';
-      }
+  const getStatusLabel = () => {
+    switch (campaign.status) {
+      case 'creating':
+        return 'Generating';
+      case 'preview':
+        return 'Ready';
+      case 'processing':
+        return 'Processing';
+      case 'active':
+        return 'Active';
+      case 'paused':
+        return 'Paused';
+      case 'failed':
+        return 'Failed';
+      case 'completed':
+        return 'Completed';
+      default:
+        return campaign.status;
+    }
+  };
 
-      if (campaign.status === 'paused') {
-        return "Paused campaigns cannot be deleted. They may contain published content and can be resumed. Only campaigns that haven't started (draft, preview, creating, failed) can be deleted.";
-      }
+  const scheduledCount = useMemo(() => {
+    const fromCounts = (campaign as any).scheduledCount;
+    if (typeof fromCounts === 'number') return fromCounts;
+    if (Array.isArray(campaign.content)) {
+      return campaign.content.filter((c: any) => c.status === 'scheduled').length;
+    }
+    return undefined;
+  }, [campaign]);
 
-      if (campaign.status === 'completed') {
-        return 'Completed campaigns cannot be deleted. They serve as historical records of your marketing activities and contain published content.';
-      }
+  const totalCount = useMemo(() => {
+    const fromCounts = (campaign as any).contentCount;
+    if (typeof fromCounts === 'number') return fromCounts;
+    return Array.isArray(campaign.content) ? campaign.content.length : undefined;
+  }, [campaign]);
 
-      if (campaign.status === 'processing') {
-        return 'Campaigns being processed cannot be deleted. Wait for processing to complete or fail before attempting deletion.';
-      }
-
-      return `Campaigns with status "${campaign.status}" cannot be deleted. Only campaigns that haven't started (draft, preview, creating, failed) can be deleted.`;
-    };
-
-    const getStatusBadgeVariant = () => {
-      switch (campaign.status) {
-        case 'active':
-          return 'success' as const;
-        case 'paused':
-          return 'warning' as const;
-        case 'processing':
-        case 'creating':
-        case 'preview':
-          return 'info' as const;
-        case 'failed':
-          return 'destructive' as const;
-        default:
-          return 'secondary' as const;
-      }
-    };
-
-    const getStatusLabel = () => {
-      switch (campaign.status) {
-        case 'creating':
-          return 'Generating';
-        case 'preview':
-          return 'Ready';
-        case 'processing':
-          return 'Processing';
-        case 'active':
-          return 'Active';
-        case 'paused':
-          return 'Paused';
-        case 'failed':
-          return 'Failed';
-        default:
-          return campaign.status;
-      }
-    };
-
-    // Priority label helper removed (unused)
-
-    const scheduledCount = useMemo(() => {
-      const fromCounts = (campaign as any).scheduledCount;
-      if (typeof fromCounts === 'number') return fromCounts;
-      if (Array.isArray(campaign.content)) {
-        return campaign.content.filter((c: any) => c.status === 'scheduled').length;
-      }
-      return undefined;
-    }, [campaign]);
-
-    const totalCount = useMemo(() => {
-      const fromCounts = (campaign as any).contentCount;
-      if (typeof fromCounts === 'number') return fromCounts;
-      return Array.isArray(campaign.content) ? campaign.content.length : undefined;
-    }, [campaign]);
-
-    const isLaunching = startCampaignLoading && startCampaignLoadingId === campaign.id;
-    const launchTooltip = startCampaignLoading
-      ? isLaunching
-        ? 'Launching… We’re queuing new AI posts and placeholders.'
-        : 'Another campaign is launching right now. Please wait a moment.'
-      : 'Launch this campaign to start scheduling its AI posts.';
-
-    return (
-      <Card
-        className="bg-card group relative cursor-pointer transition-all duration-200 hover:shadow-lg"
-        onClick={() => onViewDetails(campaign.id)}
-      >
-        <CardContent className="p-6">
-          {/* Removed campaign-colored tint overlay per design update */}
-          <div className="min-w-0 flex-1">
-            {/* Header with title, status and color dot */}
-            <div className="mb-4 flex items-start justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex items-center gap-2">
-                  <span
-                    className="inline-flex h-2.5 w-2.5 rounded-full"
-                    style={{ background: color }}
-                  />
-                  <Badge variant={getStatusBadgeVariant()} className={`text-xs`}>
-                    {getStatusLabel()}
-                  </Badge>
-                </div>
-                <h3 className="text-foreground text-lg font-semibold transition-colors group-hover:underline">
-                  {campaign.name}
-                </h3>
-              </div>
-
-              {/* Quick actions - hover on desktop */}
-              <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                {campaign.status === 'preview' && (
-                  <TooltipProvider delayDuration={150}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onStartCampaign(campaign.id);
-                          }}
-                          disabled={startCampaignLoading}
-                          className="px-3 py-1 text-xs"
-                        >
-                          {isLaunching ? (
-                            <>
-                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              Launching…
-                            </>
-                          ) : (
-                            <>
-                              <Play className="mr-1 h-3 w-3" />
-                              Launch
-                            </>
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{launchTooltip}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-
-                {campaign.status === 'active' && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPauseCampaign(campaign.id);
-                    }}
-                    disabled={pauseCampaignLoading}
-                    className="px-3 py-1 text-xs"
-                  >
-                    <Pause className="mr-1 h-3 w-3" />
-                    Pause
-                  </Button>
-                )}
-
-                {campaign.status === 'paused' && (
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStartCampaign(campaign.id);
-                    }}
-                    disabled={startCampaignLoading}
-                    className="px-3 py-1 text-xs"
-                  >
-                    <Play className="mr-1 h-3 w-3" />
-                    Resume
-                  </Button>
-                )}
-
-                {/* Calendar quick action removed to simplify UI */}
-
-                {/* Delete action on hover */}
-                <div className="group/delete relative">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (canDeleteCampaign()) {
-                        onDeleteCampaign(campaign.id, campaign.name);
-                      }
-                    }}
-                    disabled={deleteCampaignLoading || !canDeleteCampaign()}
-                    title={getDeleteTooltip()}
-                    className={`px-2 py-1 text-xs transition-all ${
-                      canDeleteCampaign()
-                        ? 'text-destructive hover:bg-destructive/10 hover:text-destructive'
-                        : 'text-muted-foreground cursor-not-allowed opacity-50 hover:bg-transparent'
-                    }`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                  {/* Show tooltip on hover for disabled state */}
-                  {!canDeleteCampaign() && (
-                    <div className="bg-popover text-popover-foreground absolute right-0 bottom-full z-50 mb-2 hidden w-64 rounded-md p-2 text-xs shadow-lg group-hover/delete:block">
-                      <div className="relative">
-                        {getDeleteTooltip()}
-                        <div
-                          className="absolute top-full right-4 h-0 w-0 border-t-4 border-r-4 border-l-4 border-r-transparent border-l-transparent"
-                          style={{ borderTopColor: 'var(--popover)' }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Info rows with icons: frequency, style, themes, posting time, priority */}
-            <div className="mt-2 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div className="flex items-center gap-2">
-                <CalendarClock className="text-muted-foreground h-4 w-4" />
-                <div className="text-muted-foreground">Frequency</div>
-                <div className="text-foreground font-medium">
-                  {getFrequencyLabel(campaign.config?.frequency || '—')}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Palette className="text-muted-foreground h-4 w-4" />
-                <div className="text-muted-foreground">Style</div>
-                <div className="text-foreground font-medium">
-                  {getStyleLabel(campaign.config?.style || '—')}
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <div className="text-muted-foreground mb-1 flex items-center gap-2">
-                  <Tag className="h-4 w-4" />
-                  Themes
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(campaign.config?.themes || []).length > 0 ? (
-                    (campaign.config?.themes || []).map((t) => (
-                      <Badge key={t} variant="secondary" className="whitespace-normal">
-                        {t}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-foreground">—</span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="text-muted-foreground h-4 w-4" />
-                <div className="text-muted-foreground">Posting Time</div>
-                <div className="text-foreground font-medium">
-                  {campaign.config?.postingTime || '—'}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="text-muted-foreground h-4 w-4" />
-                <div className="text-muted-foreground">Priority</div>
-                <Badge variant="secondary" className="font-medium">
-                  {getPriorityLabel(campaign.config?.priority ?? campaign.priority ?? 5)}
-                </Badge>
-              </div>
-            </div>
-
-            {/* Stats row */}
-            <div className="text-muted-foreground mt-4 flex items-center justify-between text-sm">
-              <div>
-                <span className="font-medium">{scheduledCount ?? '—'}</span> scheduled
-                <span className="text-muted-foreground/60 mx-2">•</span>
-                <span className="font-medium">{totalCount ?? '—'}</span> posts
-              </div>
-            </div>
-            {campaign.status === 'paused' && (
-              <p className="text-muted-foreground mt-2 text-xs">
-                Paused campaigns don&apos;t generate or schedule new posts until resumed.
-              </p>
-            )}
+  return (
+    <Card
+      className="bg-card group hover:bg-muted/30 relative cursor-pointer transition-colors"
+      onClick={() => onViewDetails(campaign.id)}
+    >
+      <CardContent className="p-4">
+        {/* Removed campaign-colored tint overlay per design update */}
+        <div className="relative min-w-0 flex-1">
+          {/* Header */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 pr-20">
+            <span
+              className="bg-muted/30 border-border relative inline-flex max-w-full min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-1 transition-colors group-hover:border-[var(--campaign-color)] before:absolute before:inset-0 before:z-0 before:bg-[var(--campaign-color)] before:opacity-0 before:transition-[clip-path,opacity] before:duration-500 before:ease-out before:content-[''] before:[clip-path:circle(0px_at_12px_50%)] group-hover:before:opacity-25 group-hover:before:[clip-path:circle(220%_at_12px_50%)]"
+              style={titleStyle}
+            >
+              <span
+                className="relative z-10 h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: 'var(--campaign-color)' }}
+              />
+              <span className="text-foreground relative z-10 truncate text-sm font-semibold">
+                {campaign.name}
+              </span>
+            </span>
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-);
+          <Badge
+            variant="outline"
+            style={statusStyle}
+            className="absolute top-0 right-0 shrink-0 text-xs font-semibold"
+          >
+            {getStatusLabel()}
+          </Badge>
+
+          {/* Info rows with icons: frequency, style, themes, posting time */}
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+            <div className="flex items-center gap-1.5">
+              <CalendarClock className="h-3.5 w-3.5" />
+              <span className="text-foreground font-medium">
+                {getFrequencyLabel(campaign.config?.frequency || '—')}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              <span className="text-foreground font-medium">
+                {campaign.config?.postingTime || '—'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Palette className="h-3.5 w-3.5" />
+              <span className="text-foreground font-medium">
+                {getStyleLabel(campaign.config?.style || '—')}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-start gap-2">
+            <Tag className="text-muted-foreground mt-0.5 h-3.5 w-3.5" />
+            <div className="flex flex-wrap gap-1.5">
+              {(campaign.config?.themes || []).length > 0 ? (
+                <>
+                  {(campaign.config?.themes || []).slice(0, 4).map((t) => (
+                    <Badge key={t} variant="secondary" className="px-2 py-0.5 text-xs">
+                      {t}
+                    </Badge>
+                  ))}
+                  {(campaign.config?.themes || []).length > 4 ? (
+                    <Badge variant="secondary" className="px-2 py-0.5 text-xs">
+                      +{(campaign.config?.themes || []).length - 4}
+                    </Badge>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-foreground text-xs">—</span>
+              )}
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="text-muted-foreground mt-3 flex items-center justify-between text-xs">
+            <div>
+              <span className="font-medium">{scheduledCount ?? '—'}</span> scheduled
+              <span className="text-muted-foreground/60 mx-2">•</span>
+              <span className="font-medium">{totalCount ?? '—'}</span> posts
+            </div>
+          </div>
+          {campaign.status === 'paused' && (
+            <p className="text-muted-foreground mt-2 text-xs">
+              Paused campaigns don&apos;t generate or schedule new posts until resumed.
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
 
 CampaignCard.displayName = 'CampaignCard';
 
