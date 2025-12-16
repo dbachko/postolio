@@ -6,7 +6,7 @@ import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -282,37 +282,51 @@ function AppLayoutInner({ children }: LayoutProps) {
                   New Post
                 </Button>
                 <Popover open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
-                  <PopoverTrigger asChild>
-                    <Button size="icon" className="h-9 w-9" aria-label="Open create actions menu">
-                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-72 rounded-xl p-0 text-sm">
-                    <div className="px-4 py-3">
-                      <div className="text-sm font-medium">Create</div>
-                      <div className="text-muted-foreground text-xs">
-                        {selectedBrand ? `For ${selectedBrand.name}` : 'Choose a brand to begin.'}
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="p-2">
+                  <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <PopoverTrigger asChild>
+                          <Button
+                            size="icon"
+                            className="h-9 w-9"
+                            aria-label="Open create actions menu"
+                          >
+                            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </PopoverTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>More create options</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <PopoverContent align="end" className="w-80 p-2">
+                    <div className="flex flex-col gap-1">
                       <Button
                         type="button"
                         variant="ghost"
-                        className="w-full justify-start"
+                        className="h-auto w-full items-start justify-start gap-3 px-3 py-2"
                         disabled={!selectedBrand}
                         onClick={() => {
                           setCreateMenuOpen(false);
                           navigate('/campaigns/create');
                         }}
                       >
-                        <Megaphone className="h-4 w-4" aria-hidden="true" />
-                        New Campaign
+                        <Megaphone
+                          className="text-muted-foreground mt-0.5 h-4 w-4"
+                          aria-hidden="true"
+                        />
+                        <span className="flex flex-col items-start gap-0.5 text-left">
+                          <span className="text-sm font-medium">New Campaign</span>
+                          <span className="text-muted-foreground text-xs leading-snug">
+                            Plan and organize your upcoming posts.
+                          </span>
+                        </span>
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
-                        className="w-full justify-start"
+                        className="h-auto w-full items-start justify-start gap-3 px-3 py-2"
                         disabled={!selectedBrand}
                         onClick={() => {
                           if (!selectedBrand) return;
@@ -320,8 +334,16 @@ function AppLayoutInner({ children }: LayoutProps) {
                           openSidebar('asset-upload', { id: selectedBrand.id });
                         }}
                       >
-                        <Upload className="h-4 w-4" aria-hidden="true" />
-                        Upload Asset
+                        <Upload
+                          className="text-muted-foreground mt-0.5 h-4 w-4"
+                          aria-hidden="true"
+                        />
+                        <span className="flex flex-col items-start gap-0.5 text-left">
+                          <span className="text-sm font-medium">Upload Asset</span>
+                          <span className="text-muted-foreground text-xs leading-snug">
+                            Add photos and videos to reuse later.
+                          </span>
+                        </span>
                       </Button>
                     </div>
                   </PopoverContent>
