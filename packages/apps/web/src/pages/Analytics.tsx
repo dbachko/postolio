@@ -446,6 +446,7 @@ export default function Analytics() {
 
           {activeTab === 'instagram' && (
             <AnalyticsInstagramTab
+              brandId={selectedBrand?.id}
               igLoading={igLoading}
               igOverview={igOverview}
               igSeries={igSeries}
