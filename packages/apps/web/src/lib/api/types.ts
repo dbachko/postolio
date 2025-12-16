@@ -365,12 +365,27 @@ export interface InstagramHashtag {
   };
 }
 
+export type InstagramAudienceDemographicsStatus =
+  | 'available'
+  | 'no_data'
+  | 'not_connected'
+  | 'insufficient_permissions'
+  | 'error';
+
+export interface InstagramAudienceDemographics {
+  totalAudience: number;
+  updatedAt: string;
+  gender: Array<{ gender: 'M' | 'F' | 'U'; value: number }>;
+  age: Array<{ range: string; value: number }>;
+  countries: Array<{ code: string; value: number }>;
+  cities: Array<{ name: string; value: number }>;
+  locales: Array<{ locale: string; value: number }>;
+}
+
 export interface InstagramAudienceInsights {
-  demographics?: {
-    age?: any;
-    gender?: any;
-    locations?: any;
-  };
+  demographics?: InstagramAudienceDemographics | null;
+  demographicsStatus?: InstagramAudienceDemographicsStatus;
+  demographicsError?: string | null;
   followerGrowth?: {
     current: number;
     change: number;

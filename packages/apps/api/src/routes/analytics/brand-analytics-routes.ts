@@ -4,6 +4,7 @@ import { getRedisClient } from '../../services/redis.js';
 import { calculateBrandHealthScore } from '../../services/brand-health-score.js';
 import { assertBrandOwnership } from '../../services/ownership.js';
 import { getAssetsClient } from '../../services/assets-media.js';
+import { instagramService } from '../../services/instagram.js';
 
 const prisma = getDatabaseClient();
 
@@ -528,33 +529,25 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       const followerGrowthRate =
         firstFollowerCount > 0 ? ((followerGrowth / firstFollowerCount) * 100).toFixed(1) : '0.0';
 
+      // Instagram audience demographics (best-effort; do not fail the endpoint on permissions/token issues)
+      const demographicsResult = await instagramService.getAudienceDemographics(brandId);
+
       return reply.send({
         success: true,
         data: {
-          demographics: {
-            // Note: demographics require Meta API calls - placeholder for now
-            age: null,
-            gender: null,
-            locations: null,
-          },
-          activityPattern: {
-            heatmap,
-            bestTimes: bestTimes.slice(0, 5).map((bt) => ({
-              day: bt.day,
-              dayName: [
-                'Sunday',
-                'Monday',
-                'Tuesday',
-                'Wednesday',
-                'Thursday',
-                'Friday',
-                'Saturday',
-              ][bt.day],
-              hour: bt.hour,
-              timeFormatted: `${bt.hour}:00`,
-              avgEngagement: bt.avgEngagement,
-            })),
-          },
+          demographics: demographicsResult.demographics || null,
+          demographicsStatus: demographicsResult.status,
+          demographicsError: demographicsResult.errorMessage || null,
+          activityHeatmap: heatmap,
+          bestPostingTimes: bestTimes.slice(0, 5).map((bt) => ({
+            day: bt.day,
+            dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][
+              bt.day
+            ],
+            hour: bt.hour,
+            timeFormatted: `${bt.hour}:00`,
+            avgEngagement: bt.avgEngagement,
+          })),
           followerGrowth: {
             current: totalFollowers,
             change: followerGrowth,

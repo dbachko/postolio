@@ -96,6 +96,8 @@ export function AnalyticsInstagramTab({
             <AudienceInsights
               audienceData={{
                 demographics: igAudience.demographics,
+                demographicsStatus: igAudience.demographicsStatus,
+                demographicsError: igAudience.demographicsError,
                 followerGrowth: igAudience.followerGrowth,
               }}
               loading={igLoading}

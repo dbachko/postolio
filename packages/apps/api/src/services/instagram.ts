@@ -60,6 +60,29 @@ export interface MediaInsights {
   video_views?: number;
 }
 
+export type InstagramAudienceDemographicsStatus =
+  | 'available'
+  | 'no_data'
+  | 'not_connected'
+  | 'insufficient_permissions'
+  | 'error';
+
+export interface InstagramAudienceDemographics {
+  totalAudience: number;
+  updatedAt: string;
+  gender: Array<{ gender: 'M' | 'F' | 'U'; value: number }>;
+  age: Array<{ range: string; value: number }>;
+  countries: Array<{ code: string; value: number }>;
+  cities: Array<{ name: string; value: number }>;
+  locales: Array<{ locale: string; value: number }>;
+}
+
+export interface InstagramAudienceDemographicsResult {
+  status: InstagramAudienceDemographicsStatus;
+  demographics?: InstagramAudienceDemographics;
+  errorMessage?: string;
+}
+
 // Webhook event type definitions (top-level to avoid class body syntax issues)
 interface InstagramWebhookChange {
   field?: string;
@@ -815,6 +838,217 @@ class InstagramService {
       throw new Error(
         `Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
+    }
+  }
+
+  /**
+   * Fetch audience demographics (age/gender/location) via Instagram Insights API.
+   * This requires an Instagram Business/Creator account and the proper permissions.
+   */
+  async getAudienceDemographics(
+    brand: BrandData | string
+  ): Promise<InstagramAudienceDemographicsResult> {
+    const brandId = typeof brand === 'string' ? brand : brand.id;
+    const account = await prisma.socialAccount.findFirst({
+      where: { brandId, platform: 'instagram' },
+      select: { metadata: true },
+    });
+
+    if (!account) return { status: 'not_connected' };
+
+    const accountMetadata = (account.metadata || {}) as Record<string, unknown>;
+    if (
+      accountMetadata &&
+      typeof accountMetadata === 'object' &&
+      (accountMetadata as any).disconnected
+    ) {
+      return { status: 'not_connected' };
+    }
+
+    const seeded = (accountMetadata as any)?.audienceDemographics;
+    if (seeded && typeof seeded === 'object') {
+      const raw = seeded as any;
+      const demographics: InstagramAudienceDemographics = {
+        totalAudience: Number(raw.totalAudience || 0),
+        updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+        gender: Array.isArray(raw.gender)
+          ? raw.gender
+              .map((g: any) => ({
+                gender: g.gender === 'M' || g.gender === 'F' || g.gender === 'U' ? g.gender : 'U',
+                value: Number(g.value || 0),
+              }))
+              .filter((g: any) => isFinite(g.value) && g.value > 0)
+          : [],
+        age: Array.isArray(raw.age)
+          ? raw.age
+              .map((a: any) => ({ range: String(a.range || ''), value: Number(a.value || 0) }))
+              .filter((a: any) => a.range && isFinite(a.value) && a.value > 0)
+          : [],
+        countries: Array.isArray(raw.countries)
+          ? raw.countries
+              .map((c: any) => ({ code: String(c.code || ''), value: Number(c.value || 0) }))
+              .filter((c: any) => c.code && isFinite(c.value) && c.value > 0)
+          : [],
+        cities: Array.isArray(raw.cities)
+          ? raw.cities
+              .map((c: any) => ({ name: String(c.name || ''), value: Number(c.value || 0) }))
+              .filter((c: any) => c.name && isFinite(c.value) && c.value > 0)
+          : [],
+        locales: Array.isArray(raw.locales)
+          ? raw.locales
+              .map((l: any) => ({ locale: String(l.locale || ''), value: Number(l.value || 0) }))
+              .filter((l: any) => l.locale && isFinite(l.value) && l.value > 0)
+          : [],
+      };
+
+      const hasAny =
+        demographics.totalAudience > 0 ||
+        demographics.gender.length > 0 ||
+        demographics.age.length > 0 ||
+        demographics.countries.length > 0 ||
+        demographics.cities.length > 0 ||
+        demographics.locales.length > 0;
+
+      if (hasAny) return { status: 'available', demographics };
+    }
+
+    try {
+      const credentials = await this.getCredentialsOrThrow(brand);
+      const cacheKey = `instagram:audience_demographics:${String(credentials.accountId)}`;
+      const cacheTtlSeconds = 6 * 60 * 60;
+
+      if (redisService.isConnected()) {
+        const cached = await redisService.get(cacheKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached) as InstagramAudienceDemographics;
+            if (parsed && typeof parsed === 'object') {
+              return { status: 'available', demographics: parsed };
+            }
+          } catch {
+            // ignore cache parse errors
+          }
+        }
+      }
+
+      await this.checkRateLimit(String(credentials.accountId));
+
+      const metrics = [
+        'audience_gender_age',
+        'audience_country',
+        'audience_city',
+        'audience_locale',
+      ];
+      const url = fbGraph(
+        `${credentials.accountId}/insights?metric=${metrics.join(',')}&period=lifetime&access_token=${credentials.accessToken}`
+      );
+
+      const response = await axios.get(url);
+      const rows: Array<any> = Array.isArray(response.data?.data) ? response.data.data : [];
+
+      const getValueMap = (metricName: string): Record<string, number> => {
+        const row = rows.find((r) => r && r.name === metricName);
+        const raw =
+          row?.values?.[0]?.value ?? row?.total_value?.value ?? row?.value ?? row?.values ?? null;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+
+        const map: Record<string, number> = {};
+        for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+          const num = Number(value);
+          if (!isFinite(num) || isNaN(num) || num <= 0) continue;
+          map[String(key)] = num;
+        }
+        return map;
+      };
+
+      const genderAge = getValueMap('audience_gender_age');
+      const countries = getValueMap('audience_country');
+      const cities = getValueMap('audience_city');
+      const locales = getValueMap('audience_locale');
+
+      const genderTotals: Record<'M' | 'F' | 'U', number> = { M: 0, F: 0, U: 0 };
+      const ageTotals = new Map<string, number>();
+
+      for (const [key, value] of Object.entries(genderAge)) {
+        const [genderRaw, ageRaw] = String(key).split('.');
+        const gender: 'M' | 'F' | 'U' = genderRaw === 'M' || genderRaw === 'F' ? genderRaw : 'U';
+        const range = ageRaw || 'unknown';
+        genderTotals[gender] += value;
+        ageTotals.set(range, (ageTotals.get(range) || 0) + value);
+      }
+
+      const toTopList = <T extends string>(
+        map: Record<string, number>,
+        keyName: T,
+        limit: number
+      ): Array<Record<T, string> & { value: number }> =>
+        Object.entries(map)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, limit)
+          .map(([k, v]) => ({ [keyName]: k, value: v }) as Record<T, string> & { value: number });
+
+      const genderList = (Object.entries(genderTotals) as Array<['M' | 'F' | 'U', number]>)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([gender, value]) => ({ gender, value }));
+
+      const ageList = Array.from(ageTotals.entries())
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([range, value]) => ({ range, value }));
+
+      const totalAudience =
+        genderList.reduce((sum, g) => sum + g.value, 0) ||
+        Object.values(countries).reduce((sum, v) => sum + v, 0) ||
+        0;
+
+      if (
+        totalAudience <= 0 &&
+        genderList.length === 0 &&
+        ageList.length === 0 &&
+        Object.keys(countries).length === 0 &&
+        Object.keys(cities).length === 0 &&
+        Object.keys(locales).length === 0
+      ) {
+        return { status: 'no_data' };
+      }
+
+      const demographics: InstagramAudienceDemographics = {
+        totalAudience,
+        updatedAt: new Date().toISOString(),
+        gender: genderList,
+        age: ageList,
+        countries: toTopList(countries, 'code', 10),
+        cities: toTopList(cities, 'name', 10),
+        locales: toTopList(locales, 'locale', 10),
+      };
+
+      if (redisService.isConnected()) {
+        await redisService.set(cacheKey, JSON.stringify(demographics), cacheTtlSeconds);
+      }
+
+      return { status: 'available', demographics };
+    } catch (error: any) {
+      const fbError = error?.response?.data?.error as
+        | { message?: string; code?: number; error_subcode?: number }
+        | undefined;
+      const message =
+        (typeof fbError?.message === 'string' && fbError.message) ||
+        (error instanceof Error ? error.message : 'Unknown error');
+      const code = fbError?.code;
+
+      const permissionLike =
+        code === 10 || /permission|insights|manage_insights|oauth/i.test(String(message));
+
+      instagramLogger.warn('Failed to fetch audience demographics', {
+        code,
+        message,
+      });
+
+      return {
+        status: permissionLike ? 'insufficient_permissions' : 'error',
+        errorMessage: message,
+      };
     }
   }
 

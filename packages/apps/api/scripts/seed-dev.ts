@@ -175,6 +175,74 @@ async function main() {
     ];
 
   // Create SocialAccount for Instagram
+  const seededFollowers = Math.floor(Math.random() * 10000) + 1000;
+  const seededTotalAudience = Math.max(
+    500,
+    Math.round(seededFollowers * (0.85 + Math.random() * 0.25))
+  );
+  const seededUpdatedAt = new Date().toISOString();
+  const seededGender = [
+    { gender: 'F', value: Math.round(seededTotalAudience * 0.55) },
+    { gender: 'M', value: Math.round(seededTotalAudience * 0.43) },
+    {
+      gender: 'U',
+      value: Math.max(
+        0,
+        seededTotalAudience -
+          Math.round(seededTotalAudience * 0.55) -
+          Math.round(seededTotalAudience * 0.43)
+      ),
+    },
+  ];
+
+  const seededAgeBuckets = [
+    { range: '13-17', share: 0.04 },
+    { range: '18-24', share: 0.22 },
+    { range: '25-34', share: 0.31 },
+    { range: '35-44', share: 0.2 },
+    { range: '45-54', share: 0.13 },
+    { range: '55-64', share: 0.07 },
+    { range: '65+', share: 0.03 },
+  ];
+  const seededAge = seededAgeBuckets.map((b) => ({
+    range: b.range,
+    value: Math.round(seededTotalAudience * b.share),
+  }));
+
+  const seededCountries = [
+    { code: 'US', value: Math.round(seededTotalAudience * 0.34) },
+    { code: 'GB', value: Math.round(seededTotalAudience * 0.11) },
+    { code: 'CA', value: Math.round(seededTotalAudience * 0.09) },
+    { code: 'AU', value: Math.round(seededTotalAudience * 0.07) },
+    { code: 'DE', value: Math.round(seededTotalAudience * 0.06) },
+    { code: 'FR', value: Math.round(seededTotalAudience * 0.05) },
+    { code: 'NL', value: Math.round(seededTotalAudience * 0.04) },
+    { code: 'ES', value: Math.round(seededTotalAudience * 0.04) },
+    { code: 'IT', value: Math.round(seededTotalAudience * 0.03) },
+    { code: 'BR', value: Math.round(seededTotalAudience * 0.03) },
+  ].filter((c) => c.value > 0);
+
+  const seededCities = [
+    { name: 'New York', value: Math.round(seededTotalAudience * 0.05) },
+    { name: 'Los Angeles', value: Math.round(seededTotalAudience * 0.04) },
+    { name: 'London', value: Math.round(seededTotalAudience * 0.035) },
+    { name: 'Toronto', value: Math.round(seededTotalAudience * 0.03) },
+    { name: 'Sydney', value: Math.round(seededTotalAudience * 0.025) },
+    { name: 'Berlin', value: Math.round(seededTotalAudience * 0.02) },
+    { name: 'Paris', value: Math.round(seededTotalAudience * 0.02) },
+    { name: 'Amsterdam', value: Math.round(seededTotalAudience * 0.015) },
+  ].filter((c) => c.value > 0);
+
+  const seededLocales = [
+    { locale: 'en_US', value: Math.round(seededTotalAudience * 0.38) },
+    { locale: 'en_GB', value: Math.round(seededTotalAudience * 0.12) },
+    { locale: 'en_CA', value: Math.round(seededTotalAudience * 0.08) },
+    { locale: 'en_AU', value: Math.round(seededTotalAudience * 0.06) },
+    { locale: 'de_DE', value: Math.round(seededTotalAudience * 0.06) },
+    { locale: 'fr_FR', value: Math.round(seededTotalAudience * 0.05) },
+    { locale: 'es_ES', value: Math.round(seededTotalAudience * 0.05) },
+  ].filter((l) => l.value > 0);
+
   const instagramSocialAccount = await prisma.socialAccount.create({
     data: {
       brandId: brand.id,
@@ -185,10 +253,19 @@ async function main() {
       displayName: brandName,
       metadata: {
         account_type: 'BUSINESS',
-        followers_count: Math.floor(Math.random() * 10000) + 1000,
+        followers_count: seededFollowers,
         biography: `Official account for ${brandName}. Sharing amazing content daily! 🚀`,
         website: `https://${brandName.toLowerCase().replace(/\s+/g, '')}.com`,
         profile_picture_url: `https://i.pravatar.cc/150?u=${instagramAccountId}`,
+        audienceDemographics: {
+          totalAudience: seededTotalAudience,
+          updatedAt: seededUpdatedAt,
+          gender: seededGender,
+          age: seededAge,
+          countries: seededCountries,
+          cities: seededCities,
+          locales: seededLocales,
+        },
       },
     },
   });
