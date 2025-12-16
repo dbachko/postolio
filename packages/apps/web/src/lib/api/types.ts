@@ -144,7 +144,7 @@ export interface Campaign {
     duration?: { start: string; end: string };
     frequency?: string;
     themes?: string[];
-    style?: string;
+    style?: string | string[];
     postingTime?: string;
   };
   // In list views, content is omitted to reduce payload. Keep optional.

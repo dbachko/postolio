@@ -27,7 +27,7 @@ export const getFrequencyLabel = (frequency: string): string => {
   return labels[frequency] || frequency;
 };
 
-export const getStyleLabel = (style: string): string => {
+export const getStyleLabel = (style: unknown): string => {
   const labels: Record<string, string> = {
     modern: 'Modern & Minimalist',
     vibrant: 'Vibrant & Colorful',
@@ -36,5 +36,17 @@ export const getStyleLabel = (style: string): string => {
     luxury: 'Luxury & Premium',
     vintage: 'Vintage & Retro',
   };
-  return labels[style] || style;
+  if (Array.isArray(style)) {
+    const cleaned = style
+      .map((s) => (typeof s === 'string' ? s.trim() : ''))
+      .filter((s) => s.length > 0);
+    if (cleaned.length === 0) return '—';
+    return cleaned.map((s) => labels[s] || s).join(', ');
+  }
+  if (typeof style === 'string') {
+    const trimmed = style.trim();
+    if (!trimmed) return '—';
+    return labels[trimmed] || trimmed;
+  }
+  return '—';
 };

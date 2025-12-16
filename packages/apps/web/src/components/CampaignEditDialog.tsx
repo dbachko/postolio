@@ -26,6 +26,9 @@ import { getStoredCampaignColor, setStoredCampaignColor } from '@/utils/campaign
 import { campaign as campaignApi, type Campaign } from '../lib/api';
 import { GoalsListInput } from './campaign-wizard/shared/GoalsListInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBrandStore } from '@/stores/brandStore';
+import { formatInTimeZone } from 'date-fns-tz';
+import { parseISO } from 'date-fns';
 
 interface CampaignEditDialogProps {
   open: boolean;
@@ -102,12 +105,64 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
   }
 }
 
+function toDateInputValue(value: unknown, timezone?: string): string {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    if (timezone) return formatInTimeZone(value, timezone, 'yyyy-MM-dd');
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    try {
+      const date = parseISO(trimmed);
+      if (Number.isNaN(date.getTime())) return '';
+      if (timezone) return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+      return date.toISOString().slice(0, 10);
+    } catch {
+      const date = new Date(trimmed);
+      if (Number.isNaN(date.getTime())) return '';
+      if (timezone) return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+      return date.toISOString().slice(0, 10);
+    }
+  }
+  return '';
+}
+
+function toSelectableStyleValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    const cleaned = value.map((v) => (typeof v === 'string' ? v.trim() : '')).filter(Boolean);
+    return cleaned.join('; ');
+  }
+  if (typeof value === 'string') return value.trim();
+  return '';
+}
+
+function normalizeOptionValue(
+  current: string,
+  options: Array<{ value: string; label: string }>
+): string {
+  if (!current) return '';
+  const byValue = options.find((o) => o.value === current);
+  if (byValue) return byValue.value;
+  const byLabel = options.find((o) => o.label.toLowerCase() === current.toLowerCase());
+  return byLabel ? byLabel.value : current;
+}
+
 export function CampaignEditDialog({
   open,
   onOpenChange,
   campaign,
   onSaved,
 }: CampaignEditDialogProps) {
+  const brands = useBrandStore((s) => s.brands);
+  const brandTimezone = useMemo(() => {
+    const brand = brands.find((b) => b.id === campaign.brandId);
+    return brand?.postingTimezone || undefined;
+  }, [brands, campaign.brandId]);
+
   const [name, setName] = useState(campaign.name);
   // Predefined hex palette (Tailwind 300 tones)
   // IMPORTANT: memoize to avoid recreating each render which caused an effect loop
@@ -132,12 +187,20 @@ export function CampaignEditDialog({
     getStableColorFromId(campaign.id) ||
     palette[0];
   const [color, setColor] = useState<string>(initialColor);
-  const [startDate, setStartDate] = useState<string>(campaign.config?.duration?.start || '');
-  const [endDate, setEndDate] = useState<string>(campaign.config?.duration?.end || '');
-  const [frequency, setFrequency] = useState<string>(campaign.config?.frequency || '');
+  const [startDate, setStartDate] = useState<string>(
+    toDateInputValue(campaign.config?.duration?.start, brandTimezone)
+  );
+  const [endDate, setEndDate] = useState<string>(
+    toDateInputValue(campaign.config?.duration?.end, brandTimezone)
+  );
+  const [frequency, setFrequency] = useState<string>(
+    normalizeOptionValue(campaign.config?.frequency || '', frequencyOptions)
+  );
   const [postingTime, setPostingTime] = useState<string>(campaign.config?.postingTime || '12:00');
   const [themes, setThemes] = useState<string>((campaign.config?.themes || []).join(', '));
-  const [style, setStyle] = useState<string>(campaign.config?.style || '');
+  const [style, setStyle] = useState<string>(
+    normalizeOptionValue(toSelectableStyleValue(campaign.config?.style), styleOptions)
+  );
   const [goals, setGoals] = useState<string[]>(
     (Array.isArray((campaign.config as any)?.goals)
       ? ((campaign.config as any)?.goals as string[])
@@ -167,12 +230,12 @@ export function CampaignEditDialog({
         getStableColorFromId(campaign.id) ||
         palette[0]
     );
-    setStartDate(campaign.config?.duration?.start || '');
-    setEndDate(campaign.config?.duration?.end || '');
-    setFrequency(campaign.config?.frequency || '');
+    setStartDate(toDateInputValue(campaign.config?.duration?.start, brandTimezone));
+    setEndDate(toDateInputValue(campaign.config?.duration?.end, brandTimezone));
+    setFrequency(normalizeOptionValue(campaign.config?.frequency || '', frequencyOptions));
     setPostingTime(campaign.config?.postingTime || '12:00');
     setThemes((campaign.config?.themes || []).join(', '));
-    setStyle(campaign.config?.style || '');
+    setStyle(normalizeOptionValue(toSelectableStyleValue(campaign.config?.style), styleOptions));
     const g = (campaign.config as any)?.goals;
     setGoals(
       Array.isArray(g)
@@ -183,24 +246,33 @@ export function CampaignEditDialog({
             .filter(Boolean)
     );
     setSeasonalityAssist((((campaign.config as any) || {}).seasonalityAssist as boolean) ?? true);
-  }, [open, campaign, palette]);
+  }, [open, campaign, palette, brandTimezone]);
 
   const onSubmit = async () => {
     if (saving) return;
     setSaving(true);
     try {
       const updates: Record<string, unknown> = {};
+      const initialStart = toDateInputValue(campaign.config?.duration?.start, brandTimezone);
+      const initialEnd = toDateInputValue(campaign.config?.duration?.end, brandTimezone);
+      const initialFrequency = normalizeOptionValue(
+        campaign.config?.frequency || '',
+        frequencyOptions
+      );
+      const initialStyle = normalizeOptionValue(
+        toSelectableStyleValue(campaign.config?.style),
+        styleOptions
+      );
 
       // Always allow name if permitted
       if (perms.name && name !== campaign.name) updates.name = name.trim();
 
       // Config-related updates if permitted
       if (perms.dates) {
-        if (startDate && startDate !== campaign.config?.duration?.start)
-          updates.startDate = startDate;
-        if (endDate && endDate !== campaign.config?.duration?.end) updates.endDate = endDate;
+        if (startDate && startDate !== initialStart) updates.startDate = startDate;
+        if (endDate && endDate !== initialEnd) updates.endDate = endDate;
       }
-      if (perms.frequency && frequency && frequency !== campaign.config?.frequency) {
+      if (perms.frequency && frequency && frequency !== initialFrequency) {
         updates.frequency = frequency;
       }
       if (perms.postingTime && postingTime && postingTime !== campaign.config?.postingTime) {
@@ -215,7 +287,7 @@ export function CampaignEditDialog({
           updates.themes = list;
         }
       }
-      if (perms.style && style !== (campaign.config?.style || '')) {
+      if (perms.style && style !== initialStyle) {
         updates.style = style;
       }
       // Color is a frontend-only preference for now; track change and persist locally
@@ -267,94 +339,166 @@ export function CampaignEditDialog({
     }
   };
 
-  const disabledMsg = perms.reason;
+  const disabledMsg = perms.all
+    ? 'Themes/style changes may regenerate preview content.'
+    : perms.reason;
+  const styleHasCurrent = !!style && !styleOptions.some((opt) => opt.value === style);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Edit Campaign</DialogTitle>
-          <DialogDescription>
-            {disabledMsg}
-            {perms.all ? (
-              <span className="text-muted-foreground ml-1">
-                Changing themes or style may regenerate preview content.
-              </span>
-            ) : null}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-xl">
+        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+          <DialogHeader>
+            <DialogTitle>Edit Campaign</DialogTitle>
+            <DialogDescription>{disabledMsg}</DialogDescription>
+          </DialogHeader>
 
-        <div className="grid gap-4 py-2">
-          <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={!perms.name}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <Label htmlFor="startDate">Start Date</Label>
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={!perms.name}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={!perms.dates ? 'cursor-not-allowed' : ''}>
+                        <Input
+                          id="startDate"
+                          type="date"
+                          placeholder="YYYY-MM-DD (optional)"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          disabled={!perms.dates}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    {!perms.dates ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="endDate">End Date</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={!perms.dates ? 'cursor-not-allowed' : ''}>
+                        <Input
+                          id="endDate"
+                          type="date"
+                          placeholder="YYYY-MM-DD (optional)"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          disabled={!perms.dates}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    {!perms.dates ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="frequency">Frequency</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={!perms.frequency ? 'cursor-not-allowed' : ''}>
+                        <Select
+                          value={frequency || undefined}
+                          onValueChange={(v) => setFrequency(v)}
+                          disabled={!perms.frequency}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select frequency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {frequencyOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TooltipTrigger>
+                    {!perms.frequency ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="postingTime">Posting Time</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={!perms.postingTime ? 'cursor-not-allowed' : ''}>
+                        <Input
+                          id="postingTime"
+                          type="time"
+                          value={postingTime}
+                          onChange={(e) => setPostingTime(e.target.value)}
+                          disabled={!perms.postingTime}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    {!perms.postingTime ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="themes">Themes (comma separated)</Label>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className={!perms.dates ? 'cursor-not-allowed' : ''}>
-                      <Input
-                        id="startDate"
-                        type="date"
-                        placeholder="YYYY-MM-DD (optional)"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        disabled={!perms.dates}
+                    <div className={!perms.themes ? 'cursor-not-allowed' : ''}>
+                      <Textarea
+                        id="themes"
+                        value={themes}
+                        onChange={(e) => setThemes(e.target.value)}
+                        disabled={!perms.themes}
+                        placeholder="e.g. Product launch, Summer sale"
+                        rows={2}
                       />
                     </div>
                   </TooltipTrigger>
-                  {!perms.dates ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                  {!perms.themes ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="endDate">End Date</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className={!perms.dates ? 'cursor-not-allowed' : ''}>
-                      <Input
-                        id="endDate"
-                        type="date"
-                        placeholder="YYYY-MM-DD (optional)"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        disabled={!perms.dates}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  {!perms.dates ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="frequency">Frequency</Label>
+              <Label htmlFor="style">Style</Label>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className={!perms.frequency ? 'cursor-not-allowed' : ''}>
+                    <div className={!perms.style ? 'cursor-not-allowed' : ''}>
                       <Select
-                        value={frequency || undefined}
-                        onValueChange={(v) => setFrequency(v)}
-                        disabled={!perms.frequency}
+                        value={style || undefined}
+                        onValueChange={(v) => setStyle(v)}
+                        disabled={!perms.style}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select frequency" />
+                          <SelectValue placeholder="Select style" />
                         </SelectTrigger>
                         <SelectContent>
-                          {frequencyOptions.map((opt) => (
+                          {styleHasCurrent ? (
+                            <SelectItem value={style} className="text-muted-foreground">
+                              Current: {style}
+                            </SelectItem>
+                          ) : null}
+                          {styleOptions.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>
@@ -363,147 +507,93 @@ export function CampaignEditDialog({
                       </Select>
                     </div>
                   </TooltipTrigger>
-                  {!perms.frequency ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="postingTime">Posting Time</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className={!perms.postingTime ? 'cursor-not-allowed' : ''}>
-                      <Input
-                        id="postingTime"
-                        type="time"
-                        value={postingTime}
-                        onChange={(e) => setPostingTime(e.target.value)}
-                        disabled={!perms.postingTime}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  {!perms.postingTime ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                  {!perms.style ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
                 </Tooltip>
               </TooltipProvider>
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="themes">Themes (comma separated)</Label>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className={!perms.themes ? 'cursor-not-allowed' : ''}>
-                    <Textarea
-                      id="themes"
-                      value={themes}
-                      onChange={(e) => setThemes(e.target.value)}
-                      disabled={!perms.themes}
-                      placeholder="e.g. Product launch, Summer sale"
-                      rows={2}
-                    />
-                  </div>
-                </TooltipTrigger>
-                {!perms.themes ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="style">Style</Label>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className={!perms.style ? 'cursor-not-allowed' : ''}>
-                    <Select
-                      value={style || undefined}
-                      onValueChange={(v) => setStyle(v)}
-                      disabled={!perms.style}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select style" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {styleOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TooltipTrigger>
-                {!perms.style ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-
-        <div className="grid gap-2">
-          <Label>Goals</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className={!perms.all ? 'cursor-not-allowed' : ''}>
-                  <GoalsListInput goals={goals} onChange={setGoals} disabled={!perms.all} />
-                </div>
-              </TooltipTrigger>
-              {!perms.all ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        <div className="grid grid-cols-2 items-center gap-2">
-          <div>
-            <Label>Seasonality Assistance</Label>
-            <div className="text-muted-foreground text-xs">Use seasons/holidays when relevant</div>
-          </div>
-          <div className="flex justify-end">
+            <Label>Goals</Label>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className={!perms.all ? 'cursor-not-allowed' : ''}>
-                    <Switch
-                      checked={seasonalityAssist}
-                      onCheckedChange={(v) => setSeasonalityAssist(!!v)}
-                      disabled={!perms.all}
-                    />
+                    <GoalsListInput goals={goals} onChange={setGoals} disabled={!perms.all} />
                   </div>
                 </TooltipTrigger>
                 {!perms.all ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
               </Tooltip>
             </TooltipProvider>
           </div>
-        </div>
 
-        {/* Calendar highlight color (compact, less prominent) */}
-        <div className="mt-3 grid gap-1">
-          <Label className="text-muted-foreground text-xs">Calendar highlight color</Label>
-          <Select value={color} onValueChange={(v) => perms.color && setColor(v)}>
-            <SelectTrigger className="h-8 w-48 justify-between px-2 py-1 text-xs">
-              <div
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-                style={{ backgroundColor: color, color: 'hsl(var(--foreground))', opacity: 0.85 }}
-              >
-                {campaign.name || 'Preview'}
+          <div className="grid grid-cols-2 items-center gap-2">
+            <div>
+              <Label>Seasonality Assistance</Label>
+              <div className="text-muted-foreground text-xs">
+                Use seasons/holidays when relevant
               </div>
-            </SelectTrigger>
-            <SelectContent className="w-56">
-              {palette.map((hex) => (
-                <SelectItem key={hex} value={hex} className="justify-start">
-                  <span
-                    className="flex items-center justify-start rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    style={{ backgroundColor: hex, color: 'hsl(var(--foreground))', opacity: 0.85 }}
-                  >
-                    {campaign.name || 'Preview'}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            </div>
+            <div className="flex justify-end">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={!perms.all ? 'cursor-not-allowed' : ''}>
+                      <Switch
+                        checked={seasonalityAssist}
+                        onCheckedChange={(v) => setSeasonalityAssist(!!v)}
+                        disabled={!perms.all}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {!perms.all ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+
+          {/* Calendar highlight color (compact, less prominent) */}
+          <div className="mt-3 grid gap-1 pb-4">
+            <Label className="text-muted-foreground text-xs">Calendar highlight color</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                style={{
+                  backgroundColor: color,
+                  borderColor: 'color-mix(in srgb, var(--border) 55%, transparent)',
+                  color: 'hsl(var(--foreground))',
+                  opacity: 0.9,
+                }}
+              >
+                <span className="block max-w-[100px] truncate">{campaign.name || 'Preview'}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {palette.map((hex) => {
+                  const selected = hex === color;
+                  return (
+                    <button
+                      key={hex}
+                      type="button"
+                      onClick={() => perms.color && setColor(hex)}
+                      disabled={!perms.color}
+                      className={[
+                        'ring-offset-background focus-visible:ring-ring inline-flex h-6 w-6 items-center justify-center rounded-full border transition-shadow focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+                        selected ? 'ring-ring shadow-sm ring-2' : 'hover:shadow-sm',
+                      ].join(' ')}
+                      style={{
+                        backgroundColor: hex,
+                        borderColor: 'color-mix(in srgb, var(--border) 65%, transparent)',
+                      }}
+                      aria-label={`Set calendar highlight color to ${hex}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <DialogFooter className="bg-background sticky bottom-0 pt-3">
+        <DialogFooter className="bg-background border-border shrink-0 flex-row justify-end gap-2 border-t px-1 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
