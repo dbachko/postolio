@@ -1,45 +1,18 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analytics } from '../lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart, AlertCircle, Loader2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { OverviewTab } from './campaign-analytics/OverviewTab';
-import { PerformanceTab } from './campaign-analytics/PerformanceTab';
-import { RecommendationsTab } from './campaign-analytics/RecommendationsTab';
-import { ROITab } from './campaign-analytics/ROITab';
 
 interface CampaignAnalyticsProps {
   campaignId: string;
-  campaignName: string;
-  timezone?: string;
 }
 
-export function CampaignAnalytics({ campaignId, campaignName, timezone }: CampaignAnalyticsProps) {
-  const [selectedTab, setSelectedTab] = useState('overview');
-
+export function CampaignAnalytics({ campaignId }: CampaignAnalyticsProps) {
   // Fetch campaign metrics (v2 path, legacy-compatible shape)
   const metricsQuery = useQuery({
     queryKey: ['campaign-metrics', campaignId],
     queryFn: () => analytics.getCampaignMetrics(campaignId),
-    enabled: !!campaignId,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  // Fetch optimization recommendations
-  const recommendationsQuery = useQuery({
-    queryKey: ['campaign-recommendations', campaignId],
-    queryFn: () => analytics.getCampaignRecommendations(campaignId),
-    enabled: !!campaignId,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  // Fetch ROI data
-  const roiQuery = useQuery({
-    queryKey: ['campaign-roi', campaignId],
-    queryFn: () => analytics.getCampaignROI(campaignId),
     enabled: !!campaignId,
     retry: false,
     refetchOnWindowFocus: false,
@@ -71,9 +44,6 @@ export function CampaignAnalytics({ campaignId, campaignName, timezone }: Campai
 
   const metrics = metricsQuery.data?.data;
 
-  const recommendations = recommendationsQuery.data?.data || [];
-  const roi = roiQuery.data?.data;
-
   if (!metrics) {
     return (
       <Card>
@@ -84,49 +54,5 @@ export function CampaignAnalytics({ campaignId, campaignName, timezone }: Campai
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart className="h-5 w-5" />
-            {campaignName} Analytics
-          </CardTitle>
-          <CardDescription>Performance metrics and insights for your campaign</CardDescription>
-        </CardHeader>
-      </Card>
-
-      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="recommendations">Insights</TabsTrigger>
-          <TabsTrigger value="roi">ROI</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          <OverviewTab metrics={metrics} />
-        </TabsContent>
-
-        <TabsContent value="performance" className="space-y-6">
-          <PerformanceTab
-            topHashtags={metrics.topHashtags || []}
-            performanceByDate={metrics.performanceByDate || []}
-            timezone={timezone}
-          />
-        </TabsContent>
-
-        <TabsContent value="recommendations" className="space-y-6">
-          <RecommendationsTab
-            recommendations={recommendations}
-            isLoading={recommendationsQuery.isLoading}
-          />
-        </TabsContent>
-
-        <TabsContent value="roi" className="space-y-6">
-          <ROITab roi={roi} isLoading={roiQuery.isLoading} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+  return <OverviewTab metrics={metrics} />;
 }

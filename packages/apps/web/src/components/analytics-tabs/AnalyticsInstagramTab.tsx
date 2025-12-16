@@ -102,15 +102,6 @@ export function AnalyticsInstagramTab({
             />
           )}
 
-          {/* Activity Heatmap */}
-          {igAudience?.activityHeatmap && (
-            <ActivityHeatmap
-              heatmap={igAudience.activityHeatmap}
-              bestTimes={igAudience.bestPostingTimes}
-              loading={igLoading}
-            />
-          )}
-
           {/* Time Series Charts */}
           {igSeries && igSeries.length > 0 ? (
             <MultiMetricTimeSeriesChart
@@ -141,6 +132,15 @@ export function AnalyticsInstagramTab({
               window.location.href = `/posts/${contentId}`;
             }}
           />
+
+          {/* Preferred Posting Times */}
+          {igAudience?.activityHeatmap && (
+            <ActivityHeatmap
+              heatmap={igAudience.activityHeatmap}
+              bestTimes={igAudience.bestPostingTimes}
+              loading={igLoading}
+            />
+          )}
         </>
       )}
     </div>

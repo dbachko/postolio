@@ -3,19 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Pause, Play, Edit, Calendar, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CampaignAnalytics } from '@/components/CampaignAnalytics';
-import PreferredPostingTime from '@/components/PreferredPostingTime';
 import { CampaignEditDialog } from '@/components/CampaignEditDialog';
-import { ContentCard } from '@/components/ContentCard';
+import { CampaignPostsGrid } from '@/components/CampaignPostsGrid';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Campaign } from '@/lib/api';
-import { useEffect, useMemo, useState } from 'react';
-import { useTimezone } from '@/contexts/TimezoneContext';
+import { useState } from 'react';
 import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
-// Week 3: Enhanced campaign analytics components
-import { CampaignTimeline } from '@/components/analytics/CampaignTimeline';
-import { useQuery } from '@tanstack/react-query';
-import { analytics } from '@/lib/api';
-import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 
 interface Props {
   campaign?: Campaign;
@@ -42,66 +35,9 @@ export function CampaignDetails({
   startCampaignLoading = false,
   startCampaignLoadingId = null,
 }: Props) {
-  const { timezone: userTz, getBrandTimezone } = useTimezone();
-  const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const goToContentWithFilters = useNavigateWithFilters();
   // Must be declared before any early returns to keep hooks order stable
   const [editOpen, setEditOpen] = useState(false);
-
-  // Week 3: Fetch enhanced campaign metrics
-  const metricsQuery = useQuery({
-    queryKey: ['campaign-metrics', campaign?.id],
-    queryFn: () => analytics.getCampaignMetrics(campaign!.id),
-    enabled: !!campaign?.id,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const primaryAssetIds = useMemo(
-    () => (campaign?.content ?? []).map((item) => item.primaryAssetId),
-    [campaign?.content]
-  );
-  const assetsQuery = useAssetsByIds(primaryAssetIds);
-  const assetsById = assetsQuery.data ?? {};
-
-  useEffect(() => {
-    let mounted = true;
-    const resolveBrandTimezone = async () => {
-      if (!campaign?.brandId) return;
-      try {
-        const tz = await getBrandTimezone(campaign.brandId);
-        if (mounted && tz) setBrandTimezone(tz);
-      } catch {
-        if (mounted) setBrandTimezone(userTz);
-      }
-    };
-    void resolveBrandTimezone();
-    return () => {
-      mounted = false;
-    };
-  }, [campaign?.brandId, getBrandTimezone, userTz]);
-  const renderSkeletonGrid = (count = 6) => (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-card overflow-hidden rounded-lg shadow-md">
-          <Skeleton className="h-48 w-full" />
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-5/6" />
-            <div className="flex gap-2">
-              <Skeleton className="h-5 w-16" />
-              <Skeleton className="h-5 w-20" />
-              <Skeleton className="h-5 w-12" />
-            </div>
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-6 w-24" />
-              <Skeleton className="h-8 w-20" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 
   if (isLoading) {
     return (
@@ -127,7 +63,9 @@ export function CampaignDetails({
               <Skeleton className="h-6 w-24" />
             </CardTitle>
           </CardHeader>
-          <CardContent>{renderSkeletonGrid(6)}</CardContent>
+          <CardContent>
+            <Skeleton className="h-[460px] w-full" />
+          </CardContent>
         </Card>
       </div>
     );
@@ -223,67 +161,26 @@ export function CampaignDetails({
               </AlertDescription>
             </Alert>
           )}
-          <CampaignAnalytics
-            campaignId={campaign.id}
-            campaignName={campaign.name}
-            timezone={brandTimezone}
-          />
+          <CampaignAnalytics campaignId={campaign.id} />
         </CardContent>
       </Card>
 
-      {/* Week 3: Campaign Timeline */}
-      {metricsQuery.data?.data?.postsTimeline &&
-        metricsQuery.data.data.postsTimeline.length > 0 && (
-          <CampaignTimeline
-            posts={metricsQuery.data.data.postsTimeline}
-            startDate={campaign.createdAt}
-            endDate={undefined}
-            loading={metricsQuery.isLoading}
-            onPostClick={(contentId) => {
-              window.location.href = `/content/${contentId}`;
-            }}
-          />
-        )}
-
-      {/* Preferred Posting Times for this brand */}
-      <PreferredPostingTime brandId={campaign.brandId} />
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle>Posts</CardTitle>
-            {!capacityFull && (!campaign.content || campaign.content.length === 0) && (
-              <Button
-                size="sm"
-                onClick={onFillWindow}
-                disabled={!!fillWindowLoading}
-                className="gap-2"
-              >
-                {fillWindowLoading ? 'Filling…' : 'Fill Window'}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isGenerating ? (
-            renderSkeletonGrid(6)
-          ) : Array.isArray(campaign.content) && campaign.content.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {campaign.content.map((item) => (
-                <ContentCard
-                  key={item.id}
-                  content={item as any}
-                  brandId={campaign.brandId}
-                  primaryAsset={item.primaryAssetId ? assetsById[item.primaryAssetId] : null}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-muted-foreground py-6 text-center text-sm">
-              No posts yet for this campaign
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <CampaignPostsGrid
+        posts={campaign.content ?? []}
+        isGenerating={isGenerating}
+        action={
+          !capacityFull && (!campaign.content || campaign.content.length === 0) ? (
+            <Button
+              size="sm"
+              onClick={onFillWindow}
+              disabled={!!fillWindowLoading}
+              className="gap-2"
+            >
+              {fillWindowLoading ? 'Filling…' : 'Fill Window'}
+            </Button>
+          ) : null
+        }
+      />
       <CampaignEditDialog
         campaign={campaign}
         open={editOpen}
