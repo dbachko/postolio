@@ -7,8 +7,80 @@ import {
   useRefreshInstagramBestTime,
 } from '@/hooks/useBestTime';
 import type { BestTimePayload } from '@/lib/api/types';
+import { cn } from '@/lib/utils';
 
-function Heatmap({ heatmap }: { heatmap: BestTimePayload['heatmap'] }) {
+type HighlightCell = {
+  title: string;
+};
+
+function getHighlightCells(data: BestTimePayload): Record<string, HighlightCell[]> {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const fmtLocal = new Intl.DateTimeFormat('en-US', {
+    timeZone: data.timezone,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const fmtTimeOnly = new Intl.DateTimeFormat('en-US', {
+    timeZone: data.timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  const getLocalParts = (date: Date) => {
+    const parts = fmtLocal.formatToParts(date);
+    const weekday = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun';
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+    const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+    const dayIndex = Math.max(0, days.indexOf(weekday));
+    return { dayIndex, hour, minute, weekday };
+  };
+
+  const windowsByDay = data.topWindows.reduce<Record<number, BestTimePayload['topWindows']>>(
+    (acc, window) => {
+      const start = new Date(window.startUTC);
+      const { dayIndex } = getLocalParts(start);
+      acc[dayIndex] = acc[dayIndex] || [];
+      acc[dayIndex].push(window);
+      return acc;
+    },
+    {}
+  );
+
+  const byCell: Record<string, HighlightCell[]> = {};
+
+  for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+    const topTwo = (windowsByDay[dayIndex] || [])
+      .slice()
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2);
+    for (const window of topTwo) {
+      const start = new Date(window.startUTC);
+      const end = new Date(start.getTime() + window.durationMinutes * 60 * 1000);
+      const midpoint = new Date(start.getTime() + (window.durationMinutes * 60 * 1000) / 2);
+
+      const mid = getLocalParts(midpoint);
+      const cellKey = `${mid.dayIndex}-${mid.hour}`;
+      const title = `${mid.weekday} • ${fmtTimeOnly.format(start)}–${fmtTimeOnly.format(end)} • score ${window.score.toFixed(2)}`;
+
+      byCell[cellKey] = byCell[cellKey] || [];
+      byCell[cellKey].push({ title });
+    }
+  }
+
+  return byCell;
+}
+
+function Heatmap({
+  heatmap,
+  highlightCells,
+}: {
+  heatmap: BestTimePayload['heatmap'];
+  highlightCells: Record<string, HighlightCell[]>;
+}) {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   return (
     <div className="space-y-2">
@@ -19,86 +91,32 @@ function Heatmap({ heatmap }: { heatmap: BestTimePayload['heatmap'] }) {
             className="grid flex-1 gap-[2px]"
             style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}
           >
-            {row.map((value, hourIndex) => (
-              <div
-                key={hourIndex}
-                className="border-border bg-muted h-4 w-full rounded-[2px] border"
-                style={{ opacity: 0.18 + Math.min(1, Math.max(0, value)) * 0.6 }}
-                title={`${String(hourIndex).padStart(2, '0')}:00 • score ${value.toFixed(2)}`}
-              />
-            ))}
+            {row.map((value, hourIndex) => {
+              const cellKey = `${dayIndex}-${hourIndex}`;
+              const highlights = highlightCells[cellKey] || [];
+              const isHighlighted = highlights.length > 0;
+              const title = [
+                `${String(hourIndex).padStart(2, '0')}:00 • score ${value.toFixed(2)}`,
+                ...highlights.map((h) => `Top window: ${h.title}`),
+              ].join('\n');
+
+              return (
+                <div
+                  key={hourIndex}
+                  className={cn(
+                    'border-border bg-muted h-4 w-full rounded-[2px] border',
+                    isHighlighted &&
+                      'border-primary ring-primary ring-offset-background ring-2 ring-offset-1'
+                  )}
+                  style={{ opacity: 0.18 + Math.min(1, Math.max(0, value)) * 0.6 }}
+                  title={title}
+                />
+              );
+            })}
           </div>
         </div>
       ))}
       <div className="text-muted-foreground mt-1 text-xs">0 → 23h (local time)</div>
-    </div>
-  );
-}
-
-function TopWindows({ data }: { data: BestTimePayload }) {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const fmtDay = new Intl.DateTimeFormat('en-US', { timeZone: data.timezone, weekday: 'short' });
-  const fmtDateTime = new Intl.DateTimeFormat('en-US', {
-    timeZone: data.timezone,
-    month: 'short',
-    day: '2-digit',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  const fmtTimeOnly = new Intl.DateTimeFormat('en-US', {
-    timeZone: data.timezone,
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-
-  const grouped = data.topWindows
-    .slice()
-    .sort((a, b) => b.score - a.score)
-    .reduce<Record<number, BestTimePayload['topWindows']>>((acc, window) => {
-      const dayLabel = fmtDay.format(new Date(window.startUTC));
-      const dayIndex = days.indexOf(dayLabel);
-      const idx = dayIndex >= 0 ? dayIndex : 0;
-      acc[idx] = acc[idx] || [];
-      acc[idx].push(window);
-      return acc;
-    }, {});
-
-  return (
-    <div className="space-y-2">
-      {days.map((label, dayIndex) => {
-        const items = grouped[dayIndex] || [];
-        if (!items.length) return null;
-        return (
-          <div key={label} className="space-y-2">
-            <div className="text-muted-foreground text-xs">{label}</div>
-            {items.map((window, idx) => {
-              const start = new Date(window.startUTC);
-              const end = new Date(start.getTime() + window.durationMinutes * 60 * 1000);
-              return (
-                <div
-                  key={`${dayIndex}-${idx}`}
-                  className="flex items-center justify-between rounded-md border p-2"
-                >
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">
-                      {fmtDateTime.format(start)}–{fmtTimeOnly.format(end)}
-                    </div>
-                    <div className="text-muted-foreground text-xs">
-                      {window.durationMinutes} min window · score {window.score.toFixed(2)} · source{' '}
-                      {data.source}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline">
-                      Use This Time
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -134,11 +152,7 @@ export function PreferredPostingTime({ brandId }: { brandId: string }) {
       <CardContent>
         {isLoading && (
           <div className="space-y-4">
-            <Skeleton className="h-24 w-full" />
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
+            <Skeleton className="h-32 w-full" />
           </div>
         )}
         {isError && (
@@ -147,22 +161,18 @@ export function PreferredPostingTime({ brandId }: { brandId: string }) {
           </div>
         )}
         {!isLoading && !isError && data && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div>
-              <div className="text-sm font-medium">Weekly Heatmap</div>
-              <div className="text-muted-foreground mb-2 text-xs">
-                Local timezone: {data.timezone} · Generated{' '}
-                {new Date(data.generatedAt).toLocaleString()}
+          <div>
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div className="text-sm font-medium">Weekly Heatmap</div>
+                <div className="text-muted-foreground mb-2 text-xs">
+                  Local timezone: {data.timezone} · Generated{' '}
+                  {new Date(data.generatedAt).toLocaleString()}
+                </div>
               </div>
-              <Heatmap heatmap={data.heatmap} />
+              <div className="text-muted-foreground text-xs">Top 2 windows/day highlighted</div>
             </div>
-            <div>
-              <div className="text-sm font-medium">Top Time Windows</div>
-              <div className="text-muted-foreground mb-2 text-xs">
-                Highlights of the best {data.topWindows?.[0]?.durationMinutes ?? 30}‑minute windows
-              </div>
-              <TopWindows data={data} />
-            </div>
+            <Heatmap heatmap={data.heatmap} highlightCells={getHighlightCells(data)} />
           </div>
         )}
         {!isLoading && !isError && !data && (
