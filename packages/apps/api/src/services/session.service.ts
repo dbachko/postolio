@@ -147,6 +147,25 @@ export class SessionService {
     });
   }
 
+  static async getUserSessionsByRefreshTokenHashes(
+    userId: string,
+    refreshTokenHashes: string[]
+  ): Promise<Session[]> {
+    if (refreshTokenHashes.length === 0) return [];
+
+    return prisma.session.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gte: new Date() },
+        refreshTokenHash: { in: refreshTokenHashes },
+      },
+      orderBy: {
+        lastActivityAt: 'desc',
+      },
+    });
+  }
+
   static async getSessionById(sessionId: string, userId: string): Promise<Session | null> {
     return prisma.session.findFirst({
       where: {

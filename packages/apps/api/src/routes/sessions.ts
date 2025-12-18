@@ -5,7 +5,8 @@ import { prisma } from '../config/database.js';
 import { z } from 'zod';
 import { validateAndSanitize } from '../middleware/validation.js';
 import type { Session } from '@postolio/database';
-import { getClientIp, parseDeviceName } from '../utils/request-info.js';
+import { parseDeviceName } from '../utils/request-info.js';
+import { createHash } from 'crypto';
 
 // Request schemas
 const updateDeviceNameSchema = z.object({
@@ -14,37 +15,42 @@ const updateDeviceNameSchema = z.object({
 
 type UpdateDeviceNameInput = z.infer<typeof updateDeviceNameSchema>;
 
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
+  const getActiveSessions = async (userId: string): Promise<Session[]> => {
+    try {
+      const tokens = await RefreshTokenService.getUserTokens(userId);
+      const hashes = Array.from(new Set(tokens.map((t) => hashToken(t.token))));
+      if (hashes.length === 0) return await SessionService.getUserSessions(userId);
+      return await SessionService.getUserSessionsByRefreshTokenHashes(userId, hashes);
+    } catch (error) {
+      fastify.log.debug(
+        { err: error },
+        'Failed to load refresh tokens for session filtering; falling back to DB sessions'
+      );
+      return await SessionService.getUserSessions(userId);
+    }
+  };
+
   // Get all active sessions for current user
   fastify.get('/sessions', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     try {
       const userId = request.user!.id;
 
-      const sessions = await SessionService.getUserSessions(userId);
+      const sessions = await getActiveSessions(userId);
 
-      // Get current session ID from refresh token cookie
-      const refreshToken = request.cookies.refresh_token;
-      let currentSessionId: string | null = null;
+      // Primary: session id claim from the access token
+      let currentSessionId: string | null = request.user?.sid || null;
 
-      if (refreshToken) {
-        const currentSession = await SessionService.findSessionByToken(refreshToken);
-        currentSessionId = currentSession?.id || null;
-      }
-
-      // Fallback: when refresh cookie is path-scoped to /api/auth/refresh, it won't be
-      // present on this endpoint. Try to infer current session by IP/User-Agent.
-      if (!currentSessionId && sessions.length > 0) {
-        const ua = request.headers['user-agent'];
-        const ip = getClientIp(request);
-        const match = sessions
-          .filter(
-            (s: Session) => (ua ? s.userAgent === ua : true) && (ip ? s.ipAddress === ip : true)
-          )
-          .sort(
-            (a: Session, b: Session) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()
-          )[0];
-        if (match) {
-          currentSessionId = match.id;
+      // Fallback: try refresh token cookie (may be path-scoped and absent here)
+      if (!currentSessionId) {
+        const refreshToken = request.cookies.refresh_token;
+        if (refreshToken) {
+          const currentSession = await SessionService.findSessionByToken(refreshToken);
+          currentSessionId = currentSession?.id || null;
         }
       }
 
@@ -129,6 +135,12 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Check if this is the current session
+        if (request.user?.sid === id) {
+          return reply
+            .code(400)
+            .send({ error: 'Cannot revoke current session. Use logout instead.' });
+        }
+        // Fallback to refresh cookie when an older token is missing sid
         const refreshToken = request.cookies.refresh_token;
         if (refreshToken) {
           const currentSession = await SessionService.findSessionByToken(refreshToken);
@@ -168,14 +180,20 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
 
         // Get current session ID
-        const refreshToken = request.cookies.refresh_token;
-        let currentSessionId: string | undefined;
+        let currentSessionId: string | undefined = request.user?.sid;
         let currentSessionHash: string | undefined;
 
-        if (refreshToken) {
-          const currentSession = await SessionService.findSessionByToken(refreshToken);
-          currentSessionId = currentSession?.id;
-          currentSessionHash = currentSession?.refreshTokenHash ?? undefined;
+        if (currentSessionId) {
+          const current = await SessionService.getSessionById(currentSessionId, userId);
+          currentSessionHash = current?.refreshTokenHash ?? undefined;
+        } else {
+          // Fallback to refresh cookie if an older token is missing sid
+          const refreshToken = request.cookies.refresh_token;
+          if (refreshToken) {
+            const currentSession = await SessionService.findSessionByToken(refreshToken);
+            currentSessionId = currentSession?.id;
+            currentSessionHash = currentSession?.refreshTokenHash ?? undefined;
+          }
         }
 
         // Revoke all sessions except current
@@ -239,7 +257,7 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
 
         // Get active sessions
-        const sessions = await SessionService.getUserSessions(userId);
+        const sessions = await getActiveSessions(userId);
 
         // Find most recent login
         const mostRecentSession = sessions.sort(
@@ -322,14 +340,35 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           take: 10,
         });
 
-        const loginHistory = sessions.map((session: Session) => ({
-          timestamp: session.createdAt,
-          device: session.deviceName || parseDeviceName(session.userAgent) || 'Unknown Device',
-          location: session.location,
-          ipAddress: session.ipAddress,
-          status: session.revokedAt ? 'revoked' : 'active',
-          revokedReason: session.revokedReason,
-        }));
+        let tokensLoaded = false;
+        let activeRefreshTokenHashes = new Set<string>();
+        try {
+          const tokens = await RefreshTokenService.getUserTokens(userId);
+          tokensLoaded = true;
+          activeRefreshTokenHashes = new Set(tokens.map((t) => hashToken(t.token)));
+        } catch (error) {
+          fastify.log.debug(
+            { err: error },
+            'Failed to load refresh tokens for login history status; falling back to DB status'
+          );
+        }
+
+        const now = new Date();
+        const loginHistory = sessions.map((session: Session) => {
+          const tokenPresent = tokensLoaded
+            ? activeRefreshTokenHashes.has(session.refreshTokenHash)
+            : true;
+          const isActive = !session.revokedAt && session.expiresAt >= now && tokenPresent;
+
+          return {
+            timestamp: session.createdAt,
+            device: session.deviceName || parseDeviceName(session.userAgent) || 'Unknown Device',
+            location: session.location,
+            ipAddress: session.ipAddress,
+            status: isActive ? 'active' : 'revoked',
+            revokedReason: session.revokedAt ? session.revokedReason : isActive ? null : 'expired',
+          };
+        });
 
         return reply.send({
           history: loginHistory,

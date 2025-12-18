@@ -24,7 +24,9 @@ export class RefreshTokenService {
   private static readonly TOKEN_LENGTH = 32;
   private static readonly TOKEN_EXPIRY_DAYS = 30;
   private static readonly FAMILY_EXPIRY_DAYS = 90; // Family tracking for 90 days
-  private static readonly MAX_GENERATIONS = 100; // Maximum rotations per family
+  // With 12-minute refreshes, 100 generations is reached in ~20 hours. Keep this high enough
+  // to avoid churn in normal usage while still providing a theoretical safety cap.
+  private static readonly MAX_GENERATIONS = 20_000; // Maximum rotations per family
 
   /**
    * Generate a new refresh token
@@ -179,13 +181,6 @@ export class RefreshTokenService {
       return null;
     }
 
-    // Check max generations
-    if (oldTokenParsed.generation >= this.MAX_GENERATIONS) {
-      // Force new family creation
-      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
-      return this.generateRefreshToken(fastify, oldTokenParsed.userId, ipAddress, userAgent);
-    }
-
     // Validate that the old token maps to an active session; if not, treat as invalid
     let session = null;
     try {
@@ -199,6 +194,80 @@ export class RefreshTokenService {
       // Ensure any lingering old token is removed and stop rotation
       await tokenStore.deleteToken(oldToken);
       return null;
+    }
+
+    // Check max generations (maintenance: reset family without creating a new DB session)
+    if (oldTokenParsed.generation >= this.MAX_GENERATIONS) {
+      const newToken = randomBytes(this.TOKEN_LENGTH).toString('hex');
+      const newFamily = randomBytes(16).toString('hex');
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + this.TOKEN_EXPIRY_DAYS);
+
+      const newTokenData: RefreshToken = {
+        token: newToken,
+        userId: oldTokenParsed.userId,
+        family: newFamily,
+        generation: 1,
+        expiresAt,
+        createdAt: new Date(),
+        ipAddress,
+        userAgent,
+      };
+
+      await tokenStore.storeToken(newTokenData, this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
+      await tokenStore.storeFamily(
+        newFamily,
+        {
+          userId: oldTokenParsed.userId,
+          currentGeneration: 1,
+          createdAt: new Date(),
+        },
+        this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
+      );
+
+      // Keep the same session; just point it at the new token and refresh activity timestamps.
+      await SessionService.updateLastActivity(session.id);
+      await SessionService.updateRefreshTokenHash(session.id, newToken);
+
+      // Retire the old family tokens/data (this is NOT a reuse event).
+      await tokenStore.deleteFamilyTokens(oldTokenParsed.family);
+
+      const user = await prisma.user.findUnique({
+        where: { id: oldTokenParsed.userId },
+        select: { id: true, email: true },
+      });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const accessToken = fastify.jwt.sign(
+        { id: user.id, email: user.email, sid: session.id }
+        // Token expiry is configured in auth plugin (default 1h)
+      );
+
+      await AuditLogger.log({
+        userId: oldTokenParsed.userId,
+        eventType: AuditEventType.REFRESH_TOKEN_ROTATED,
+        metadata: {
+          reason: 'max_generations',
+          oldFamily: oldTokenParsed.family,
+          oldGeneration: oldTokenParsed.generation,
+          newFamily,
+          newGeneration: 1,
+          ipAddress,
+          userAgent,
+          sessionId: session.id,
+        },
+        success: true,
+      });
+
+      return {
+        refreshToken: newToken,
+        accessToken,
+        family: newFamily,
+      };
     }
 
     // Generate new token in same family
@@ -234,13 +303,13 @@ export class RefreshTokenService {
       this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
     );
 
-    // Invalidate old token
-    await tokenStore.deleteToken(oldToken);
-
     // Update session last activity and refresh token hash
     await SessionService.updateLastActivity(session.id);
     // Update the stored refreshTokenHash to the new token's hash
     await SessionService.updateRefreshTokenHash(session.id, newToken);
+
+    // Invalidate old token *after* the session points at the new token, to avoid transient mismatch.
+    await tokenStore.deleteToken(oldToken);
 
     // Generate new access token (include session id if available)
     const user = await prisma.user.findUnique({
