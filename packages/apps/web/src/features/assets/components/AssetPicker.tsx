@@ -200,91 +200,103 @@ export default function AssetPicker({
             <div className="h-2" />
 
             {/* Assets Grid */}
-            {isLoading ? (
-              <div className="flex h-64 items-center justify-center">
-                <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-              </div>
-            ) : sortedAssets.length === 0 ? (
-              <div className="rounded-lg border-2 border-dashed py-12 text-center">
-                <p className="text-muted-foreground">No assets found</p>
-                <p className="text-muted-foreground mt-2 text-sm">
-                  Upload images or videos to your asset library first
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {sortedAssets.map((asset) => {
-                  const isSelected = selected.has(asset.id);
-                  const previewUrl = asset.thumbnailUrl || asset.url;
-                  const isVideo = asset.fileType === 'video';
-                  return (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      onClick={() => handleSelectAsset(asset)}
-                      onDoubleClick={() => {
-                        setSelected(new Map([[asset.id, asset]]));
-                        handleConfirm([asset]);
-                      }}
-                      className={`group relative aspect-square overflow-hidden rounded-lg border transition ${isSelected ? 'ring-primary border-primary ring-2 ring-offset-2' : 'hover:border-border/80'} `}
-                    >
-                      <div className="bg-card/80 absolute top-2 left-2 z-10 rounded-md px-1 py-1 shadow-sm backdrop-blur">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleSelectAsset(asset)}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          aria-label={isSelected ? 'Deselect asset' : 'Select asset'}
-                        />
-                      </div>
+            {(() => {
+              if (isLoading) {
+                return (
+                  <div className="flex h-64 items-center justify-center">
+                    <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+                  </div>
+                );
+              }
 
-                      <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
-                        <Badge variant="secondary" className="flex items-center gap-1">
-                          {isVideo ? (
-                            <Video className="h-3 w-3" />
-                          ) : (
-                            <ImageIcon className="h-3 w-3" />
-                          )}
-                          <span className="capitalize">{asset.fileType}</span>
-                        </Badge>
-                      </div>
+              if (sortedAssets.length === 0) {
+                return (
+                  <div className="rounded-lg border-2 border-dashed py-12 text-center">
+                    <p className="text-muted-foreground">No assets found</p>
+                    <p className="text-muted-foreground mt-2 text-sm">
+                      Upload images or videos to your asset library first
+                    </p>
+                  </div>
+                );
+              }
 
-                      {isVideo ? (
-                        <div className="relative h-full w-full">
-                          <video
-                            src={previewUrl}
-                            className="h-full w-full object-cover"
-                            muted
-                            playsInline
+              return (
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                  {sortedAssets.map((asset) => {
+                    const isSelected = selected.has(asset.id);
+                    const previewUrl = asset.thumbnailUrl || asset.url;
+                    const isVideo = asset.fileType === 'video';
+                    return (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        onClick={() => handleSelectAsset(asset)}
+                        onDoubleClick={() => {
+                          setSelected(new Map([[asset.id, asset]]));
+                          handleConfirm([asset]);
+                        }}
+                        className={`group relative aspect-square overflow-hidden rounded-lg border transition ${isSelected ? 'ring-primary border-primary ring-2 ring-offset-2' : 'hover:border-border/80'} `}
+                      >
+                        <div className="bg-card/80 absolute top-2 left-2 z-10 rounded-md px-1 py-1 shadow-sm backdrop-blur">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleSelectAsset(asset)}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            aria-label={isSelected ? 'Deselect asset' : 'Select asset'}
                           />
-                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                            <div className="rounded-full bg-black/60 p-2">
-                              <Play className="h-4 w-4 text-white" />
+                        </div>
+
+                        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            {isVideo ? (
+                              <Video className="h-3 w-3" />
+                            ) : (
+                              <ImageIcon className="h-3 w-3" />
+                            )}
+                            <span className="capitalize">{asset.fileType}</span>
+                          </Badge>
+                        </div>
+
+                        {isVideo ? (
+                          <div className="relative h-full w-full">
+                            <video
+                              src={previewUrl}
+                              className="h-full w-full object-cover"
+                              muted
+                              playsInline
+                            />
+                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                              <div className="rounded-full bg-black/60 p-2">
+                                <Play className="h-4 w-4 text-white" />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <img
+                            src={previewUrl}
+                            alt={asset.altText || asset.fileName}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        )}
+
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/60 to-transparent px-3 pt-12 pb-3 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                          <div className="flex min-w-0 flex-col gap-1 text-left">
+                            <div className="line-clamp-1 text-sm font-semibold">
+                              {asset.title || asset.fileName}
+                            </div>
+                            <div className="text-xs text-white/80">
+                              {formatBytes(asset.fileSize)}
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <img
-                          src={previewUrl}
-                          alt={asset.altText || asset.fileName}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      )}
-
-                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/60 to-transparent px-3 pt-12 pb-3 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                        <div className="flex min-w-0 flex-col gap-1 text-left">
-                          <div className="line-clamp-1 text-sm font-semibold">
-                            {asset.title || asset.fileName}
-                          </div>
-                          <div className="text-xs text-white/80">{formatBytes(asset.fileSize)}</div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             <div ref={loadMoreRef} className="h-1" />
             {isFetchingNextPage && (
               <div className="text-muted-foreground flex justify-center py-3 text-sm">

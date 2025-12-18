@@ -263,7 +263,27 @@ export const handler = async (
       throw new Error('User ID not found in schedule or event - required for token retrieval');
     }
 
-    const tokenData = await getTokenFromTokenService(brandId, userId, schedule.platform);
+    const scheduleMetadata =
+      publishableSchedule &&
+      typeof (publishableSchedule as any).metadata === 'object' &&
+      (publishableSchedule as any).metadata !== null &&
+      !Array.isArray((publishableSchedule as any).metadata)
+        ? ((publishableSchedule as any).metadata as Record<string, unknown>)
+        : null;
+
+    const socialAccountId =
+      typeof (publishableSchedule as any).socialAccountId === 'string'
+        ? String((publishableSchedule as any).socialAccountId)
+        : scheduleMetadata && typeof scheduleMetadata.socialAccountId === 'string'
+          ? String(scheduleMetadata.socialAccountId)
+          : undefined;
+
+    const tokenData = await getTokenFromTokenService(
+      brandId,
+      userId,
+      schedule.platform,
+      socialAccountId
+    );
 
     const credentials = {
       accessToken: tokenData.accessToken,
@@ -425,6 +445,7 @@ export const handler = async (
               contentId: schedule.contentId,
               brandId: schedule.brandId,
               platform: schedule.platform,
+              socialAccountId,
               platformPostId: publishResult.platformPostId,
               permalink: publishResult.platformUrl,
               publishedAt: new Date().toISOString(),
@@ -477,6 +498,15 @@ export const handler = async (
               contentId: schedule?.contentId,
               brandId: schedule?.brandId,
               platform: schedule?.platform,
+              socialAccountId:
+                typeof (schedule as any)?.socialAccountId === 'string'
+                  ? String((schedule as any).socialAccountId)
+                  : schedule &&
+                      typeof (schedule as any).metadata === 'object' &&
+                      (schedule as any).metadata !== null &&
+                      typeof (schedule as any).metadata.socialAccountId === 'string'
+                    ? String((schedule as any).metadata.socialAccountId)
+                    : undefined,
               error: (error as Error)?.message || 'Unknown error',
               attemptNumber: 1,
             }),

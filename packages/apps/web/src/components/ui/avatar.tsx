@@ -1,64 +1,44 @@
-import { useState, useMemo } from 'react';
+import * as React from 'react';
+import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import { cn } from '@/lib/utils';
 
-export type AvatarProps = {
-  src?: string | null;
-  name?: string | null;
-  alt?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-  className?: string;
-};
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn('relative flex shrink-0 overflow-hidden rounded-full', className)}
+    {...props}
+  />
+));
+Avatar.displayName = AvatarPrimitive.Root.displayName;
 
-function getInitials(name?: string | null): string {
-  const n = (name || '').trim();
-  if (!n) return 'U';
-  const parts = n.split(/[\s\u00A0]+/).filter(Boolean);
-  if (parts.length === 1) {
-    const s = parts[0].slice(0, 2).toUpperCase();
-    return s || 'U';
-  }
-  const first = parts[0][0] || '';
-  const last = parts[parts.length - 1][0] || '';
-  const out = (first + last).toUpperCase();
-  return out || 'U';
-}
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn('h-full w-full object-cover', className)}
+    {...props}
+  />
+));
+AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
-const sizeMap: Record<NonNullable<AvatarProps['size']>, string> = {
-  xs: 'h-6 w-6 text-[10px]',
-  sm: 'h-8 w-8 text-xs',
-  md: 'h-10 w-10 text-sm',
-  lg: 'h-12 w-12 text-base',
-  xl: 'h-16 w-16 text-lg',
-};
+const AvatarFallback = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      'bg-muted text-muted-foreground flex h-full w-full items-center justify-center rounded-full select-none',
+      className
+    )}
+    {...props}
+  />
+));
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
 
-export function Avatar({ src, name, alt, size = 'md', className }: AvatarProps) {
-  const [errored, setErrored] = useState(false);
-  const initials = useMemo(() => getInitials(name), [name]);
-  const showFallback = !src || errored;
-  const sizeCls = sizeMap[size] || sizeMap.md;
-
-  if (showFallback) {
-    return (
-      <div
-        className={cn(
-          'bg-muted text-muted-foreground inline-flex items-center justify-center rounded-full select-none',
-          sizeCls,
-          className
-        )}
-        aria-label={alt || name || 'avatar'}
-      >
-        {initials}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src || undefined}
-      alt={alt || name || 'avatar'}
-      className={cn('rounded-full object-cover', sizeCls, className)}
-      onError={() => setErrored(true)}
-      loading="lazy"
-    />
-  );
-}
+export { Avatar, AvatarImage, AvatarFallback };

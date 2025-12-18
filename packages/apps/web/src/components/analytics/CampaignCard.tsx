@@ -75,14 +75,13 @@ export function CampaignCard({ campaign, onClick, loading }: CampaignCardProps) 
     );
   }
 
-  const TrendIcon =
-    campaign.trend === 'up' ? TrendingUp : campaign.trend === 'down' ? TrendingDown : Minus;
-  const trendColor =
-    campaign.trend === 'up'
-      ? 'text-green-600 dark:text-green-400'
-      : campaign.trend === 'down'
-        ? 'text-red-600 dark:text-red-400'
-        : 'text-gray-400 dark:text-gray-500';
+  let TrendIcon = Minus;
+  if (campaign.trend === 'up') TrendIcon = TrendingUp;
+  else if (campaign.trend === 'down') TrendIcon = TrendingDown;
+
+  let trendColor = 'text-gray-400 dark:text-gray-500';
+  if (campaign.trend === 'up') trendColor = 'text-green-600 dark:text-green-400';
+  else if (campaign.trend === 'down') trendColor = 'text-red-600 dark:text-red-400';
 
   return (
     <Card

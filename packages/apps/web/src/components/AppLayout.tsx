@@ -1,5 +1,6 @@
 import { useState, type ReactNode, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { EmailVerificationBanner } from './EmailVerificationBanner';
 import { DemoModeBanner } from './DemoModeBanner';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
@@ -46,6 +47,7 @@ import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
 import { PageMetaProvider, usePageMeta } from '@/contexts/PageMetaContext';
+import { brand as brandApi } from '@/lib/api';
 import {
   allNavItems,
   isRouteActive as isRouteActiveForItem,
@@ -55,6 +57,7 @@ import {
 } from './app-shell/nav-config';
 import { getSectionNavItems } from './app-shell/section-nav';
 import { SidebarNav } from './app-shell/sidebar-nav';
+import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 
 interface LayoutProps {
   children: ReactNode;
@@ -71,6 +74,7 @@ export function AppLayout({ children }: LayoutProps) {
 function AppLayoutInner({ children }: LayoutProps) {
   const { user, logout } = useAuthStore();
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const { override: pageMetaOverride, setOverride: setPageMetaOverride } = usePageMeta();
@@ -83,6 +87,17 @@ function AppLayoutInner({ children }: LayoutProps) {
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { openSidebar } = useRightSidebarRouter();
+
+  // Prefetch frequently-used brand data once per brand selection.
+  useEffect(() => {
+    if (!selectedBrand?.id) return;
+    queryClient.prefetchQuery({
+      queryKey: ['brand-social-accounts', selectedBrand.id],
+      queryFn: () => brandApi.getConnectedAccounts(selectedBrand.id),
+      staleTime: CACHE_TIMES.LONG,
+      gcTime: GC_TIMES.LONG,
+    });
+  }, [queryClient, selectedBrand?.id]);
 
   const handleLogout = () => {
     logout();

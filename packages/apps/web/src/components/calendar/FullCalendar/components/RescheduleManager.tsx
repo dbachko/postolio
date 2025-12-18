@@ -35,11 +35,23 @@ export function RescheduleManager({
   const handleSave = useCallback(
     async (newISO: string) => {
       try {
-        const id = state.item?.id;
-        if (!id) return;
+        const item = state.item;
+        if (!item) return;
 
-        await contentApi.updateContent({ contentId: id, scheduledAt: newISO });
-        toast.success('Post rescheduled');
+        const record = item as unknown as Record<string, unknown>;
+        const groupId =
+          typeof record.contentGroupId === 'string' && record.contentGroupId.trim().length > 0
+            ? record.contentGroupId.trim()
+            : null;
+        const isMultiDestination = record.isMultiDestination === true && Boolean(groupId);
+
+        if (isMultiDestination && groupId) {
+          await contentApi.scheduleContentGroup(groupId, newISO);
+          toast.success('Posts rescheduled');
+        } else {
+          await contentApi.updateContent({ contentId: item.id, scheduledAt: newISO });
+          toast.success('Post rescheduled');
+        }
       } catch (error) {
         console.error(error);
         toast.error('Failed to reschedule');

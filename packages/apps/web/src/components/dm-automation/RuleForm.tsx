@@ -154,6 +154,11 @@ export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
     });
   };
 
+  let submitLabel = isEditing ? 'Update Rule' : 'Create Rule';
+  if (createMutation.isPending || updateMutation.isPending) {
+    submitLabel = 'Saving...';
+  }
+
   return (
     <AppSidebar
       open
@@ -169,11 +174,7 @@ export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
             form="rule-form"
             disabled={createMutation.isPending || updateMutation.isPending}
           >
-            {createMutation.isPending || updateMutation.isPending
-              ? 'Saving...'
-              : isEditing
-                ? 'Update Rule'
-                : 'Create Rule'}
+            {submitLabel}
           </Button>
         </div>
       }

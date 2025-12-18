@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { getLocalSetting, setLocalSetting } from '@/lib/settings/localSettings';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +22,22 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, ChevronDown, Clock, Save } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Clock, Save, X } from 'lucide-react';
+
+const DISMISS_TTL_DAYS = 7;
+const TOP_BANNER_DISMISS_KEY = 'schedule-limit-banner-dismissed-at';
+const SIDEBAR_DISMISS_KEY = 'schedule-limit-writeitbar-dismissed-at';
+
+function isDismissedWithinTtl(key: string): boolean {
+  try {
+    const ts = getLocalSetting<number>(key);
+    if (!ts || !Number.isFinite(ts)) return false;
+    const ageMs = Date.now() - ts;
+    return ageMs < DISMISS_TTL_DAYS * 24 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
 
 type WriteItBarLayout = 'sidebar' | 'page';
 
@@ -59,6 +76,12 @@ type WriteItBarProps =
     };
 
 export function WriteItBar(props: WriteItBarProps) {
+  const [scheduleLimitDismissed, setScheduleLimitDismissed] = useState<boolean>(() => {
+    return (
+      isDismissedWithinTtl(TOP_BANNER_DISMISS_KEY) || isDismissedWithinTtl(SIDEBAR_DISMISS_KEY)
+    );
+  });
+
   const outerClass = cn(
     'border-border bg-card border-t px-4 py-3',
     props.layout === 'sidebar' && 'sticky bottom-0 z-20'
@@ -68,10 +91,10 @@ export function WriteItBar(props: WriteItBarProps) {
     <div className={outerClass}>
       {props.mode === 'create' ? (
         <div className="space-y-3">
-          {props.atCapacity && (
+          {props.atCapacity && !scheduleLimitDismissed && (
             <div className="bg-muted border-border text-foreground flex items-start gap-2 rounded-md border p-3 text-xs">
               <AlertTriangle className="text-destructive mt-0.5 h-4 w-4 flex-shrink-0" />
-              <div className="space-y-1">
+              <div className="flex-1 space-y-1">
                 <p className="font-medium">
                   You&apos;ve reached your plan&apos;s scheduling limit.
                 </p>
@@ -88,6 +111,21 @@ export function WriteItBar(props: WriteItBarProps) {
                   .
                 </p>
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Dismiss scheduling limit alert"
+                className="text-muted-foreground hover:text-foreground -mt-1 -mr-1 shrink-0"
+                onClick={() => {
+                  try {
+                    setLocalSetting<number>(SIDEBAR_DISMISS_KEY, Date.now());
+                  } catch {}
+                  setScheduleLimitDismissed(true);
+                }}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
             </div>
           )}
 
@@ -112,10 +150,18 @@ export function WriteItBar(props: WriteItBarProps) {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={props.onSchedule}
-                        disabled={props.createScheduleDisabled}
+                        type="button"
+                        onClick={() => {
+                          if (props.createScheduleDisabled) return;
+                          props.onSchedule();
+                        }}
+                        disabled={props.isCreatingPost}
                         aria-disabled={props.createScheduleDisabled}
-                        className={cn(props.createScheduleDisabled && 'cursor-not-allowed')}
+                        className={cn(
+                          props.createScheduleDisabled &&
+                            !props.isCreatingPost &&
+                            'hover:bg-primary cursor-not-allowed opacity-50'
+                        )}
                       >
                         {props.isCreatingPost ? (
                           <>

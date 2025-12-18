@@ -23,8 +23,10 @@ import passwordResetRoutes from './routes/password-reset.js';
 import twoFactorRoutes from './routes/two-factor.js';
 import monitoringRoutes from './routes/monitoring.js';
 import instagramOAuthRoutes from './routes/instagram-oauth.js';
+import metaOAuthRoutes from './routes/meta-oauth.js';
 import { socialPlatformRoutes } from './routes/social-platform.js';
 import brandsRoutes from './routes/brands.js';
+import brandsSocialAccountsRoutes from './routes/brands-social-accounts.js';
 import contentRoutes from './routes/content/index.js';
 import videoRoutes from './routes/video.js';
 import analyticsRoutes from './routes/analytics.js';
@@ -101,8 +103,8 @@ export function buildFastify(): FastifyInstance {
   });
 
   // Register plugins
-  // CORS configuration for same-origin setup
-  const corsOrigins = [
+  // CORS allowlist (web → api)
+  const corsOrigins = new Set<string>([
     // Local development origins
     'http://ai.localhost:5173',
     'https://ai.localhost:5173',
@@ -113,15 +115,52 @@ export function buildFastify(): FastifyInstance {
     'http://127.0.0.1:5173',
     // Production same-domain origin (postolio.example)
     'https://postolio.example',
-  ];
+  ]);
 
-  // Add CloudFront domain for backward compatibility
-  if (process.env.CORS_ORIGIN) {
-    corsOrigins.push(`https://${process.env.CORS_ORIGIN}`);
+  const normalizeOrigin = (value: string): string | null => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return null;
+
+    try {
+      return new URL(trimmed).origin;
+    } catch {
+      // Accept bare hosts/domains (e.g., "postolio.example" or "localhost:5173")
+      const host = trimmed.replace(/\/+$/, '');
+      const isLocal =
+        host === 'localhost' ||
+        host.startsWith('localhost:') ||
+        host === '127.0.0.1' ||
+        host.startsWith('127.0.0.1:') ||
+        host === 'ai.localhost' ||
+        host.startsWith('ai.localhost:') ||
+        host.endsWith('.localhost');
+      const scheme = isLocal ? 'http' : 'https';
+      return `${scheme}://${host}`;
+    }
+  };
+
+  const addCorsOrigin = (value: string | undefined) => {
+    if (!value) return;
+    const origin = normalizeOrigin(value);
+    if (origin && origin !== '*') corsOrigins.add(origin);
+  };
+
+  // Env-driven origins (recommended)
+  addCorsOrigin(process.env.APP_URL);
+  addCorsOrigin(process.env.FRONTEND_URL);
+
+  // Comma-separated list of allowed origins (preferred)
+  if (process.env.CORS_ORIGINS) {
+    for (const raw of process.env.CORS_ORIGINS.split(',')) {
+      addCorsOrigin(raw);
+    }
   }
 
+  // Backward-compatible single origin (historical)
+  addCorsOrigin(process.env.CORS_ORIGIN);
+
   app.register(cors, {
-    origin: corsOrigins,
+    origin: Array.from(corsOrigins),
     credentials: true,
   });
   // Validate required secrets on startup
@@ -228,9 +267,11 @@ export function buildFastify(): FastifyInstance {
   app.register(twoFactorRoutes, { prefix: '/api/auth' });
   app.register(userRoutes); // User routes include their own /api prefix
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' });
+  app.register(metaOAuthRoutes, { prefix: '/api/auth/meta' });
   // Generic social platform routes (platform-agnostic)
   app.register(socialPlatformRoutes);
   app.register(brandsRoutes, { prefix: '/api/brands' });
+  app.register(brandsSocialAccountsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
   app.register(videoRoutes, { prefix: '/api/video' });
   // All analytics (scheduler + v2) under /api/analytics/*

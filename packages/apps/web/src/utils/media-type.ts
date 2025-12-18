@@ -6,12 +6,12 @@ export function getMediaBadgeType(input: {
   primaryAssetFileType?: 'image' | 'video' | null;
   mediaAssetCount?: number | null;
 }): MediaBadgeType {
-  const assetCount =
-    typeof input.mediaAssetCount === 'number'
-      ? input.mediaAssetCount
-      : Array.isArray(input.mediaAssets)
-        ? input.mediaAssets.length
-        : 0;
+  let assetCount = 0;
+  if (typeof input.mediaAssetCount === 'number') {
+    assetCount = input.mediaAssetCount;
+  } else if (Array.isArray(input.mediaAssets)) {
+    assetCount = input.mediaAssets.length;
+  }
 
   if (input.contentType === 'reel') return 'reel';
   if (assetCount > 1) return 'carousel';

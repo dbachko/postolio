@@ -220,6 +220,15 @@ export function RecommendationsPanel({
             {contentOptimizations.map((rec, index) => {
               const Icon = getRecommendationIcon(rec.type);
               const isExpanded = expandedRecommendation === `content-${index}`;
+              let impactIconClassName =
+                'bg-gray-100 text-gray-600 dark:bg-gray-950/30 dark:text-gray-400';
+              if (rec.impact === 'high') {
+                impactIconClassName =
+                  'bg-red-100 text-red-600 dark:bg-red-950/30 dark:text-red-400';
+              } else if (rec.impact === 'medium') {
+                impactIconClassName =
+                  'bg-yellow-100 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400';
+              }
 
               return (
                 <div
@@ -236,13 +245,7 @@ export function RecommendationsPanel({
                   >
                     <div className="flex items-start gap-3">
                       <div
-                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                          rec.impact === 'high'
-                            ? 'bg-red-100 text-red-600 dark:bg-red-950/30 dark:text-red-400'
-                            : rec.impact === 'medium'
-                              ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400'
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-950/30 dark:text-gray-400'
-                        }`}
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${impactIconClassName}`}
                       >
                         <Icon className="h-4 w-4" />
                       </div>

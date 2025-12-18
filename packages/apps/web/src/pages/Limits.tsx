@@ -64,20 +64,24 @@ export default function Limits() {
               <div className="text-muted-foreground mb-2 flex items-center gap-2 text-sm">
                 <Clock className="h-4 w-4" /> Schedule Ahead Capacity
               </div>
-              {limitsQuery.isLoading ? (
-                <div className="text-muted-foreground text-sm">Loading…</div>
-              ) : limits ? (
-                <div>
-                  <div className="text-2xl font-semibold">
-                    {Number.isFinite(limits.maxAllowed) ? limits.maxAllowed : 'Unlimited'}
-                  </div>
-                  <div className="text-muted-foreground text-sm">
-                    You have {limits.currentCount} scheduled in the future · Tier: {limits.tier}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-sm">No data</div>
-              )}
+              {(() => {
+                if (limitsQuery.isLoading) {
+                  return <div className="text-muted-foreground text-sm">Loading…</div>;
+                }
+                if (limits) {
+                  return (
+                    <div>
+                      <div className="text-2xl font-semibold">
+                        {Number.isFinite(limits.maxAllowed) ? limits.maxAllowed : 'Unlimited'}
+                      </div>
+                      <div className="text-muted-foreground text-sm">
+                        You have {limits.currentCount} scheduled in the future · Tier: {limits.tier}
+                      </div>
+                    </div>
+                  );
+                }
+                return <div className="text-muted-foreground text-sm">No data</div>;
+              })()}
             </div>
 
             <div className="bg-background rounded-lg border p-4">
@@ -104,39 +108,48 @@ export default function Limits() {
           {/* Per‑brand breakdown */}
           <div className="mt-6">
             <div className="mb-2 text-sm font-medium">Per‑Brand Upcoming Breakdown</div>
-            {perBrandQuery.isLoading ? (
-              <div className="text-muted-foreground text-sm">Loading brand breakdown…</div>
-            ) : perBrand.length === 0 ? (
-              <div className="text-muted-foreground text-sm">No brands found</div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {perBrand.map((b) => {
-                  const total = limits?.currentCount || 0;
-                  const share = total > 0 ? Math.round((b.totalFuture / total) * 100) : 0;
-                  const cap = Number.isFinite(limits?.maxAllowed || 0)
-                    ? limits?.maxAllowed
-                    : Infinity;
-                  return (
-                    <div key={b.brandId} className="bg-background rounded-lg border p-4">
-                      <div className="mb-1 text-sm font-medium">{b.brandName}</div>
-                      <div className="text-muted-foreground mb-2 text-xs">
-                        Upcoming scheduled: {b.scheduled} · Drafts with time: {b.draft}
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div>
-                          <span className="font-medium">{b.totalFuture}</span>
-                          {Number.isFinite(cap as number) &&
-                            typeof limits?.maxAllowed === 'number' && (
-                              <span className="text-muted-foreground"> / {limits?.maxAllowed}</span>
-                            )}
+            {(() => {
+              if (perBrandQuery.isLoading) {
+                return (
+                  <div className="text-muted-foreground text-sm">Loading brand breakdown…</div>
+                );
+              }
+              if (perBrand.length === 0) {
+                return <div className="text-muted-foreground text-sm">No brands found</div>;
+              }
+              return (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {perBrand.map((b) => {
+                    const total = limits?.currentCount || 0;
+                    const share = total > 0 ? Math.round((b.totalFuture / total) * 100) : 0;
+                    const cap = Number.isFinite(limits?.maxAllowed || 0)
+                      ? limits?.maxAllowed
+                      : Infinity;
+                    return (
+                      <div key={b.brandId} className="bg-background rounded-lg border p-4">
+                        <div className="mb-1 text-sm font-medium">{b.brandName}</div>
+                        <div className="text-muted-foreground mb-2 text-xs">
+                          Upcoming scheduled: {b.scheduled} · Drafts with time: {b.draft}
                         </div>
-                        <div className="text-muted-foreground">{share}% of capacity</div>
+                        <div className="flex items-center justify-between text-sm">
+                          <div>
+                            <span className="font-medium">{b.totalFuture}</span>
+                            {Number.isFinite(cap as number) &&
+                              typeof limits?.maxAllowed === 'number' && (
+                                <span className="text-muted-foreground">
+                                  {' '}
+                                  / {limits?.maxAllowed}
+                                </span>
+                              )}
+                          </div>
+                          <div className="text-muted-foreground">{share}% of capacity</div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
             <div className="text-muted-foreground mt-2 text-xs">
               Counts include future posts only. Drafts shown here are drafts with a scheduled time.
             </div>

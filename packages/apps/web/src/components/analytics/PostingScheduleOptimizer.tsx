@@ -68,7 +68,9 @@ export function PostingScheduleOptimizer({ postingTimes, loading }: PostingSched
 
   const formatTime = (hour: number) => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    let displayHour = hour;
+    if (hour === 0) displayHour = 12;
+    else if (hour > 12) displayHour = hour - 12;
     return `${displayHour}:00 ${ampm}`;
   };
 
@@ -128,64 +130,74 @@ export function PostingScheduleOptimizer({ postingTimes, loading }: PostingSched
               Top 5 Best Times to Post
             </h4>
             <div className="space-y-2">
-              {topRecommendations.map((time, index) => (
-                <div
-                  key={`${time.dayOfWeek}-${time.hour}`}
-                  className="border-border/50 bg-card/50 hover:border-border flex items-center gap-3 rounded-lg border p-3 transition-all"
-                >
-                  {/* Rank badge */}
+              {topRecommendations.map((time, index) => {
+                let rankClassName = 'bg-muted/50 text-muted-foreground';
+                if (index === 0) {
+                  rankClassName =
+                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400';
+                } else if (index === 1) {
+                  rankClassName =
+                    'bg-gray-100 text-gray-700 dark:bg-gray-950/30 dark:text-gray-400';
+                } else if (index === 2) {
+                  rankClassName =
+                    'bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400';
+                }
+
+                let confidenceClassName =
+                  'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-400';
+                if (time.confidence >= 75) {
+                  confidenceClassName =
+                    'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400';
+                } else if (time.confidence >= 50) {
+                  confidenceClassName =
+                    'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900 dark:bg-yellow-950/30 dark:text-yellow-400';
+                }
+
+                return (
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                      index === 0
-                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400'
-                        : index === 1
-                          ? 'bg-gray-100 text-gray-700 dark:bg-gray-950/30 dark:text-gray-400'
-                          : index === 2
-                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400'
-                            : 'bg-muted/50 text-muted-foreground'
-                    }`}
+                    key={`${time.dayOfWeek}-${time.hour}`}
+                    className="border-border/50 bg-card/50 hover:border-border flex items-center gap-3 rounded-lg border p-3 transition-all"
                   >
-                    #{index + 1}
-                  </div>
-
-                  {/* Time details */}
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="text-sm font-semibold">{time.dayOfWeek}</span>
-                      <span className="text-muted-foreground text-sm">
-                        at {formatTime(time.hour)}
-                      </span>
-                    </div>
-                    <div className="text-muted-foreground flex items-center gap-3 text-xs">
-                      <div className="flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3" />
-                        <span>{Math.round(time.avgEngagement)} avg engagement</span>
-                      </div>
-                      <div>•</div>
-                      <div>{time.postCount} posts</div>
-                    </div>
-                  </div>
-
-                  {/* Confidence indicator */}
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge
-                      variant="outline"
-                      className={`text-xs font-medium ${
-                        time.confidence >= 75
-                          ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400'
-                          : time.confidence >= 50
-                            ? 'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900 dark:bg-yellow-950/30 dark:text-yellow-400'
-                            : 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-400'
-                      }`}
+                    {/* Rank badge */}
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${rankClassName}`}
                     >
-                      {getConfidenceLabel(time.confidence)}
-                    </Badge>
-                    <div className="text-muted-foreground flex items-center gap-1 text-xs">
-                      <span>{time.confidence}%</span>
+                      #{index + 1}
+                    </div>
+
+                    {/* Time details */}
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-sm font-semibold">{time.dayOfWeek}</span>
+                        <span className="text-muted-foreground text-sm">
+                          at {formatTime(time.hour)}
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3" />
+                          <span>{Math.round(time.avgEngagement)} avg engagement</span>
+                        </div>
+                        <div>•</div>
+                        <div>{time.postCount} posts</div>
+                      </div>
+                    </div>
+
+                    {/* Confidence indicator */}
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs font-medium ${confidenceClassName}`}
+                      >
+                        {getConfidenceLabel(time.confidence)}
+                      </Badge>
+                      <div className="text-muted-foreground flex items-center gap-1 text-xs">
+                        <span>{time.confidence}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

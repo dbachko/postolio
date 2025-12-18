@@ -318,6 +318,78 @@ export class TokenServiceClient {
   }
 
   /**
+   * Get an account-scoped token (supports multiple social accounts per brand+platform).
+   */
+  async getTokenForSocialAccount(
+    userId: string,
+    brandId: string,
+    platform: string,
+    socialAccountId: string
+  ): Promise<TokenData | null> {
+    await this.ensureInitialized();
+
+    const cacheKey = `token:${userId}:${brandId}:${platform}:social:${socialAccountId}`;
+
+    if (this.config.enableCache) {
+      const cached = this.getFromCache(cacheKey);
+      if (cached) {
+        this.logDebug('Cache hit', { cacheKey });
+        return cached;
+      }
+    }
+
+    const pendingKey = `get:${cacheKey}`;
+    if (this.pendingRequests.has(pendingKey)) {
+      this.logDebug('Request deduplication', { pendingKey });
+      const existing = this.pendingRequests.get(pendingKey);
+      if (existing) return existing;
+    }
+
+    if (this.config.enableRateLimit) {
+      await this.checkRateLimit('getTokenForSocialAccount');
+    }
+
+    const promise = this.circuitBreaker!.fire(async () => {
+      const path = `/tokens/${userId}/${platform}/${brandId}/social-accounts/${socialAccountId}`;
+      const response = await this.makeRequest(path, 'GET');
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new TokenServiceError(
+          `Failed to get token: ${error}`,
+          'TOKEN_GET_FAILED',
+          response.status,
+          response.status >= 500
+        );
+      }
+
+      const data = (await response.json()) as TokenData;
+
+      if (this.config.enableCache && data) {
+        this.setInCache(cacheKey, data);
+      }
+
+      if (this.config.enableAuditLog) {
+        await this.auditLog('GET_TOKEN', { userId, brandId, platform, socialAccountId });
+      }
+
+      return data;
+    }) as Promise<TokenData | null>;
+
+    this.pendingRequests.set(pendingKey, promise);
+
+    try {
+      return await promise;
+    } finally {
+      this.pendingRequests.delete(pendingKey);
+    }
+  }
+
+  /**
    * Store a token with validation
    */
   async storeToken(params: StoreTokenParams): Promise<void> {
@@ -366,6 +438,103 @@ export class TokenServiceClient {
         });
       }
     });
+  }
+
+  /**
+   * Store an account-scoped token (supports multiple social accounts per brand+platform).
+   */
+  async storeTokenForSocialAccount(
+    params: StoreTokenParams & { socialAccountId: string }
+  ): Promise<void> {
+    await this.ensureInitialized();
+
+    this.validateStoreTokenParams(params);
+
+    if (this.config.enableRateLimit) {
+      await this.checkRateLimit('storeTokenForSocialAccount');
+    }
+
+    await this.circuitBreaker!.fire(async () => {
+      const path = `/tokens/${params.userId}/${params.platform}/${params.brandId}/social-accounts/${params.socialAccountId}`;
+      const response = await this.makeRequest(path, 'PUT', {
+        accessToken: params.accessToken,
+        refreshToken: params.refreshToken,
+        expiresAt: params.expiresAt,
+        metadata: params.metadata,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new TokenServiceError(
+          `Failed to store token: ${error}`,
+          'TOKEN_STORE_FAILED',
+          response.status,
+          response.status >= 500
+        );
+      }
+
+      if (this.config.enableCache) {
+        const cacheKey = `token:${params.userId}:${params.brandId}:${params.platform}:social:${params.socialAccountId}`;
+        this.cache.delete(cacheKey);
+      }
+
+      if (this.config.enableAuditLog) {
+        await this.auditLog('STORE_TOKEN', {
+          userId: params.userId,
+          brandId: params.brandId,
+          platform: params.platform,
+          socialAccountId: params.socialAccountId,
+        });
+      }
+    });
+  }
+
+  /**
+   * Delete an account-scoped token (supports multiple social accounts per brand+platform).
+   *
+   * @returns true when a token existed and was deleted, false when not found.
+   */
+  async deleteTokenForSocialAccount(
+    userId: string,
+    brandId: string,
+    platform: string,
+    socialAccountId: string
+  ): Promise<boolean> {
+    await this.ensureInitialized();
+
+    if (this.config.enableRateLimit) {
+      await this.checkRateLimit('deleteTokenForSocialAccount');
+    }
+
+    return this.circuitBreaker!.fire(async () => {
+      const path = `/tokens/${userId}/${platform}/${brandId}/social-accounts/${socialAccountId}`;
+      const response = await this.makeRequest(path, 'DELETE');
+
+      if (response.status === 404) {
+        return false;
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new TokenServiceError(
+          `Failed to delete token: ${error}`,
+          'TOKEN_DELETE_FAILED',
+          response.status,
+          response.status >= 500
+        );
+      }
+
+      if (this.config.enableCache) {
+        const cacheKey = `token:${userId}:${brandId}:${platform}:social:${socialAccountId}`;
+        this.cache.delete(cacheKey);
+      }
+
+      if (this.config.enableAuditLog) {
+        await this.auditLog('DELETE_TOKEN', { userId, brandId, platform, socialAccountId });
+      }
+
+      return true;
+    }) as Promise<boolean>;
   }
 
   /**

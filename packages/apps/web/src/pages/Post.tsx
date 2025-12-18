@@ -5,9 +5,9 @@ import { content as contentApi, analytics } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar } from '@/components/ui/avatar';
+import { ProfileAvatar } from '@/components/ui/profile-avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PostSidebar } from '@/right-sidebar/PostSidebar';
+import { PostEditor } from '@/components/post-editor/PostEditor';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatInUserTimezone } from '@/lib/timezone';
@@ -80,19 +80,50 @@ const MetricsGrid = memo(({ insights }: { insights: PostInsights }) => (
   </div>
 ));
 
-export default function PostDetail() {
-  const { postId } = useParams<{ postId: string }>();
+export default function PostPage() {
+  const { postId } = useParams<{ postId?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { timezone, getBrandTimezone } = useTimezone();
   const { setOverride: setPageMetaOverride } = usePageMeta();
 
+  const isCreate = !postId;
+  const resolvedPostId = postId || '';
+
   const { data: post, isLoading } = usePostDetail(postId);
   const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
 
   const isPosted = Boolean(post?.postedAt) || post?.status === 'published';
+  const contentGroupId = useMemo(() => {
+    const raw = (post as any)?.contentGroupId;
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    return trimmed.length ? trimmed : null;
+  }, [post]);
+
+  const contentGroupQuery = useQuery({
+    queryKey: ['content-group', contentGroupId],
+    enabled: Boolean(contentGroupId),
+    queryFn: () => contentApi.getContentGroup(contentGroupId!),
+    staleTime: 10000,
+  });
+
+  const isMultiDestinationGroup = useMemo(() => {
+    if (!contentGroupId) return false;
+    const raw = contentGroupQuery.data as any;
+    const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
+    return destinations.length > 1;
+  }, [contentGroupId, contentGroupQuery.data]);
 
   useEffect(() => {
+    if (isCreate) {
+      setPageMetaOverride({
+        title: 'Create Post',
+        description: 'Create and schedule a new post.',
+      });
+      return () => setPageMetaOverride(null);
+    }
+
     const title = isPosted ? 'View Post' : 'Edit Post';
     const description = (() => {
       if (!post) return undefined;
@@ -105,7 +136,7 @@ export default function PostDetail() {
       description,
     });
     return () => setPageMetaOverride(null);
-  }, [isPosted, post, setPageMetaOverride]);
+  }, [isCreate, isPosted, post, setPageMetaOverride]);
 
   useEffect(() => {
     let mounted = true;
@@ -127,7 +158,7 @@ export default function PostDetail() {
 
   const publicationsQuery = useQuery<{ success: boolean; data: Array<any> }>({
     queryKey: ['v2-publications', postId],
-    queryFn: async () => analytics.getPublicationsByContent(postId!),
+    queryFn: async () => analytics.getPublicationsByContent(resolvedPostId),
     enabled: Boolean(postId) && post?.status === 'published',
     staleTime: 30000,
   });
@@ -170,22 +201,36 @@ export default function PostDetail() {
     comments: { username: string; text: string }[];
   }>({
     queryKey: ['post-comments', postId],
-    queryFn: async () => (await contentApi.getPostComments(postId!)).data,
+    queryFn: async () => (await contentApi.getPostComments(resolvedPostId)).data,
     enabled: Boolean(postId) && post?.status === 'published',
     staleTime: 60000,
   });
 
   const publishNowMutation = useMutation({
-    mutationFn: async () => contentApi.publishPost(postId!),
+    mutationFn: async () => {
+      if (isMultiDestinationGroup && contentGroupId) {
+        return contentApi.publishContentGroupNow(contentGroupId);
+      }
+      return contentApi.publishNow(resolvedPostId);
+    },
     onSuccess: () => {
-      toast.success('Post published successfully');
+      toast.success(
+        isMultiDestinationGroup ? 'Publishing started for all destinations' : 'Publishing started'
+      );
       queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      if (contentGroupId)
+        queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
     },
     onError: () => toast.error('Failed to publish post'),
   });
 
   const deletePostMutation = useMutation({
-    mutationFn: async () => contentApi.deletePost(postId!),
+    mutationFn: async () => {
+      if (isMultiDestinationGroup && contentGroupId) {
+        return contentApi.deleteContentGroup(contentGroupId);
+      }
+      return contentApi.deletePost(resolvedPostId);
+    },
     onSuccess: () => {
       toast.success('Post deleted successfully');
       navigate(-1);
@@ -261,14 +306,14 @@ export default function PostDetail() {
     ));
   }, [publicationsQuery.data?.data, post?.instagramPermalink, post?.status]);
 
-  if (!postId) {
-    return null;
+  if (isCreate) {
+    return <PostEditor layout="page" showHeader={false} />;
   }
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
       <div className="lg:col-span-2">
-        <PostSidebar id={postId} layout="page" showHeader={false} />
+        <PostEditor id={postId} layout="page" showHeader={false} />
       </div>
 
       <div className="space-y-4 lg:space-y-6">
@@ -354,19 +399,12 @@ export default function PostDetail() {
                     </span>
                   </div>
                 ) : null}
-
-                {brandTimezone ? (
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Timezone</span>
-                    <span className="font-medium">{brandTimezone}</span>
-                  </div>
-                ) : null}
               </div>
             </Card>
 
             {post.status === 'published' ? (
               <Card className="p-4 md:p-6">
-                <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <h3 className="text-base font-semibold md:text-lg">Performance</h3>
                   {selectedPublicationId ? (
                     <Button
@@ -375,19 +413,9 @@ export default function PostDetail() {
                       onClick={async () => {
                         try {
                           await analytics.refreshPublication(selectedPublicationId);
-                          toast.success('Refresh enqueued');
-                        } catch (e: any) {
-                          const status = e?.status;
-                          const next = e?.data?.nextRefreshAllowed;
-                          if (status === 429) {
-                            toast.error(
-                              next
-                                ? `Refresh throttled. Try after ${new Date(next).toLocaleTimeString()}`
-                                : 'Refresh throttled. Try later.'
-                            );
-                          } else {
-                            toast.error('Refresh throttled or failed');
-                          }
+                          toast.success('Metrics refresh enqueued');
+                        } catch {
+                          toast.error('Unable to enqueue refresh');
                         }
                       }}
                     >
@@ -396,18 +424,13 @@ export default function PostDetail() {
                   ) : null}
                 </div>
 
-                <Tabs defaultValue="metrics" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs defaultValue="metrics" className="mt-4">
+                  <TabsList>
                     <TabsTrigger value="metrics">Metrics</TabsTrigger>
                     <TabsTrigger value="comments">Comments</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="metrics" className="mt-4">
-                    <div className="text-muted-foreground mb-3 text-xs">
-                      {insights
-                        ? `Last updated: ${new Date(insights.lastUpdated).toLocaleString()}`
-                        : 'No metrics yet'}
-                    </div>
                     {insights ? (
                       <MetricsGrid insights={insights} />
                     ) : (
@@ -419,52 +442,67 @@ export default function PostDetail() {
                   </TabsContent>
 
                   <TabsContent value="comments" className="mt-4">
-                    {commentsData?.comments && commentsData.comments.length > 0 ? (
-                      <div className="max-h-[360px] space-y-3 overflow-y-auto">
-                        {commentsData.comments.map(
-                          (comment: { username: string; text: string }, index: number) => (
-                            <div
-                              key={index}
-                              className="bg-muted flex items-start gap-3 rounded-lg p-3"
+                    {(() => {
+                      const comments = commentsData?.comments || [];
+                      if (comments.length > 0) {
+                        return (
+                          <div className="max-h-[360px] space-y-3 overflow-y-auto">
+                            {comments.map(
+                              (comment: { username: string; text: string }, index: number) => (
+                                <div
+                                  key={index}
+                                  className="bg-muted flex items-start gap-3 rounded-lg p-3"
+                                >
+                                  <div className="mt-0.5">
+                                    <ProfileAvatar name={comment.username} size="sm" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">{comment.username}</p>
+                                    <p className="text-foreground mt-1 text-sm">{comment.text}</p>
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (
+                        insights &&
+                        insights.metrics.comments_count > 0 &&
+                        selectedPublicationId
+                      ) {
+                        return (
+                          <div className="text-muted-foreground flex flex-col items-center gap-3 py-6 text-center text-sm">
+                            <p>
+                              {insights.metrics.comments_count.toLocaleString()} comment
+                              {insights.metrics.comments_count === 1 ? '' : 's'} on Instagram. They
+                              may not be synced yet.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await analytics.refreshPublication(selectedPublicationId);
+                                  toast.success('Comments refresh enqueued');
+                                } catch {
+                                  toast.error('Unable to enqueue refresh');
+                                }
+                              }}
                             >
-                              <div className="mt-0.5">
-                                <Avatar name={comment.username} size="sm" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium">{comment.username}</p>
-                                <p className="text-foreground mt-1 text-sm">{comment.text}</p>
-                              </div>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    ) : insights && insights.metrics.comments_count > 0 && selectedPublicationId ? (
-                      <div className="text-muted-foreground flex flex-col items-center gap-3 py-6 text-center text-sm">
-                        <p>
-                          {insights.metrics.comments_count.toLocaleString()} comment
-                          {insights.metrics.comments_count === 1 ? '' : 's'} on Instagram. They may
-                          not be synced yet.
+                              <RefreshCw className="mr-2 h-4 w-4" /> Refresh Comments
+                            </Button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <p className="text-muted-foreground py-6 text-center text-sm">
+                          No comments yet
                         </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              await analytics.refreshPublication(selectedPublicationId);
-                              toast.success('Comments refresh enqueued');
-                            } catch {
-                              toast.error('Unable to enqueue refresh');
-                            }
-                          }}
-                        >
-                          <RefreshCw className="mr-2 h-4 w-4" /> Refresh Comments
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground py-6 text-center text-sm">
-                        No comments yet
-                      </p>
-                    )}
+                      );
+                    })()}
                   </TabsContent>
                 </Tabs>
               </Card>
@@ -473,7 +511,7 @@ export default function PostDetail() {
             <Card className="p-4 md:p-6">
               <h3 className="mb-3 text-base font-semibold md:mb-4 md:text-lg">Actions</h3>
               <div className="space-y-2">
-                {post.status === 'scheduled' ? (
+                {!isPosted ? (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
@@ -482,14 +520,19 @@ export default function PostDetail() {
                         disabled={publishNowMutation.isPending}
                       >
                         <CheckCircle className="mr-2 h-4 w-4" />
-                        Publish Now
+                        {isMultiDestinationGroup ? 'Publish All Destinations' : 'Publish Now'}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Publish this post now?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                          {isMultiDestinationGroup
+                            ? 'Publish all destinations now?'
+                            : 'Publish this post now?'}
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will publish immediately and may override the scheduled time.
+                          This will publish immediately
+                          {post.status === 'scheduled' ? ' and override the scheduled time' : ''}.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -500,7 +543,7 @@ export default function PostDetail() {
                           onClick={() => publishNowMutation.mutate()}
                           disabled={publishNowMutation.isPending}
                         >
-                          Publish Now
+                          {isMultiDestinationGroup ? 'Publish All' : 'Publish Now'}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -515,12 +558,14 @@ export default function PostDetail() {
                       disabled={deletePostMutation.isPending}
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Post
+                      {isMultiDestinationGroup ? 'Delete Post Group' : 'Delete Post'}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete this post?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        {isMultiDestinationGroup ? 'Delete this post group?' : 'Delete this post?'}
+                      </AlertDialogTitle>
                       <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

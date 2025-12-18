@@ -140,62 +140,72 @@ export default function SavedReplies() {
           </Button>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="text-muted-foreground flex items-center justify-center p-12">
-              <div className="text-center">
-                <MessageSquare className="text-muted-foreground mx-auto mb-3 h-12 w-12 animate-pulse" />
-                <p className="text-sm">Loading saved replies...</p>
-              </div>
-            </div>
-          ) : replies.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center">
-              <MessageSquare className="text-muted-foreground mb-4 h-12 w-12" />
-              <h3 className="mb-2 text-lg font-semibold">No saved replies yet</h3>
-              <p className="text-muted-foreground mb-4 max-w-sm text-sm">
-                Create your first saved reply to quickly respond to common DM inquiries
-              </p>
-              <Button onClick={handleCreate}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Your First Reply
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {replies.map((reply) => (
-                <Card key={reply.id} className="transition-shadow hover:shadow-md">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{reply.title}</h3>
-                          {reply.isDefault && (
-                            <Badge variant="secondary" className="gap-1">
-                              <Star className="h-3 w-3" />
-                              Default
-                            </Badge>
-                          )}
+          {(() => {
+            if (isLoading) {
+              return (
+                <div className="text-muted-foreground flex items-center justify-center p-12">
+                  <div className="text-center">
+                    <MessageSquare className="text-muted-foreground mx-auto mb-3 h-12 w-12 animate-pulse" />
+                    <p className="text-sm">Loading saved replies...</p>
+                  </div>
+                </div>
+              );
+            }
+
+            if (replies.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center">
+                  <MessageSquare className="text-muted-foreground mb-4 h-12 w-12" />
+                  <h3 className="mb-2 text-lg font-semibold">No saved replies yet</h3>
+                  <p className="text-muted-foreground mb-4 max-w-sm text-sm">
+                    Create your first saved reply to quickly respond to common DM inquiries
+                  </p>
+                  <Button onClick={handleCreate}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Your First Reply
+                  </Button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {replies.map((reply) => (
+                  <Card key={reply.id} className="transition-shadow hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{reply.title}</h3>
+                            {reply.isDefault && (
+                              <Badge variant="secondary" className="gap-1">
+                                <Star className="h-3 w-3" />
+                                Default
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground line-clamp-3 text-sm whitespace-pre-wrap">
+                            {reply.body}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            Created {new Date(reply.createdAt).toLocaleDateString()}
+                          </p>
                         </div>
-                        <p className="text-muted-foreground line-clamp-3 text-sm whitespace-pre-wrap">
-                          {reply.body}
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                          Created {new Date(reply.createdAt).toLocaleDateString()}
-                        </p>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="icon" onClick={() => handleEdit(reply)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="icon" onClick={() => handleDelete(reply)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="icon" onClick={() => handleEdit(reply)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" onClick={() => handleDelete(reply)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 

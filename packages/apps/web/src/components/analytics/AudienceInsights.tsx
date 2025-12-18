@@ -227,7 +227,8 @@ export function AudienceInsights({ audienceData, loading }: AudienceInsightsProp
                 <div className="space-y-2">
                   <div className="text-muted-foreground text-xs font-medium">Gender</div>
                   {(demographics?.gender || []).slice(0, 3).map((g) => {
-                    const label = g.gender === 'F' ? 'Women' : g.gender === 'M' ? 'Men' : 'Unknown';
+                    const labelMap: Record<string, string> = { F: 'Women', M: 'Men' };
+                    const label = labelMap[g.gender] || 'Unknown';
                     const ratio = totalAudience > 0 ? g.value / totalAudience : 0;
                     return (
                       <div key={g.gender} className="space-y-1">

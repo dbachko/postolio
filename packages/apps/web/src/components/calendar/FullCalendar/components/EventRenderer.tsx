@@ -1,6 +1,7 @@
 import type { MouseEventHandler } from 'react';
 import { PostPreviewCard } from '@/components/PostPreviewCard';
 import type { CalendarItem } from '@/types/calendar';
+import type { SocialAccountsById } from '@/types/social-accounts';
 import type { CalendarEvent } from '../types';
 import type { AssetType } from '@/features/assets/api/client';
 
@@ -10,6 +11,7 @@ interface EventRendererProps {
   brandId: string;
   onReschedule: (item: CalendarItem) => void;
   assetsById?: Record<string, AssetType | null>;
+  socialAccountsById?: SocialAccountsById;
 }
 
 export function EventRenderer({
@@ -18,6 +20,7 @@ export function EventRenderer({
   brandId,
   onReschedule,
   assetsById,
+  socialAccountsById,
 }: EventRendererProps) {
   const rawResource = event.resource as unknown as Record<string, unknown> | undefined;
   if (rawResource?.type === 'more') {
@@ -45,6 +48,7 @@ export function EventRenderer({
         timezone={timezone}
         onReschedule={onReschedule}
         primaryAsset={primaryAsset}
+        socialAccountsById={socialAccountsById}
       />
     </div>
   );

@@ -11,6 +11,7 @@ import {
   attachAssetToContent,
   getAssetsClient,
 } from '../../services/assets-media.js';
+import { schedulerService } from '../../services/scheduler.js';
 import type { AssetRecord } from '@postolio/assets-client';
 import { buildContentResponse } from '../../services/content-response-builder.js';
 import { haveUniformAspectRatio } from '../../utils/aspect-ratio.js';
@@ -74,6 +75,8 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           postedAt: true,
           brandId: true,
           campaignId: true,
+          contentGroupId: true,
+          targetSocialAccountId: true,
           schedulingError: true,
           generationParams: true,
           contentType: true,
@@ -91,6 +94,23 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!updatedContent) {
         return reply.code(404).send({ error: 'Content not found after attaching asset' });
+      }
+
+      if (updatedContent.status === 'scheduled' && updatedContent.scheduledAt) {
+        try {
+          const syncResult = await schedulerService.updateScheduledContent(contentId);
+          if (!syncResult.success) {
+            request.log.warn(
+              { contentId, error: syncResult.error },
+              'Failed to sync schedule payload after asset update'
+            );
+          }
+        } catch (syncError) {
+          request.log.warn(
+            { contentId, err: syncError },
+            'Error syncing schedule payload after asset update'
+          );
+        }
       }
 
       const response = buildContentResponse(updatedContent);
@@ -209,6 +229,8 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           postedAt: true,
           brandId: true,
           campaignId: true,
+          contentGroupId: true,
+          targetSocialAccountId: true,
           schedulingError: true,
           generationParams: true,
           contentType: true,
@@ -226,6 +248,23 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!updatedContent) {
         return reply.code(404).send({ error: 'Content not found after media update' });
+      }
+
+      if (updatedContent.status === 'scheduled' && updatedContent.scheduledAt) {
+        try {
+          const syncResult = await schedulerService.updateScheduledContent(contentId);
+          if (!syncResult.success) {
+            request.log.warn(
+              { contentId, error: syncResult.error },
+              'Failed to sync schedule payload after media update'
+            );
+          }
+        } catch (syncError) {
+          request.log.warn(
+            { contentId, err: syncError },
+            'Error syncing schedule payload after media update'
+          );
+        }
       }
 
       const response = buildContentResponse(updatedContent);

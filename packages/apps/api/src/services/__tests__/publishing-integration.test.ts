@@ -48,11 +48,15 @@ vi.mock('../connectors/index.js', () => {
 });
 
 // Mock Token Service helper so no network calls are made.
-vi.mock('../../utils/token-service-client.ts', () => ({
-  fetchTokensFromService: vi.fn(async () => ({
+vi.mock('../../utils/token-service-client.js', () => ({
+  fetchTokensForSocialAccountFromService: vi.fn(async () => ({
     accessToken: 'test-access-token',
     refreshToken: 'test-refresh-token',
   })),
+}));
+
+vi.mock('../social-account-resolver.js', () => ({
+  resolvePrimarySocialAccount: vi.fn(),
 }));
 
 vi.mock('../assets-media.js', () => ({
@@ -74,6 +78,7 @@ vi.mock('../assets-media.js', () => ({
 // Import after mocks
 const { getDatabaseClient } = await import('../../config/database.js');
 const { ConnectorFactory, __mockConnector } = await import('../connectors/index.js' as any);
+const { resolvePrimarySocialAccount } = await import('../social-account-resolver.js');
 const { publishContent } = await import('../content-operations/publishing.js');
 
 describe('publishContent (connector integration)', () => {
@@ -102,13 +107,15 @@ describe('publishContent (connector integration)', () => {
       campaign: null,
     });
 
-    mockPrisma.socialAccount.findFirst.mockResolvedValue({
+    (resolvePrimarySocialAccount as any).mockResolvedValue({
       id: 'social-account-123',
       brandId: 'brand-123',
       platform: 'instagram',
       externalAccountId: 'ig-account-123',
       externalPageId: 'fb-page-123',
       username: 'testuser',
+      displayName: null,
+      metadata: {},
     });
 
     const result = await publishContent('content-123', 'instagram');
@@ -165,13 +172,15 @@ describe('publishContent (connector integration)', () => {
       },
     });
 
-    mockPrisma.socialAccount.findFirst.mockResolvedValue({
+    (resolvePrimarySocialAccount as any).mockResolvedValue({
       id: 'social-account-123',
       brandId: 'brand-123',
       platform: 'instagram',
       externalAccountId: 'ig-account-123',
       externalPageId: 'fb-page-123',
       username: 'testuser',
+      displayName: null,
+      metadata: {},
     });
 
     const result = await publishContent('content-123', 'instagram');

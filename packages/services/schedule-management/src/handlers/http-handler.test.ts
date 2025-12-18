@@ -16,6 +16,7 @@ vi.mock('../utils/auth', async (importOriginal) => {
 vi.mock('../services/schedule-service', () => {
   class MockScheduleService {
     createSchedule = vi.fn();
+    publishNow = vi.fn();
     getSchedule = vi.fn();
     listSchedules = vi.fn();
     updateSchedule = vi.fn();
@@ -57,6 +58,7 @@ describe('HttpHandler', () => {
   let httpHandler: HttpHandler;
   let mockScheduleService: {
     createSchedule: ReturnType<typeof vi.fn>;
+    publishNow: ReturnType<typeof vi.fn>;
     getSchedule: ReturnType<typeof vi.fn>;
     listSchedules: ReturnType<typeof vi.fn>;
     updateSchedule: ReturnType<typeof vi.fn>;
@@ -133,6 +135,66 @@ describe('HttpHandler', () => {
         contentType: 'post',
         mediaType: 'image',
         scheduledAt: expect.any(String),
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
+        firstComment: 'First comment from API',
+      });
+    });
+
+    it('should handle POST /schedules/publish-now request', async () => {
+      const event: Partial<APIGatewayProxyEvent> = {
+        httpMethod: 'POST',
+        path: '/schedules/publish-now',
+        body: JSON.stringify({
+          contentId: 'content-123',
+          brandId: 'brand-789',
+          userId: 'overridden',
+          platform: 'instagram',
+          contentType: 'post',
+          mediaType: 'image',
+          mediaAssets: [
+            { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+          ],
+          firstComment: 'First comment from API',
+        }),
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
+      };
+
+      const mockSchedule = {
+        scheduleId: 'schedule-456',
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'post',
+        mediaType: 'image',
+        scheduledAt: new Date().toISOString(),
+        status: 'scheduled',
+      };
+
+      mockScheduleService.publishNow.mockResolvedValue({
+        success: true,
+        schedule: mockSchedule,
+      });
+
+      const result = await httpHandler.handle(event as APIGatewayProxyEvent);
+
+      expect(result.statusCode).toBe(201);
+      const responseBody = JSON.parse(result.body);
+      expect(responseBody.success).toBe(true);
+      expect(responseBody.data).toEqual(mockSchedule);
+      expect(responseBody.timestamp).toBeDefined();
+
+      expect(mockScheduleService.publishNow).toHaveBeenCalledWith({
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'post',
+        mediaType: 'image',
         mediaAssets: [
           { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
         ],
@@ -263,6 +325,42 @@ describe('HttpHandler', () => {
         caption: 'Updated caption',
         scheduledAt: expect.any(String),
       });
+    });
+
+    it('should return 400 for invalid schedule update payload', async () => {
+      const event: Partial<APIGatewayProxyEvent> = {
+        httpMethod: 'PUT',
+        path: '/schedules/test-123',
+        pathParameters: { id: 'test-123' },
+        body: JSON.stringify({
+          thumbOffset: -1,
+        }),
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
+      };
+
+      mockScheduleService.getSchedule.mockResolvedValue({
+        success: true,
+        schedule: {
+          scheduleId: 'test-123',
+          brandId: 'brand-789',
+          userId: 'user-012',
+          status: 'pending',
+          scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+        },
+      });
+
+      const result = await httpHandler.handle(event as APIGatewayProxyEvent);
+
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body)).toEqual({
+        error: 'Invalid request',
+        details: {
+          errors: ['thumbOffset must be greater than or equal to 0'],
+        },
+      });
+      expect(mockScheduleService.updateSchedule).not.toHaveBeenCalled();
     });
 
     it('should handle DELETE /schedules/{id} request', async () => {

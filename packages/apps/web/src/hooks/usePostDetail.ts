@@ -8,6 +8,8 @@ export interface PostDetailData {
   status: string; // 'draft' | 'scheduled' | 'published' | ...
   scheduledAt?: string | null;
   postedAt?: string | null;
+  contentGroupId?: string | null;
+  targetSocialAccountId?: string | null;
   brandId?: string;
   brand: { id: string; name: string };
   mediaAssets?: Array<{

@@ -5,6 +5,7 @@ export type OnboardingStatus = 'no_brand' | 'brand_no_social' | 'complete' | 'de
 export interface OnboardingState {
   status: OnboardingStatus;
   realBrandCount: number;
+  socialConnected: boolean;
   instagramConnected: boolean;
   activeBrandId: string | null;
   demoBrandId: string | null;

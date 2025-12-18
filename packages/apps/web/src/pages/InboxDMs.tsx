@@ -277,13 +277,15 @@ export default function InboxDMs() {
                 onSendMessage={handleSendMessage}
                 brandId={selectedBrand.id}
                 disabled={selectedConversation.state !== 'active'}
-                placeholder={
-                  selectedConversation.state === 'archived'
-                    ? 'Cannot reply to archived conversation'
-                    : selectedConversation.state === 'spam'
-                      ? 'Cannot reply to spam conversation'
-                      : 'Type your message...'
-                }
+                placeholder={(() => {
+                  if (selectedConversation.state === 'archived') {
+                    return 'Cannot reply to archived conversation';
+                  }
+                  if (selectedConversation.state === 'spam') {
+                    return 'Cannot reply to spam conversation';
+                  }
+                  return 'Type your message...';
+                })()}
               />
             </CardContent>
           </>

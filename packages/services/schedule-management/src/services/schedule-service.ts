@@ -110,6 +110,11 @@ export interface ScheduleRequest {
   idempotencyToken?: string;
 }
 
+export interface PublishNowScheduleRequest extends Omit<ScheduleRequest, 'scheduledAt'> {
+  // Optional client-provided value; ignored by the service.
+  scheduledAt?: string;
+}
+
 export interface Schedule {
   pk: string;
   sk: string;
@@ -432,6 +437,244 @@ export class ScheduleService {
   }
 
   /**
+   * Publish immediately.
+   *
+   * Creates (or updates) a schedule record with scheduledAt="now" and emits a schedule.due event.
+   *
+   * Reliability note: publisher reads schedules via scheduleId GSI, which is eventually consistent.
+   * We confirm the GSI has the record before emitting schedule.due to avoid "Schedule not found" races.
+   */
+  async publishNow(request: PublishNowScheduleRequest): Promise<ScheduleResult> {
+    logger.info('Publishing now', {
+      contentId: request.contentId,
+      brandId: request.brandId,
+      campaignId: request.campaignId,
+      platform: request.platform,
+    });
+
+    try {
+      // Validate campaign if specified
+      if (request.campaignId) {
+        const campaign = await getCampaignById(request.campaignId);
+        if (!canCampaignSchedule(campaign)) {
+          const blockReason = getCampaignScheduleBlockReason(campaign);
+          return {
+            success: false,
+            error: blockReason || 'Campaign does not allow publishing',
+          };
+        }
+      }
+
+      const now = new Date().toISOString();
+      const scheduledAt = now;
+      const ttl = Math.floor((Date.now() + 30 * 24 * 60 * 60 * 1000) / 1000);
+      const pk = `SCHEDULE#${request.contentId}`;
+
+      const existing = await docClient.send(
+        new GetCommand({
+          TableName: this.config.schedulesTable,
+          Key: { pk, sk: 'METADATA' },
+          ConsistentRead: true,
+        })
+      );
+
+      const existingSchedule = existing.Item as Schedule | undefined;
+      const scheduleId = existingSchedule?.scheduleId || randomUUID();
+      const idempotencyToken =
+        request.idempotencyToken || existingSchedule?.idempotencyToken || randomUUID();
+
+      const base: Schedule = {
+        pk,
+        sk: 'METADATA',
+        scheduleId,
+        contentId: request.contentId,
+        brandId: request.brandId,
+        userId: request.userId,
+        campaignId: request.campaignId,
+        status: SCHEDULE_STATUS.SCHEDULED,
+        scheduledAt,
+        gsi1pk: `BRAND#${request.brandId}`,
+        gsi1sk: scheduledAt,
+        platform: request.platform,
+        contentType: request.contentType,
+        mediaType: request.mediaType,
+        videoUrl: request.videoUrl,
+        caption: request.caption,
+        firstComment: request.firstComment,
+        hashtags: request.hashtags || [],
+        mediaAssets: request.mediaAssets,
+        metadata: request.metadata,
+        shareToFeed: request.shareToFeed,
+        thumbOffset: request.thumbOffset,
+        createdAt: existingSchedule?.createdAt || now,
+        updatedAt: now,
+        ttl,
+        eventBridgeScheduleCreated: false,
+        eventBridgeScheduleArn: undefined,
+        idempotencyToken,
+      };
+
+      let next: Schedule = base;
+
+      if (existingSchedule) {
+        // Security: ensure only the schedule owner can mutate/trigger.
+        if (existingSchedule.userId !== request.userId) {
+          return { success: false, error: 'Forbidden: You do not have access to this schedule' };
+        }
+
+        await docClient.send(
+          new PutCommand({
+            TableName: this.config.schedulesTable,
+            Item: next,
+          })
+        );
+      } else {
+        // Create record (idempotent).
+        try {
+          await docClient.send(
+            new PutCommand({
+              TableName: this.config.schedulesTable,
+              Item: next,
+              ConditionExpression: 'attribute_not_exists(pk)',
+            })
+          );
+        } catch (putErr) {
+          // If a concurrent writer created the schedule, re-read and continue.
+          const existingAgain = await docClient.send(
+            new GetCommand({
+              TableName: this.config.schedulesTable,
+              Key: { pk, sk: 'METADATA' },
+              ConsistentRead: true,
+            })
+          );
+          const scheduleAgain = existingAgain.Item as Schedule | undefined;
+          if (!scheduleAgain) throw putErr;
+          if (scheduleAgain.userId !== request.userId) {
+            return { success: false, error: 'Forbidden: You do not have access to this schedule' };
+          }
+
+          next = {
+            ...base,
+            scheduleId: scheduleAgain.scheduleId,
+            createdAt: scheduleAgain.createdAt || now,
+            idempotencyToken: scheduleAgain.idempotencyToken || idempotencyToken,
+          };
+
+          // Overwrite the existing schedule with the publish-now payload.
+          await docClient.send(
+            new PutCommand({
+              TableName: this.config.schedulesTable,
+              Item: next,
+            })
+          );
+        }
+      }
+
+      // Best-effort: delete any existing EventBridge schedule to prevent later triggers.
+      // We do this after scheduleId is finalized (handles rare races on initial creation).
+      try {
+        const targetCfg = await getSchedulerEventBusTargetConfig();
+        await schedulerClient.send(
+          new DeleteScheduleCommand({
+            Name: next.scheduleId,
+            GroupName: targetCfg.groupName,
+          })
+        );
+      } catch (deleteError) {
+        logger.debug('EventBridge schedule delete skipped/failed (ignored)', {
+          scheduleId: next.scheduleId,
+          error: deleteError,
+        });
+      }
+
+      // Confirm schedule is visible via scheduleId GSI before emitting schedule.due.
+      if (!existingSchedule) {
+        const deadline = Date.now() + 5000;
+        let visible = false;
+        while (Date.now() < deadline) {
+          const found = await this.getSchedule(next.scheduleId);
+          if (found.success && found.schedule) {
+            visible = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        if (!visible) {
+          logger.warn('Schedule not visible via scheduleId GSI; aborting publish-now emit', {
+            scheduleId: next.scheduleId,
+            contentId: request.contentId,
+          });
+          return {
+            success: false,
+            error: 'Schedule record not yet available; please retry',
+          };
+        }
+      }
+
+      try {
+        await eventBridge.send(
+          new PutEventsCommand({
+            Entries: [
+              {
+                Source: 'postolio.scheduling',
+                DetailType: 'schedule.due',
+                Detail: JSON.stringify({
+                  scheduleId: next.scheduleId,
+                  contentId: request.contentId,
+                  brandId: request.brandId,
+                  campaignId: request.campaignId,
+                  userId: request.userId,
+                }),
+                EventBusName: process.env.EVENT_BUS_NAME || 'default',
+              },
+            ],
+          })
+        );
+      } catch (emitErr) {
+        logger.error('Failed to emit schedule.due event', { error: emitErr, scheduleId });
+        return {
+          success: false,
+          error: 'Failed to enqueue publish event',
+        };
+      }
+
+      // Emit schedule.created after schedule.due is enqueued (keeps status-sync behavior consistent).
+      await this.emitScheduleEvent('schedule.created', next);
+
+      metrics.addMetric('PublishNowEnqueued', MetricUnit.Count, 1);
+
+      return {
+        success: true,
+        schedule: next,
+      };
+    } catch (error) {
+      logger.error('Failed to publish now', {
+        error,
+        contentId: request.contentId,
+      });
+
+      metrics.addMetric('PublishNowFailed', MetricUnit.Count, 1);
+
+      await this.emitScheduleFailedEvent(
+        undefined,
+        error instanceof Error ? error.message : 'Unknown error',
+        'create',
+        {
+          contentId: request.contentId,
+          brandId: request.brandId,
+          campaignId: request.campaignId,
+          platform: request.platform,
+        }
+      );
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
    * Get a schedule by ID
    */
   async getSchedule(scheduleId: string): Promise<ScheduleResult> {
@@ -715,6 +958,11 @@ export class ScheduleService {
         expressionAttributeValues[':caption'] = updateRequest.caption;
       }
 
+      if (updateRequest.firstComment !== undefined) {
+        updateExpressions.push('firstComment = :firstComment');
+        expressionAttributeValues[':firstComment'] = updateRequest.firstComment;
+      }
+
       if (updateRequest.hashtags !== undefined) {
         updateExpressions.push('hashtags = :hashtags');
         expressionAttributeValues[':hashtags'] = updateRequest.hashtags;
@@ -723,6 +971,16 @@ export class ScheduleService {
       if (updateRequest.mediaAssets !== undefined) {
         updateExpressions.push('mediaAssets = :mediaAssets');
         expressionAttributeValues[':mediaAssets'] = updateRequest.mediaAssets;
+      }
+
+      if (updateRequest.thumbOffset !== undefined) {
+        updateExpressions.push('thumbOffset = :thumbOffset');
+        expressionAttributeValues[':thumbOffset'] = updateRequest.thumbOffset;
+      }
+
+      if (updateRequest.shareToFeed !== undefined) {
+        updateExpressions.push('shareToFeed = :shareToFeed');
+        expressionAttributeValues[':shareToFeed'] = updateRequest.shareToFeed;
       }
 
       if (updateRequest.metadata !== undefined) {

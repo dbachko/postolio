@@ -5,14 +5,22 @@ import { prisma } from '../config/database.js';
 import { ConnectorFactory } from '../services/connectors/index.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { getRedisClient } from '../services/redis.js';
-import { fetchTokensFromService } from '../utils/token-service-client.js';
+import { fetchTokensForSocialAccountFromService } from '../utils/token-service-client.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { APIError } from '@postolio/errors';
 import { getAssetsClient } from '../services/assets-media.js';
 import type { AssetRecord } from '@postolio/assets-client';
+import { resolvePrimarySocialAccount } from '../services/social-account-resolver.js';
+import { getTokenService } from '../services/service-clients.js';
 
 const logger = baseLogger.child({ module: 'social-platform-routes' });
+
+const OptionalSocialAccountBodySchema = z
+  .object({
+    socialAccountId: z.string().optional(),
+  })
+  .passthrough();
 
 const PlatformParamSchema = z.object({
   platform: z.string(),
@@ -78,6 +86,53 @@ function ensurePlatformSupported(platform: string) {
     } as const;
   }
   return null;
+}
+
+function isDisconnected(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  return Boolean((metadata as any).disconnected);
+}
+
+async function resolveSocialAccountForBrandPlatform(params: {
+  brandId: string;
+  platform: string;
+  preferredSocialAccountId?: string | null;
+}) {
+  const preferredSocialAccountId = params.preferredSocialAccountId || null;
+
+  if (preferredSocialAccountId) {
+    const sa = await prisma.socialAccount.findFirst({
+      where: {
+        id: preferredSocialAccountId,
+        brandId: params.brandId,
+        platform: params.platform as any,
+      },
+      select: {
+        id: true,
+        platform: true,
+        externalAccountId: true,
+        externalPageId: true,
+        username: true,
+        displayName: true,
+        metadata: true,
+      },
+    });
+
+    if (!sa) return null;
+    if (isDisconnected(sa.metadata)) return null;
+
+    return {
+      id: sa.id,
+      platform: String(sa.platform),
+      externalAccountId: sa.externalAccountId,
+      externalPageId: sa.externalPageId,
+      username: sa.username,
+      displayName: sa.displayName,
+      metadata: sa.metadata,
+    };
+  }
+
+  return resolvePrimarySocialAccount(params.brandId, params.platform);
 }
 
 /**
@@ -165,18 +220,9 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           operation: 'status',
         });
 
-        // Check if social account exists (and is not soft-disconnected)
-        const socialAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId,
-            platform: platform as any,
-          },
-        });
+        const socialAccount = await resolvePrimarySocialAccount(brandId, platform);
 
-        const isDisconnected =
-          socialAccount && (socialAccount.metadata as any)?.disconnected === true;
-
-        if (!socialAccount || isDisconnected) {
+        if (!socialAccount) {
           return reply.send({
             connected: false,
             platform,
@@ -228,6 +274,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
       try {
         const { platform, contentId } = ContentIdSchema.parse(req.params);
         const userId = req.user!.id;
+        const body = OptionalSocialAccountBodySchema.parse((req.body || {}) as unknown);
 
         const platformError = ensurePlatformSupported(platform);
         if (platformError) {
@@ -295,18 +342,17 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Get social account for this platform (must be connected)
-        const socialAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId: content.brandId,
-            platform: platform as any,
-          },
+        const contentPreferredSocialAccountId =
+          typeof (content as any).targetSocialAccountId === 'string'
+            ? ((content as any).targetSocialAccountId as string)
+            : null;
+
+        const socialAccount = await resolveSocialAccountForBrandPlatform({
+          brandId: content.brandId,
+          platform,
+          preferredSocialAccountId: body.socialAccountId || contentPreferredSocialAccountId,
         });
-
-        const isDisconnectedForPublish =
-          socialAccount && (socialAccount.metadata as any)?.disconnected === true;
-
-        if (!socialAccount || isDisconnectedForPublish) {
+        if (!socialAccount) {
           return reply.code(400).send({
             error: 'Social account not connected',
             message: `Brand has not connected ${platform}`,
@@ -317,10 +363,11 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
         const connector = ConnectorFactory.get(platform as PlatformName);
 
         // Get credentials from token service
-        const tokens = await fetchTokensFromService(
+        const tokens = await fetchTokensForSocialAccountFromService(
           content.brand.userId,
           content.brandId,
-          platform
+          platform,
+          socialAccount.id
         );
 
         if (!tokens || !tokens.accessToken) {
@@ -567,6 +614,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
       try {
         const { platform, brandId } = PlatformParamSchema.parse(req.params);
         const userId = req.user!.id;
+        const body = OptionalSocialAccountBodySchema.parse((req.body || {}) as unknown);
 
         const platformError = ensurePlatformSupported(platform);
         if (platformError) {
@@ -622,19 +670,12 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           }
         }
 
-        // Get social account (must be connected)
-        const socialAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId,
-            platform: platform as any,
-          },
-          include: { brand: true },
+        const socialAccount = await resolveSocialAccountForBrandPlatform({
+          brandId,
+          platform,
+          preferredSocialAccountId: body.socialAccountId,
         });
-
-        const isDisconnectedForSync =
-          socialAccount && (socialAccount.metadata as any)?.disconnected === true;
-
-        if (!socialAccount || isDisconnectedForSync) {
+        if (!socialAccount) {
           return reply.code(400).send({
             error: 'platform_not_connected',
             message: `Brand has not connected ${platform}`,
@@ -645,7 +686,12 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
         const connector = ConnectorFactory.get(platform as PlatformName);
 
         // Get credentials
-        const tokens = await fetchTokensFromService(userId, brandId, platform);
+        const tokens = await fetchTokensForSocialAccountFromService(
+          userId,
+          brandId,
+          platform,
+          socialAccount.id
+        );
 
         if (!tokens || !tokens.accessToken) {
           return reply.code(401).send({
@@ -923,14 +969,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           operation: 'disconnect',
         });
 
-        // Get social account
-        const socialAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId,
-            platform: platform as any,
-          },
-          include: { brand: true },
-        });
+        const socialAccount = await resolvePrimarySocialAccount(brandId, platform);
 
         if (!socialAccount) {
           return reply.code(404).send({
@@ -994,8 +1033,23 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           }
         }
 
-        // TODO: Delete tokens from token-service
-        // await deleteTokensFromService(socialAccount.brand.userId, platform, brandId);
+        // Delete tokens from token-service (best-effort)
+        try {
+          const tokenService = await getTokenService();
+          await tokenService.deleteTokenForSocialAccount(
+            userId,
+            brandId,
+            platform,
+            socialAccount.id
+          );
+        } catch (e) {
+          logger.warn('Failed to delete token for disconnected platform', {
+            error: (e as any)?.message ?? String(e),
+            platform,
+            brandId,
+            socialAccountId: socialAccount.id,
+          });
+        }
 
         logger.info('Platform disconnected', {
           platform,
@@ -1146,10 +1200,11 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
         // Fallback: live fetch via connector when no ingested metrics exist yet.
         const connector = ConnectorFactory.get(platform as PlatformName);
 
-        const tokens = await fetchTokensFromService(
-          content.brand.userId,
-          content.brandId,
-          platform
+        const tokens = await fetchTokensForSocialAccountFromService(
+          publication.socialAccount.brand.userId,
+          publication.socialAccount.brandId,
+          platform,
+          publication.socialAccountId
         );
 
         if (!tokens || !tokens.accessToken) {

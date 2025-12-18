@@ -4,9 +4,9 @@ import { toZonedTime } from 'date-fns-tz';
 import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { content as contentApi, type Content } from '@/lib/api';
+import { brand as brandApi, content as contentApi, type Content } from '@/lib/api';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { convertLocalToUTC } from '@/lib/timezone';
 import { useCalendarItems } from './hooks/useCalendarItems';
@@ -19,6 +19,9 @@ import { isTouchDevice } from './utils/device';
 import { CALENDAR_VIEW_MAP } from './constants';
 import type { CalendarEvent, PlaceholderItem, RescheduleState } from './types';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
+import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
+import type { Platform } from '@/lib/platform-config';
+import type { SocialAccountsById } from '@/types/social-accounts';
 
 export interface FullCalendarProps {
   brandId: string;
@@ -57,6 +60,38 @@ function FullCalendarImpl({
   const primaryAssetIds = useMemo(() => content.map((item) => item.primaryAssetId), [content]);
   const { data: assetsById } = useAssetsByIds(primaryAssetIds);
 
+  const socialAccountsQuery = useQuery({
+    queryKey: ['brand-social-accounts', brandId],
+    queryFn: () => brandApi.getConnectedAccounts(brandId),
+    enabled: Boolean(brandId),
+    staleTime: CACHE_TIMES.LONG,
+    gcTime: GC_TIMES.LONG,
+    refetchOnWindowFocus: false,
+  });
+
+  const socialAccountsById = useMemo(() => {
+    const rawAccounts = (socialAccountsQuery.data as any)?.socialAccounts;
+    const accounts = Array.isArray(rawAccounts) ? (rawAccounts as any[]) : [];
+    const out: SocialAccountsById = {};
+
+    for (const account of accounts) {
+      const id = typeof account?.id === 'string' ? account.id : null;
+      const platform =
+        typeof account?.platform === 'string' ? (account.platform as Platform) : null;
+      if (!id || !platform) continue;
+      const username = typeof account?.username === 'string' ? account.username : null;
+      const displayName = typeof account?.displayName === 'string' ? account.displayName : null;
+      const label = username ? `@${username}` : displayName || platform;
+      const avatarName = username || displayName || platform;
+      const avatarUrl =
+        typeof account?.profilePictureUrl === 'string' ? account.profilePictureUrl : null;
+      const disconnected = account?.disconnected === true;
+      out[id] = { platform, label, avatarName, avatarUrl, disconnected };
+    }
+
+    return out;
+  }, [socialAccountsQuery.data]);
+
   const calendarView = CALENDAR_VIEW_MAP[view] ?? 'month';
   const calendarDate = calendarView === 'agenda' ? new Date() : date;
   const isTouch = isTouchDevice();
@@ -81,7 +116,18 @@ function FullCalendarImpl({
         }
 
         const utcISO = convertLocalToUTC(new Date(start), tzRef.current).toISOString();
-        await contentApi.updateContent({ contentId: event.id, scheduledAt: utcISO });
+        const record = resource.item as unknown as Record<string, unknown>;
+        const groupId =
+          typeof record.contentGroupId === 'string' && record.contentGroupId.trim().length > 0
+            ? record.contentGroupId.trim()
+            : null;
+        const isMultiDestination = record.isMultiDestination === true && Boolean(groupId);
+
+        if (isMultiDestination && groupId) {
+          await contentApi.scheduleContentGroup(groupId, utcISO);
+        } else {
+          await contentApi.updateContent({ contentId: event.id, scheduledAt: utcISO });
+        }
         toast.success('Post rescheduled');
       } catch (error) {
         console.error(error);
@@ -141,6 +187,7 @@ function FullCalendarImpl({
               brandId={brandId}
               onReschedule={(item) => setReschedule({ open: true, item })}
               assetsById={assetsById}
+              socialAccountsById={socialAccountsById}
             />
           ),
         }}

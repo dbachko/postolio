@@ -25,6 +25,8 @@ export interface CreateManualContentBody {
   scheduledAt?: string;
   shareToFeed?: boolean;
   firstComment?: string;
+  targetSocialAccountIds?: string[];
+  targetSocialAccountId?: string | null;
 }
 
 export interface ApproveContentBody {
@@ -92,6 +94,47 @@ export function validateRequestBody(body: CreateManualContentBody) {
         error: {
           error: 'firstComment must be at most 2200 characters',
           details: ['firstComment must be at most 2200 characters'],
+        },
+      };
+    }
+  }
+
+  if (
+    body.targetSocialAccountId !== undefined &&
+    body.targetSocialAccountId !== null &&
+    typeof body.targetSocialAccountId !== 'string'
+  ) {
+    return {
+      ok: false,
+      error: {
+        error: 'targetSocialAccountId must be a string or null if provided',
+        details: ['targetSocialAccountId must be a string or null if provided'],
+      },
+    };
+  }
+
+  if (body.targetSocialAccountIds !== undefined) {
+    if (!Array.isArray(body.targetSocialAccountIds)) {
+      return {
+        ok: false,
+        error: {
+          error: 'targetSocialAccountIds must be an array if provided',
+          details: ['targetSocialAccountIds must be an array if provided'],
+        },
+      };
+    }
+
+    const normalized = body.targetSocialAccountIds
+      .filter((v): v is string => typeof v === 'string')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+
+    if (normalized.length === 0) {
+      return {
+        ok: false,
+        error: {
+          error: 'targetSocialAccountIds must include at least one destination',
+          details: ['targetSocialAccountIds must include at least one destination'],
         },
       };
     }
@@ -266,6 +309,8 @@ export async function createContentInTransaction(
     scheduledAt?: string;
     shareToFeed?: boolean;
     firstComment?: string;
+    contentGroupId?: string | null;
+    targetSocialAccountId?: string | null;
     resolvedAssets: AssetRecord[];
   },
   prismaClient: any
@@ -281,10 +326,12 @@ export async function createContentInTransaction(
         status,
         brandId: params.brandId,
         campaignId: resolvedCampaignId,
+        contentGroupId: params.contentGroupId ?? null,
         scheduledAt: params.scheduledAt ? new Date(params.scheduledAt) : null,
         contentType: params.contentType || 'post',
         shareToFeed: params.shareToFeed ?? null,
         firstComment: params.firstComment ? params.firstComment.trim() : null,
+        targetSocialAccountId: params.targetSocialAccountId ?? null,
         generationParams: Prisma.JsonNull,
       },
       select: {
@@ -311,6 +358,8 @@ export async function createContentInTransaction(
         status: true,
         brandId: true,
         campaignId: true,
+        contentGroupId: true,
+        targetSocialAccountId: true,
         schedulingError: true,
         generationParams: true,
         createdAt: true,

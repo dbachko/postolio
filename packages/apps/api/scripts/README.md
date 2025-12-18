@@ -11,6 +11,7 @@ Seeds the database with a complete test user, brand, campaigns, and content for 
 **Updated Features:**
 
 - ✅ Creates Instagram account connection data for brands
+- ✅ Creates Facebook Page connection data for brands
 - ✅ Generates realistic Instagram profile metadata
 - ✅ Creates varied campaigns with different statuses
 - ✅ Generates content across all content statuses
@@ -45,10 +46,10 @@ pnpm --filter=api tsx scripts/seed-dev.ts \
    - Premium subscription tier
    - UTC timezone
 
-2. **Brand with Instagram Connection**
+2. **Brand with Social Accounts (Instagram + Facebook Page)**
    - Brand name and description
    - Instagram account ID (random, format: `IG_xxxxxxxxxxxxx`)
-   - Instagram page ID (random, format: `FB_xxxxxxxxxxxxx`)
+   - Facebook Page ID (random, format: `FB_xxxxxxxxxxxxx`)
    - Instagram profile data:
      - Username (derived from brand name)
      - Display name
@@ -56,6 +57,9 @@ pnpm --filter=api tsx scripts/seed-dev.ts \
      - Follower/following counts (random)
      - Biography and website
      - Profile picture URL
+   - Brand defaults:
+     - `preferences.primarySocialAccountIds.instagram`
+     - `preferences.primarySocialAccountIds.facebook`
 
 3. **7 Demo Campaigns** (all statuses):
    - Onboarding Preview (preview)

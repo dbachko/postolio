@@ -119,5 +119,7 @@ export default function CampaignsContainer() {
     );
   }
 
-  return currentView === 'create' ? create : currentView === 'details' ? details : dashboard;
+  if (currentView === 'create') return create;
+  if (currentView === 'details') return details;
+  return dashboard;
 }

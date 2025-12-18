@@ -196,26 +196,46 @@ function validateFacebook(payload: ValidateContentPayload): ValidationResult {
 
   const data = parsed.data;
   const errors: ValidationErrorItem[] = [];
-  const mediaType = data.mediaType || 'image';
-  const counts = getMediaCounts(data.mediaAssets, mediaType);
+  const mediaTypeHint = typeof data.mediaType === 'string' ? data.mediaType : undefined;
+  const counts = getMediaCounts(data.mediaAssets, mediaTypeHint);
   const hasText = !!(data.caption && data.caption.trim().length > 0);
 
-  if (mediaType === 'image' && counts.images < 1) {
+  const explicitMediaType = typeof data.mediaType === 'string' ? data.mediaType.toLowerCase() : '';
+  const effectiveMediaType: 'image' | 'video' | 'mixed' | null = (() => {
+    if (explicitMediaType === 'image' || explicitMediaType === 'video') return explicitMediaType;
+    if (data.videoUrl) return 'video';
+    if (counts.videos > 0 && counts.images === 0) return 'video';
+    if (counts.images > 0 && counts.videos === 0) return 'image';
+    if (counts.images > 0 && counts.videos > 0) return 'mixed';
+    return null;
+  })();
+
+  if (effectiveMediaType === 'mixed') {
+    errors.push({
+      field: 'mediaAssets',
+      message: 'Facebook posts cannot mix images and videos in the same post',
+      code: 'MEDIA_MIXED',
+    });
+  }
+
+  if (effectiveMediaType === 'image' && counts.images < 1) {
     errors.push({
       field: 'mediaAssets',
       message: 'A photo/album post needs at least one image',
       code: 'MEDIA_REQUIRED',
     });
   }
-  // For Facebook, treat multiple images as an album/carousel implicitly; require at least 1 image.
-  if (mediaType === 'video' && !data.videoUrl && counts.videos < 1) {
+
+  // For Facebook, treat multiple images as an album implicitly; require at least 1 image.
+  if (effectiveMediaType === 'video' && !data.videoUrl && counts.videos < 1) {
     errors.push({
       field: 'videoUrl',
       message: 'Video post requires a video asset',
       code: 'MEDIA_REQUIRED',
     });
   }
-  if (!hasText && counts.total === 0 && !data.videoUrl) {
+
+  if (!effectiveMediaType && !hasText) {
     errors.push({
       field: 'caption',
       message: 'Provide text or media for a Facebook post',

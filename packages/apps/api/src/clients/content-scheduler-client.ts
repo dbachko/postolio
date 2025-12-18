@@ -66,13 +66,20 @@ const CreateScheduleInputSchema = z.object({
   shareToFeed: z.boolean().optional(),
 });
 
+const PublishNowInputSchema = CreateScheduleInputSchema.omit({ scheduledAt: true }).extend({
+  // Optional client-provided value; the scheduler service sets the actual value.
+  scheduledAt: z.string().datetime().optional(),
+});
+
 const UpdateScheduleInputSchema = z
   .object({
     scheduledAt: z.string().datetime().optional(), // Changed from scheduledTime
     caption: z.string().optional(),
+    firstComment: z.string().max(2200, 'firstComment must be at most 2200 characters').optional(),
     mediaAssets: z.array(MediaAssetSchema).optional(),
     hashtags: z.array(z.string()).optional(),
     thumbOffset: z.number().optional(),
+    shareToFeed: z.boolean().optional(),
     status: ScheduleStatusSchema.optional(),
     metadata: MetadataSchema.optional(),
     // API Gateway validation fields (required when performing reschedule)
@@ -148,6 +155,7 @@ export type MediaAsset = z.infer<typeof MediaAssetSchema>;
 export type Schedule = z.infer<typeof ScheduleSchema>;
 export type ScheduleList = z.infer<typeof ScheduleListSchema>;
 export type CreateScheduleInput = z.infer<typeof CreateScheduleInputSchema>;
+export type PublishNowInput = z.infer<typeof PublishNowInputSchema>;
 export type UpdateScheduleInput = z.infer<typeof UpdateScheduleInputSchema>;
 export type ListSchedulesParams = z.infer<typeof ListSchedulesParamsSchema>;
 
@@ -515,6 +523,36 @@ export class ContentSchedulerClient {
   }
 
   /**
+   * Publish immediately (no EventBridge schedule creation).
+   *
+   * Creates/updates a schedule record and emits schedule.due right away.
+   */
+  async publishNow(data: PublishNowInput): Promise<Schedule> {
+    return this.executeWithCircuitBreaker(async () => {
+      const validatedData = PublishNowInputSchema.parse(data);
+
+      const response = await this.retryWithBackoff(() =>
+        this.client.post('schedules/publish-now', validatedData)
+      );
+
+      if (this.debug) {
+        const size = this.safeSize(response.data);
+        this.log('info', 'scheduler.http.publishNow.response', {
+          status: response.status,
+          size,
+          body: size < 2048 ? response.data : undefined,
+        });
+      }
+
+      const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
+      return this.parseScheduleResponseData(responseBody.data, {
+        path: 'schedules/publish-now',
+        status: response.status,
+      });
+    });
+  }
+
+  /**
    * Update an existing schedule
    */
   async updateSchedule(id: string, data: UpdateScheduleInput): Promise<Schedule> {
@@ -540,9 +578,15 @@ export class ContentSchedulerClient {
   /**
    * Delete a schedule
    */
-  async deleteSchedule(id: string): Promise<void> {
+  async deleteSchedule(id: string, options?: { userId?: string }): Promise<void> {
     return this.executeWithCircuitBreaker(async () => {
-      await this.retryWithBackoff(() => this.client.delete(`schedules/${id}`));
+      const headers: Record<string, string> = {};
+      const userId = options?.userId && options.userId.trim().length ? options.userId.trim() : null;
+      if (userId) headers['X-User-Context'] = userId;
+
+      await this.retryWithBackoff(() =>
+        this.client.delete(`schedules/${id}`, Object.keys(headers).length ? { headers } : undefined)
+      );
     });
   }
 

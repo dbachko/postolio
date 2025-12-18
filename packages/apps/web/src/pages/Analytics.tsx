@@ -4,7 +4,8 @@ import { brand as brandApi, httpGet, analytics } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { BarChart3, Instagram } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
+import { InstagramIcon } from '@/components/icons/BrandIcons';
 import { AnalyticsOverviewTab } from '../components/analytics-tabs/AnalyticsOverviewTab';
 import { AnalyticsInstagramTab } from '../components/analytics-tabs/AnalyticsInstagramTab';
 
@@ -155,9 +156,11 @@ export default function Analytics() {
     setError('');
 
     try {
-      const period = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
+      let period: '7d' | '30d' | '90d' = '30d';
+      if (daysPeriod === 7) period = '7d';
+      else if (daysPeriod === 90) period = '90d';
 
-      const window = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
+      const window = period;
       const [v2Summary, topPublications, accountSeries] = await Promise.all([
         analytics.getBrandSummary(selectedBrand.id, period).catch(() => null),
         analytics.getBrandTopPublications(selectedBrand.id, 10).catch(() => null),
@@ -420,7 +423,7 @@ export default function Analytics() {
                   : 'text-muted-foreground hover:text-foreground border-transparent hover:border-gray-300'
               }`}
             >
-              <Instagram className="h-4 w-4" />
+              <InstagramIcon className="h-4 w-4" aria-hidden="true" />
               <span>Instagram</span>
             </button>
           </div>

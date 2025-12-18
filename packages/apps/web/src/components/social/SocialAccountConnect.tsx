@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Avatar } from '@/components/ui/avatar';
+import { ProfileAvatar } from '@/components/ui/profile-avatar';
 import { brand as brandApi } from '@/lib/api';
 import type { Brand } from '@/lib/api';
 import { type Platform, getPlatformConfig } from '@/lib/platform-config';
@@ -41,6 +41,12 @@ interface SocialAccountConnectProps {
   customActions?: React.ReactNode;
   /** Callback when connection status changes */
   onConnectionChange?: (connected: boolean) => void;
+}
+
+function getAccountTypeLabel(accountType: string): string {
+  if (accountType === 'BUSINESS') return 'Business';
+  if (accountType === 'CREATOR') return 'Creator';
+  return accountType;
 }
 
 export function SocialAccountConnect({
@@ -245,7 +251,7 @@ export function SocialAccountConnect({
           <div className="bg-muted rounded-lg border p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
-                <Avatar
+                <ProfileAvatar
                   src={profile.profile_picture_url || null}
                   name={profile.name || profile.username}
                   alt={`@${profile.username}`}
@@ -282,11 +288,7 @@ export function SocialAccountConnect({
                   variant={profile.account_type === 'BUSINESS' ? 'default' : 'secondary'}
                   className="ml-2"
                 >
-                  {profile.account_type === 'BUSINESS'
-                    ? 'Business'
-                    : profile.account_type === 'CREATOR'
-                      ? 'Creator'
-                      : profile.account_type}
+                  {getAccountTypeLabel(profile.account_type)}
                 </Badge>
               )}
             </div>

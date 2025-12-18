@@ -48,6 +48,7 @@ vi.mock('../../config/database.js', () => {
     socialAccount: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       upsert: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -67,6 +68,7 @@ vi.mock('../../config/database.js', () => {
     },
     brand: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
     },
     auditLog: {
       create: vi.fn(),
@@ -96,6 +98,18 @@ vi.mock('../../utils/token-service-client.js', () => ({
       refreshToken: 'mock-refresh-token',
     })
   ),
+  fetchTokensForSocialAccountFromService: vi.fn(() =>
+    Promise.resolve({
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+    })
+  ),
+}));
+
+vi.mock('../../services/service-clients.js', () => ({
+  getTokenService: vi.fn(async () => ({
+    deleteTokenForSocialAccount: vi.fn(async () => true),
+  })),
 }));
 
 vi.mock('../../services/assets-media.js', () => ({
@@ -171,6 +185,8 @@ describe('Social Platform Routes', () => {
     // Get mock Prisma instance
     const { getDatabaseClient } = await import('../../config/database.js');
     mockPrisma = getDatabaseClient();
+
+    mockPrisma.socialAccount.findMany.mockResolvedValue([]);
   });
 
   describe('GET /api/social/:platform/status/:brandId', () => {
@@ -186,10 +202,14 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         platform: 'instagram',
         externalAccountId: 'ig-account-123',
+        externalPageId: null,
+        username: null,
         displayName: 'testuser',
+        metadata: null,
+        createdAt: new Date(),
+        sortOrder: 0,
       };
-      mockPrisma.socialAccount.findUnique.mockResolvedValue(socialAccount);
-      mockPrisma.socialAccount.findFirst.mockResolvedValue(socialAccount);
+      mockPrisma.socialAccount.findMany.mockResolvedValue([socialAccount]);
 
       const response = await app.inject({
         method: 'GET',
@@ -294,9 +314,14 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         platform: 'instagram',
         externalAccountId: 'ig-account-123',
+        externalPageId: null,
+        username: null,
+        displayName: null,
+        metadata: null,
+        createdAt: new Date(),
+        sortOrder: 0,
       };
-      mockPrisma.socialAccount.findUnique.mockResolvedValue(socialAccount);
-      mockPrisma.socialAccount.findFirst.mockResolvedValue(socialAccount);
+      mockPrisma.socialAccount.findMany.mockResolvedValue([socialAccount]);
 
       mockPrisma.socialAccount.upsert.mockResolvedValue({
         id: 'social-account-123',
@@ -386,9 +411,14 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         platform: 'instagram',
         externalAccountId: 'ig-account-123',
+        externalPageId: null,
+        username: null,
+        displayName: null,
+        metadata: null,
+        createdAt: new Date(),
+        sortOrder: 0,
       };
-      mockPrisma.socialAccount.findUnique.mockResolvedValue(socialAccount);
-      mockPrisma.socialAccount.findFirst.mockResolvedValue(socialAccount);
+      mockPrisma.socialAccount.findMany.mockResolvedValue([socialAccount]);
 
       vi.mocked(mockConnector.publish).mockRejectedValue(new Error('Rate limit exceeded'));
 
@@ -453,9 +483,14 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         platform: 'instagram',
         externalAccountId: 'ig-account-123',
+        externalPageId: null,
+        username: null,
+        displayName: null,
+        metadata: null,
+        createdAt: new Date(),
+        sortOrder: 0,
       };
-      mockPrisma.socialAccount.findUnique.mockResolvedValue(socialAccount);
-      mockPrisma.socialAccount.findFirst.mockResolvedValue(socialAccount);
+      mockPrisma.socialAccount.findMany.mockResolvedValue([socialAccount]);
 
       vi.mocked(mockConnector.listRecentPosts).mockResolvedValue({
         data: [
@@ -505,9 +540,14 @@ describe('Social Platform Routes', () => {
         brandId: 'brand-123',
         platform: 'instagram',
         externalAccountId: 'ig-account-123',
+        externalPageId: null,
+        username: null,
+        displayName: null,
+        metadata: null,
+        createdAt: new Date(),
+        sortOrder: 0,
       };
-      mockPrisma.socialAccount.findUnique.mockResolvedValue(socialAccount);
-      mockPrisma.socialAccount.findFirst.mockResolvedValue(socialAccount);
+      mockPrisma.socialAccount.findMany.mockResolvedValue([socialAccount]);
 
       vi.mocked(mockConnector.listRecentPosts).mockResolvedValue({
         data: [
@@ -569,7 +609,20 @@ describe('Social Platform Routes', () => {
         userId: 'user-123',
       });
 
-      mockPrisma.socialAccount.delete.mockResolvedValue({});
+      const socialAccount = {
+        id: 'social-account-123',
+        brandId: 'brand-123',
+        platform: 'instagram',
+        externalAccountId: 'ig-account-123',
+        externalPageId: 'fb-page-123',
+        username: 'testuser',
+        displayName: 'Test User',
+        metadata: {},
+        createdAt: new Date(),
+        sortOrder: 0,
+      };
+      mockPrisma.socialAccount.findMany.mockResolvedValue([socialAccount]);
+      mockPrisma.socialAccount.update.mockResolvedValue({});
 
       const response = await app.inject({
         method: 'POST',
@@ -613,10 +666,15 @@ describe('Social Platform Routes', () => {
           contentId: 'content-123',
           platform: 'instagram',
           externalPostId: 'ig-post-123',
+          socialAccountId: 'social-account-123',
           socialAccount: {
             id: 'social-account-123',
+            brandId: 'brand-123',
+            brand: { id: 'brand-123', userId: 'user-123' },
             platform: 'instagram',
             externalAccountId: 'ig-account-123',
+            externalPageId: 'fb-page-123',
+            username: 'testuser',
           },
         },
       ]);

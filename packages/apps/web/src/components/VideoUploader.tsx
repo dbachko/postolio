@@ -409,6 +409,7 @@ export function VideoUploader({
             isUploading={isUploading}
             progressPercent={uploadProgress?.percentage}
             showDragHandle={false}
+            fit="contain"
             onVideoLoaded={handleVideoLoad}
             onVideoError={() => {
               if (!selectedFile) {

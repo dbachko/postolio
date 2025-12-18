@@ -556,4 +556,174 @@ describe('Publisher Lambda', () => {
       );
     });
   });
+
+  describe('Facebook Publishing', () => {
+    it('should successfully publish a single image post to Facebook', async () => {
+      dynamoMock.on(QueryCommand).resolves({
+        Items: [
+          {
+            pk: 'BRAND#brand-789',
+            sk: 'SCHEDULE#test-schedule-123',
+            scheduleId: 'test-schedule-123',
+            contentId: 'content-456',
+            brandId: 'brand-789',
+            userId: 'user-001',
+            platform: 'facebook',
+            caption: 'Test Facebook post caption',
+            contentType: 'post',
+            mediaType: 'image',
+            mediaAssets: [
+              {
+                key: 'images/test-image.jpg',
+                type: 'image',
+                order: 0,
+              },
+            ],
+            metadata: { socialAccountId: 'sa-facebook-1' },
+          },
+        ],
+      });
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          accessToken: 'fb-access-token',
+          metadata: {
+            pageId: 'facebook-page-123',
+          },
+        }),
+      });
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({ id: 'fb-photo-1', post_id: 'facebook-page-123_999' }),
+      });
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({ permalink_url: 'https://facebook.com/permalink/facebook-page-123_999' }),
+      });
+
+      dynamoMock.on(UpdateCommand).resolves({});
+      eventBridgeMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
+      schedulerMock.on(DeleteScheduleCommand).resolves({});
+
+      const { handler } = await import('./index.js');
+      const event: EventBridgeEvent<'schedule.due', ScheduleDueDetail> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'schedule.due',
+        source: 'postolio.scheduling',
+        account: '123456789',
+        time: new Date().toISOString(),
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          scheduleId: 'test-schedule-123',
+        },
+      };
+
+      await handler(event, {} as Context);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('token-service.example.com/tokens'),
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/facebook-page-123/photos'),
+        expect.anything()
+      );
+      expect(eventBridgeMock.commandCalls(PutEventsCommand)).toHaveLength(1);
+      expect(
+        eventBridgeMock.commandCalls(PutEventsCommand)[0].args[0].input.Entries?.[0].DetailType
+      ).toBe('post.published');
+      expect(schedulerMock.commandCalls(DeleteScheduleCommand)).toHaveLength(1);
+    });
+
+    it('should successfully publish an album post to Facebook', async () => {
+      dynamoMock.on(QueryCommand).resolves({
+        Items: [
+          {
+            pk: 'BRAND#brand-789',
+            sk: 'SCHEDULE#test-schedule-123',
+            scheduleId: 'test-schedule-123',
+            contentId: 'content-456',
+            brandId: 'brand-789',
+            userId: 'user-001',
+            platform: 'facebook',
+            caption: 'Album caption',
+            contentType: 'post',
+            mediaType: 'image',
+            mediaAssets: [
+              { key: 'images/one.jpg', type: 'image', order: 0 },
+              { key: 'images/two.jpg', type: 'image', order: 1 },
+              { key: 'images/three.jpg', type: 'image', order: 2 },
+            ],
+            metadata: { socialAccountId: 'sa-facebook-1' },
+          },
+        ],
+      });
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          accessToken: 'fb-access-token',
+          metadata: {
+            pageId: 'facebook-page-123',
+          },
+        }),
+      });
+
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify({ id: 'fb-photo-a' }) })
+        .mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify({ id: 'fb-photo-b' }) })
+        .mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify({ id: 'fb-photo-c' }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => JSON.stringify({ id: 'facebook-page-123_111' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () =>
+            JSON.stringify({
+              permalink_url: 'https://facebook.com/permalink/facebook-page-123_111',
+            }),
+        });
+
+      dynamoMock.on(UpdateCommand).resolves({});
+      eventBridgeMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
+      schedulerMock.on(DeleteScheduleCommand).resolves({});
+
+      const { handler } = await import('./index.js');
+      const event: EventBridgeEvent<'schedule.due', ScheduleDueDetail> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'schedule.due',
+        source: 'postolio.scheduling',
+        account: '123456789',
+        time: new Date().toISOString(),
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          scheduleId: 'test-schedule-123',
+        },
+      };
+
+      await handler(event, {} as Context);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/facebook-page-123/photos'),
+        expect.anything()
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/facebook-page-123/feed'),
+        expect.anything()
+      );
+      expect(eventBridgeMock.commandCalls(PutEventsCommand)).toHaveLength(1);
+      expect(
+        eventBridgeMock.commandCalls(PutEventsCommand)[0].args[0].input.Entries?.[0].DetailType
+      ).toBe('post.published');
+    });
+  });
 });

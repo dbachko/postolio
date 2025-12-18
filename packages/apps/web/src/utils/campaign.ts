@@ -50,3 +50,16 @@ export const getStyleLabel = (style: unknown): string => {
   }
   return '—';
 };
+
+export const getPriorityLabel = (priority: unknown): string => {
+  let numeric = NaN;
+  if (typeof priority === 'number') numeric = priority;
+  else if (typeof priority === 'string') numeric = Number(priority);
+
+  if (!Number.isFinite(numeric)) return '—';
+
+  // Convention: higher number = higher priority (legacy scale was typically 1-10).
+  if (numeric >= 8) return 'High';
+  if (numeric >= 5) return 'Medium';
+  return 'Low';
+};

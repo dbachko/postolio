@@ -163,18 +163,13 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
   const getTrendIcon = (trend?: 'up' | 'down' | 'stable') => {
     if (!trend) return null;
 
-    const className =
-      trend === 'up'
-        ? 'h-3 w-3 text-green-600 dark:text-green-400'
-        : trend === 'down'
-          ? 'h-3 w-3 text-red-600 dark:text-red-400'
-          : 'h-3 w-3 text-gray-600 dark:text-gray-400';
+    let className = 'h-3 w-3 text-gray-600 dark:text-gray-400';
+    if (trend === 'up') className = 'h-3 w-3 text-green-600 dark:text-green-400';
+    else if (trend === 'down') className = 'h-3 w-3 text-red-600 dark:text-red-400';
 
-    return trend === 'up' ? (
-      <TrendingUp className={className} />
-    ) : trend === 'down' ? (
-      <AlertCircle className={className} />
-    ) : null;
+    if (trend === 'up') return <TrendingUp className={className} />;
+    if (trend === 'down') return <AlertCircle className={className} />;
+    return null;
   };
 
   return (

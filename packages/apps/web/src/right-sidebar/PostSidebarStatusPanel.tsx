@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import type { PostStatus } from '@/components/PostStatusCard';
-import { Instagram } from 'lucide-react';
+import { InstagramIcon } from '@/components/icons/BrandIcons';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
 
 interface PostSidebarStatusPanelProps {
@@ -48,7 +48,7 @@ export function PostSidebarStatusPanel({
             className="text-xs"
             onClick={() => window.open(instagramPermalink, '_blank')}
           >
-            <Instagram className="mr-1 h-4 w-4" />
+            <InstagramIcon className="mr-1 h-4 w-4" aria-hidden="true" />
             <span>View on Instagram</span>
           </Button>
         )}

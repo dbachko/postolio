@@ -7,8 +7,9 @@ import { getDatabaseClient } from '../../config/database.js';
 import { ConnectorFactory } from '../connectors/index.js';
 import type { PlatformName } from '@postolio/connectors';
 import { logger as baseLogger } from '@postolio/logger';
-import { fetchTokensFromService } from '../../utils/token-service-client.js';
+import { fetchTokensForSocialAccountFromService } from '../../utils/token-service-client.js';
 import { getAssetsClient } from '../assets-media.js';
+import { resolvePrimarySocialAccount } from '../social-account-resolver.js';
 
 const prisma = getDatabaseClient();
 const logger = baseLogger.child({ module: 'publishing' });
@@ -79,13 +80,7 @@ export async function publishContent(
       };
     }
 
-    // Get social account for this platform
-    const socialAccount = await prisma.socialAccount.findFirst({
-      where: {
-        brandId: content.brandId,
-        platform,
-      },
-    });
+    const socialAccount = await resolvePrimarySocialAccount(content.brandId, platform);
 
     if (!socialAccount) {
       return {
@@ -108,10 +103,11 @@ export async function publishContent(
     const connector = ConnectorFactory.get(platform as PlatformName);
 
     // Get credentials from token service
-    const tokens = await fetchTokensFromService(
+    const tokens = await fetchTokensForSocialAccountFromService(
       content.brand.userId,
       content.brandId,
-      platform as string
+      platform as string,
+      socialAccount.id
     );
 
     if (!tokens) {

@@ -66,7 +66,9 @@ export function GrowthProjectionCard({
   }
 
   const getTrendIcon = (trend: string) => {
-    return trend === 'increasing' ? TrendingUp : trend === 'decreasing' ? TrendingDown : ArrowRight;
+    if (trend === 'increasing') return TrendingUp;
+    if (trend === 'decreasing') return TrendingDown;
+    return ArrowRight;
   };
 
   const getTrendColor = (trend: string) => {

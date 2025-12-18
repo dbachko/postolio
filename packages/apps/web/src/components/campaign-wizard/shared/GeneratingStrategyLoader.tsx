@@ -93,18 +93,18 @@ export function GeneratingStrategyLoader() {
 
           {/* Progress dots */}
           <div className="flex gap-2">
-            {loadingSteps.map((_, index) => (
-              <div
-                key={index}
-                className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${
-                  index === currentStep
-                    ? 'bg-primary w-6'
-                    : index < currentStep
-                      ? 'bg-primary/40'
-                      : 'bg-muted'
-                }`}
-              />
-            ))}
+            {loadingSteps.map((_, index) => {
+              let dotClassName = 'bg-muted';
+              if (index === currentStep) dotClassName = 'bg-primary w-6';
+              else if (index < currentStep) dotClassName = 'bg-primary/40';
+
+              return (
+                <div
+                  key={index}
+                  className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${dotClassName}`}
+                />
+              );
+            })}
           </div>
         </div>
       </CardContent>

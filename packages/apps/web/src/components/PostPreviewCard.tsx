@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone } from 'date-fns-tz';
-import { CalendarClock, Clock, Copy, ExternalLink, Trash2 } from 'lucide-react';
+import { CalendarClock, Clock, Copy, ExternalLink, Layers, Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
@@ -16,6 +16,8 @@ import { getPostStatusBorderColor } from '@/utils/post-status-colors';
 import { getMediaBadgeType } from '@/utils/media-type';
 import { MediaTypeBadge } from '@/components/MediaTypeBadge';
 import type { AssetType } from '@/features/assets/api/client';
+import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
+import type { SocialAccountsById } from '@/types/social-accounts';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,12 +36,22 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Badge } from '@/components/ui/badge';
+
+type DeleteTarget =
+  | { kind: 'content'; contentId: string }
+  | { kind: 'group'; contentGroupId: string; destinationCount: number };
+
+type ScheduleTarget =
+  | { kind: 'content'; contentId: string }
+  | { kind: 'group'; contentGroupId: string; destinationCount: number };
 
 interface PostPreviewCardProps {
   item: CalendarItem;
   timezone: string;
   onReschedule?: (item: CalendarItem) => void;
   primaryAsset?: AssetType | null;
+  socialAccountsById?: SocialAccountsById;
 }
 
 // Lightweight preview card shown inside the Month grid
@@ -48,9 +60,34 @@ export function PostPreviewCard({
   timezone,
   onReschedule,
   primaryAsset,
+  socialAccountsById,
 }: PostPreviewCardProps) {
   const navigate = useNavigate();
   const { openSidebar } = useRightSidebarRouter();
+
+  const groupMeta = useMemo(() => {
+    if (item.type === 'placeholder') return null;
+    const record = item as unknown as Record<string, unknown>;
+    const contentGroupId =
+      typeof record.contentGroupId === 'string' && record.contentGroupId.trim().length > 0
+        ? record.contentGroupId.trim()
+        : null;
+    const isMultiDestination = record.isMultiDestination === true && Boolean(contentGroupId);
+    const destinationContentIds = Array.isArray(record.destinationContentIds)
+      ? (record.destinationContentIds as unknown[])
+          .filter((v): v is string => typeof v === 'string')
+          .map((v) => v.trim())
+          .filter((v) => v.length > 0)
+      : [];
+    const destinationCount = destinationContentIds.length > 0 ? destinationContentIds.length : 0;
+
+    if (!isMultiDestination || !contentGroupId) return null;
+
+    return {
+      contentGroupId,
+      destinationCount: destinationCount > 0 ? destinationCount : 2,
+    };
+  }, [item]);
 
   const { status, displayTime, campaignColor } = useMemo(() => {
     const isPlaceholder = item.type === 'placeholder' || (item as any)?.isPlaceholder;
@@ -95,6 +132,71 @@ export function PostPreviewCard({
   });
   const showMediaBadge = item.type !== 'placeholder';
 
+  const destinationAvatars = useMemo(() => {
+    if (item.type === 'placeholder') return null;
+    if (!socialAccountsById) return null;
+
+    const record = item as unknown as Record<string, unknown>;
+    const rawIds = Array.isArray(record.destinationSocialAccountIds)
+      ? (record.destinationSocialAccountIds as unknown[])
+      : null;
+    const singleId =
+      typeof record.targetSocialAccountId === 'string' ? record.targetSocialAccountId : null;
+
+    const ids = (rawIds && rawIds.length > 0 ? rawIds : singleId ? [singleId] : [])
+      .filter((v): v is string => typeof v === 'string')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+
+    const unique = Array.from(new Set(ids));
+    if (unique.length === 0) return null;
+
+    const maxVisible = 3;
+    const visible = unique.slice(0, maxVisible);
+    const extraCount = unique.length - visible.length;
+
+    return (
+      <div className="flex items-center -space-x-2">
+        {visible.map((id) => {
+          const meta = socialAccountsById[id];
+          if (!meta) return null;
+          return (
+            <div key={id} className="shrink-0" title={meta.label}>
+              <SocialAccountAvatar
+                platform={meta.platform}
+                name={meta.avatarName}
+                src={meta.avatarUrl}
+                size="xs"
+                disabled={meta.disconnected}
+                muted={false}
+              />
+            </div>
+          );
+        })}
+        {extraCount > 0 ? (
+          <div className="bg-muted text-muted-foreground border-border flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium">
+            +{extraCount}
+          </div>
+        ) : null}
+      </div>
+    );
+  }, [item, socialAccountsById]);
+
+  const groupBadge = useMemo(() => {
+    if (!groupMeta) return null;
+    return (
+      <Badge
+        variant="secondary"
+        className="gap-1 px-2 py-0.5 text-[11px] font-medium"
+        title={`${groupMeta.destinationCount} destinations`}
+      >
+        <Layers className="h-3 w-3" />
+        <span>{groupMeta.destinationCount}</span>
+        <span className="sr-only">destinations</span>
+      </Badge>
+    );
+  }, [groupMeta]);
+
   useEffect(() => {
     setImageReady(false);
   }, [previewUrl]);
@@ -126,9 +228,14 @@ export function PostPreviewCard({
   // Mutations
   const queryClient = useQueryClient();
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => contentApi.deletePost(id),
+    mutationFn: (target: DeleteTarget) => {
+      if (target.kind === 'group') {
+        return contentApi.deleteContentGroup(target.contentGroupId);
+      }
+      return contentApi.deletePost(target.contentId);
+    },
     onSuccess: () => {
-      toast.success('Post deleted');
+      toast.success(groupMeta ? 'Posts deleted' : 'Post deleted');
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.invalidateQueries({ queryKey: ['content'] });
     },
@@ -136,13 +243,19 @@ export function PostPreviewCard({
   });
 
   const unscheduleMutation = useMutation({
-    mutationFn: (id: string) =>
-      contentApi.updateContent({
-        contentId: id,
+    mutationFn: (target: ScheduleTarget) => {
+      if (target.kind === 'group') {
+        return contentApi.scheduleContentGroup(target.contentGroupId, null);
+      }
+      return contentApi.updateContent({
+        contentId: target.contentId,
         scheduledAt: null,
-      }),
+      });
+    },
     onSuccess: () => {
-      toast.success('Post unscheduled and moved to Drafts');
+      toast.success(
+        groupMeta ? 'Posts unscheduled and moved to Drafts' : 'Post unscheduled and moved to Drafts'
+      );
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.invalidateQueries({ queryKey: ['content'] });
     },
@@ -206,24 +319,28 @@ export function PostPreviewCard({
 
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center justify-between gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PostStatusTimeBadge status={status} variant="inline">
-                        {displayTime ? (
-                          <span>{displayTime}</span>
-                        ) : (
-                          <span className="italic">No time</span>
-                        )}
-                      </PostStatusTimeBadge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <span className="capitalize">
-                        {status === 'placeholder' ? 'Future AI' : status}
-                      </span>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <div className="flex min-w-0 items-center gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <PostStatusTimeBadge status={status} variant="inline">
+                          {displayTime ? (
+                            <span>{displayTime}</span>
+                          ) : (
+                            <span className="italic">No time</span>
+                          )}
+                        </PostStatusTimeBadge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span className="capitalize">
+                          {status === 'placeholder' ? 'Future AI' : status}
+                        </span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  {groupBadge}
+                  {destinationAvatars}
+                </div>
 
                 <div className="flex min-w-0 items-center gap-1 pr-7">
                   {item.campaignName ? (
@@ -274,24 +391,28 @@ export function PostPreviewCard({
             ) : null}
             {/* Top row: time/status + campaign */}
             <div className="flex items-center justify-between gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <PostStatusTimeBadge status={status} variant="inline">
-                      {displayTime ? (
-                        <span>{displayTime}</span>
-                      ) : (
-                        <span className="italic">No time</span>
-                      )}
-                    </PostStatusTimeBadge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <span className="capitalize">
-                      {status === 'placeholder' ? 'Future AI' : status}
-                    </span>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className="flex min-w-0 items-center gap-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PostStatusTimeBadge status={status} variant="inline">
+                        {displayTime ? (
+                          <span>{displayTime}</span>
+                        ) : (
+                          <span className="italic">No time</span>
+                        )}
+                      </PostStatusTimeBadge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span className="capitalize">
+                        {status === 'placeholder' ? 'Future AI' : status}
+                      </span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {groupBadge}
+                {destinationAvatars}
+              </div>
 
               <div className="flex min-w-0 items-center gap-1 pr-7">
                 {item.campaignName ? (
@@ -358,15 +479,27 @@ export function PostPreviewCard({
             <AlertDialogTrigger asChild>
               <ContextMenuItem className="gap-2">
                 <Clock className="h-4 w-4" />
-                Unschedule to Draft
+                {groupMeta ? 'Unschedule all destinations' : 'Unschedule to Draft'}
               </ContextMenuItem>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Unschedule this post?</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {groupMeta ? 'Unschedule these posts?' : 'Unschedule this post?'}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  We’ll cancel the scheduled publish time and move this post back to Drafts. It will
-                  no longer publish automatically.
+                  {groupMeta ? (
+                    <>
+                      We’ll cancel the scheduled publish time for{' '}
+                      <span className="font-medium">{groupMeta.destinationCount} destinations</span>{' '}
+                      and move them back to Drafts. They will no longer publish automatically.
+                    </>
+                  ) : (
+                    <>
+                      We’ll cancel the scheduled publish time and move this post back to Drafts. It
+                      will no longer publish automatically.
+                    </>
+                  )}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -374,10 +507,22 @@ export function PostPreviewCard({
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() => unscheduleMutation.mutate((item as any).id)}
+                  onClick={() =>
+                    unscheduleMutation.mutate(
+                      groupMeta
+                        ? {
+                            kind: 'group',
+                            contentGroupId: groupMeta.contentGroupId,
+                            destinationCount: groupMeta.destinationCount,
+                          }
+                        : { kind: 'content', contentId: (item as any).id }
+                    )
+                  }
                   disabled={unscheduleMutation.isPending}
                 >
-                  Unschedule and move to Drafts
+                  {groupMeta
+                    ? 'Unschedule all and move to Drafts'
+                    : 'Unschedule and move to Drafts'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -393,10 +538,20 @@ export function PostPreviewCard({
         {item.type !== 'placeholder' && (
           <ContextMenuItem
             className="text-destructive focus:text-destructive gap-2"
-            onSelect={() => deleteMutation.mutate((item as any).id)}
+            onSelect={() =>
+              deleteMutation.mutate(
+                groupMeta
+                  ? {
+                      kind: 'group',
+                      contentGroupId: groupMeta.contentGroupId,
+                      destinationCount: groupMeta.destinationCount,
+                    }
+                  : { kind: 'content', contentId: (item as any).id }
+              )
+            }
           >
             <Trash2 className="h-4 w-4" />
-            Delete
+            {groupMeta ? 'Delete all destinations' : 'Delete'}
           </ContextMenuItem>
         )}
       </ContextMenuContent>

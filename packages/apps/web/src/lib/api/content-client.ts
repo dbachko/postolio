@@ -5,6 +5,32 @@ import { assetsApi } from '@/features/assets/api/client';
 export class ContentClient {
   constructor(private request: HttpRequest) {}
 
+  publishToPlatform(contentId: string, platform: string, options?: { socialAccountId?: string }) {
+    const body =
+      options && options.socialAccountId
+        ? JSON.stringify({ socialAccountId: options.socialAccountId })
+        : undefined;
+    return this.request(
+      `/api/social/${encodeURIComponent(platform)}/publish/${encodeURIComponent(contentId)}`,
+      {
+        method: 'POST',
+        body,
+      }
+    );
+  }
+
+  publishNow(contentId: string) {
+    return this.request(`/api/content/${encodeURIComponent(contentId)}/publish-now`, {
+      method: 'POST',
+    });
+  }
+
+  publishContentGroupNow(contentGroupId: string) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}/publish-now`, {
+      method: 'POST',
+    });
+  }
+
   // Manual content creation (accepts form-like input and handles base64 conversion)
   async createManualContent(data: {
     brandId: string;
@@ -16,6 +42,8 @@ export class ContentClient {
     scheduledAt?: string;
     shareToFeed?: boolean;
     firstComment?: string;
+    targetSocialAccountIds?: string[];
+    targetSocialAccountId?: string | null;
   }) {
     const body: Record<string, unknown> = {
       brandId: data.brandId,
@@ -27,6 +55,11 @@ export class ContentClient {
     if (data.assetIds) body.assetIds = data.assetIds;
     if (data.shareToFeed !== undefined) body.shareToFeed = data.shareToFeed;
     if (data.firstComment) body.firstComment = data.firstComment;
+    if (data.targetSocialAccountIds && data.targetSocialAccountIds.length > 0) {
+      body.targetSocialAccountIds = data.targetSocialAccountIds;
+    }
+    if (data.targetSocialAccountId !== undefined)
+      body.targetSocialAccountId = data.targetSocialAccountId;
     if (data.imageFile) {
       const uploadInfo = await assetsApi.getUploadUrl({
         brandId: data.brandId,
@@ -49,6 +82,72 @@ export class ContentClient {
     return this.request('/api/content', { method: 'POST', body: JSON.stringify(body) });
   }
 
+  getContentGroup(contentGroupId: string) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}`);
+  }
+
+  scheduleContentGroup(contentGroupId: string, scheduledAt: string | null) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduledAt }),
+    });
+  }
+
+  updateContentGroupTemplate(
+    contentGroupId: string,
+    template: {
+      caption?: string;
+      contentType?: InstagramContentType;
+      shareToFeed?: boolean | null;
+      firstComment?: string | null;
+      thumbOffset?: number | null;
+      assetIds?: string[];
+    }
+  ) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}/template`, {
+      method: 'PATCH',
+      body: JSON.stringify(template),
+    });
+  }
+
+  applyContentGroupTemplate(contentGroupId: string) {
+    return this.request(
+      `/api/content/groups/${encodeURIComponent(contentGroupId)}/apply-template`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  resetGroupDestinationToTemplate(contentGroupId: string, contentId: string) {
+    return this.request(
+      `/api/content/groups/${encodeURIComponent(contentGroupId)}/destinations/${encodeURIComponent(contentId)}/reset-to-template`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  addContentGroupDestinations(contentGroupId: string, targetSocialAccountIds: string[]) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}/destinations`, {
+      method: 'POST',
+      body: JSON.stringify({ targetSocialAccountIds }),
+    });
+  }
+
+  addContentDestinations(contentId: string, targetSocialAccountIds: string[]) {
+    return this.request(`/api/content/${encodeURIComponent(contentId)}/destinations`, {
+      method: 'POST',
+      body: JSON.stringify({ targetSocialAccountIds }),
+    });
+  }
+
+  deleteContentGroup(contentGroupId: string) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}`, {
+      method: 'DELETE',
+    });
+  }
+
   // List drafts for a brand (sorted by last modified by default)
   getDrafts(brandId: string) {
     return this.request(`/api/content/pending/${encodeURIComponent(brandId)}`);
@@ -59,7 +158,7 @@ export class ContentClient {
   }
 
   publishToInstagram(contentId: string) {
-    return this.request(`/api/content/${contentId}/publish`, { method: 'POST' });
+    return this.publishToPlatform(contentId, 'instagram');
   }
 
   scheduleContent(contentId: string, customTime?: string) {
@@ -120,7 +219,7 @@ export class ContentClient {
   }
 
   publishPostNow(postId: string) {
-    return this.request(`/api/content/${postId}/publish`, { method: 'POST' });
+    return this.publishNow(postId);
   }
 
   getCalendarContent(brandId: string, yyyymm: string) {
@@ -171,7 +270,7 @@ export class ContentClient {
   }
 
   publishPost(postId: string) {
-    return this.request(`/api/content/${postId}/publish`, { method: 'POST' });
+    return this.publishNow(postId);
   }
 
   attachAsset(contentId: string, assetId: string) {

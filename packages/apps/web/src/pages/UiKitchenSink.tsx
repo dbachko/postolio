@@ -1,4 +1,5 @@
 // Kitchen sink page for manual UI verification
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,8 +26,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { SocialAccountsPicker } from '@/components/social/SocialAccountsPicker';
 
 export default function UiKitchenSink() {
+  const [platforms, setPlatforms] = useState<string[]>(['instagram']);
+
   return (
     <div className="mx-auto w-full space-y-8">
       <Card>
@@ -112,6 +116,52 @@ export default function UiKitchenSink() {
               <Label htmlFor="r2">Two</Label>
             </div>
           </RadioGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Social Accounts Picker</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm">Platforms</Label>
+            <SocialAccountsPicker
+              options={[
+                {
+                  id: 'instagram',
+                  platform: 'instagram',
+                  label: '@postolio',
+                  tooltipLabel: 'Instagram · @postolio',
+                  avatarName: 'Postolio',
+                  avatarUrl: '/postolio-icon.svg',
+                },
+                {
+                  id: 'facebook',
+                  platform: 'facebook',
+                  label: 'Postolio Page',
+                  tooltipLabel: 'Facebook · Postolio Page',
+                  avatarName: 'Postolio Page',
+                  avatarUrl: null,
+                },
+                {
+                  id: 'linkedin',
+                  platform: 'linkedin',
+                  label: 'Coming soon',
+                  tooltipLabel: 'LinkedIn (coming soon)',
+                  avatarName: 'LinkedIn',
+                  avatarUrl: null,
+                  disabled: true,
+                },
+              ]}
+              value={platforms}
+              onChange={setPlatforms}
+              addButtonText="Add platforms"
+            />
+          </div>
+          <div className="text-muted-foreground text-xs">
+            Selected: {platforms.length ? platforms.join(', ') : 'none'}
+          </div>
         </CardContent>
       </Card>
     </div>

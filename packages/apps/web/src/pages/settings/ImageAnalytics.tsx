@@ -16,6 +16,12 @@ import { brand as brandApi } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
 import { format } from 'date-fns';
 
+function getLogStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destructive' {
+  if (status === 'success') return 'default';
+  if (status === 'fallback') return 'secondary';
+  return 'destructive';
+}
+
 export default function ImageAnalytics() {
   const { selectedBrand } = useBrandStore();
   const [dateRange] = useState<{ startDate?: string; endDate?: string }>({});
@@ -212,16 +218,7 @@ export default function ImageAnalytics() {
                           {providerDisplayNames[log.provider] || log.provider}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              log.status === 'success'
-                                ? 'default'
-                                : log.status === 'fallback'
-                                  ? 'secondary'
-                                  : 'destructive'
-                            }
-                            className="text-xs"
-                          >
+                          <Badge variant={getLogStatusBadgeVariant(log.status)} className="text-xs">
                             {log.status}
                           </Badge>
                         </TableCell>

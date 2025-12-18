@@ -78,6 +78,29 @@ class SchedulerService {
   }
 
   /**
+   * Update an existing AWS schedule payload (caption/media/etc) without changing time.
+   */
+  async updateScheduledContent(contentId: string): Promise<{ success: boolean; error?: string }> {
+    return schedulerAdapter.updateScheduledContent(contentId);
+  }
+
+  /**
+   * Publish content immediately (enqueue publisher via scheduler service).
+   */
+  async publishNow(
+    contentId: string,
+    userId?: string
+  ): Promise<{
+    success: boolean;
+    scheduleId?: string;
+    brandId?: string;
+    campaignId?: string;
+    error?: string;
+  }> {
+    return schedulerAdapter.publishNow(contentId, userId);
+  }
+
+  /**
    * Get upcoming scheduled posts for a brand
    */
   async getUpcomingPosts(brandId: string, limit: number = 10): Promise<ScheduledPost[]> {

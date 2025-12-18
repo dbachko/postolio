@@ -81,7 +81,7 @@ async function getCredentialsForSocialAccount(
     });
     if (!sa || !sa.brand) throw new Error('SocialAccount not found for credentials lookup');
 
-    const path = `${tokenServiceUrl}/tokens/${sa.brand.userId}/${platform}/${sa.brand.id}`;
+    const path = `${tokenServiceUrl}/tokens/${sa.brand.userId}/${platform}/${sa.brand.id}/social-accounts/${socialAccountId}`;
     const url = new URL(path);
     const signed = await signRequest({ method: 'GET', url, headers: {} });
     const res = await fetch(path, { method: 'GET', headers: signed });

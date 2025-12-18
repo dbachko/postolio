@@ -229,48 +229,60 @@ export default function InboxComments() {
                 </div>
               </div>
             )}
-            {isFetching ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="rounded-md border p-2">
-                    <Skeleton className="mb-2 h-3 w-1/3" />
-                    <Skeleton className="h-4 w-5/6" />
+            {(() => {
+              if (isFetching) {
+                return (
+                  <div className="space-y-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="rounded-md border p-2">
+                        <Skeleton className="mb-2 h-3 w-1/3" />
+                        <Skeleton className="h-4 w-5/6" />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : commentsData?.data?.length ? (
-              <div className="space-y-4">
-                {commentsData.data.map((c) => (
-                  <CommentCard
-                    key={c.id}
-                    data={c as any}
-                    isReplying={activeReplyFor === c.id}
-                    isSending={replyMutation.isPending}
-                    replyText={replyText}
-                    setReplyText={setReplyText}
-                    onStartReply={() => setActiveReplyFor(c.id || null)}
-                    onCancelReply={() => setActiveReplyFor(null)}
-                    onSendReply={() => {
-                      if (replyMutation.isPending) return;
-                      const msg = replyText.trim();
-                      if (!msg) return;
-                      if (c.id) replyMutation.mutate({ commentId: c.id, message: msg });
-                    }}
-                    onLike={() => c.id && likeMutation.mutate({ commentId: c.id })}
-                    onResolve={() =>
-                      c.id && workflowMutation.mutate({ commentId: c.id, status: 'resolved' })
-                    }
-                    onArchive={() =>
-                      c.id && workflowMutation.mutate({ commentId: c.id, status: 'archived' })
-                    }
-                    savedReplies={repliesData?.replies || []}
-                    onSaveReply={(title, body) => saveReply(title, body)}
-                  />
-                ))}
-              </div>
-            ) : selectedPostId ? (
-              <div className="text-muted-foreground text-sm">No comments found.</div>
-            ) : null}
+                );
+              }
+
+              if (commentsData?.data?.length) {
+                return (
+                  <div className="space-y-4">
+                    {commentsData.data.map((c) => (
+                      <CommentCard
+                        key={c.id}
+                        data={c as any}
+                        isReplying={activeReplyFor === c.id}
+                        isSending={replyMutation.isPending}
+                        replyText={replyText}
+                        setReplyText={setReplyText}
+                        onStartReply={() => setActiveReplyFor(c.id || null)}
+                        onCancelReply={() => setActiveReplyFor(null)}
+                        onSendReply={() => {
+                          if (replyMutation.isPending) return;
+                          const msg = replyText.trim();
+                          if (!msg) return;
+                          if (c.id) replyMutation.mutate({ commentId: c.id, message: msg });
+                        }}
+                        onLike={() => c.id && likeMutation.mutate({ commentId: c.id })}
+                        onResolve={() =>
+                          c.id && workflowMutation.mutate({ commentId: c.id, status: 'resolved' })
+                        }
+                        onArchive={() =>
+                          c.id && workflowMutation.mutate({ commentId: c.id, status: 'archived' })
+                        }
+                        savedReplies={repliesData?.replies || []}
+                        onSaveReply={(title, body) => saveReply(title, body)}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+
+              if (selectedPostId) {
+                return <div className="text-muted-foreground text-sm">No comments found.</div>;
+              }
+
+              return null;
+            })()}
           </div>
         </div>
       </CardContent>

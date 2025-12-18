@@ -9,6 +9,7 @@ import { getDatabaseClient } from '../config/database.js';
 import { getRedisClient } from '../services/redis.js';
 import { getTokenService } from './service-clients.js';
 import { formatError } from '../utils/logging.js';
+import { resolvePrimarySocialAccount } from './social-account-resolver.js';
 
 const prisma = getDatabaseClient();
 const credentialsLogger = baseLogger.child({ module: 'publisher-credentials' });
@@ -58,14 +59,6 @@ export class PublisherCredentialsService {
           id: true,
           name: true,
           userId: true,
-          socialAccounts: {
-            where: { platform: 'instagram' },
-            select: {
-              externalAccountId: true,
-              externalPageId: true,
-            },
-            take: 1,
-          },
         },
       });
 
@@ -74,8 +67,7 @@ export class PublisherCredentialsService {
         return null;
       }
 
-      // Get Instagram account info from SocialAccount
-      const instagramAccount = brand.socialAccounts?.[0];
+      const instagramAccount = await resolvePrimarySocialAccount(brandId, 'instagram');
       if (!instagramAccount) {
         credentialsLogger.error(`No Instagram account connected for brand: ${brandId}`);
         return null;
@@ -83,7 +75,12 @@ export class PublisherCredentialsService {
 
       // Fetch token from Token Service (using service discovery)
       const tokenServiceClient = await getTokenService();
-      const tokenData = await tokenServiceClient.getToken(brand.userId, brand.id, 'instagram');
+      const tokenData = await tokenServiceClient.getTokenForSocialAccount(
+        brand.userId,
+        brand.id,
+        'instagram',
+        instagramAccount.id
+      );
 
       if (!tokenData) {
         credentialsLogger.error(`No Instagram token found for brand: ${brandId}`);

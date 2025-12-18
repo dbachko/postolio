@@ -179,7 +179,7 @@ export class BrandClient {
   syncSocialPosts(
     brandId: string,
     platform: string,
-    options: { maxPosts?: number; maxDays?: number }
+    options: { maxPosts?: number; maxDays?: number; socialAccountId?: string }
   ) {
     // Backend route: POST /api/social/:platform/sync/:brandId
     return this.request(`/api/social/${platform}/sync/${brandId}`, {
@@ -206,9 +206,103 @@ export class BrandClient {
    * @param _brandId - Brand ID
    */
   getConnectedAccounts(_brandId: string) {
-    // TODO: Backend endpoint not yet implemented
-    throw new Error('getConnectedAccounts not yet implemented');
+    return this.request(`/api/brands/${encodeURIComponent(_brandId)}/social-accounts`) as Promise<{
+      brandId: string;
+      primarySocialAccountId: string | null;
+      defaultPostSocialAccountIds: string[];
+      socialAccounts: Array<{
+        id: string;
+        platform: string;
+        externalAccountId: string;
+        externalPageId?: string | null;
+        username?: string | null;
+        displayName?: string | null;
+        profilePictureUrl?: string | null;
+        disconnected: boolean;
+        tokenStatus?: 'healthy' | 'expiring' | 'expired' | 'unknown' | 'disconnected';
+        tokenExpiresAt?: string | null;
+        metadata?: any;
+        sortOrder: number;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>;
   }
+
+  setDefaultPostSocialAccounts(brandId: string, socialAccountIds: string[]) {
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/social-accounts/default-post-social-accounts`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ socialAccountIds }),
+      }
+    ) as Promise<{ success: boolean; brandId: string; defaultPostSocialAccountIds: string[] }>;
+  }
+
+  setSocialAccountOrder(brandId: string, orderedIds: string[]) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/social-accounts/order`, {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds }),
+    }) as Promise<{ success: boolean; brandId: string; orderedIds: string[] }>;
+  }
+
+  // ===============================================================
+  // Meta Connect (Instagram + Facebook) — Multi-account flow
+  // ===============================================================
+
+  startMetaConnect(brandId: string) {
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/social-accounts/meta/authorize`
+    ) as Promise<{ authUrl: string; connectSessionId: string }>;
+  }
+
+  getMetaConnectCandidates(connectSessionId: string) {
+    return this.request(
+      `/api/auth/meta/candidates?connectSessionId=${encodeURIComponent(connectSessionId)}`
+    ) as Promise<{
+      connectSessionId: string;
+      brandId: string;
+      expiresAt: string | null;
+      candidates: Array<{
+        candidateId: string;
+        platform: 'instagram' | 'facebook';
+        externalAccountId: string;
+        externalPageId?: string | null;
+        username?: string | null;
+        displayName?: string | null;
+        profilePictureUrl?: string | null;
+        metadata?: Record<string, unknown>;
+      }>;
+    }>;
+  }
+
+  finalizeMetaConnect(connectSessionId: string, candidateIds: string[]) {
+    return this.request('/api/auth/meta/finalize', {
+      method: 'POST',
+      body: JSON.stringify({ connectSessionId, candidateIds }),
+    }) as Promise<{
+      success: boolean;
+      brandId: string;
+      connected: Array<{ socialAccountId: string; platform: 'instagram' | 'facebook' }>;
+      socialAccounts: any[];
+    }>;
+  }
+
+  disconnectSocialAccount(
+    brandId: string,
+    socialAccountId: string,
+    options?: { removeImportedPosts?: boolean }
+  ) {
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/social-accounts/${encodeURIComponent(socialAccountId)}/disconnect`,
+      {
+        method: 'POST',
+        body: options ? JSON.stringify(options) : undefined,
+      }
+    );
+  }
+
+  // Social account ordering and default selection are managed via `setSocialAccountOrder`.
 
   // Brand analysis
   hasBrandProfileProjection(brandId: string) {

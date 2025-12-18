@@ -62,7 +62,7 @@ export function RescheduleDialog({
     try {
       const local = new Date(date);
       const h = parseInt(hour || '12', 10) % 12;
-      const finalH = ampm === 'pm' ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h; // normalize
+      const finalH = ampm === 'pm' ? h + 12 : h; // normalize
       local.setHours(finalH);
       local.setMinutes(parseInt(minute || '0', 10));
       local.setSeconds(0, 0);

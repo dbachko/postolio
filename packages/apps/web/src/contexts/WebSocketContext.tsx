@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React from 'react';
+import * as React from 'react';
 import type { ConnectionStatus as ConnectionStatusType } from '../types/websocket';
 import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket';
 import { useAuthStore } from '../stores/authStore';

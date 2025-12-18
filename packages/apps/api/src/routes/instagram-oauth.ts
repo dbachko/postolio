@@ -2,6 +2,7 @@ import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import crypto from 'crypto';
 import { captureException, captureMessage } from '@postolio/observability';
+import { Prisma } from '@postolio/database';
 
 import { getDatabaseClient } from '../config/database.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
@@ -601,19 +602,6 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         ? new Date(Date.now() + tokenData.expires_in * 1000)
         : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // Default 60 days
 
-      await tokenServiceClient.storeToken({
-        userId: brand.userId,
-        brandId: brand.id,
-        platform: 'instagram',
-        accessToken: pageAccessToken,
-        expiresAt: tokenExpiresAt,
-        metadata: {
-          pageId: pageWithInstagram.id,
-          accountId: instagramAccountId,
-          profileData: instagramProfile,
-        },
-      });
-
       // Update brand with UI metadata only (no sensitive token)
       const updatedBrand = await prisma.brand.update({
         where: { id: brand.id },
@@ -630,7 +618,16 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       });
 
       // Create or update SocialAccount record for Instagram
-      await prisma.socialAccount.upsert({
+      const socialAccountMetadata = JSON.parse(
+        JSON.stringify({
+          ...(instagramProfile || {}),
+          tokenExpiresAt: tokenExpiresAt.toISOString(),
+          tokenUpdatedAt: new Date().toISOString(),
+          pageId: pageWithInstagram.id,
+          accountId: instagramAccountId,
+        })
+      ) as Prisma.InputJsonValue;
+      const connectedSocialAccount = await prisma.socialAccount.upsert({
         where: {
           platform_externalAccountId: {
             platform: 'instagram',
@@ -644,14 +641,30 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           externalPageId: pageWithInstagram.id,
           username: instagramProfile.username || null,
           displayName: instagramProfile.name || null,
-          metadata: JSON.parse(JSON.stringify(instagramProfile)),
+          metadata: socialAccountMetadata,
         },
         update: {
           externalPageId: pageWithInstagram.id,
           username: instagramProfile.username || null,
           displayName: instagramProfile.name || null,
-          metadata: JSON.parse(JSON.stringify(instagramProfile)),
+          metadata: socialAccountMetadata,
           updatedAt: new Date(),
+        },
+        select: { id: true },
+      });
+
+      // Store sensitive token in Token Service (account-scoped)
+      await tokenServiceClient.storeTokenForSocialAccount({
+        userId: brand.userId,
+        brandId: brand.id,
+        platform: 'instagram',
+        socialAccountId: connectedSocialAccount.id,
+        accessToken: pageAccessToken,
+        expiresAt: tokenExpiresAt,
+        metadata: {
+          pageId: pageWithInstagram.id,
+          accountId: instagramAccountId,
+          profileData: instagramProfile,
         },
       });
 

@@ -55,6 +55,7 @@ Use the development seeder to create a user, a brand, rich demo posts, and multi
 - What it creates:
   - One user (re-used on subsequent runs if email exists)
   - One brand linked to that user
+  - Two social accounts for the brand (Instagram + Facebook Page) and sets `preferences.primarySocialAccountIds` for both
   - Multiple campaigns covering all statuses (`creating`, `preview`, `active`, `paused`, `completed`, `failed`, `processing`) with varied configs:
     - Frequencies: `daily`, `every2days`, `3weekly`
     - Posting time styles: single `postingTime` and multi `postingTimes`

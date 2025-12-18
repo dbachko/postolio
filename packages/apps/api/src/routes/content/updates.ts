@@ -19,8 +19,14 @@ import {
 } from '@postolio/content-validation';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 import type { AssetRecord } from '@postolio/assets-client';
+import { supportsScheduling, toValidationPlatform } from '../../utils/platform.js';
 
 const prisma = getDatabaseClient();
+
+function isDisconnected(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  return Boolean((metadata as any).disconnected);
+}
 
 interface UpdateContentBody {
   contentId: string;
@@ -29,6 +35,7 @@ interface UpdateContentBody {
   scheduledAt?: string;
   shareToFeed?: boolean;
   firstComment?: string;
+  targetSocialAccountId?: string | null;
 }
 
 const updatesRoutes: FastifyPluginAsync = async (fastify) => {
@@ -41,8 +48,14 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       const contentId = request.params.contentId;
-      const { caption, contentType, scheduledAt, shareToFeed, firstComment } =
-        request.body as Partial<UpdateContentBody>;
+      const {
+        caption,
+        contentType,
+        scheduledAt,
+        shareToFeed,
+        firstComment,
+        targetSocialAccountId,
+      } = request.body as Partial<UpdateContentBody>;
 
       // Verify user owns the content and it's editable (not published)
       const authResult = await verifyContentEditable(userId, contentId);
@@ -91,6 +104,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
         shareToFeed?: boolean | null;
         firstComment?: string | null;
+        targetSocialAccountId?: string | null;
       }
       const updateData: MutableContentUpdate = {};
 
@@ -102,6 +116,100 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         caption !== undefined
           ? caption
           : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
+
+      const normalizedTargetSocialAccountId = (() => {
+        if (targetSocialAccountId === undefined) return undefined;
+        if (targetSocialAccountId === null || targetSocialAccountId === '') return null;
+        if (typeof targetSocialAccountId !== 'string') return '__invalid__';
+        const trimmed = targetSocialAccountId.trim();
+        return trimmed.length ? trimmed : null;
+      })() as string | null | undefined;
+
+      if (normalizedTargetSocialAccountId === '__invalid__') {
+        return reply.code(400).send({
+          error: 'Invalid targetSocialAccountId',
+          details: ['targetSocialAccountId must be a string or null'],
+        });
+      }
+
+      const existingTargetSocialAccountId =
+        typeof (content as any).targetSocialAccountId === 'string' &&
+        String((content as any).targetSocialAccountId).trim().length > 0
+          ? String((content as any).targetSocialAccountId).trim()
+          : null;
+
+      const effectiveTargetSocialAccountId =
+        normalizedTargetSocialAccountId === undefined
+          ? existingTargetSocialAccountId
+          : normalizedTargetSocialAccountId;
+
+      let resolvedTargetSocialAccount: { id: string; platform: string } | null = null;
+      let resolvedTargetSocialAccountDisconnected = false;
+      if (effectiveTargetSocialAccountId) {
+        const sa = await prisma.socialAccount.findFirst({
+          where: {
+            id: effectiveTargetSocialAccountId,
+            brandId: content.brandId,
+          },
+          select: { id: true, platform: true, metadata: true },
+        });
+
+        if (!sa) {
+          // If the client is explicitly setting a destination, enforce that it exists.
+          // If the post already has a stored destination, allow edits even if the account is gone.
+          if (normalizedTargetSocialAccountId !== undefined) {
+            return reply.code(400).send({
+              error: 'invalid_target_social_account',
+              message: 'Target social account is not connected to this brand',
+            });
+          }
+        } else {
+          resolvedTargetSocialAccountDisconnected = isDisconnected(sa.metadata);
+          // If the client is explicitly setting a destination, enforce that it is connected.
+          if (
+            normalizedTargetSocialAccountId !== undefined &&
+            resolvedTargetSocialAccountDisconnected
+          ) {
+            return reply.code(400).send({
+              error: 'invalid_target_social_account',
+              message: 'Target social account is not connected to this brand',
+            });
+          }
+
+          resolvedTargetSocialAccount = {
+            id: sa.id,
+            platform: String(sa.platform),
+          };
+        }
+      }
+
+      if (normalizedTargetSocialAccountId !== undefined) {
+        updateData.targetSocialAccountId = normalizedTargetSocialAccountId
+          ? resolvedTargetSocialAccount!.id
+          : null;
+      }
+
+      const destinationPlatform = resolvedTargetSocialAccount?.platform ?? 'instagram';
+      const schedulingSupported = supportsScheduling(destinationPlatform);
+      const schedulingEligible =
+        schedulingSupported &&
+        (!effectiveTargetSocialAccountId ||
+          (Boolean(resolvedTargetSocialAccount) && !resolvedTargetSocialAccountDisconnected));
+
+      if (scheduledAt !== undefined && scheduledAt && !schedulingSupported) {
+        return reply.code(400).send({
+          error: 'scheduling_not_supported',
+          message: `Scheduling is not yet supported for ${destinationPlatform}`,
+        });
+      }
+
+      if (scheduledAt !== undefined && scheduledAt && !schedulingEligible) {
+        return reply.code(400).send({
+          error: 'invalid_target_social_account',
+          message:
+            'Selected destination account is no longer connected. Choose a different destination and try again.',
+        });
+      }
 
       const joinMediaAssets = (content.mediaAssets ?? [])
         .map((asset) => ({
@@ -153,18 +261,28 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         })
         .filter((asset): asset is { key: string; type: 'image' | 'video' } => Boolean(asset));
 
-      const mediaTypeHint: ValidationMediaType =
+      const mediaTypeHint: ValidationMediaType | undefined =
         effectiveContentType === 'reel'
           ? 'video'
           : mediaAssetsForValidation.some((asset) => asset.type === 'video')
             ? 'video'
-            : 'image';
+            : mediaAssetsForValidation.length > 0
+              ? 'image'
+              : undefined;
+
+      const validationPlatform = toValidationPlatform(destinationPlatform);
+      if (!validationPlatform) {
+        return reply.code(400).send({
+          error: 'unsupported_platform',
+          message: `Platform ${destinationPlatform} is not supported for content updates yet`,
+        });
+      }
 
       const validation = validateContentPayload({
-        platform: 'instagram',
+        platform: validationPlatform,
         contentType: effectiveContentType,
         mediaType: mediaTypeHint,
-        caption: effectiveCaption,
+        caption: effectiveContentType === 'story' ? '' : effectiveCaption,
         mediaAssets: mediaAssetsForValidation,
       });
 
@@ -238,7 +356,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       let newScheduleError: string | undefined;
       let planLimitHit = false;
       let planLimitMessage: string | undefined;
-      if (!isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
+      if (schedulingSupported && !isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
         try {
           // Ensure firstComment is persisted before creating the AWS schedule
           // so the scheduler and publisher receive the latest text.
@@ -288,7 +406,13 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       // Check if this is a reschedule operation (time changed)
       // Skip AWS operations if content belongs to a draft campaign
       let needsNewSchedule = false;
-      if (!isInDraftCampaign && originalScheduledTime && newScheduledTime) {
+      if (
+        schedulingSupported &&
+        !isInDraftCampaign &&
+        originalScheduledTime &&
+        newScheduledTime &&
+        originalScheduledTime !== newScheduledTime
+      ) {
         try {
           request.log.info(
             { contentId, originalScheduledTime, newScheduledTime },
@@ -397,6 +521,8 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           brandId: true,
           contentType: true,
           campaignId: true,
+          contentGroupId: true,
+          targetSocialAccountId: true,
           schedulingError: true,
           generationParams: true,
           shareToFeed: true,
@@ -424,7 +550,12 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Handle scheduling changes with AWS ContentScheduler
       // Skip AWS operations if content belongs to a draft campaign
-      if (scheduledAt !== undefined && !isInDraftCampaign && !scheduledInAwsBeforeUpdate) {
+      if (
+        schedulingSupported &&
+        scheduledAt !== undefined &&
+        !isInDraftCampaign &&
+        !scheduledInAwsBeforeUpdate
+      ) {
         const originalScheduledTime = content.scheduledAt?.toISOString();
         const newScheduledTime = updatedContent.scheduledAt?.toISOString();
 
@@ -528,6 +659,40 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         );
       }
 
+      // If the post is scheduled and its content changed (caption/media/etc), sync the AWS schedule payload.
+      // This ensures the publisher uses the latest post content at publish time.
+      const contentChanged =
+        caption !== undefined ||
+        contentType !== undefined ||
+        shareToFeed !== undefined ||
+        firstComment !== undefined;
+      const timeChanged = Boolean(
+        originalScheduledTime && newScheduledTime && originalScheduledTime !== newScheduledTime
+      );
+
+      if (
+        schedulingSupported &&
+        !isInDraftCampaign &&
+        updatedContent.scheduledAt &&
+        contentChanged &&
+        !timeChanged
+      ) {
+        try {
+          const syncResult = await schedulerService.updateScheduledContent(contentId);
+          if (!syncResult.success) {
+            request.log.warn(
+              { contentId, error: syncResult.error },
+              'Failed to sync schedule payload after content update'
+            );
+          }
+        } catch (syncError) {
+          request.log.warn(
+            { contentId, err: syncError },
+            'Error syncing schedule payload after content update'
+          );
+        }
+      }
+
       // Apply AI learning if there were changes
       let learningResults = null;
       const hasChanges =
@@ -599,16 +764,23 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
     '/:contentId/schedule',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-      const payload = {
-        contentId: request.params.contentId,
-        scheduledAt: request.body?.scheduledAt,
-      } as UpdateContentBody;
+      const contentId = request.params.contentId;
+      const scheduledAt = request.body?.scheduledAt;
+
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (typeof request.headers.cookie === 'string') headers.cookie = request.headers.cookie;
+      if (typeof request.headers.authorization === 'string')
+        headers.authorization = request.headers.authorization;
+      if (typeof request.headers['csrf-token'] === 'string')
+        headers['csrf-token'] = request.headers['csrf-token'];
+
       const r = await fastify.inject({
         method: 'PUT',
-        url: '/update',
-        payload,
-        headers: { cookie: request.headers.cookie as string },
+        url: `/api/content/${encodeURIComponent(contentId)}`,
+        payload: { scheduledAt },
+        headers,
       });
+
       return reply.code(r.statusCode).send(r.json());
     }
   );

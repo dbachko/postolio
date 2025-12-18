@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
-import { InstagramConnect } from '../components/InstagramConnect';
+import { SocialAccountsManager } from '@/components/social/SocialAccountsManager';
 import { BrandAnalysisPanel } from '@/components/BrandAnalysisPanel';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { Label } from '@/components/ui/label';
@@ -329,182 +329,47 @@ export function Brands() {
           <h2 className="text-lg font-medium">Your Brands</h2>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="border-foreground h-6 w-6 animate-spin rounded-full border-b-2"></div>
-          </div>
-        ) : brands.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-muted-foreground mb-4">No brands created yet.</p>
-            <Button variant="neutral" onClick={() => setIsCreating(true)}>
-              Create Your First Brand
-            </Button>
-          </div>
-        ) : (
-          <div className="divide-y">
-            {/* Selected Brand */}
-            {selectedBrand && (
-              <div key={selectedBrand.id} className="border-l-4 p-6">
-                <div className="mb-2 flex items-start justify-between">
-                  <div className="flex items-center space-x-2">
-                    <h3 className="text-foreground text-sm font-medium">Selected Brand</h3>
-                    <span className="bg-accent text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
-                      Current
-                    </span>
-                  </div>
-                </div>
-                {editingBrandId === selectedBrand.id ? (
-                  /* Edit Mode */
-                  <form
-                    onSubmit={(e) => handleEditSubmit(e, selectedBrand.id)}
-                    className="space-y-4"
-                  >
-                    {updateBrandMutation.error && (
-                      <div className="rounded-md border p-3">
-                        <p className="text-destructive text-sm">
-                          {updateBrandMutation.error?.message ||
-                            'Failed to update brand. Please try again.'}
-                        </p>
-                      </div>
-                    )}
-
-                    <div>
-                      <Label>Brand Name</Label>
-                      <Input
-                        type="text"
-                        required
-                        value={editFormData[selectedBrand.id]?.name || ''}
-                        onChange={(e) =>
-                          updateEditFormData(selectedBrand.id, 'name', e.target.value)
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Country</Label>
-                      <CountrySelect
-                        value={editFormData[selectedBrand.id]?.countryCode || ''}
-                        onChange={(code) =>
-                          updateEditFormData(selectedBrand.id, 'countryCode', code)
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Description</Label>
-                      <Textarea
-                        rows={3}
-                        value={editFormData[selectedBrand.id]?.description || ''}
-                        onChange={(e) =>
-                          updateEditFormData(selectedBrand.id, 'description', e.target.value)
-                        }
-                        placeholder="Brief description of your brand..."
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Country Code (ISO‑2)</Label>
-                      <Input
-                        type="text"
-                        maxLength={2}
-                        className="w-32 uppercase"
-                        value={editFormData[selectedBrand.id]?.countryCode || ''}
-                        onChange={(e) =>
-                          updateEditFormData(selectedBrand.id, 'countryCode', e.target.value)
-                        }
-                        placeholder="US"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap justify-end gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleEditCancel(selectedBrand.id)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={updateBrandMutation.isPending}>
-                        {updateBrandMutation.isPending ? 'Saving...' : 'Save Changes'}
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  /* Display Mode */
-                  <div>
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-medium">{selectedBrand.name}</h3>
-                        {selectedBrand.description && (
-                          <p className="text-muted-foreground mt-1">{selectedBrand.description}</p>
-                        )}
-                        <p className="text-muted-foreground mt-2 text-xs">
-                          Created {new Date(selectedBrand.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                        {profileAvailable[selectedBrand.id] &&
-                          (profileSummaries[selectedBrand.id] ? (
-                            <div className="flex items-center gap-3">
-                              <div className="text-muted-foreground text-xs">
-                                Tones: {profileSummaries[selectedBrand.id].tones.join(', ') || '—'}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {profileSummaries[selectedBrand.id].palette.map((hex) => (
-                                  <span
-                                    key={hex}
-                                    title={hex}
-                                    className="inline-block h-3 w-3 rounded-full border"
-                                    style={{ backgroundColor: hex }}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
-                              Analyzed
-                            </span>
-                          ))}
-                        <div className="flex flex-wrap gap-2 sm:justify-end">
-                          <Button variant="outline" onClick={() => handleEditStart(selectedBrand)}>
-                            Edit
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => handleDeleteBrand(selectedBrand)}
-                            disabled={deleteBrandMutation.isPending}
-                          >
-                            {deleteBrandMutation.isPending ? 'Deleting...' : 'Delete'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Instagram Connection Section */}
-                <div className="mt-4 border-t pt-4">
-                  <InstagramConnect brand={selectedBrand} />
-                </div>
-
-                {/* Brand Analysis Section */}
-                <div id="brand-analysis-panel" className="mt-6">
-                  <BrandAnalysisPanel brandId={selectedBrand.id} />
-                </div>
+        {(() => {
+          if (isLoading) {
+            return (
+              <div className="flex items-center justify-center py-8">
+                <div className="border-foreground h-6 w-6 animate-spin rounded-full border-b-2"></div>
               </div>
-            )}
+            );
+          }
 
-            {/* Other Brands */}
-            {brands
-              .filter((brand) => brand.id !== selectedBrand?.id)
-              .map((brand) => (
-                <div key={brand.id} className="p-6">
-                  {/* Brand Content - Editing or Display Mode */}
-                  {editingBrandId === brand.id ? (
+          if (brands.length === 0) {
+            return (
+              <div className="py-8 text-center">
+                <p className="text-muted-foreground mb-4">No brands created yet.</p>
+                <Button variant="neutral" onClick={() => setIsCreating(true)}>
+                  Create Your First Brand
+                </Button>
+              </div>
+            );
+          }
+
+          return (
+            <div className="divide-y">
+              {/* Selected Brand */}
+              {selectedBrand && (
+                <div key={selectedBrand.id} className="border-l-4 p-6">
+                  <div className="mb-2 flex items-start justify-between">
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-foreground text-sm font-medium">Selected Brand</h3>
+                      <span className="bg-accent text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                        Current
+                      </span>
+                    </div>
+                  </div>
+                  {editingBrandId === selectedBrand.id ? (
                     /* Edit Mode */
-                    <form onSubmit={(e) => handleEditSubmit(e, brand.id)} className="space-y-4">
+                    <form
+                      onSubmit={(e) => handleEditSubmit(e, selectedBrand.id)}
+                      className="space-y-4"
+                    >
                       {updateBrandMutation.error && (
-                        <div className="bg-muted rounded-md border p-3">
+                        <div className="rounded-md border p-3">
                           <p className="text-destructive text-sm">
                             {updateBrandMutation.error?.message ||
                               'Failed to update brand. Please try again.'}
@@ -517,16 +382,20 @@ export function Brands() {
                         <Input
                           type="text"
                           required
-                          value={editFormData[brand.id]?.name || ''}
-                          onChange={(e) => updateEditFormData(brand.id, 'name', e.target.value)}
+                          value={editFormData[selectedBrand.id]?.name || ''}
+                          onChange={(e) =>
+                            updateEditFormData(selectedBrand.id, 'name', e.target.value)
+                          }
                         />
                       </div>
 
                       <div>
                         <Label>Country</Label>
                         <CountrySelect
-                          value={editFormData[brand.id]?.countryCode || ''}
-                          onChange={(code) => updateEditFormData(brand.id, 'countryCode', code)}
+                          value={editFormData[selectedBrand.id]?.countryCode || ''}
+                          onChange={(code) =>
+                            updateEditFormData(selectedBrand.id, 'countryCode', code)
+                          }
                         />
                       </div>
 
@@ -534,9 +403,9 @@ export function Brands() {
                         <Label>Description</Label>
                         <Textarea
                           rows={3}
-                          value={editFormData[brand.id]?.description || ''}
+                          value={editFormData[selectedBrand.id]?.description || ''}
                           onChange={(e) =>
-                            updateEditFormData(brand.id, 'description', e.target.value)
+                            updateEditFormData(selectedBrand.id, 'description', e.target.value)
                           }
                           placeholder="Brief description of your brand..."
                         />
@@ -548,9 +417,9 @@ export function Brands() {
                           type="text"
                           maxLength={2}
                           className="w-32 uppercase"
-                          value={editFormData[brand.id]?.countryCode || ''}
+                          value={editFormData[selectedBrand.id]?.countryCode || ''}
                           onChange={(e) =>
-                            updateEditFormData(brand.id, 'countryCode', e.target.value)
+                            updateEditFormData(selectedBrand.id, 'countryCode', e.target.value)
                           }
                           placeholder="US"
                         />
@@ -560,7 +429,7 @@ export function Brands() {
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => handleEditCancel(brand.id)}
+                          onClick={() => handleEditCancel(selectedBrand.id)}
                         >
                           Cancel
                         </Button>
@@ -574,28 +443,26 @@ export function Brands() {
                     <div>
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1">
-                          <h3 className="text-lg font-medium">{brand.name}</h3>
-                          {brand.description && (
-                            <p className="text-muted-foreground mt-1">{brand.description}</p>
-                          )}
-                          <p className="text-muted-foreground mt-2 text-xs">
-                            Created {new Date(brand.createdAt).toLocaleDateString()}
-                          </p>
-                          {brand.countryCode && (
-                            <p className="text-muted-foreground text-xs">
-                              Country: {brand.countryCode}
+                          <h3 className="text-lg font-medium">{selectedBrand.name}</h3>
+                          {selectedBrand.description && (
+                            <p className="text-muted-foreground mt-1">
+                              {selectedBrand.description}
                             </p>
                           )}
+                          <p className="text-muted-foreground mt-2 text-xs">
+                            Created {new Date(selectedBrand.createdAt).toLocaleDateString()}
+                          </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                          {profileAvailable[brand.id] &&
-                            (profileSummaries[brand.id] ? (
-                              <div className="flex items-center gap-2">
+                          {profileAvailable[selectedBrand.id] &&
+                            (profileSummaries[selectedBrand.id] ? (
+                              <div className="flex items-center gap-3">
                                 <div className="text-muted-foreground text-xs">
-                                  {profileSummaries[brand.id].tones.join(', ') || '—'}
+                                  Tones:{' '}
+                                  {profileSummaries[selectedBrand.id].tones.join(', ') || '—'}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  {profileSummaries[brand.id].palette.map((hex) => (
+                                  {profileSummaries[selectedBrand.id].palette.map((hex) => (
                                     <span
                                       key={hex}
                                       title={hex}
@@ -606,23 +473,20 @@ export function Brands() {
                                 </div>
                               </div>
                             ) : (
-                              <span className="bg-accent text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
                                 Analyzed
                               </span>
                             ))}
                           <div className="flex flex-wrap gap-2 sm:justify-end">
                             <Button
-                              variant={selectedBrand?.id === brand.id ? 'secondary' : 'outline'}
-                              onClick={() => handleSelectBrand(brand)}
+                              variant="outline"
+                              onClick={() => handleEditStart(selectedBrand)}
                             >
-                              {selectedBrand?.id === brand.id ? 'Selected' : 'Select'}
-                            </Button>
-                            <Button variant="outline" onClick={() => handleEditStart(brand)}>
                               Edit
                             </Button>
                             <Button
                               variant="destructive"
-                              onClick={() => handleDeleteBrand(brand)}
+                              onClick={() => handleDeleteBrand(selectedBrand)}
                               disabled={deleteBrandMutation.isPending}
                             >
                               {deleteBrandMutation.isPending ? 'Deleting...' : 'Delete'}
@@ -633,14 +497,166 @@ export function Brands() {
                     </div>
                   )}
 
-                  {/* Instagram Connection Section */}
+                  {/* Social Accounts Section */}
                   <div className="mt-4 border-t pt-4">
-                    <InstagramConnect brand={brand} />
+                    <SocialAccountsManager brand={selectedBrand} />
+                  </div>
+
+                  {/* Brand Analysis Section */}
+                  <div id="brand-analysis-panel" className="mt-6">
+                    <BrandAnalysisPanel brandId={selectedBrand.id} />
                   </div>
                 </div>
-              ))}
-          </div>
-        )}
+              )}
+
+              {/* Other Brands */}
+              {brands
+                .filter((brand) => brand.id !== selectedBrand?.id)
+                .map((brand) => (
+                  <div key={brand.id} className="p-6">
+                    {/* Brand Content - Editing or Display Mode */}
+                    {editingBrandId === brand.id ? (
+                      /* Edit Mode */
+                      <form onSubmit={(e) => handleEditSubmit(e, brand.id)} className="space-y-4">
+                        {updateBrandMutation.error && (
+                          <div className="bg-muted rounded-md border p-3">
+                            <p className="text-destructive text-sm">
+                              {updateBrandMutation.error?.message ||
+                                'Failed to update brand. Please try again.'}
+                            </p>
+                          </div>
+                        )}
+
+                        <div>
+                          <Label>Brand Name</Label>
+                          <Input
+                            type="text"
+                            required
+                            value={editFormData[brand.id]?.name || ''}
+                            onChange={(e) => updateEditFormData(brand.id, 'name', e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <Label>Country</Label>
+                          <CountrySelect
+                            value={editFormData[brand.id]?.countryCode || ''}
+                            onChange={(code) => updateEditFormData(brand.id, 'countryCode', code)}
+                          />
+                        </div>
+
+                        <div>
+                          <Label>Description</Label>
+                          <Textarea
+                            rows={3}
+                            value={editFormData[brand.id]?.description || ''}
+                            onChange={(e) =>
+                              updateEditFormData(brand.id, 'description', e.target.value)
+                            }
+                            placeholder="Brief description of your brand..."
+                          />
+                        </div>
+
+                        <div>
+                          <Label>Country Code (ISO‑2)</Label>
+                          <Input
+                            type="text"
+                            maxLength={2}
+                            className="w-32 uppercase"
+                            value={editFormData[brand.id]?.countryCode || ''}
+                            onChange={(e) =>
+                              updateEditFormData(brand.id, 'countryCode', e.target.value)
+                            }
+                            placeholder="US"
+                          />
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleEditCancel(brand.id)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={updateBrandMutation.isPending}>
+                            {updateBrandMutation.isPending ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      /* Display Mode */
+                      <div>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-medium">{brand.name}</h3>
+                            {brand.description && (
+                              <p className="text-muted-foreground mt-1">{brand.description}</p>
+                            )}
+                            <p className="text-muted-foreground mt-2 text-xs">
+                              Created {new Date(brand.createdAt).toLocaleDateString()}
+                            </p>
+                            {brand.countryCode && (
+                              <p className="text-muted-foreground text-xs">
+                                Country: {brand.countryCode}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+                            {profileAvailable[brand.id] &&
+                              (profileSummaries[brand.id] ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="text-muted-foreground text-xs">
+                                    {profileSummaries[brand.id].tones.join(', ') || '—'}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    {profileSummaries[brand.id].palette.map((hex) => (
+                                      <span
+                                        key={hex}
+                                        title={hex}
+                                        className="inline-block h-3 w-3 rounded-full border"
+                                        style={{ backgroundColor: hex }}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="bg-accent text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                                  Analyzed
+                                </span>
+                              ))}
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                              <Button
+                                variant={selectedBrand?.id === brand.id ? 'secondary' : 'outline'}
+                                onClick={() => handleSelectBrand(brand)}
+                              >
+                                {selectedBrand?.id === brand.id ? 'Selected' : 'Select'}
+                              </Button>
+                              <Button variant="outline" onClick={() => handleEditStart(brand)}>
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                onClick={() => handleDeleteBrand(brand)}
+                                disabled={deleteBrandMutation.isPending}
+                              >
+                                {deleteBrandMutation.isPending ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Social Accounts Section */}
+                    <div className="mt-4 border-t pt-4">
+                      <SocialAccountsManager brand={brand} />
+                    </div>
+                  </div>
+                ))}
+            </div>
+          );
+        })()}
       </div>
       {/* Brand profile now opens in the universal right sidebar */}
     </div>

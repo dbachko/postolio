@@ -181,6 +181,7 @@ async function main() {
     Math.round(seededFollowers * (0.85 + Math.random() * 0.25))
   );
   const seededUpdatedAt = new Date().toISOString();
+  const seededTokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
   const seededGender = [
     { gender: 'F', value: Math.round(seededTotalAudience * 0.55) },
     { gender: 'M', value: Math.round(seededTotalAudience * 0.43) },
@@ -257,6 +258,8 @@ async function main() {
         biography: `Official account for ${brandName}. Sharing amazing content daily! 🚀`,
         website: `https://${brandName.toLowerCase().replace(/\s+/g, '')}.com`,
         profile_picture_url: `https://i.pravatar.cc/150?u=${instagramAccountId}`,
+        tokenExpiresAt: seededTokenExpiresAt,
+        tokenUpdatedAt: seededUpdatedAt,
         audienceDemographics: {
           totalAudience: seededTotalAudience,
           updatedAt: seededUpdatedAt,
@@ -270,6 +273,45 @@ async function main() {
     },
   });
 
+  // Create SocialAccount for the backing Facebook Page (so multi-platform UX works in dev)
+  const facebookPageName = `${brandName} Page`;
+  const facebookSocialAccount = await prisma.socialAccount.create({
+    data: {
+      brandId: brand.id,
+      platform: 'facebook',
+      externalAccountId: instagramPageId,
+      externalPageId: instagramPageId,
+      username: null,
+      displayName: facebookPageName,
+      metadata: {
+        pageId: instagramPageId,
+        pageName: facebookPageName,
+        profile_picture_url: `https://i.pravatar.cc/150?u=${instagramPageId}`,
+        tokenExpiresAt: seededTokenExpiresAt,
+        tokenUpdatedAt: seededUpdatedAt,
+      },
+    },
+  });
+
+  // Set brand defaults for the new multi-account flow
+  const currentPreferences =
+    brand.preferences && typeof brand.preferences === 'object' && !Array.isArray(brand.preferences)
+      ? (brand.preferences as Record<string, unknown>)
+      : {};
+  await prisma.brand.update({
+    where: { id: brand.id },
+    data: {
+      preferences: {
+        ...currentPreferences,
+        primarySocialAccountIds: {
+          instagram: instagramSocialAccount.id,
+          facebook: facebookSocialAccount.id,
+        },
+        defaultPostSocialAccountIds: [instagramSocialAccount.id, facebookSocialAccount.id],
+      },
+    },
+  });
+
   // Helper for date formatting to yyyy-MM-dd
   const pad = (n: number) => String(n).padStart(2, '0');
   const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -277,6 +319,62 @@ async function main() {
   // Utility helpers
   const days = (n: number) => 24 * 60 * 60 * 1000 * n;
   const hours = (n: number) => 60 * 60 * 1000 * n;
+
+  async function createSeededContentGroup(opts: {
+    campaignId: string | null;
+    template?: {
+      initialized: boolean;
+      caption?: string | null;
+      contentType?: string | null;
+    };
+    destinations: Array<{
+      socialAccountId: string;
+      caption: string;
+      hashtags: string[];
+      status: ContentStatus;
+      scheduledAt?: Date | null;
+      postedAt?: Date | null;
+      schedulingError?: string | null;
+    }>;
+  }): Promise<{ contentGroupId: string; contentIds: string[] }> {
+    const template = opts.template ?? null;
+
+    const group = await prisma.contentGroup.create({
+      data: {
+        brandId: brand.id,
+        ...(template && template.initialized
+          ? {
+              templateInitialized: true,
+              templateCaption: template.caption ?? null,
+              templateContentType: template.contentType ?? null,
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+
+    const created = await prisma.$transaction(
+      opts.destinations.map((destination) =>
+        prisma.content.create({
+          data: {
+            brandId: brand.id,
+            campaignId: opts.campaignId,
+            contentGroupId: group.id,
+            targetSocialAccountId: destination.socialAccountId,
+            caption: destination.caption,
+            hashtags: destination.hashtags,
+            status: destination.status,
+            scheduledAt: destination.scheduledAt ?? null,
+            postedAt: destination.postedAt ?? null,
+            schedulingError: destination.schedulingError ?? null,
+          },
+          select: { id: true },
+        })
+      )
+    );
+
+    return { contentGroupId: group.id, contentIds: created.map((c) => c.id) };
+  }
 
   // Create several campaigns covering all statuses and varied configs
   console.log('==> Creating demo campaigns with varied statuses and configs');
@@ -791,8 +889,58 @@ async function main() {
     data: normalizeStatuses(contentPayload.concat(brandCoverage)),
   });
 
-  // Attach publications + mock comments using the created SocialAccount
-  console.log('==> Creating SocialAccount, publications, comments, and saved replies');
+  console.log('==> Creating multi-destination content groups (ContentGroup)');
+  await createSeededContentGroup({
+    campaignId: null,
+    template: {
+      initialized: true,
+      caption: 'Template: Multi-destination seeded post',
+      contentType: 'post',
+    },
+    destinations: [
+      {
+        socialAccountId: instagramSocialAccount.id,
+        caption: 'IG: Multi-destination draft (seeded)',
+        hashtags: ['#postolio', '#multi', '#instagram'],
+        status: 'draft' as ContentStatus,
+      },
+      {
+        socialAccountId: facebookSocialAccount.id,
+        caption: 'FB: Multi-destination draft (seeded)',
+        hashtags: ['#postolio', '#multi', '#facebook'],
+        status: 'draft' as ContentStatus,
+      },
+    ],
+  });
+
+  const activeCampaign = createdCampaigns.find((c) => c.status === 'active') || null;
+  if (activeCampaign) {
+    const scheduledAt = new Date(now.getTime() + days(4) + hours(2));
+    await createSeededContentGroup({
+      campaignId: activeCampaign.id,
+      destinations: [
+        {
+          socialAccountId: instagramSocialAccount.id,
+          caption: 'Launch Momentum: Multi-destination scheduled (IG)',
+          hashtags: ['#postolio', '#campaign', '#instagram'],
+          status: 'scheduled' as ContentStatus,
+          scheduledAt,
+        },
+        {
+          socialAccountId: facebookSocialAccount.id,
+          caption: 'Launch Momentum: Multi-destination scheduled (FB)',
+          hashtags: ['#postolio', '#campaign', '#facebook'],
+          status: 'scheduled' as ContentStatus,
+          scheduledAt,
+        },
+      ],
+    });
+  }
+
+  // Attach publications + mock comments using the created SocialAccounts
+  console.log('==> Creating publications, comments, and saved replies');
+  const instagram = instagramSocialAccount;
+  const facebook = facebookSocialAccount;
   const social = instagramSocialAccount;
 
   // Pick a few published posts and create publications + comments
@@ -808,19 +956,19 @@ async function main() {
     const pub = await prisma.contentPublication.upsert({
       where: {
         socialAccountId_externalPostId: {
-          socialAccountId: social.id,
+          socialAccountId: instagram.id,
           externalPostId,
         },
       },
       update: { contentId: c.id, permalink: `https://instagram.com/p/${externalPostId}` },
       create: {
         contentId: c.id,
-        socialAccountId: social.id,
+        socialAccountId: instagram.id,
         platform: 'instagram',
         externalPostId,
         externalThreadRootId: null,
-        externalAccountId: social.externalAccountId,
-        externalPageId: social.externalPageId || undefined,
+        externalAccountId: instagram.externalAccountId,
+        externalPageId: instagram.externalPageId || undefined,
         permalink: `https://instagram.com/p/${externalPostId}`,
         publishedAt: c.postedAt || new Date(),
         status: 'published',
@@ -863,6 +1011,35 @@ async function main() {
         },
       ],
     });
+
+    // Seed a couple of Facebook publications for cross-platform UX testing
+    if (i < 2) {
+      const facebookExternalPostId = `FBPOST_${randomSuffix()}_${i + 1}`;
+      await prisma.contentPublication.upsert({
+        where: {
+          socialAccountId_externalPostId: {
+            socialAccountId: facebook.id,
+            externalPostId: facebookExternalPostId,
+          },
+        },
+        update: {
+          contentId: c.id,
+          permalink: `https://www.facebook.com/${facebookExternalPostId}`,
+        },
+        create: {
+          contentId: c.id,
+          socialAccountId: facebook.id,
+          platform: 'facebook',
+          externalPostId: facebookExternalPostId,
+          externalThreadRootId: null,
+          externalAccountId: facebook.externalAccountId,
+          externalPageId: facebook.externalPageId || undefined,
+          permalink: `https://www.facebook.com/${facebookExternalPostId}`,
+          publishedAt: c.postedAt || new Date(),
+          status: 'published',
+        },
+      });
+    }
   }
 
   // Saved replies

@@ -129,11 +129,50 @@ function DraftCard({
   const isScheduled = Boolean(draft.scheduledAt);
   const statusVariant = isScheduled ? 'info' : 'secondary';
   const statusLabel = isScheduled ? 'Scheduled' : 'Draft';
-  const mediaLabel =
-    preview.kind === 'video' ? 'Video' : preview.kind === 'image' ? 'Image' : 'Text';
   const previewAlt = draft.caption?.trim()
     ? `${draft.caption.trim()} preview`
     : 'Draft media preview';
+
+  let mediaLabel = 'Text';
+  let mediaIcon = <FileText className="h-3 w-3" />;
+  let previewBody = (
+    <div className="bg-muted flex h-full w-full items-center justify-center">
+      <FileText className="text-muted-foreground h-8 w-8" />
+    </div>
+  );
+
+  if (preview.kind === 'video') {
+    mediaLabel = 'Video';
+    mediaIcon = <Video className="h-3 w-3" />;
+    previewBody = (
+      <div className="relative h-full w-full">
+        <video
+          src={preview.url}
+          poster={preview.posterUrl || undefined}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="rounded-full bg-black/60 p-2">
+            <Play className="h-4 w-4 text-white" />
+          </div>
+        </div>
+      </div>
+    );
+  } else if (preview.kind === 'image') {
+    mediaLabel = 'Image';
+    mediaIcon = <Image className="h-3 w-3" />;
+    previewBody = (
+      <img
+        src={preview.url}
+        alt={previewAlt}
+        className="h-full w-full object-cover"
+        loading="lazy"
+      />
+    );
+  }
 
   return (
     <button type="button" onClick={onOpen} className="w-full text-left">
@@ -148,45 +187,12 @@ function DraftCard({
 
           <div className="absolute top-2 right-2 z-10">
             <Badge variant="secondary" className="flex items-center gap-1">
-              {preview.kind === 'video' ? (
-                <Video className="h-3 w-3" />
-              ) : preview.kind === 'image' ? (
-                <Image className="h-3 w-3" />
-              ) : (
-                <FileText className="h-3 w-3" />
-              )}
+              {mediaIcon}
               <span>{mediaLabel}</span>
             </Badge>
           </div>
 
-          {preview.kind === 'video' ? (
-            <div className="relative h-full w-full">
-              <video
-                src={preview.url}
-                poster={preview.posterUrl || undefined}
-                className="h-full w-full object-cover"
-                muted
-                playsInline
-                preload="metadata"
-              />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="rounded-full bg-black/60 p-2">
-                  <Play className="h-4 w-4 text-white" />
-                </div>
-              </div>
-            </div>
-          ) : preview.kind === 'image' ? (
-            <img
-              src={preview.url}
-              alt={previewAlt}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="bg-muted flex h-full w-full items-center justify-center">
-              <FileText className="text-muted-foreground h-8 w-8" />
-            </div>
-          )}
+          {previewBody}
         </div>
 
         <div className="space-y-1">
@@ -365,69 +371,83 @@ export default function Drafts() {
           </div>
         )}
 
-        {isLoading ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {Array.from({ length: 10 }).map((_, idx) => (
-              <div key={idx} className="space-y-2">
-                <Skeleton className="aspect-square rounded-lg" />
-                <Skeleton className="h-3 w-2/3" />
+        {(() => {
+          if (isLoading) {
+            return (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <Skeleton className="aspect-square rounded-lg" />
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : isError ? (
-          <div className="rounded-lg border p-6">
-            <div className="border-destructive/50 bg-destructive/10 rounded-lg border p-4">
-              <h3 className="text-destructive mb-2 font-semibold">Failed to load drafts</h3>
-              <p className="text-muted-foreground text-sm">
-                Please try again in a moment or refresh the page.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Button variant="outline" onClick={() => refetch()}>
-                  Retry
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : filteredSortedDrafts.length === 0 ? (
-          <div className="rounded-lg border-2 border-dashed py-12 text-center">
-            <p className="text-muted-foreground">No drafts match these filters</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Try adjusting your search, filters, or create a new draft.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-3">
-              <Button variant="outline" onClick={resetControls}>
-                Reset filters
-              </Button>
-              <Button onClick={() => openSidebar('post-create')}>Create draft</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {groupedDrafts.map((group) => (
-              <div key={group.key} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="text-muted-foreground h-4 w-4" />
-                  <h3 className="text-sm font-semibold">{group.label}</h3>
-                  <span className="text-muted-foreground text-xs">
-                    {group.drafts.length} drafts
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                  {group.drafts.map((draft) => (
-                    <DraftCard
-                      key={draft.id}
-                      draft={draft}
-                      primaryAsset={
-                        draft.primaryAssetId ? (assetsById[draft.primaryAssetId] ?? null) : null
-                      }
-                      onOpen={() => openSidebar('post', { id: draft.id })}
-                    />
-                  ))}
+            );
+          }
+
+          if (isError) {
+            return (
+              <div className="rounded-lg border p-6">
+                <div className="border-destructive/50 bg-destructive/10 rounded-lg border p-4">
+                  <h3 className="text-destructive mb-2 font-semibold">Failed to load drafts</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Please try again in a moment or refresh the page.
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    <Button variant="outline" onClick={() => refetch()}>
+                      Retry
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          }
+
+          if (filteredSortedDrafts.length === 0) {
+            return (
+              <div className="rounded-lg border-2 border-dashed py-12 text-center">
+                <p className="text-muted-foreground">No drafts match these filters</p>
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Try adjusting your search, filters, or create a new draft.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-3">
+                  <Button variant="outline" onClick={resetControls}>
+                    Reset filters
+                  </Button>
+                  <Button onClick={() => openSidebar('post-create')}>Create draft</Button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-8">
+              {groupedDrafts.map((group) => (
+                <div key={group.key} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="text-muted-foreground h-4 w-4" />
+                    <h3 className="text-sm font-semibold">{group.label}</h3>
+                    <span className="text-muted-foreground text-xs">
+                      {group.drafts.length} drafts
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {group.drafts.map((draft) => (
+                      <DraftCard
+                        key={draft.id}
+                        draft={draft}
+                        primaryAsset={
+                          draft.primaryAssetId ? (assetsById[draft.primaryAssetId] ?? null) : null
+                        }
+                        onOpen={() => openSidebar('post', { id: draft.id })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

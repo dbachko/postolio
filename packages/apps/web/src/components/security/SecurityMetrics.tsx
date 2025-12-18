@@ -96,6 +96,16 @@ export function SecurityMetrics({ summary }: SecurityMetricsProps) {
 
   const passwordStatus = getPasswordChangeStatus();
 
+  let passwordAgeValue = '—';
+  if (usingOAuthOnly) {
+    passwordAgeValue = 'Not set';
+  } else if (summary.lastPasswordChange) {
+    const daysSinceChange = Math.floor(
+      (Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    passwordAgeValue = `${daysSinceChange} days`;
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
       <MetricCard
@@ -125,13 +135,7 @@ export function SecurityMetrics({ summary }: SecurityMetricsProps) {
       <MetricCard
         icon={<Key className="h-6 w-6" />}
         label="Password Age"
-        value={
-          usingOAuthOnly
-            ? 'Not set'
-            : summary.lastPasswordChange
-              ? `${Math.floor((Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24))} days`
-              : '—'
-        }
+        value={passwordAgeValue}
         description={passwordStatus.description}
         variant={passwordStatus.variant}
       />

@@ -97,6 +97,13 @@ vi.mock('../../../config/database.js', () => {
         userId: 'user-123',
         name: 'Test Brand',
       })),
+      findUnique: vi.fn(async () => ({
+        preferences: {},
+      })),
+    },
+    socialAccount: {
+      findFirst: vi.fn(async () => null),
+      findMany: vi.fn(async () => []),
     },
     contentMediaAsset: {
       createMany: vi.fn(async () => ({ count: 1 })),

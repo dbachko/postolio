@@ -22,6 +22,8 @@ export interface Brand {
 export interface Content {
   id: string;
   caption: string;
+  contentGroupId?: string | null;
+  targetSocialAccountId?: string | null;
   primaryAssetId?: string | null;
   contentType?: string | null;
   mediaAssets?: Array<{
@@ -112,6 +114,7 @@ export interface CampaignConfig {
   themes: string[];
   style: string;
   postingTime: string;
+  priority?: number;
   campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
   promotionDetails?: { discountPercentage?: number; promoCode?: string; limitedQuantity?: boolean };
   contentPillars?: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
@@ -140,12 +143,14 @@ export interface Campaign {
   status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing';
   brandId: string;
   color?: string | null;
+  priority?: number;
   config?: {
     duration?: { start: string; end: string };
     frequency?: string;
     themes?: string[];
     style?: string | string[];
     postingTime?: string;
+    priority?: number;
   };
   // In list views, content is omitted to reduce payload. Keep optional.
   content?: Content[];

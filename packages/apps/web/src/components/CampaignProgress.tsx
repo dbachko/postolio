@@ -10,6 +10,12 @@ interface CampaignProgressProps {
   allBrands?: boolean;
 }
 
+function getStatusTextClass(status: string): string {
+  if (status === 'active') return 'text-green-600 dark:text-green-400';
+  if (status === 'paused') return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-muted-foreground';
+}
+
 export function CampaignProgress({ brandId, allBrands = false }: CampaignProgressProps) {
   const navigate = useNavigate();
 
@@ -68,15 +74,7 @@ export function CampaignProgress({ brandId, allBrands = false }: CampaignProgres
                 <CardTitle className="text-lg break-words">{campaign.name}</CardTitle>
                 <p className="text-muted-foreground mt-1 text-sm break-words whitespace-normal">
                   Status:{' '}
-                  <span
-                    className={`capitalize ${
-                      campaign.status === 'active'
-                        ? 'text-green-600 dark:text-green-400'
-                        : campaign.status === 'paused'
-                          ? 'text-yellow-600 dark:text-yellow-400'
-                          : 'text-muted-foreground'
-                    }`}
-                  >
+                  <span className={`capitalize ${getStatusTextClass(campaign.status)}`}>
                     {campaign.status}
                   </span>
                   {campaign.brandId && (

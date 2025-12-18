@@ -16,4 +16,11 @@ export interface Placeholder {
   postedAt: undefined;
 }
 
-export type CalendarItem = (Content & { type: 'content' }) | Placeholder;
+export type CalendarContentItem = Content & {
+  type: 'content';
+  isMultiDestination?: boolean;
+  destinationSocialAccountIds?: string[];
+  destinationContentIds?: string[];
+};
+
+export type CalendarItem = CalendarContentItem | Placeholder;

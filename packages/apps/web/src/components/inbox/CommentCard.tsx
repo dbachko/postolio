@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { QuickLensChips } from '@/components/QuickLensChips';
-import { Avatar } from '@/components/ui/avatar';
+import { ProfileAvatar } from '@/components/ui/profile-avatar';
 import { Heart, CheckCircle2, Archive, Send, Eraser } from 'lucide-react';
 
 export type CommentRow = {
@@ -45,7 +45,7 @@ export function CommentCard({
     <div className="rounded-md border p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Avatar name={data.username || 'User'} size="sm" />
+          <ProfileAvatar name={data.username || 'User'} size="sm" />
           <div className="text-foreground font-medium">{data.username || 'User'}</div>
           {Boolean(data?.workflow?.status) && (
             <span className="text-muted-foreground text-xs capitalize">

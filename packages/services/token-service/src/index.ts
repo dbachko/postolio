@@ -5,7 +5,12 @@
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  DeleteCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
@@ -45,6 +50,17 @@ class NotFoundError extends ServiceError {
   }
 }
 
+function getHttpStatusCodeForServiceError(error: ServiceError): number {
+  switch (error.code) {
+    case 'VALIDATION_FAILED':
+      return 400;
+    case 'RATE_LIMITED':
+      return 429;
+    default:
+      return 500;
+  }
+}
+
 // Enhanced type definitions with strict typing
 type TokenMetadata = Record<string, unknown>;
 
@@ -62,6 +78,11 @@ interface StoreTokenRequest {
   userId: string;
   brandId: string;
   platform: string;
+  /**
+   * Optional: when present, the token is scoped to a specific connected social account
+   * (enables multiple accounts per brand+platform).
+   */
+  socialAccountId?: string;
   accessToken: string;
   refreshToken?: string;
   expiresAt: string;
@@ -223,6 +244,10 @@ async function checkRateLimit(userId: string, platform?: string): Promise<void> 
 }
 
 // Enhanced token operations with validation
+function buildTokenSk(brandId: string, socialAccountId?: string): string {
+  return socialAccountId ? `${brandId}#${socialAccountId}` : brandId;
+}
+
 async function storeToken(
   data: StoreTokenRequest,
   requestContext: {
@@ -250,14 +275,17 @@ async function storeToken(
 
     const item = {
       pk: `${data.userId}#${data.platform}`,
-      sk: data.brandId,
+      sk: buildTokenSk(data.brandId, data.socialAccountId),
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       accessToken: encryptedAccessToken,
       refreshToken: encryptedRefreshToken,
       expiresAt: data.expiresAt,
-      metadata: data.metadata,
+      metadata: {
+        ...(data.metadata || {}),
+        ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+      },
       tokenVersion: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -280,12 +308,16 @@ async function storeToken(
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
       result: 'success',
-      metadata: { hasRefreshToken: !!data.refreshToken },
+      metadata: {
+        hasRefreshToken: !!data.refreshToken,
+        ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+      },
     });
 
     logger.info('Token stored successfully', {
       userId: data.userId,
       brandId: data.brandId,
+      socialAccountId: data.socialAccountId || null,
       platform: data.platform,
       correlationId: requestContext.correlationId,
     });
@@ -308,7 +340,7 @@ async function storeToken(
 }
 
 async function getToken(
-  data: { userId: string; brandId: string; platform: string },
+  data: { userId: string; brandId: string; platform: string; socialAccountId?: string },
   requestContext: {
     requestId: string;
     correlationId: string;
@@ -321,7 +353,7 @@ async function getToken(
         TableName: TABLE_NAME,
         Key: {
           pk: `${data.userId}#${data.platform}`,
-          sk: data.brandId,
+          sk: buildTokenSk(data.brandId, data.socialAccountId),
         },
       })
     );
@@ -336,7 +368,10 @@ async function getToken(
         correlationId: requestContext.correlationId,
         ipAddress: requestContext.ipAddress,
         result: 'success',
-        metadata: { found: false },
+        metadata: {
+          found: false,
+          ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+        },
       });
       return null;
     }
@@ -368,7 +403,11 @@ async function getToken(
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
       result: 'success',
-      metadata: { found: true, needsRefresh: expiryTime < refreshThreshold },
+      metadata: {
+        found: true,
+        needsRefresh: expiryTime < refreshThreshold,
+        ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+      },
     });
 
     metrics.addMetric('TokensRetrieved', MetricUnit.Count, 1);
@@ -394,6 +433,75 @@ async function getToken(
       result: 'failure',
       errorCode: error instanceof ServiceError ? error.code : 'UNKNOWN_ERROR',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      metadata: {
+        ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+      },
+    });
+    throw error;
+  }
+}
+
+async function deleteToken(
+  data: { userId: string; brandId: string; platform: string; socialAccountId?: string },
+  requestContext: {
+    requestId: string;
+    correlationId: string;
+    ipAddress?: string;
+  }
+): Promise<boolean> {
+  try {
+    const result = await docClient.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: {
+          pk: `${data.userId}#${data.platform}`,
+          sk: buildTokenSk(data.brandId, data.socialAccountId),
+        },
+        ReturnValues: 'ALL_OLD',
+      })
+    );
+
+    const deleted = !!result.Attributes;
+
+    await auditLog({
+      operation: 'DELETE_TOKEN',
+      userId: data.userId,
+      brandId: data.brandId,
+      platform: data.platform,
+      requestId: requestContext.requestId,
+      correlationId: requestContext.correlationId,
+      ipAddress: requestContext.ipAddress,
+      result: 'success',
+      metadata: {
+        deleted,
+        ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+      },
+    });
+
+    if (deleted) {
+      metrics.addMetric('TokensDeleted', MetricUnit.Count, 1);
+      logger.info('Token deleted successfully', {
+        ...data,
+        correlationId: requestContext.correlationId,
+      });
+    }
+
+    return deleted;
+  } catch (error) {
+    await auditLog({
+      operation: 'DELETE_TOKEN',
+      userId: data.userId,
+      brandId: data.brandId,
+      platform: data.platform,
+      requestId: requestContext.requestId,
+      correlationId: requestContext.correlationId,
+      ipAddress: requestContext.ipAddress,
+      result: 'failure',
+      errorCode: error instanceof ServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      metadata: {
+        ...(data.socialAccountId ? { socialAccountId: data.socialAccountId } : {}),
+      },
     });
     throw error;
   }
@@ -401,7 +509,7 @@ async function getToken(
 
 // Token rotation implementation
 async function rotateToken(
-  data: { userId: string; brandId: string; platform: string },
+  data: { userId: string; brandId: string; platform: string; socialAccountId?: string },
   requestContext: {
     requestId: string;
     correlationId: string;
@@ -435,6 +543,7 @@ async function rotateToken(
         userId: data.userId,
         brandId: data.brandId,
         platform: data.platform,
+        socialAccountId: data.socialAccountId,
         accessToken: currentToken.accessToken, // In reality, this would be a new token
         refreshToken: currentToken.refreshToken,
         expiresAt: currentToken.expiresAt,
@@ -500,7 +609,14 @@ function parsePathParameters(path: string): Record<string, string> {
         params.platform = parts[2];
         if (parts[3]) {
           params.brandId = parts[3];
-          if (parts[4]) {
+          if (parts[4] === 'social-accounts') {
+            if (parts[5]) {
+              params.socialAccountId = parts[5];
+            }
+            if (parts[6]) {
+              params.action = parts[6];
+            }
+          } else if (parts[4]) {
             params.action = parts[4];
           }
         }
@@ -644,6 +760,102 @@ export const handler = async (
       await checkRateLimit(pathParams.userId, pathParams.platform);
     }
 
+    // PUT /tokens/{userId}/{platform}/{brandId}/social-accounts/{socialAccountId} - Store/update token (account-scoped)
+    if (
+      method === 'PUT' &&
+      pathParams.userId &&
+      pathParams.platform &&
+      pathParams.brandId &&
+      pathParams.socialAccountId &&
+      !pathParams.action
+    ) {
+      const body = JSON.parse(event.body || '{}');
+      await storeToken(
+        {
+          userId: pathParams.userId,
+          brandId: pathParams.brandId,
+          platform: pathParams.platform,
+          socialAccountId: pathParams.socialAccountId,
+          ...body,
+        },
+        requestContext
+      );
+
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({ success: true }),
+      };
+    }
+
+    // GET /tokens/{userId}/{platform}/{brandId}/social-accounts/{socialAccountId} - Get specific token (account-scoped)
+    if (
+      method === 'GET' &&
+      pathParams.userId &&
+      pathParams.platform &&
+      pathParams.brandId &&
+      pathParams.socialAccountId &&
+      !pathParams.action
+    ) {
+      const token = await getToken(
+        {
+          userId: pathParams.userId,
+          brandId: pathParams.brandId,
+          platform: pathParams.platform,
+          socialAccountId: pathParams.socialAccountId,
+        },
+        requestContext
+      );
+
+      if (!token) {
+        return {
+          statusCode: 404,
+          headers: responseHeaders,
+          body: JSON.stringify({ error: 'Token not found' }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify(token),
+      };
+    }
+
+    // DELETE /tokens/{userId}/{platform}/{brandId}/social-accounts/{socialAccountId} - Delete token (account-scoped)
+    if (
+      method === 'DELETE' &&
+      pathParams.userId &&
+      pathParams.platform &&
+      pathParams.brandId &&
+      pathParams.socialAccountId &&
+      !pathParams.action
+    ) {
+      const deleted = await deleteToken(
+        {
+          userId: pathParams.userId,
+          brandId: pathParams.brandId,
+          platform: pathParams.platform,
+          socialAccountId: pathParams.socialAccountId,
+        },
+        requestContext
+      );
+
+      if (!deleted) {
+        return {
+          statusCode: 404,
+          headers: responseHeaders,
+          body: JSON.stringify({ error: 'Token not found' }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({ success: true }),
+      };
+    }
+
     // PUT /tokens/{userId}/{platform}/{brandId} - Store/update token
     if (
       method === 'PUT' &&
@@ -740,8 +952,7 @@ export const handler = async (
       if (error.code === 'RATE_LIMITED' && error.details?.retryAfterSeconds) {
         retryHeaders['Retry-After'] = error.details.retryAfterSeconds.toString();
       }
-      const statusCode =
-        error.code === 'VALIDATION_FAILED' ? 400 : error.code === 'RATE_LIMITED' ? 429 : 500;
+      const statusCode = getHttpStatusCodeForServiceError(error);
       const retryable = error.retryable ?? false;
       return {
         statusCode,

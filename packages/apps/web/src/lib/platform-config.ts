@@ -56,10 +56,10 @@ export const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
     icon: '👥',
     description: 'Share updates with your Facebook audience',
     requirements: 'Facebook Page',
-    enabled: false, // Not yet implemented
+    enabled: true,
     features: {
-      publishing: false,
-      scheduling: false,
+      publishing: true,
+      scheduling: true,
       analytics: false,
       comments: false,
       directMessages: false,

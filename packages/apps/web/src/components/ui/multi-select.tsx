@@ -36,6 +36,22 @@ export function MultiSelect({
 
   const selectedLabels = options.filter((opt) => value.includes(opt.value)).map((opt) => opt.label);
 
+  let triggerLabel: React.ReactNode;
+  if (selectedLabels.length === 0) {
+    triggerLabel = <span className="text-muted-foreground">{placeholder}</span>;
+  } else if (selectedLabels.length === 1) {
+    triggerLabel = selectedLabels[0];
+  } else {
+    triggerLabel = (
+      <span className="flex items-center gap-1">
+        {selectedLabels[0]}
+        <Badge variant="secondary" className="ml-1">
+          +{selectedLabels.length - 1}
+        </Badge>
+      </span>
+    );
+  }
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
@@ -45,20 +61,7 @@ export function MultiSelect({
           aria-expanded={open}
           className={cn('w-full justify-between', className)}
         >
-          <span className="flex-1 truncate text-left">
-            {selectedLabels.length === 0 ? (
-              <span className="text-muted-foreground">{placeholder}</span>
-            ) : selectedLabels.length === 1 ? (
-              selectedLabels[0]
-            ) : (
-              <span className="flex items-center gap-1">
-                {selectedLabels[0]}
-                <Badge variant="secondary" className="ml-1">
-                  +{selectedLabels.length - 1}
-                </Badge>
-              </span>
-            )}
-          </span>
+          <span className="flex-1 truncate text-left">{triggerLabel}</span>
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverPrimitive.Trigger>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
@@ -211,6 +211,32 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
     link: 'Link Facebook Account',
   }[mode];
 
+  let buttonContent: ReactNode;
+  if (isLoading) {
+    buttonContent = 'Connecting...';
+  } else if (!isSDKLoaded) {
+    buttonContent = 'Loading...';
+  } else {
+    buttonContent = (
+      <>
+        <svg
+          className="mr-2 h-4 w-4"
+          aria-hidden="true"
+          focusable="false"
+          role="img"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 512 512"
+        >
+          <path
+            fill="#1877F2"
+            d="M512 256C512 114.6 397.4 0 256 0S0 114.6 0 256C0 382.3 94.3 487.3 216 508.3V330h-65v-74h65v-56.4c0-64.2 38.2-99.6 96.7-99.6 28 0 57.3 5 57.3 5v63h-32.3c-31.8 0-41.7 19.8-41.7 40v48h71l-11.4 74H296v178.3C417.7 487.3 512 382.3 512 256z"
+          />
+        </svg>
+        {buttonText}
+      </>
+    );
+  }
+
   return (
     <Button
       type="button"
@@ -219,28 +245,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
       onClick={handleFacebookLogin}
       disabled={isLoading || !isSDKLoaded}
     >
-      {isLoading ? (
-        'Connecting...'
-      ) : !isSDKLoaded ? (
-        'Loading...'
-      ) : (
-        <>
-          <svg
-            className="mr-2 h-4 w-4"
-            aria-hidden="true"
-            focusable="false"
-            role="img"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 512 512"
-          >
-            <path
-              fill="#1877F2"
-              d="M512 256C512 114.6 397.4 0 256 0S0 114.6 0 256C0 382.3 94.3 487.3 216 508.3V330h-65v-74h65v-56.4c0-64.2 38.2-99.6 96.7-99.6 28 0 57.3 5 57.3 5v63h-32.3c-31.8 0-41.7 19.8-41.7 40v48h71l-11.4 74H296v178.3C417.7 487.3 512 382.3 512 256z"
-            />
-          </svg>
-          {buttonText}
-        </>
-      )}
+      {buttonContent}
     </Button>
   );
 }

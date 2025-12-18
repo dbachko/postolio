@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { InstagramConnect } from '@/components/InstagramConnect';
+import { SocialAccountsManager } from '@/components/social/SocialAccountsManager';
 
 type Step = 'choice' | 'brand' | 'connect';
 
@@ -287,8 +287,8 @@ export function OnboardingPage() {
                 <CardTitle>Step 2 of 2 – Connect social accounts</CardTitle>
                 <CardDescription>
                   Connect at least one social media account to unlock scheduling and analytics.
-                  Today we support Instagram Business and Creator accounts, with more platforms
-                  coming soon.
+                  Today we support Instagram Business/Creator accounts and Facebook Pages (via
+                  Meta), with more platforms coming soon.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -310,12 +310,20 @@ export function OnboardingPage() {
                       We will connect social accounts for:{' '}
                       <span className="font-medium">{targetBrand.name}</span>
                     </p>
-                    <InstagramConnect
+                    <SocialAccountsManager
                       brand={targetBrand}
-                      onConnectionChange={async (connected) => {
-                        if (!connected) return;
-                        await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
-                        navigate('/', { replace: true });
+                      onAccountsChanged={async () => {
+                        try {
+                          const res = await brandApi.getConnectedAccounts(targetBrand.id);
+                          const connected = (res.socialAccounts || []).some(
+                            (a: any) => !a.disconnected
+                          );
+                          if (!connected) return;
+                          await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
+                          navigate('/', { replace: true });
+                        } catch (_e) {
+                          // ignore
+                        }
                       }}
                     />
                   </div>

@@ -3,7 +3,7 @@ import { render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PageMetaProvider } from '@/contexts/PageMetaContext';
-import PostDetail from './PostDetail';
+import PostPage from './Post';
 
 vi.mock('@/lib/api', () => ({
   content: {
@@ -117,7 +117,7 @@ describe('PostDetail', () => {
         <PageMetaProvider>
           <MemoryRouter initialEntries={[`/posts/${postId}`]}>
             <Routes>
-              <Route path="/posts/:postId" element={<PostDetail />} />
+              <Route path="/posts/:postId" element={<PostPage />} />
             </Routes>
           </MemoryRouter>
         </PageMetaProvider>

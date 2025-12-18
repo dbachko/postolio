@@ -280,6 +280,8 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
             brandId: item.brandId,
+            contentGroupId: (item as any).contentGroupId ?? null,
+            targetSocialAccountId: (item as any).targetSocialAccountId ?? null,
             contentType: item.contentType,
             shareToFeed: (item as any).shareToFeed ?? null,
             schedulingError: (item as any).schedulingError ?? null,

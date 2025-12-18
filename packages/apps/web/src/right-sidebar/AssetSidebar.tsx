@@ -344,8 +344,8 @@ export function AssetSidebar({
   const headerClass = useMemo(
     () =>
       cn(
-        'bg-card flex h-14 items-center justify-between border-b px-4',
-        layout === 'sidebar' ? 'sticky top-0 z-30' : 'rounded-t'
+        'bg-card flex items-center justify-between border-b px-4',
+        layout === 'sidebar' ? 'sticky top-0 z-30 h-12' : 'h-14 rounded-t'
       ),
     [layout]
   );
@@ -407,198 +407,221 @@ export function AssetSidebar({
       ) : null}
 
       <div className={bodyClass}>
-        {assetQuery.isError ? (
-          <div className="border-destructive/50 bg-destructive/10 text-destructive rounded-lg border px-4 py-3 text-sm">
-            {assetQuery.error instanceof Error ? assetQuery.error.message : 'Failed to load asset.'}
-          </div>
-        ) : assetQuery.isLoading ? (
-          <div className="flex min-h-[240px] items-center justify-center">
-            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-          </div>
-        ) : !asset ? (
-          <div className="text-muted-foreground text-sm">Select an asset to view its details.</div>
-        ) : (
-          <div className="space-y-8 pb-6">
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="asset-title">Asset Title</Label>
-                  <Input
-                    id="asset-title"
-                    value={formState.title}
-                    onChange={handleFieldChange('title')}
-                    placeholder="Name this asset"
-                  />
-                  <div className="text-muted-foreground flex justify-end text-xs">
-                    {formState.title.length}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="asset-alt-text">Alt Text</Label>
-                  <Textarea
-                    id="asset-alt-text"
-                    value={formState.altText}
-                    onChange={handleFieldChange('altText')}
-                    placeholder="Describe the contents of the asset for accessibility"
-                    rows={3}
-                  />
-                  <div className="text-muted-foreground flex justify-between text-xs">
-                    <span>Alt text describes the contents of the asset.</span>
-                    <span>{formState.altText.length}</span>
-                  </div>
-                </div>
+        {(() => {
+          if (assetQuery.isError) {
+            return (
+              <div className="border-destructive/50 bg-destructive/10 text-destructive rounded-lg border px-4 py-3 text-sm">
+                {assetQuery.error instanceof Error
+                  ? assetQuery.error.message
+                  : 'Failed to load asset.'}
               </div>
+            );
+          }
 
-              <Separator />
+          if (assetQuery.isLoading) {
+            return (
+              <div className="flex min-h-[240px] items-center justify-center">
+                <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+              </div>
+            );
+          }
 
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-lg font-semibold">Preview</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Replace the source file to update this asset
-                  </p>
-                </div>
+          if (!asset) {
+            return (
+              <div className="text-muted-foreground text-sm">
+                Select an asset to view its details.
+              </div>
+            );
+          }
 
-                <input
-                  ref={uploadInputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  className="hidden"
-                  onChange={handleFileSelection}
-                />
-
-                <div className="border-border bg-muted/20 group relative flex min-h-[220px] items-center justify-center overflow-hidden rounded-lg border">
-                  {asset.fileType === 'video' ? (
-                    <video
-                      key={assetPreviewUrl}
-                      controls
-                      className="h-full w-full object-contain"
-                      src={assetPreviewUrl}
+          return (
+            <div className="space-y-8 pb-6">
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="asset-title">Asset Title</Label>
+                    <Input
+                      id="asset-title"
+                      value={formState.title}
+                      onChange={handleFieldChange('title')}
+                      placeholder="Name this asset"
                     />
-                  ) : (
-                    <img
-                      src={assetPreviewUrl}
-                      alt={formState.altText || asset.altText || asset.fileName}
-                      className="h-full w-full object-contain"
-                    />
-                  )}
-
-                  {replaceFileMutation.isPending && (
-                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 text-white">
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                      <span className="mt-2 text-sm">Uploading…</span>
+                    <div className="text-muted-foreground flex justify-end text-xs">
+                      {formState.title.length}
                     </div>
-                  )}
-
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <div className="pointer-events-auto flex flex-wrap justify-center gap-2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleUploadTrigger}
-                        disabled={replaceFileMutation.isPending || deleteAssetMutation.isPending}
-                        className="shadow-lg"
-                      >
-                        {replaceFileMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Uploading…
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="mr-2 h-4 w-4" />
-                            Upload
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleDeleteAsset}
-                        disabled={deleteAssetMutation.isPending || replaceFileMutation.isPending}
-                        className="shadow-lg"
-                      >
-                        {deleteAssetMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Deleting…
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </>
-                        )}
-                      </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="asset-alt-text">Alt Text</Label>
+                    <Textarea
+                      id="asset-alt-text"
+                      value={formState.altText}
+                      onChange={handleFieldChange('altText')}
+                      placeholder="Describe the contents of the asset for accessibility"
+                      rows={3}
+                    />
+                    <div className="text-muted-foreground flex justify-between text-xs">
+                      <span>Alt text describes the contents of the asset.</span>
+                      <span>{formState.altText.length}</span>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <Separator />
+                <Separator />
 
-              <div className="rounded-lg border">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-4 py-3 text-left"
-                  onClick={() => setDetailsOpen((prev) => !prev)}
-                >
-                  <span className="text-lg font-semibold">Asset Details</span>
-                  <ChevronDown
-                    className={cn('h-4 w-4 transition-transform', detailsOpen ? 'rotate-180' : '')}
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold">Preview</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Replace the source file to update this asset
+                    </p>
+                  </div>
+
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={handleFileSelection}
                   />
-                </button>
-                {detailsOpen ? (
-                  <div className="border-t px-4 pt-2 pb-4">
-                    <dl className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="space-y-1">
-                        <dt className="text-muted-foreground">Type</dt>
-                        <dd className="font-medium capitalize">{asset.fileType}</dd>
+
+                  <div className="border-border bg-muted/20 group relative flex min-h-[220px] items-center justify-center overflow-hidden rounded-lg border">
+                    {asset.fileType === 'video' ? (
+                      <video
+                        key={assetPreviewUrl}
+                        controls
+                        className="h-full w-full object-contain"
+                        src={assetPreviewUrl}
+                      />
+                    ) : (
+                      <img
+                        src={assetPreviewUrl}
+                        alt={formState.altText || asset.altText || asset.fileName}
+                        className="h-full w-full object-contain"
+                      />
+                    )}
+
+                    {replaceFileMutation.isPending && (
+                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 text-white">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <span className="mt-2 text-sm">Uploading…</span>
                       </div>
-                      <div className="space-y-1">
-                        <dt className="text-muted-foreground">Format</dt>
-                        <dd className="font-medium">{derivedDisplay?.extension}</dd>
+                    )}
+
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className="pointer-events-auto flex flex-wrap justify-center gap-2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleUploadTrigger}
+                          disabled={replaceFileMutation.isPending || deleteAssetMutation.isPending}
+                          className="shadow-lg"
+                        >
+                          {replaceFileMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Uploading…
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={handleDeleteAsset}
+                          disabled={deleteAssetMutation.isPending || replaceFileMutation.isPending}
+                          className="shadow-lg"
+                        >
+                          {deleteAssetMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Deleting…
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      <div className="space-y-1">
-                        <dt className="text-muted-foreground">MIME Type</dt>
-                        <dd className="font-medium">{asset.mimeType}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-muted-foreground">File Size</dt>
-                        <dd className="font-medium">{derivedDisplay?.fileSize}</dd>
-                      </div>
-                      {asset.fileType === 'image' ? (
-                        <div className="space-y-1">
-                          <dt className="text-muted-foreground">Dimensions</dt>
-                          <dd className="font-medium">
-                            {asset.width && asset.height ? `${asset.width} × ${asset.height}` : '—'}
-                          </dd>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <dt className="text-muted-foreground">Duration</dt>
-                          <dd className="font-medium">
-                            {asset.duration ? `${asset.duration}s` : '—'}
-                          </dd>
-                        </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="rounded-lg border">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    onClick={() => setDetailsOpen((prev) => !prev)}
+                  >
+                    <span className="text-lg font-semibold">Asset Details</span>
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        detailsOpen ? 'rotate-180' : ''
                       )}
-                      <div className="space-y-1">
-                        <dt className="text-muted-foreground">Uploaded</dt>
-                        <dd className="font-medium">{derivedDisplay?.createdAt}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-muted-foreground">Last Updated</dt>
-                        <dd className="font-medium">{derivedDisplay?.updatedAt}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                ) : null}
+                    />
+                  </button>
+                  {detailsOpen ? (
+                    <div className="border-t px-4 pt-2 pb-4">
+                      <dl className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="space-y-1">
+                          <dt className="text-muted-foreground">Type</dt>
+                          <dd className="font-medium capitalize">{asset.fileType}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-muted-foreground">Format</dt>
+                          <dd className="font-medium">{derivedDisplay?.extension}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-muted-foreground">MIME Type</dt>
+                          <dd className="font-medium">{asset.mimeType}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-muted-foreground">File Size</dt>
+                          <dd className="font-medium">{derivedDisplay?.fileSize}</dd>
+                        </div>
+                        {asset.fileType === 'image' ? (
+                          <div className="space-y-1">
+                            <dt className="text-muted-foreground">Dimensions</dt>
+                            <dd className="font-medium">
+                              {asset.width && asset.height
+                                ? `${asset.width} × ${asset.height}`
+                                : '—'}
+                            </dd>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <dt className="text-muted-foreground">Duration</dt>
+                            <dd className="font-medium">
+                              {asset.duration ? `${asset.duration}s` : '—'}
+                            </dd>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <dt className="text-muted-foreground">Uploaded</dt>
+                          <dd className="font-medium">{derivedDisplay?.createdAt}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-muted-foreground">Last Updated</dt>
+                          <dd className="font-medium">{derivedDisplay?.updatedAt}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {asset ? (

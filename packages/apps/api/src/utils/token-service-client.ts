@@ -15,3 +15,13 @@ export async function fetchTokensFromService(
   const client = await getTokenService();
   return client.getToken(userId, brandId, platform);
 }
+
+export async function fetchTokensForSocialAccountFromService(
+  userId: string,
+  brandId: string,
+  platform: string,
+  socialAccountId: string
+): Promise<TokenData | null> {
+  const client = await getTokenService();
+  return client.getTokenForSocialAccount(userId, brandId, platform, socialAccountId);
+}

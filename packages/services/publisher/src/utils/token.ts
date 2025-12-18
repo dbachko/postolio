@@ -7,12 +7,19 @@ const logger = new Logger({ serviceName: 'publisher' });
 export async function getTokenFromTokenService(
   brandId: string,
   userId: string,
-  platform: string
+  platform: string,
+  socialAccountId?: string
 ): Promise<TokenServiceResponse> {
+  const normalizedSocialAccountId =
+    typeof socialAccountId === 'string' && socialAccountId.trim().length > 0
+      ? socialAccountId.trim()
+      : undefined;
+
   logger.info('Fetching token from Token Service', {
     brandId,
     userId,
     platform,
+    socialAccountId: normalizedSocialAccountId,
   });
 
   try {
@@ -23,23 +30,49 @@ export async function getTokenFromTokenService(
     });
 
     const url = new URL(tokenServiceUrl);
-    const pathSegments = ['tokens', userId, platform, brandId].map((segment) =>
+    const basePathSegments = ['tokens', userId, platform, brandId].map((segment) =>
       encodeURIComponent(segment)
     );
-    url.pathname = `/${pathSegments.join('/')}`;
 
-    const headers = await signRequest({
-      method: 'GET',
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    if (normalizedSocialAccountId) {
+      url.pathname = `/${[
+        ...basePathSegments,
+        'social-accounts',
+        encodeURIComponent(normalizedSocialAccountId),
+      ].join('/')}`;
+    } else {
+      url.pathname = `/${basePathSegments.join('/')}`;
+    }
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers,
-    });
+    const fetchSigned = async (targetUrl: URL) => {
+      const headers = await signRequest({
+        method: 'GET',
+        url: targetUrl,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return fetch(targetUrl.toString(), {
+        method: 'GET',
+        headers,
+      });
+    };
+
+    let response = await fetchSigned(url);
+
+    // Backwards compatibility: if an account-scoped lookup 404s, try legacy (brand-scoped) lookup.
+    if (!response.ok && response.status === 404 && normalizedSocialAccountId) {
+      const legacyUrl = new URL(tokenServiceUrl);
+      legacyUrl.pathname = `/${basePathSegments.join('/')}`;
+      logger.warn('Account-scoped token not found; falling back to legacy lookup', {
+        brandId,
+        userId,
+        platform,
+        socialAccountId: normalizedSocialAccountId,
+      });
+      response = await fetchSigned(legacyUrl);
+    }
 
     if (!response.ok) {
       let errorBody: string | undefined;
@@ -61,14 +94,10 @@ export async function getTokenFromTokenService(
           : `Token Service error: ${response.status} ${response.statusText}`;
       const err = new Error(baseMessage) as Error & { meta?: Record<string, unknown> };
       const retryable = response.status === 429 || response.status >= 500;
-      const errorCode =
-        response.status === 404
-          ? 'TOKEN_NOT_FOUND'
-          : response.status === 401 || response.status === 403
-            ? 'UNAUTHORIZED'
-            : retryable
-              ? 'SERVICE_UNAVAILABLE'
-              : 'REQUEST_FAILED';
+      let errorCode: string = 'REQUEST_FAILED';
+      if (response.status === 404) errorCode = 'TOKEN_NOT_FOUND';
+      else if (response.status === 401 || response.status === 403) errorCode = 'UNAUTHORIZED';
+      else if (retryable) errorCode = 'SERVICE_UNAVAILABLE';
       err.meta = {
         service: 'token-service',
         httpStatus: response.status,

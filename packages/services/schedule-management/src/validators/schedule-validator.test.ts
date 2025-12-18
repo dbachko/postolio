@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateScheduleRequest } from './schedule-validator';
+import { validatePublishNowRequest, validateScheduleRequest } from './schedule-validator';
 
 describe('Schedule Validator', () => {
   describe('validateScheduleRequest', () => {
@@ -276,6 +276,59 @@ describe('Schedule Validator', () => {
       expect(result.valid).toBe(false);
       expect(result.errors.some((error) => error.includes('hashtags'))).toBe(true);
       expect(result.errors.some((error) => error.includes('mediaAssets'))).toBe(true);
+    });
+  });
+
+  describe('validatePublishNowRequest', () => {
+    it('should validate a minimal publish-now request without scheduledAt', () => {
+      const request = {
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'post',
+        mediaType: 'image',
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
+      };
+
+      const result = validatePublishNowRequest(request);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('should allow a past scheduledAt value if provided (ignored by service)', () => {
+      const request = {
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'post',
+        mediaType: 'image',
+        scheduledAt: new Date(Date.now() - 3600000).toISOString(),
+        mediaAssets: [
+          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
+        ],
+      };
+
+      const result = validatePublishNowRequest(request);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('should reject request with missing required fields (but not require scheduledAt)', () => {
+      const invalidRequest = {
+        contentId: 'content-123',
+      };
+
+      const result = validatePublishNowRequest(invalidRequest);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('scheduledAt'))).toBe(false);
     });
   });
 });

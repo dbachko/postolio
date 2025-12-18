@@ -8,7 +8,6 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { X } from 'lucide-react';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
@@ -105,10 +104,17 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
     }
   }
 
+  let freezeButtonLabel = 'Freeze Core';
+  if (freezeCore) {
+    freezeButtonLabel = freezeLoading ? 'Unfreezing…' : 'Unfreeze';
+  } else if (freezeLoading) {
+    freezeButtonLabel = 'Freezing…';
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Header matches top nav height and stays visible */}
-      <div className="bg-card sticky top-0 z-30 flex h-14 items-center justify-between border-b px-4">
+      <div className="bg-card sticky top-0 z-30 flex h-12 items-center justify-between border-b px-4">
         <Breadcrumb aria-label="right-sidebar-title">
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -127,7 +133,6 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
           </Button>
         </div>
       </div>
-      <Separator />
       <ScrollArea className="flex-1 px-4 py-3">
         {reRunMessage && (
           <div className="bg-muted mb-3 rounded border p-2 text-xs">{reRunMessage}</div>
@@ -155,13 +160,7 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
                 onClick={toggleFreeze}
                 disabled={freezeLoading}
               >
-                {freezeCore
-                  ? freezeLoading
-                    ? 'Unfreezing…'
-                    : 'Unfreeze'
-                  : freezeLoading
-                    ? 'Freezing…'
-                    : 'Freeze Core'}
+                {freezeButtonLabel}
               </Button>
             </div>
             <div>

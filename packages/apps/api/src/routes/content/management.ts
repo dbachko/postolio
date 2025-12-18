@@ -4,6 +4,7 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { Prisma } from '@postolio/database';
 
 import { schedulerService } from '../../services/scheduler.js';
 import {
@@ -20,14 +21,22 @@ import {
   validateRequestBody,
   verifyBrandAndCampaign,
   resolveAssets,
-  validateInstagramContentForCreate,
   createContentInTransaction,
   handleScheduling,
   type CreateManualContentBody,
   type ApproveContentBody,
 } from '../../utils/content-management.js';
+import { resolvePrimarySocialAccount } from '../../services/social-account-resolver.js';
+import { validateContentPayload } from '@postolio/content-validation';
+import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
+import { supportsScheduling, toValidationPlatform } from '../../utils/platform.js';
 
 const prisma = getDatabaseClient();
+
+function isDisconnected(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  return Boolean((metadata as any).disconnected);
+}
 
 const managementRoutes: FastifyPluginAsync = async (fastify) => {
   // Create manual content (user-generated, not AI) - RESTful: POST /
@@ -48,49 +57,287 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         // Verify brand and campaign access (throws APIError on failure)
         await verifyBrandAndCampaign(userId, body.brandId, body.campaignId);
 
+        const requestedTargetIds = Array.isArray((body as any).targetSocialAccountIds)
+          ? (body as any).targetSocialAccountIds
+              .filter((v: unknown): v is string => typeof v === 'string')
+              .map((v: string) => v.trim())
+              .filter((v: string) => v.length > 0)
+          : null;
+
+        // Resolve destination social accounts:
+        // - Prefer explicit targetSocialAccountIds (multi-destination)
+        // - Fall back to targetSocialAccountId (single destination)
+        // - Fall back to brand primary Instagram account (legacy behavior)
+        const destinationAccounts = (() => {
+          if (requestedTargetIds) return requestedTargetIds;
+          if (body.targetSocialAccountId === undefined) return null;
+          if (body.targetSocialAccountId === null || body.targetSocialAccountId === '') return [];
+          return [body.targetSocialAccountId];
+        })();
+
+        let resolvedDestinations: Array<{ id: string; platform: string; metadata: unknown }> = [];
+        if (Array.isArray(destinationAccounts)) {
+          const uniqueIds = Array.from(new Set(destinationAccounts));
+          if (uniqueIds.length > 0) {
+            const accounts = await prisma.socialAccount.findMany({
+              where: { brandId: body.brandId, id: { in: uniqueIds } },
+              select: { id: true, platform: true, metadata: true },
+            });
+            const byId = new Map(accounts.map((a) => [a.id, a]));
+            const invalid: string[] = [];
+            resolvedDestinations = uniqueIds
+              .map((id) => {
+                const match = byId.get(id);
+                if (!match) {
+                  invalid.push(id);
+                  return null;
+                }
+                if (isDisconnected(match.metadata)) {
+                  invalid.push(id);
+                  return null;
+                }
+                return { id: match.id, platform: String(match.platform), metadata: match.metadata };
+              })
+              .filter(Boolean) as Array<{ id: string; platform: string; metadata: unknown }>;
+
+            if (invalid.length > 0) {
+              return reply.code(400).send({
+                error: 'invalid_target_social_account',
+                message: 'One or more destination social accounts are not connected to this brand',
+                details: invalid,
+              });
+            }
+          }
+        } else {
+          // Legacy behavior: no explicit destination provided.
+          const primary = await resolvePrimarySocialAccount(body.brandId, 'instagram');
+          if (primary) {
+            resolvedDestinations = [
+              { id: primary.id, platform: primary.platform, metadata: primary.metadata },
+            ];
+          } else {
+            resolvedDestinations = [];
+          }
+        }
+
         // Resolve assets (unified for single and carousel)
         const assetResult = await resolveAssets(body.assetIds, body.brandId, request);
         if (!assetResult.success) {
           return reply.code(assetResult.code || 500).send({ error: assetResult.error });
         }
 
-        const assetsForValidation = assetResult.resolvedAssets ?? [];
-        const validation = validateInstagramContentForCreate({
-          caption: body.caption,
-          contentType: body.contentType ?? 'post',
-          assets: assetsForValidation,
-        });
-        if (!validation.ok) {
-          return reply.code(400).send(validation.error);
+        const normalizedContentType = (body.contentType ?? 'post') as any;
+        const resolvedAssets = assetResult.resolvedAssets ?? [];
+
+        // Extra constraints (current product limitations):
+        // - Reels require exactly one video asset
+        // - Carousels currently support images only
+        if (normalizedContentType === 'reel') {
+          if (resolvedAssets.length !== 1 || resolvedAssets[0]?.fileType !== 'video') {
+            return reply.code(400).send({
+              error: 'invalid_media',
+              message: 'Reels require exactly one video asset',
+            });
+          }
+        }
+        if (resolvedAssets.length > 1) {
+          const nonImages = resolvedAssets.filter((a) => a.fileType !== 'image');
+          if (nonImages.length > 0) {
+            return reply.code(400).send({
+              error: 'invalid_media',
+              message: 'Carousels currently support images only',
+            });
+          }
         }
 
-        // Create content in transaction
-        const content = await createContentInTransaction(
-          {
-            brandId: body.brandId,
-            caption: body.caption,
-            contentType: body.contentType,
-            campaignId: body.campaignId,
-            scheduledAt: body.scheduledAt,
-            shareToFeed: body.shareToFeed,
-            firstComment: body.firstComment,
-            resolvedAssets: assetResult.resolvedAssets ?? [],
-          },
-          prisma
-        );
+        const mediaAssetsForValidation = resolvedAssets.map((asset) => ({
+          key: asset.id,
+          type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
+        }));
+        const mediaTypeHint =
+          normalizedContentType === 'reel' ||
+          mediaAssetsForValidation.some((a) => a.type === 'video')
+            ? 'video'
+            : mediaAssetsForValidation.length > 0
+              ? 'image'
+              : undefined;
+        const captionForValidation = normalizedContentType === 'story' ? '' : body.caption;
 
-        if (!content) {
+        const platformsToValidate =
+          resolvedDestinations.length > 0
+            ? resolvedDestinations.map((d) => d.platform)
+            : ['instagram'];
+
+        for (const platform of platformsToValidate) {
+          const validationPlatform = toValidationPlatform(platform);
+          if (!validationPlatform) {
+            return reply.code(400).send({
+              error: 'unsupported_platform',
+              message: `Platform ${platform} is not supported for content creation yet`,
+            });
+          }
+
+          const validation = validateContentPayload({
+            platform: validationPlatform,
+            contentType: normalizedContentType,
+            mediaType: mediaTypeHint,
+            caption: captionForValidation,
+            mediaAssets: mediaAssetsForValidation,
+          });
+
+          if (!validation.ok) {
+            return reply.code(400).send({
+              error: 'invalid_content',
+              message: validation.errors[0]?.message || 'Invalid content payload',
+              platform,
+              details: validation.errors,
+            });
+          }
+        }
+
+        // Scheduling is platform-dependent.
+        if (body.scheduledAt && resolvedDestinations.some((d) => !supportsScheduling(d.platform))) {
+          return reply.code(400).send({
+            error: 'scheduling_not_supported',
+            message: 'Scheduling is not yet supported for one or more selected destinations',
+            details: Array.from(
+              new Set(
+                resolvedDestinations
+                  .filter((d) => !supportsScheduling(d.platform))
+                  .map((d) => d.platform)
+              )
+            ),
+          });
+        }
+
+        const status = body.scheduledAt ? 'scheduled' : 'draft';
+        const resolvedCampaignId = body.campaignId || null;
+        const hashtags = extractHashtagsFromCaption(body.caption);
+
+        // Create content (single) or a content group (multi-destination)
+        let created: { contentGroupId: string | null; contents: any[] };
+        if (resolvedDestinations.length <= 1) {
+          const targetSocialAccountId = resolvedDestinations[0]?.id ?? null;
+          const content = await createContentInTransaction(
+            {
+              brandId: body.brandId,
+              caption: body.caption,
+              contentType: body.contentType,
+              campaignId: body.campaignId,
+              scheduledAt: body.scheduledAt,
+              shareToFeed: body.shareToFeed,
+              firstComment: body.firstComment,
+              contentGroupId: null,
+              targetSocialAccountId,
+              resolvedAssets,
+            },
+            prisma
+          );
+          created = { contentGroupId: null, contents: content ? [content] : [] };
+        } else {
+          created = await prisma.$transaction(async (tx) => {
+            const group = await tx.contentGroup.create({
+              data: {
+                brandId: body.brandId,
+                templateInitialized: true,
+                templateCaption: body.caption,
+                templateContentType: body.contentType || 'post',
+                templateShareToFeed: body.shareToFeed ?? null,
+                templateFirstComment: body.firstComment ? body.firstComment.trim() : null,
+                templateThumbOffset: null,
+                templateAssetIds: resolvedAssets.map((asset) => asset.id),
+              },
+              select: { id: true },
+            });
+
+            const createdIds: string[] = [];
+            for (const dest of resolvedDestinations) {
+              const row = await tx.content.create({
+                data: {
+                  caption: body.caption,
+                  hashtags,
+                  status,
+                  brandId: body.brandId,
+                  campaignId: resolvedCampaignId,
+                  contentGroupId: group.id,
+                  scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
+                  contentType: body.contentType || 'post',
+                  shareToFeed: body.shareToFeed ?? null,
+                  firstComment: body.firstComment ? body.firstComment.trim() : null,
+                  targetSocialAccountId: dest.id,
+                  generationParams: Prisma.JsonNull,
+                },
+                select: { id: true },
+              });
+              createdIds.push(row.id);
+            }
+
+            if (resolvedAssets.length > 0) {
+              await tx.contentMediaAsset.createMany({
+                data: createdIds.flatMap((contentId) =>
+                  resolvedAssets.map((asset, idx) => ({
+                    contentId,
+                    assetId: asset.id,
+                    displayOrder: idx,
+                  }))
+                ),
+              });
+            }
+
+            const contents = await tx.content.findMany({
+              where: { id: { in: createdIds } },
+              select: {
+                id: true,
+                caption: true,
+                hashtags: true,
+                status: true,
+                brandId: true,
+                campaignId: true,
+                contentGroupId: true,
+                targetSocialAccountId: true,
+                schedulingError: true,
+                generationParams: true,
+                createdAt: true,
+                updatedAt: true,
+                scheduledAt: true,
+                postedAt: true,
+                contentType: true,
+                shareToFeed: true,
+                firstComment: true,
+                firstCommentStatus: true,
+                firstCommentPostedAt: true,
+                firstCommentError: true,
+                mediaAssets: {
+                  select: { assetId: true, displayOrder: true },
+                  orderBy: { displayOrder: 'asc' },
+                },
+              },
+            });
+
+            const byId = new Map(contents.map((c) => [c.id, c]));
+            const ordered = createdIds.map((id) => byId.get(id)).filter(Boolean) as typeof contents;
+            return { contentGroupId: group.id, contents: ordered };
+          });
+        }
+
+        if (created.contents.length === 0) {
           return reply.code(500).send({ error: 'Failed to create content' });
         }
 
-        // Handle scheduling if needed
-        const upsell = await handleScheduling(content.id, body.scheduledAt);
+        // Handle scheduling if needed (one per destination)
+        let upsell: any | null = null;
+        if (body.scheduledAt) {
+          for (const content of created.contents) {
+            const u = await handleScheduling(content.id, body.scheduledAt);
+            if (u && !upsell) upsell = u;
+          }
+        }
 
-        // Build response
-        const contentWithUrl = buildContentResponse(content);
-
+        const contentResponses = created.contents.map(buildContentResponse);
         return reply.code(201).send({
-          content: contentWithUrl,
+          content: contentResponses[0],
+          contents: created.contents.length > 1 ? contentResponses : undefined,
+          contentGroupId: created.contentGroupId,
           metadata: {
             brandId: body.brandId,
             source: 'manual',
@@ -136,6 +383,8 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             brandId: true,
             generationParams: true,
             campaignId: true,
+            contentGroupId: true,
+            targetSocialAccountId: true,
             schedulingError: true,
             mediaAssets: {
               select: { assetId: true, displayOrder: true },
@@ -224,6 +473,28 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               'Content belongs to preview campaign - skipping AWS scheduling'
             );
           } else {
+            if (content.targetSocialAccountId) {
+              const sa = await prisma.socialAccount.findFirst({
+                where: {
+                  id: content.targetSocialAccountId,
+                  brandId: content.brandId,
+                },
+                select: { platform: true, metadata: true },
+              });
+              if (!sa || isDisconnected(sa.metadata)) {
+                return reply.code(400).send({
+                  error: 'invalid_target_social_account',
+                  message: 'Target social account is not connected to this brand',
+                });
+              }
+              if (!supportsScheduling(String(sa.platform))) {
+                return reply.code(400).send({
+                  error: 'scheduling_not_supported',
+                  message: `Scheduling is not yet supported for ${String(sa.platform)}`,
+                });
+              }
+            }
+
             try {
               // Don't pass customTime - let scheduler-adapter read scheduledAt from database
               // This avoids timezone conversion issues since DB stores UTC

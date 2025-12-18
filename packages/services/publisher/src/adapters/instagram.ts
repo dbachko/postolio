@@ -432,12 +432,10 @@ export class InstagramAdapter implements PlatformAdapter {
       createMediaParams.set('video_url', mediaUrl);
       if (isReel) {
         createMediaParams.set('media_type', 'REELS');
-        const shareToFeed =
-          schedule.contentType === 'reel'
-            ? typeof schedule.shareToFeed === 'boolean'
-              ? schedule.shareToFeed
-              : true
-            : true;
+        let shareToFeed = true;
+        if (schedule.contentType === 'reel' && typeof schedule.shareToFeed === 'boolean') {
+          shareToFeed = schedule.shareToFeed;
+        }
         createMediaParams.set('share_to_feed', shareToFeed ? 'true' : 'false');
 
         if (thumbOffset !== undefined && thumbOffset >= 0) {
@@ -465,15 +463,13 @@ export class InstagramAdapter implements PlatformAdapter {
       accountId: credentials.accountId,
       hasMediaUrl: !!mediaUrl,
       mediaUrl: sanitizeUrlForLog(mediaUrl),
-      mediaKind: isReel
-        ? 'reel'
-        : isStory
-          ? isVideo
-            ? 'story_video'
-            : 'story_image'
-          : isVideo
-            ? 'video'
-            : 'image',
+      mediaKind: (() => {
+        if (isReel) return 'reel';
+        if (isStory && isVideo) return 'story_video';
+        if (isStory) return 'story_image';
+        if (isVideo) return 'video';
+        return 'image';
+      })(),
       contentType: schedule.contentType,
     });
 

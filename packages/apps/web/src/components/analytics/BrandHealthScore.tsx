@@ -141,6 +141,24 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
 
   const config = levelConfig[level];
 
+  let gradientStartColor = '#ef4444';
+  if (config.gradient.includes('emerald')) {
+    gradientStartColor = '#10b981';
+  } else if (config.gradient.includes('blue')) {
+    gradientStartColor = '#3b82f6';
+  } else if (config.gradient.includes('amber')) {
+    gradientStartColor = '#f59e0b';
+  }
+
+  let gradientEndColor = '#ec4899';
+  if (config.gradient.includes('teal')) {
+    gradientEndColor = '#14b8a6';
+  } else if (config.gradient.includes('purple')) {
+    gradientEndColor = '#a855f7';
+  } else if (config.gradient.includes('orange')) {
+    gradientEndColor = '#f97316';
+  }
+
   // Circle progress calculation
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
@@ -246,30 +264,8 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
 
                 <defs>
                   <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop
-                      offset="0%"
-                      stopColor={
-                        config.gradient.includes('emerald')
-                          ? '#10b981'
-                          : config.gradient.includes('blue')
-                            ? '#3b82f6'
-                            : config.gradient.includes('amber')
-                              ? '#f59e0b'
-                              : '#ef4444'
-                      }
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor={
-                        config.gradient.includes('teal')
-                          ? '#14b8a6'
-                          : config.gradient.includes('purple')
-                            ? '#a855f7'
-                            : config.gradient.includes('orange')
-                              ? '#f97316'
-                              : '#ec4899'
-                      }
-                    />
+                    <stop offset="0%" stopColor={gradientStartColor} />
+                    <stop offset="100%" stopColor={gradientEndColor} />
                   </linearGradient>
                 </defs>
               </svg>

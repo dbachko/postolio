@@ -10,7 +10,12 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { ScheduleService } from '../services/schedule-service';
 import { CampaignService, CampaignRequest } from '../services/campaign-service';
-import { validateCampaignRequest, validateScheduleRequest } from '../validators/schedule-validator';
+import {
+  validateCampaignRequest,
+  validatePublishNowRequest,
+  validateScheduleRequest,
+  validateScheduleUpdateRequest,
+} from '../validators/schedule-validator';
 import { createErrorResponse, createSuccessResponse } from '../utils/response-utils';
 import { authenticateRequest, AuthenticationError } from '../utils/auth';
 
@@ -110,6 +115,10 @@ export class HttpHandler {
         if (pathSegments.length === 1) {
           // POST /schedules - create new schedule
           return await this.createSchedule(event, userId);
+        }
+        if (pathSegments.length === 2 && pathSegments[1] === 'publish-now') {
+          // POST /schedules/publish-now - publish immediately (no EventBridge schedule creation)
+          return await this.publishNow(event, userId);
         }
         return createErrorResponse(404, 'Route not found');
 
@@ -250,6 +259,65 @@ export class HttpHandler {
   }
 
   /**
+   * Publish content immediately by creating/updating a schedule record and emitting schedule.due.
+   */
+  private async publishNow(
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
+    userId: string
+  ): Promise<APIGatewayProxyResult> {
+    try {
+      const body = this.getBody(event);
+
+      let scheduleRequest;
+      try {
+        scheduleRequest = JSON.parse(body);
+      } catch {
+        return createErrorResponse(
+          400,
+          'Invalid JSON in request body',
+          undefined,
+          'INVALID_REQUEST_BODY'
+        );
+      }
+
+      // Always use the authenticated userId from IAM for validation + creation
+      scheduleRequest.userId = userId;
+
+      // Validate request
+      const validation = validatePublishNowRequest(scheduleRequest);
+      if (!validation.valid) {
+        logger.warn('Publish-now validation failed', {
+          errors: validation.errors,
+          userId,
+        });
+        return createErrorResponse(400, 'Invalid request', { errors: validation.errors });
+      }
+
+      const brandId = scheduleRequest.brandId;
+      if (!brandId) {
+        return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
+      }
+
+      const result = await this.scheduleService.publishNow(scheduleRequest);
+
+      if (result.success) {
+        metrics.addMetric('PublishNowEnqueued', MetricUnit.Count, 1);
+        return createSuccessResponse(201, result.schedule);
+      }
+
+      logger.warn('Schedule service failed to publish now', {
+        error: result.error,
+        userId,
+        brandId,
+      });
+      return createErrorResponse(400, result.error || 'Failed to publish now');
+    } catch (error) {
+      logger.error('Failed to publish now', { error });
+      return createErrorResponse(500, 'Failed to publish now');
+    }
+  }
+
+  /**
    * List schedules with optional filters
    */
   private async listSchedules(
@@ -343,7 +411,51 @@ export class HttpHandler {
       }
 
       const body = this.getBody(event);
-      const updateRequest = JSON.parse(body);
+      let updateRequest: Record<string, unknown>;
+      try {
+        const parsed = JSON.parse(body);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          return createErrorResponse(
+            400,
+            'Invalid JSON in request body',
+            undefined,
+            'INVALID_REQUEST_BODY'
+          );
+        }
+        updateRequest = parsed as Record<string, unknown>;
+      } catch {
+        return createErrorResponse(
+          400,
+          'Invalid JSON in request body',
+          undefined,
+          'INVALID_REQUEST_BODY'
+        );
+      }
+
+      // Never allow userId override (publisher token retrieval depends on schedule userId).
+      if (
+        typeof updateRequest.userId === 'string' &&
+        updateRequest.userId.length > 0 &&
+        updateRequest.userId !== userId
+      ) {
+        logger.warn('Attempted userId override in schedule update request', {
+          userId,
+          scheduleId,
+          attemptedUserId: updateRequest.userId,
+        });
+        return createErrorResponse(403, 'Forbidden: You do not have access to this schedule');
+      }
+
+      // Validate update payload
+      const validation = validateScheduleUpdateRequest(updateRequest);
+      if (!validation.valid) {
+        logger.warn('Schedule update validation failed', {
+          errors: validation.errors,
+          userId,
+          scheduleId,
+        });
+        return createErrorResponse(400, 'Invalid request', { errors: validation.errors });
+      }
 
       const result = await this.scheduleService.updateSchedule(scheduleId, updateRequest);
 

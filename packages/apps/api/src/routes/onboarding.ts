@@ -10,6 +10,7 @@ type OnboardingStatus = 'no_brand' | 'brand_no_social' | 'complete' | 'demo';
 interface OnboardingResponse {
   status: OnboardingStatus;
   realBrandCount: number;
+  socialConnected: boolean;
   instagramConnected: boolean;
   activeBrandId: string | null;
   demoBrandId: string | null;
@@ -50,6 +51,7 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
           const payload: OnboardingResponse = {
             status: 'no_brand',
             realBrandCount: 0,
+            socialConnected: false,
             instagramConnected: false,
             activeBrandId: null,
             demoBrandId: null,
@@ -76,6 +78,16 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
           })
         );
 
+        const hasRealSocialConnected = realBrands.some((b) =>
+          b.socialAccounts.some((sa) => {
+            const disconnected =
+              sa.metadata && typeof sa.metadata === 'object'
+                ? Boolean((sa.metadata as any).disconnected)
+                : false;
+            return !disconnected && !isDemoSocialAccount(sa.metadata);
+          })
+        );
+
         let status: OnboardingStatus;
         let activeBrandId: string | null = null;
         const demoBrandId: string | null = firstDemoBrand?.id ?? null;
@@ -85,20 +97,18 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
           activeBrandId = firstDemoBrand.id;
         } else if (realBrandCount === 0) {
           status = 'no_brand';
-        } else if (hasRealInstagram) {
+        } else if (hasRealSocialConnected) {
           status = 'complete';
-          const brandWithIg = realBrands.find((b) =>
+          const brandWithSocial = realBrands.find((b) =>
             b.socialAccounts.some((sa) => {
               const disconnected =
                 sa.metadata && typeof sa.metadata === 'object'
                   ? Boolean((sa.metadata as any).disconnected)
                   : false;
-              return (
-                sa.platform === 'instagram' && !disconnected && !isDemoSocialAccount(sa.metadata)
-              );
+              return !disconnected && !isDemoSocialAccount(sa.metadata);
             })
           );
-          activeBrandId = brandWithIg?.id ?? realBrands[0]?.id ?? null;
+          activeBrandId = brandWithSocial?.id ?? realBrands[0]?.id ?? null;
         } else {
           status = 'brand_no_social';
           activeBrandId = realBrands[0]?.id ?? null;
@@ -107,6 +117,7 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
         const payload: OnboardingResponse = {
           status,
           realBrandCount,
+          socialConnected: hasRealSocialConnected,
           instagramConnected: hasRealInstagram,
           activeBrandId,
           demoBrandId,
@@ -251,6 +262,7 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
         const response: OnboardingResponse = {
           status: 'demo',
           realBrandCount: 0,
+          socialConnected: true,
           instagramConnected: true,
           activeBrandId: demoBrand.id,
           demoBrandId: demoBrand.id,

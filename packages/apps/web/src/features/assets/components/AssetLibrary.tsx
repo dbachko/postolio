@@ -147,16 +147,21 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
     return new Set(usedIds);
   }, [usageData]);
 
-  const deleteBlockedReason =
-    selectedAssets.length === 0
-      ? null
-      : isUsageError
-        ? 'Unable to verify whether these assets are used in posts. Please try again before deleting.'
-        : usedAssetIds.size > 0
-          ? selectedAssets.length === 1 && usedAssetIds.has(selectedAssets[0].id)
-            ? 'This asset is used in one or more posts. Remove it from those posts before deleting it.'
-            : 'Some assets are used in posts. Deselect those assets before deleting.'
-          : null;
+  let deleteBlockedReason: string | null = null;
+  if (selectedAssets.length > 0) {
+    if (isUsageError) {
+      deleteBlockedReason =
+        'Unable to verify whether these assets are used in posts. Please try again before deleting.';
+    } else if (usedAssetIds.size > 0) {
+      if (selectedAssets.length === 1 && usedAssetIds.has(selectedAssets[0].id)) {
+        deleteBlockedReason =
+          'This asset is used in one or more posts. Remove it from those posts before deleting it.';
+      } else {
+        deleteBlockedReason =
+          'Some assets are used in posts. Deselect those assets before deleting.';
+      }
+    }
+  }
 
   const deleteTooltip =
     deleteBlockedReason ||
@@ -357,67 +362,77 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
           </div>
         )}
 
-        {isLoading ? (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {Array.from({ length: 10 }).map((_, idx) => (
-              <div key={idx} className="space-y-2">
-                <Skeleton className="aspect-square rounded-lg" />
-                <Skeleton className="h-3 w-2/3" />
+        {(() => {
+          if (isLoading) {
+            return (
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <Skeleton className="aspect-square rounded-lg" />
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : sortedAssets.length === 0 ? (
-          <div className="rounded-lg border-2 border-dashed py-12 text-center">
-            <p className="text-muted-foreground">No assets match these filters</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Try adjusting search or upload your first image or video.
-            </p>
-            <div className="mt-4 flex justify-center gap-3">
-              <Button variant="outline" onClick={resetFilters}>
-                Reset filters
-              </Button>
-              <Button onClick={() => openSidebar('asset-upload', { id: brandId })}>
-                Upload assets
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {Object.entries(groupedAssets).map(([month, assets]) => (
-              <div key={month} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="text-muted-foreground h-4 w-4" />
-                  <h3 className="text-sm font-semibold">{month}</h3>
-                  <span className="text-muted-foreground text-xs">{assets.length} assets</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                  {assets.map((asset) => (
-                    <AssetCard
-                      key={asset.id}
-                      asset={asset}
-                      selected={selected.has(asset.id)}
-                      onToggle={(opts) => toggleSelect(asset, opts)}
-                      onOpen={() => handleOpenAsset(asset.id)}
-                      onCreatePost={() =>
-                        openSidebar('post-create', {
-                          params: { assetId: asset.id, assetIds: null },
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+            );
+          }
 
-            <div ref={loadMoreRef} className="h-1" />
-            {isFetchingNextPage && (
-              <div className="text-muted-foreground flex justify-center py-4 text-sm">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading more assets…
+          if (sortedAssets.length === 0) {
+            return (
+              <div className="rounded-lg border-2 border-dashed py-12 text-center">
+                <p className="text-muted-foreground">No assets match these filters</p>
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Try adjusting search or upload your first image or video.
+                </p>
+                <div className="mt-4 flex justify-center gap-3">
+                  <Button variant="outline" onClick={resetFilters}>
+                    Reset filters
+                  </Button>
+                  <Button onClick={() => openSidebar('asset-upload', { id: brandId })}>
+                    Upload assets
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+            );
+          }
+
+          return (
+            <div className="space-y-8">
+              {Object.entries(groupedAssets).map(([month, assets]) => (
+                <div key={month} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="text-muted-foreground h-4 w-4" />
+                    <h3 className="text-sm font-semibold">{month}</h3>
+                    <span className="text-muted-foreground text-xs">{assets.length} assets</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {assets.map((asset) => (
+                      <AssetCard
+                        key={asset.id}
+                        asset={asset}
+                        selected={selected.has(asset.id)}
+                        onToggle={(opts) => toggleSelect(asset, opts)}
+                        onOpen={() => handleOpenAsset(asset.id)}
+                        onCreatePost={() =>
+                          openSidebar('post-create', {
+                            params: { assetId: asset.id, assetIds: null },
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div ref={loadMoreRef} className="h-1" />
+              {isFetchingNextPage && (
+                <div className="text-muted-foreground flex justify-center py-4 text-sm">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading more assets…
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <SelectionBar

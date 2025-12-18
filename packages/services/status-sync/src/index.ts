@@ -31,6 +31,7 @@ interface EventDetail {
   contentId?: string;
   publicationId?: string;
   brandId?: string;
+  socialAccountId?: string;
   platform?: string;
   platformPostId?: string;
   permalink?: string;
@@ -46,6 +47,23 @@ interface EventDetail {
 
 let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null; // kept for local/dev connection string
+
+function toDatabasePlatform(platform: string | undefined): Platform | null {
+  const normalized = (platform || '').toLowerCase().trim();
+  if (!normalized) return null;
+  if (normalized === 'twitter') return 'x';
+  if (
+    normalized === 'instagram' ||
+    normalized === 'facebook' ||
+    normalized === 'linkedin' ||
+    normalized === 'x' ||
+    normalized === 'youtube' ||
+    normalized === 'tiktok'
+  ) {
+    return normalized as Platform;
+  }
+  return null;
+}
 
 function ensureProxyParams(urlString: string): string {
   try {
@@ -205,7 +223,12 @@ async function getClient(): Promise<LambdaPrismaClient> {
 
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) return normalizeErrorMessage(error.message);
-  const text = typeof error === 'string' ? error : error ? String(error) : '';
+  let text = '';
+  if (typeof error === 'string') {
+    text = error;
+  } else if (error) {
+    text = String(error);
+  }
   const trimmed = text.trim();
   if (!trimmed) return 'Unknown error';
   return trimmed.length > 500 ? `${trimmed.slice(0, 497)}...` : trimmed;
@@ -470,23 +493,49 @@ async function handlePostPublished(detail: EventDetail) {
 
   // Record publication using the v2 publication model (append-only)
   try {
-    const plt = (platform || 'instagram') as Platform;
+    const plt = toDatabasePlatform(platform) || 'instagram';
+    const requestedSocialAccountId =
+      typeof detail.socialAccountId === 'string' && detail.socialAccountId.trim().length > 0
+        ? detail.socialAccountId.trim()
+        : null;
 
-    // Query SocialAccount directly for this brand/platform
-    // If post was published, SocialAccount must exist
-    const socialAccount = brandId
-      ? await client.socialAccount.findFirst({
-          where: { brandId, platform: plt },
+    const resolvedById = requestedSocialAccountId
+      ? await client.socialAccount.findUnique({
+          where: { id: requestedSocialAccountId },
           select: {
             id: true,
+            brandId: true,
+            platform: true,
             externalAccountId: true,
             externalPageId: true,
           },
         })
       : null;
 
+    const socialAccount =
+      resolvedById &&
+      (!brandId || resolvedById.brandId === brandId) &&
+      resolvedById.platform === plt
+        ? resolvedById
+        : brandId
+          ? await client.socialAccount.findFirst({
+              where: { brandId, platform: plt },
+              select: {
+                id: true,
+                brandId: true,
+                platform: true,
+                externalAccountId: true,
+                externalPageId: true,
+              },
+            })
+          : null;
+
     if (!socialAccount) {
-      logger.warn('SocialAccount not found for published post', { brandId, platform: plt });
+      logger.warn('SocialAccount not found for published post', {
+        brandId,
+        platform: plt,
+        socialAccountId: requestedSocialAccountId || undefined,
+      });
       return;
     }
 

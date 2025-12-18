@@ -133,9 +133,48 @@ function PostCard({
 }) {
   const preview = getPostPreview(primaryAsset);
   const borderColor = getPostStatusBorderColor(post.status);
-  const mediaLabel =
-    preview.kind === 'video' ? 'Video' : preview.kind === 'image' ? 'Image' : 'Text';
   const previewAlt = post.caption?.trim() ? `${post.caption.trim()} preview` : 'Post media preview';
+
+  let mediaLabel = 'Text';
+  let mediaIcon: ReactNode = <FileText className="h-3 w-3" />;
+  let previewBody: ReactNode = (
+    <div className="bg-muted flex h-full w-full items-center justify-center">
+      <FileText className="text-muted-foreground h-8 w-8" />
+    </div>
+  );
+
+  if (preview.kind === 'video') {
+    mediaLabel = 'Video';
+    mediaIcon = <Video className="h-3 w-3" />;
+    previewBody = (
+      <div className="relative h-full w-full">
+        <video
+          src={preview.url}
+          poster={preview.posterUrl || undefined}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="rounded-full bg-black/60 p-2">
+            <Play className="h-4 w-4 text-white" />
+          </div>
+        </div>
+      </div>
+    );
+  } else if (preview.kind === 'image') {
+    mediaLabel = 'Image';
+    mediaIcon = <Image className="h-3 w-3" />;
+    previewBody = (
+      <img
+        src={preview.url}
+        alt={previewAlt}
+        className="h-full w-full object-cover"
+        loading="lazy"
+      />
+    );
+  }
 
   const statusTimestamp =
     (post.status === 'published' && post.postedAt) ||
@@ -167,45 +206,12 @@ function PostCard({
 
           <div className="absolute top-2 right-2 z-10">
             <Badge variant="secondary" className="flex items-center gap-1">
-              {preview.kind === 'video' ? (
-                <Video className="h-3 w-3" />
-              ) : preview.kind === 'image' ? (
-                <Image className="h-3 w-3" />
-              ) : (
-                <FileText className="h-3 w-3" />
-              )}
+              {mediaIcon}
               <span>{mediaLabel}</span>
             </Badge>
           </div>
 
-          {preview.kind === 'video' ? (
-            <div className="relative h-full w-full">
-              <video
-                src={preview.url}
-                poster={preview.posterUrl || undefined}
-                className="h-full w-full object-cover"
-                muted
-                playsInline
-                preload="metadata"
-              />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="rounded-full bg-black/60 p-2">
-                  <Play className="h-4 w-4 text-white" />
-                </div>
-              </div>
-            </div>
-          ) : preview.kind === 'image' ? (
-            <img
-              src={preview.url}
-              alt={previewAlt}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="bg-muted flex h-full w-full items-center justify-center">
-              <FileText className="text-muted-foreground h-8 w-8" />
-            </div>
-          )}
+          {previewBody}
         </div>
 
         <div className="space-y-1">
@@ -349,59 +355,75 @@ export function CampaignPostsGrid({
         </div>
       </CardHeader>
       <CardContent>
-        {isGenerating || isLoading ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {Array.from({ length: 10 }).map((_, idx) => (
-              <div key={idx} className="space-y-2">
-                <Skeleton className="aspect-square rounded-lg" />
-                <Skeleton className="h-3 w-2/3" />
+        {(() => {
+          if (isGenerating || isLoading) {
+            return (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <Skeleton className="aspect-square rounded-lg" />
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (posts || []).length === 0 ? (
-          <div className="rounded-lg border-2 border-dashed py-12 text-center">
-            <p className="text-muted-foreground">No posts yet for this campaign</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Fill the window to generate posts, then open any post to review and schedule.
-            </p>
-          </div>
-        ) : filteredSortedPosts.length === 0 ? (
-          <div className="rounded-lg border-2 border-dashed py-12 text-center">
-            <p className="text-muted-foreground">No posts match these filters</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Try adjusting your search and filters.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-3">
-              <Button variant="outline" onClick={resetControls}>
-                Reset filters
-              </Button>
+            );
+          }
+
+          if ((posts || []).length === 0) {
+            return (
+              <div className="rounded-lg border-2 border-dashed py-12 text-center">
+                <p className="text-muted-foreground">No posts yet for this campaign</p>
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Fill the window to generate posts, then open any post to review and schedule.
+                </p>
+              </div>
+            );
+          }
+
+          if (filteredSortedPosts.length === 0) {
+            return (
+              <div className="rounded-lg border-2 border-dashed py-12 text-center">
+                <p className="text-muted-foreground">No posts match these filters</p>
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Try adjusting your search and filters.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-3">
+                  <Button variant="outline" onClick={resetControls}>
+                    Reset filters
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-8">
+              {grouped.map((group) => (
+                <div key={group.key} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="text-muted-foreground h-4 w-4" />
+                    <h3 className="text-sm font-semibold">{group.label}</h3>
+                    <span className="text-muted-foreground text-xs">
+                      {group.posts.length} posts
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {group.posts.map((post) => (
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        primaryAsset={
+                          post.primaryAssetId ? (assetsById[post.primaryAssetId] ?? null) : null
+                        }
+                        onOpen={() => openSidebar('post', { id: post.id })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {grouped.map((group) => (
-              <div key={group.key} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="text-muted-foreground h-4 w-4" />
-                  <h3 className="text-sm font-semibold">{group.label}</h3>
-                  <span className="text-muted-foreground text-xs">{group.posts.length} posts</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                  {group.posts.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      primaryAsset={
-                        post.primaryAssetId ? (assetsById[post.primaryAssetId] ?? null) : null
-                      }
-                      onOpen={() => openSidebar('post', { id: post.id })}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          );
+        })()}
       </CardContent>
     </Card>
   );

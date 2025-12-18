@@ -19,6 +19,7 @@ interface MediaCardProps {
   showDragHandle?: boolean;
   onVideoLoaded?: (video: HTMLVideoElement) => void;
   onVideoError?: () => void;
+  fit?: 'cover' | 'contain';
   className?: string;
 }
 
@@ -38,6 +39,7 @@ export function MediaCard({
   showDragHandle = true,
   onVideoLoaded,
   onVideoError,
+  fit = 'cover',
   className,
 }: MediaCardProps) {
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
@@ -51,6 +53,7 @@ export function MediaCard({
   };
 
   const showProgress = type === 'video' && typeof progressPercent === 'number';
+  const objectFitClass = fit === 'contain' ? 'object-contain' : 'object-cover';
 
   return (
     <div
@@ -93,12 +96,12 @@ export function MediaCard({
       )}
 
       {type === 'image' ? (
-        <img src={src} alt={alt || 'Image'} className="h-full w-full object-cover" />
+        <img src={src} alt={alt || 'Image'} className={cn('h-full w-full', objectFitClass)} />
       ) : (
         <video
           src={src}
           controls
-          className="h-full w-full object-cover"
+          className={cn('h-full w-full', objectFitClass)}
           onLoadedMetadata={(event) => onVideoLoaded?.(event.currentTarget)}
           onError={onVideoError}
         />

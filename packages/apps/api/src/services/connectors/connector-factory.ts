@@ -1,5 +1,5 @@
 import type { Connector, PlatformName } from '@postolio/connectors';
-import { InstagramConnector } from '@postolio/connectors';
+import { InstagramConnector, FacebookConnector } from '@postolio/connectors';
 
 /**
  * Factory for getting platform-specific connectors
@@ -12,8 +12,9 @@ import { InstagramConnector } from '@postolio/connectors';
  *   const result = await connector.publish(request, credentials, account);
  */
 export class ConnectorFactory {
-  private static connectors: Map<PlatformName, Connector> = new Map([
+  private static connectors: Map<PlatformName, Connector> = new Map<PlatformName, Connector>([
     ['instagram', new InstagramConnector()],
+    ['facebook', new FacebookConnector()],
     // Additional platforms can be registered here as they come online
   ]);
 

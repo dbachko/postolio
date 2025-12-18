@@ -6,7 +6,9 @@
 import { FastifyPluginAsync } from 'fastify';
 
 import generationRoutes from './generation.js';
+import groupsRoutes from './groups.js';
 import managementRoutes from './management.js';
+import publishNowRoutes from './publish-now.js';
 import publishingRoutes from './publishing.js';
 import updatesRoutes from './updates.js';
 import imagesRoutes from './images.js';
@@ -20,8 +22,14 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Content generation (AI)
   await fastify.register(generationRoutes);
 
+  // Multi-destination content groups
+  await fastify.register(groupsRoutes);
+
   // Content management (CRUD)
   await fastify.register(managementRoutes);
+
+  // Publish-now (platform-aware via scheduler pipeline)
+  await fastify.register(publishNowRoutes);
 
   // Content publishing (Instagram)
   await fastify.register(publishingRoutes);

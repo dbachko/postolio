@@ -31,10 +31,16 @@ describe('ConnectorFactory', () => {
       expect(connector.platform).toBe('instagram');
     });
 
+    it('should return Facebook connector for facebook platform', () => {
+      const connector = ConnectorFactory.get('facebook' as any);
+      expect(connector).toBeDefined();
+      expect(connector.platform).toBe('facebook');
+    });
+
     it('should throw error for unsupported platform', () => {
       expect(() => {
-        ConnectorFactory.get('facebook' as any);
-      }).toThrow('No connector found for platform: facebook');
+        ConnectorFactory.get('linkedin' as any);
+      }).toThrow('No connector found for platform: linkedin');
     });
 
     it('should throw error for invalid platform', () => {
@@ -49,8 +55,11 @@ describe('ConnectorFactory', () => {
       expect(ConnectorFactory.supports('instagram')).toBe(true);
     });
 
+    it('should return true for supported platform (facebook)', () => {
+      expect(ConnectorFactory.supports('facebook' as any)).toBe(true);
+    });
+
     it('should return false for unsupported platform', () => {
-      expect(ConnectorFactory.supports('facebook' as any)).toBe(false);
       expect(ConnectorFactory.supports('linkedin' as any)).toBe(false);
       expect(ConnectorFactory.supports('x' as any)).toBe(false);
       expect(ConnectorFactory.supports('tiktok' as any)).toBe(false);
@@ -77,33 +86,33 @@ describe('ConnectorFactory', () => {
     let mockConnector: Connector;
 
     beforeEach(() => {
-      mockConnector = createMockConnector('facebook');
+      mockConnector = createMockConnector('linkedin');
     });
 
     afterEach(() => {
       // Cleanup - unregister the test connector
       try {
-        ConnectorFactory.unregister('facebook' as any);
+        ConnectorFactory.unregister('linkedin' as any);
       } catch {
         // Ignore if already unregistered
       }
     });
 
     it('should register a new connector', () => {
-      ConnectorFactory.register('facebook' as any, mockConnector);
-      expect(ConnectorFactory.supports('facebook' as any)).toBe(true);
+      ConnectorFactory.register('linkedin' as any, mockConnector);
+      expect(ConnectorFactory.supports('linkedin' as any)).toBe(true);
     });
 
     it('should allow retrieving registered connector', () => {
-      ConnectorFactory.register('facebook' as any, mockConnector);
-      const connector = ConnectorFactory.get('facebook' as any);
+      ConnectorFactory.register('linkedin' as any, mockConnector);
+      const connector = ConnectorFactory.get('linkedin' as any);
       expect(connector).toBe(mockConnector);
     });
 
     it('should include registered platform in supportedPlatforms', () => {
-      ConnectorFactory.register('facebook' as any, mockConnector);
+      ConnectorFactory.register('linkedin' as any, mockConnector);
       const platforms = ConnectorFactory.supportedPlatforms();
-      expect(platforms).toContain('facebook');
+      expect(platforms).toContain('linkedin');
     });
 
     it('should throw error when registering with mismatched platform name', () => {
@@ -149,43 +158,47 @@ describe('ConnectorFactory', () => {
   });
 
   describe('multiple connectors', () => {
-    let facebookConnector: Connector;
     let linkedinConnector: Connector;
+    let xConnector: Connector;
 
     beforeEach(() => {
-      facebookConnector = createMockConnector('facebook');
       linkedinConnector = createMockConnector('linkedin');
-      ConnectorFactory.register('facebook' as any, facebookConnector);
+      xConnector = createMockConnector('x');
       ConnectorFactory.register('linkedin' as any, linkedinConnector);
+      ConnectorFactory.register('x' as any, xConnector);
     });
 
     afterEach(() => {
-      ConnectorFactory.unregister('facebook' as any);
       ConnectorFactory.unregister('linkedin' as any);
+      ConnectorFactory.unregister('x' as any);
     });
 
     it('should support multiple registered connectors', () => {
-      expect(ConnectorFactory.supports('facebook' as any)).toBe(true);
       expect(ConnectorFactory.supports('linkedin' as any)).toBe(true);
+      expect(ConnectorFactory.supports('x' as any)).toBe(true);
       expect(ConnectorFactory.supports('instagram')).toBe(true);
+      expect(ConnectorFactory.supports('facebook' as any)).toBe(true);
     });
 
     it('should return correct connector for each platform', () => {
-      const fb = ConnectorFactory.get('facebook' as any);
       const li = ConnectorFactory.get('linkedin' as any);
+      const x = ConnectorFactory.get('x' as any);
       const ig = ConnectorFactory.get('instagram');
+      const fb = ConnectorFactory.get('facebook' as any);
 
-      expect(fb).toBe(facebookConnector);
       expect(li).toBe(linkedinConnector);
+      expect(x).toBe(xConnector);
       expect(ig.platform).toBe('instagram');
+      expect(fb.platform).toBe('facebook');
     });
 
     it('should list all registered platforms', () => {
       const platforms = ConnectorFactory.supportedPlatforms();
-      expect(platforms).toContain('facebook');
       expect(platforms).toContain('linkedin');
+      expect(platforms).toContain('x');
       expect(platforms).toContain('instagram');
-      expect(platforms.length).toBeGreaterThanOrEqual(3);
+      expect(platforms).toContain('facebook');
+      expect(platforms.length).toBeGreaterThanOrEqual(4);
     });
   });
 

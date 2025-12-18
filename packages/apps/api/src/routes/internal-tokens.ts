@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { getTokenService } from '../services/service-clients.js';
+import { resolvePrimarySocialAccount } from '../services/social-account-resolver.js';
 
 // Token encryption configuration
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
@@ -77,7 +78,20 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Get the token from Token Service
         const tokenServiceClient = await getTokenService();
-        const token = await tokenServiceClient.getToken(brand.user.id, brand.id, platform);
+        const primaryAccount =
+          platform === 'instagram' || platform === 'facebook'
+            ? await resolvePrimarySocialAccount(brand.id, platform)
+            : null;
+
+        const token =
+          primaryAccount && (platform === 'instagram' || platform === 'facebook')
+            ? await tokenServiceClient.getTokenForSocialAccount(
+                brand.user.id,
+                brand.id,
+                platform,
+                primaryAccount.id
+              )
+            : await tokenServiceClient.getToken(brand.user.id, brand.id, platform);
 
         if (!token) {
           return reply.code(404).send({
@@ -100,14 +114,8 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
             let pageId = token.metadata?.pageId;
 
             if (!accountId || !pageId) {
-              const socialAccount = await prisma.socialAccount.findFirst({
-                where: {
-                  brandId,
-                  platform: 'instagram',
-                },
-              });
-              accountId = accountId || socialAccount?.externalAccountId || undefined;
-              pageId = pageId || socialAccount?.externalPageId || undefined;
+              accountId = accountId || primaryAccount?.externalAccountId || undefined;
+              pageId = pageId || primaryAccount?.externalPageId || undefined;
             }
 
             tokenData = {

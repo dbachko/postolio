@@ -36,15 +36,10 @@ import NotificationsPage from './pages/Notifications';
 import { RouteError } from './components/RouteError';
 import OnboardingPage from './pages/Onboarding';
 import { useOnboardingStatus } from './hooks/useOnboardingStatus';
-const PostDetail = lazy(() => import('./pages/PostDetail'));
+const PostPage = lazy(() => import('./pages/Post'));
 const InboxComments = lazy(() => import('./pages/InboxComments'));
 const InboxDMs = lazy(() => import('./pages/InboxDMs'));
 const SavedReplies = lazy(() => import('./pages/SavedReplies'));
-const CreatePost = lazy(() =>
-  import('./pages/CreatePost').then((module) => ({
-    default: module.CreatePost,
-  }))
-);
 const Limits = lazy(() => import('./pages/Limits'));
 const Drafts = lazy(() => import('./pages/Drafts'));
 
@@ -409,7 +404,7 @@ const router = createBrowserRouter([
           <Layout>
             <ErrorBoundary>
               <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-                <PostDetail />
+                <PostPage />
               </Suspense>
             </ErrorBoundary>
           </Layout>
@@ -426,7 +421,7 @@ const router = createBrowserRouter([
           <Layout>
             <ErrorBoundary>
               <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-                <CreatePost />
+                <PostPage />
               </Suspense>
             </ErrorBoundary>
           </Layout>

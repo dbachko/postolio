@@ -117,6 +117,69 @@ export function CampaignDetails({
       (campaign.status === 'preview' && !campaign.previewGenerated)) &&
     !capacityFull;
 
+  const deleteButton = (() => {
+    if (!onDeleteCampaign) return null;
+
+    if (canDeleteCampaign) {
+      return (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-2"
+              disabled={deleteCampaignLoading}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently deletes <span className="font-medium">{campaign.name}</span> and
+                its unpublished content. Published posts are kept as historical records and cannot
+                be deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteCampaignLoading}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={onDeleteCampaign}
+                disabled={deleteCampaignLoading}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleteCampaignLoading ? 'Deleting…' : 'Delete campaign'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      );
+    }
+
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-2"
+                disabled
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{deleteDisabledReason}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  })();
+
   return (
     <div className="space-y-4">
       <Card>
@@ -143,65 +206,7 @@ export function CampaignDetails({
                 <Edit className="h-4 w-4" />
                 Edit
               </Button>
-              {onDeleteCampaign ? (
-                canDeleteCampaign ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-2"
-                        disabled={deleteCampaignLoading}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This permanently deletes{' '}
-                          <span className="font-medium">{campaign.name}</span> and its unpublished
-                          content. Published posts are kept as historical records and cannot be
-                          deleted.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleteCampaignLoading}>
-                          Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={onDeleteCampaign}
-                          disabled={deleteCampaignLoading}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          {deleteCampaignLoading ? 'Deleting…' : 'Delete campaign'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                ) : (
-                  <TooltipProvider delayDuration={150}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-2"
-                            disabled
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>{deleteDisabledReason}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              ) : null}
+              {deleteButton}
               {campaign.status === 'preview' && (
                 <Button
                   size="sm"

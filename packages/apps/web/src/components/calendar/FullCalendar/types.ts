@@ -1,5 +1,4 @@
-import type { Content } from '@/lib/api';
-import type { CalendarItem } from '@/types/calendar';
+import type { CalendarContentItem, CalendarItem } from '@/types/calendar';
 import type { CalendarFilterState } from '@/stores/calendarFilterStore';
 
 export interface PlaceholderItem {
@@ -11,9 +10,7 @@ export interface PlaceholderItem {
   campaignColor?: string | null;
 }
 
-export type CalendarDataItem =
-  | (Content & { type: 'content' })
-  | (PlaceholderItem & { type: 'placeholder' });
+export type CalendarDataItem = CalendarContentItem | (PlaceholderItem & { type: 'placeholder' });
 
 export type CalendarFilters = Pick<
   CalendarFilterState,
