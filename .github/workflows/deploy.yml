@@ -577,6 +577,7 @@ jobs:
           FACEBOOK_APP_ID: ${{ vars.FACEBOOK_APP_ID }}
           INSTAGRAM_APP_ID: ${{ vars.INSTAGRAM_APP_ID }}
           INSTAGRAM_REDIRECT_URI: ${{ vars.INSTAGRAM_REDIRECT_URI }}
+          META_REDIRECT_URI: ${{ vars.META_REDIRECT_URI }}
           LINKEDIN_CLIENT_ID: ${{ vars.LINKEDIN_CLIENT_ID }}
           TIKTOK_CLIENT_KEY: ${{ vars.TIKTOK_CLIENT_KEY }}
           NODE_ENV: ${{ vars.NODE_ENV }}
@@ -733,6 +734,7 @@ jobs:
               --context instagramAppId="$INSTAGRAM_APP_ID" \
               --context instagramAppSecret="$INSTAGRAM_APP_SECRET" \
               --context instagramRedirectUri="$INSTAGRAM_REDIRECT_URI" \
+              --context metaRedirectUri="$META_REDIRECT_URI" \
               --context linkedinClientId="$LINKEDIN_CLIENT_ID" \
               --context linkedinClientSecret="$LINKEDIN_CLIENT_SECRET" \
               --context tiktokClientKey="$TIKTOK_CLIENT_KEY" \

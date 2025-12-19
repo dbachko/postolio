@@ -22,6 +22,7 @@ export interface OAuthConfig {
 
   // OAuth Redirect URIs
   instagramRedirectUri?: string;
+  metaRedirectUri?: string;
 }
 
 /**
@@ -53,6 +54,7 @@ export function getOAuthConfig(app: cdk.App): OAuthConfig {
     // OAuth Redirect URIs
     instagramRedirectUri:
       app.node.tryGetContext('instagramRedirectUri') || process.env.INSTAGRAM_REDIRECT_URI,
+    metaRedirectUri: app.node.tryGetContext('metaRedirectUri') || process.env.META_REDIRECT_URI,
   };
 }
 
@@ -90,6 +92,9 @@ export function getOAuthEnvironmentVariables(config: OAuthConfig): Record<string
     // OAuth Redirect URIs (only if provided)
     ...(config.instagramRedirectUri && {
       INSTAGRAM_REDIRECT_URI: config.instagramRedirectUri,
+    }),
+    ...(config.metaRedirectUri && {
+      META_REDIRECT_URI: config.metaRedirectUri,
     }),
   };
 }
