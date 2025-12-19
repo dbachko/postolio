@@ -80,6 +80,11 @@ export function useSchedulingWebSocket({
   const queryKeys = useMemo(() => {
     if (!selectedBrand?.id) return [];
     return [
+      // Calendar drives most status badges (month key is appended downstream)
+      ['calendar', selectedBrand.id],
+      // Current content list queries (and legacy segmented keys below)
+      ['content'],
+      ['content', selectedBrand.id],
       ['content', 'pending', selectedBrand.id],
       ['content', 'scheduled', selectedBrand.id],
       ['content', 'history', selectedBrand.id],

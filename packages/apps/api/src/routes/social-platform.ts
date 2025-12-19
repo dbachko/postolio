@@ -13,6 +13,7 @@ import { getAssetsClient } from '../services/assets-media.js';
 import type { AssetRecord } from '@postolio/assets-client';
 import { resolvePrimarySocialAccount } from '../services/social-account-resolver.js';
 import { getTokenService } from '../services/service-clients.js';
+import { getStatusBroadcaster } from '../services/broadcast-registry.js';
 
 const logger = baseLogger.child({ module: 'social-platform-routes' });
 
@@ -543,6 +544,32 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           platform,
           postId: publishResult.externalPostId,
         });
+
+        // Broadcast status update for real-time UI refresh (calendar/cards/detail)
+        try {
+          const broadcaster = getStatusBroadcaster();
+          if (broadcaster && content.status !== 'published') {
+            await broadcaster.broadcastStatusChange(
+              contentId,
+              content.brandId,
+              content.status as any,
+              'published',
+              {
+                platform,
+                campaignId: content.campaignId ?? undefined,
+                externalPostId: publishResult.externalPostId,
+                permalink: publishResult.permalink,
+                publishedAt: publishResult.publishedAt,
+              }
+            );
+          }
+        } catch (err: unknown) {
+          logger.warn('Failed to broadcast published status update', {
+            contentId,
+            platform,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
 
         // Security audit: log content publication
         try {
