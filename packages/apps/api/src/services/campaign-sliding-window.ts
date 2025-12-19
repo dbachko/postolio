@@ -6,6 +6,7 @@ import { generateInstagramContent } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
 import { computeUpcomingSlots } from './slot-utils.js';
 import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
+import type { ImageProvider } from './image-providers/types.js';
 
 const prisma = getDatabaseClient();
 const slidingWindowLogger = baseLogger.child({ module: 'campaign-sliding-window' });
@@ -65,6 +66,7 @@ export class CampaignSlidingWindowService {
             frequency?: 'daily' | 'every2days' | '3weekly' | string;
             themes?: string[];
             style?: string;
+            imageProvider?: ImageProvider;
           })
         : {};
 
@@ -259,6 +261,7 @@ export class CampaignSlidingWindowService {
           ? config.themes[i % config.themes.length]
           : undefined;
       const style = config.style;
+      const imageProvider = config.imageProvider;
 
       // 1) Generate single post
       const batch = await generateInstagramContent(campaign.brand.name, {
@@ -267,6 +270,7 @@ export class CampaignSlidingWindowService {
         theme,
         style,
         campaignId: campaign.id,
+        imageProvider,
       });
       if (!batch || batch.length === 0) continue;
       const post = batch[0]!;

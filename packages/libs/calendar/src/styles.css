@@ -109,7 +109,7 @@
 }
 
 .pc-day--today {
-  background: color-mix(in oklch, var(--primary) 10%, var(--background));
+  background: color-mix(in oklch, var(--primary) 6%, var(--background));
 }
 
 .pc-day--drop {
@@ -135,20 +135,15 @@
   color: var(--muted-foreground);
 }
 
-.pc-today-pill {
+.pc-day--today .pc-day-label {
   display: inline-flex;
   align-items: center;
-  height: var(--pc-pill-h);
-  padding: 0 var(--pc-pill-pad-x);
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   border-radius: 9999px;
-  background: var(--muted);
-  color: var(--muted-foreground);
-  border: 1px solid var(--border);
-  font-weight: 500;
-  font-size: var(--pc-pill-font);
-  line-height: 1;
-  pointer-events: none;
-  box-shadow: none;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .pc-day-events {
@@ -325,6 +320,24 @@
   font-weight: 500;
 }
 
+.pc-col-label-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+}
+
+.pc-col-label-day--today {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.pc-col-head--today {
+  background: color-mix(in oklch, var(--primary) 6%, var(--card));
+}
+
 .pc-timegrid-body {
   display: grid;
   grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
@@ -357,6 +370,10 @@
 
 .pc-daycol--past {
   background: color-mix(in oklch, var(--muted) 16%, transparent);
+}
+
+.pc-daycol--today {
+  background: color-mix(in oklch, var(--primary) 4%, transparent);
 }
 
 .pc-daycol--drop {

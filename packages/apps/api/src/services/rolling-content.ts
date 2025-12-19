@@ -5,6 +5,7 @@ import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
+import type { ImageProvider } from './image-providers/types.js';
 
 const prisma = getDatabaseClient();
 const rollingLogger = baseLogger.child({ module: 'rolling-content' });
@@ -180,15 +181,17 @@ class RollingContentService {
       const activeCampaign = brand.campaigns.find((c) => c.id === campaignId) || brand.campaigns[0];
       let themes = ['lifestyle', 'inspiration', 'behind-the-scenes']; // defaults
       let style = 'modern'; // default
+      let imageProvider: ImageProvider | undefined;
 
       if (activeCampaign) {
         const configRaw = activeCampaign.config as unknown;
         const config =
           configRaw && typeof configRaw === 'object'
-            ? (configRaw as { themes?: string[]; style?: string })
+            ? (configRaw as { themes?: string[]; style?: string; imageProvider?: ImageProvider })
             : {};
         themes = config.themes || themes;
         style = config.style || style;
+        imageProvider = config.imageProvider;
         rollingLogger.info(`Using campaign ${activeCampaign.name} for rolling generation`);
       } else {
         // Use brand preferences if no active campaign
@@ -237,6 +240,7 @@ class RollingContentService {
           count: 1,
           theme,
           style,
+          imageProvider,
         };
 
         const content = await generateInstagramContent(brand.name, contentRequest);

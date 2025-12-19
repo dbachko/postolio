@@ -32,6 +32,7 @@ export function TimeGridView<E extends CalendarEventBase>({
   const startOfThisWeek = localizer.startOfWeek(date, weekStartsOn);
   const start = days === 7 ? startOfThisWeek : new Date(date);
   const dayDates = Array.from({ length: days }, (_, i) => localizer.addDays(start, i));
+  const todayKey = localizer.format(new Date(), 'yyyy-LL-dd');
 
   function isSameDay(a: Date, b: Date) {
     return (
@@ -45,8 +46,18 @@ export function TimeGridView<E extends CalendarEventBase>({
     <div className="pc-timegrid" style={{ ['--pc-days' as any]: String(days) }}>
       <div className="pc-timegrid-head">
         {dayDates.map((d, i) => (
-          <div key={i} className="pc-col-head">
-            <div className="pc-col-label">{localizer.format(d, 'LLL d')}</div>
+          <div
+            key={i}
+            className={`pc-col-head ${localizer.format(d, 'yyyy-LL-dd') === todayKey ? 'pc-col-head--today' : ''}`}
+          >
+            <div className="pc-col-label">
+              <span className="pc-col-label-month">{localizer.format(d, 'LLL')}</span>{' '}
+              <span
+                className={`pc-col-label-day ${localizer.format(d, 'yyyy-LL-dd') === todayKey ? 'pc-col-label-day--today' : ''}`}
+              >
+                {localizer.format(d, 'd')}
+              </span>
+            </div>
           </div>
         ))}
       </div>
@@ -57,6 +68,7 @@ export function TimeGridView<E extends CalendarEventBase>({
             date={d}
             events={events.filter((e) => isSameDay(e.start, d))}
             localizer={localizer}
+            todayKey={todayKey}
             EventComp={EventComp}
             onEventDrop={onEventDrop}
             onBackgroundClick={onBackgroundClick}
@@ -72,6 +84,7 @@ function DayColumn<E extends CalendarEventBase>({
   date,
   events,
   localizer,
+  todayKey,
   EventComp,
   onEventDrop,
   onBackgroundClick,
@@ -80,23 +93,25 @@ function DayColumn<E extends CalendarEventBase>({
   date: Date;
   events: E[];
   localizer: Localizer;
+  todayKey: string;
   EventComp?: React.ComponentType<{ event: E }>;
   onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const now = new Date();
-  const dayOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const isPastDay = dayOnly < todayOnly;
+  const dayKey = localizer.format(date, 'yyyy-LL-dd');
+  const isToday = dayKey === todayKey;
+  const isPastDay = dayKey < todayKey;
   function withinNext30Days(d: Date) {
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const end = new Date(start);
     end.setDate(end.getDate() + 30);
-    const dayOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return dayOnly >= start && dayOnly <= end;
+    const startKey = localizer.format(start, 'yyyy-LL-dd');
+    const endKey = localizer.format(end, 'yyyy-LL-dd');
+    const dKey = localizer.format(d, 'yyyy-LL-dd');
+    return dKey >= startKey && dKey <= endKey;
   }
 
   const [{ isOver, canDrop }, drop] = useDrop(
@@ -138,7 +153,7 @@ function DayColumn<E extends CalendarEventBase>({
 
   return (
     <div
-      className={`pc-daycol ${isPastDay ? 'pc-daycol--past' : ''} ${isOver && canDrop ? 'pc-daycol--drop' : ''}`}
+      className={`pc-daycol ${isPastDay ? 'pc-daycol--past' : ''} ${isToday ? 'pc-daycol--today' : ''} ${isOver && canDrop ? 'pc-daycol--drop' : ''}`}
       ref={ref}
       onClick={() => onBackgroundClick?.(date)}
     >

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { Placeholder } from '../types/calendar';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import {
   Select,
@@ -268,8 +268,14 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={handleToday} className="h-10">
-            Today
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleToday}
+            aria-label="Today"
+            className="h-10 w-10"
+          >
+            <CalendarDays className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
@@ -299,9 +305,12 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             </SelectTrigger>
             <SelectContent className="max-h-80">
               {timezoneOptions.map((tz) => (
-                <SelectItem key={tz.value} value={tz.value}>
-                  {tz.label} ({getTimezoneAbbr(tz.value)} ·{' '}
-                  {formatGmtOffset(getTimezoneOffset(tz.value))})
+                <SelectItem key={tz.value} value={tz.value} className="min-w-0">
+                  <span className="block min-w-0 truncate">
+                    {`${tz.label} (${getTimezoneAbbr(tz.value)} · ${formatGmtOffset(
+                      getTimezoneOffset(tz.value)
+                    )})`}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

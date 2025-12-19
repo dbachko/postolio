@@ -8,6 +8,7 @@ import {
 import { getStatusBroadcaster } from './broadcast-registry.js';
 import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
+import type { ImageProvider } from './image-providers/types.js';
 
 const prisma = getDatabaseClient();
 const campaignJobsLogger = baseLogger.child({ module: 'campaign-jobs' });
@@ -89,8 +90,8 @@ class CampaignJobService {
       const configRaw = campaign.config as unknown;
       const config =
         configRaw && typeof configRaw === 'object'
-          ? (configRaw as { themes: string[]; style?: string })
-          : { themes: [] as string[], style: undefined };
+          ? (configRaw as { themes: string[]; style?: string; imageProvider?: ImageProvider })
+          : { themes: [] as string[], style: undefined, imageProvider: undefined };
 
       // No numeric progress updates stored in DB
 
@@ -101,6 +102,7 @@ class CampaignJobService {
         theme,
         style: config.style,
         campaignId: campaign.id,
+        imageProvider: config.imageProvider,
       }));
 
       // Generate preview posts (3 posts)
@@ -136,6 +138,7 @@ class CampaignJobService {
           theme: config.themes[0],
           style: config.style,
           campaignId: campaign.id,
+          imageProvider: config.imageProvider,
         });
 
         if (!additionalContent.length) {

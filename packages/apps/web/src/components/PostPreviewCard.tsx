@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone } from 'date-fns-tz';
-import { CalendarClock, Clock, Copy, ExternalLink, Layers, Trash2 } from 'lucide-react';
+import { CalendarClock, Clock, Copy, ExternalLink, Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
@@ -36,7 +36,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Badge } from '@/components/ui/badge';
 
 type DeleteTarget =
   | { kind: 'content'; contentId: string }
@@ -156,7 +155,7 @@ export function PostPreviewCard({
     const extraCount = unique.length - visible.length;
 
     return (
-      <div className="flex items-center -space-x-2">
+      <div className="flex items-center -space-x-1.5">
         {visible.map((id) => {
           const meta = socialAccountsById[id];
           if (!meta) return null;
@@ -174,7 +173,7 @@ export function PostPreviewCard({
           );
         })}
         {extraCount > 0 ? (
-          <div className="bg-muted text-muted-foreground border-border flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium">
+          <div className="bg-muted text-muted-foreground border-border flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-medium">
             +{extraCount}
           </div>
         ) : null}
@@ -182,20 +181,46 @@ export function PostPreviewCard({
     );
   }, [item, socialAccountsById]);
 
-  const groupBadge = useMemo(() => {
-    if (!groupMeta) return null;
-    return (
-      <Badge
-        variant="secondary"
-        className="gap-1 px-2 py-0.5 text-[11px] font-medium"
-        title={`${groupMeta.destinationCount} destinations`}
-      >
-        <Layers className="h-3 w-3" />
-        <span>{groupMeta.destinationCount}</span>
-        <span className="sr-only">destinations</span>
-      </Badge>
+  const campaignDot = useMemo(() => {
+    if (!item.campaignName) return null;
+    const href = item.campaignId ? `/campaigns/${item.campaignId}` : undefined;
+    const style = campaignColor ? { backgroundColor: campaignColor } : undefined;
+    const label = item.campaignName;
+
+    const dot = (
+      <span
+        className="border-border h-2.5 w-2.5 shrink-0 rounded-full border"
+        style={style}
+        aria-label={label}
+      />
     );
-  }, [groupMeta]);
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {href ? (
+              <a
+                href={href}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                className="inline-flex items-center"
+                aria-label={label}
+              >
+                {dot}
+              </a>
+            ) : (
+              <span className="inline-flex items-center">{dot}</span>
+            )}
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="max-w-[240px] truncate">{label}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }, [campaignColor, item.campaignId, item.campaignName]);
 
   useEffect(() => {
     setImageReady(false);
@@ -317,54 +342,37 @@ export function PostPreviewCard({
               />
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PostStatusTimeBadge status={status} variant="inline">
-                          {displayTime ? (
-                            <span>{displayTime}</span>
-                          ) : (
-                            <span className="italic">No time</span>
-                          )}
-                        </PostStatusTimeBadge>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <span className="capitalize">
-                          {status === 'placeholder' ? 'Future AI' : status}
-                        </span>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  {groupBadge}
-                  {destinationAvatars}
-                </div>
-
-                <div className="flex min-w-0 items-center gap-1 pr-7">
-                  {item.campaignName ? (
-                    <a
-                      href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
-                      onClick={(e) => {
-                        if (!item.campaignId) return;
-                        e.stopPropagation();
-                      }}
-                      className="inline-flex max-w-[10rem] min-w-0 items-center gap-2 overflow-hidden rounded-full px-2 py-0.5 text-[11px] font-medium text-ellipsis whitespace-nowrap"
-                      style={{
-                        backgroundColor: campaignColor || 'hsl(var(--muted))',
-                        color: campaignColor ? 'white' : 'hsl(var(--foreground))',
-                      }}
-                      title={item.campaignName}
-                    >
-                      <span className="block min-w-0 truncate">{item.campaignName}</span>
-                    </a>
-                  ) : null}
-                </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-center gap-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PostStatusTimeBadge status={status} variant="inline">
+                        {displayTime ? (
+                          <span>{displayTime}</span>
+                        ) : (
+                          <span className="italic">No time</span>
+                        )}
+                      </PostStatusTimeBadge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span className="capitalize">
+                        {status === 'placeholder' ? 'Future AI' : status}
+                      </span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
 
-              <div className="text-foreground line-clamp-1 min-h-[1.4em] text-[12px] leading-snug">
+              <div className="text-foreground mt-1 line-clamp-1 min-h-[1.4em] text-[12px] leading-snug">
                 {(item as any)?.caption || '\u00A0'}
+              </div>
+
+              <div className="mt-auto flex items-center justify-between pt-1">
+                <div className="flex min-w-0 items-center gap-2">{campaignDot}</div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="origin-right scale-90">{destinationAvatars}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -389,7 +397,7 @@ export function PostPreviewCard({
                 className="pointer-events-none absolute top-2 right-2 z-10"
               />
             ) : null}
-            {/* Top row: time/status + campaign */}
+            {/* Top row: time/status */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
                 <TooltipProvider>
@@ -410,29 +418,8 @@ export function PostPreviewCard({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {groupBadge}
-                {destinationAvatars}
               </div>
-
-              <div className="flex min-w-0 items-center gap-1 pr-7">
-                {item.campaignName ? (
-                  <a
-                    href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
-                    onClick={(e) => {
-                      if (!item.campaignId) return;
-                      e.stopPropagation();
-                    }}
-                    className="inline-flex max-w-[8.5rem] min-w-0 items-center gap-2 overflow-hidden rounded-full px-2 py-0.5 text-[11px] font-medium text-ellipsis whitespace-nowrap"
-                    style={{
-                      backgroundColor: campaignColor || 'hsl(var(--muted))',
-                      color: campaignColor ? 'white' : 'hsl(var(--foreground))',
-                    }}
-                    title={item.campaignName}
-                  >
-                    <span className="block min-w-0 truncate">{item.campaignName}</span>
-                  </a>
-                ) : null}
-              </div>
+              <div className="min-w-0 pr-7" />
             </div>
 
             {/* Second row: image + caption */}
@@ -454,6 +441,13 @@ export function PostPreviewCard({
 
               <div className="text-foreground line-clamp-2 min-w-0 flex-1">
                 {(item as any)?.caption || ''}
+              </div>
+            </div>
+
+            <div className="mt-auto flex items-center justify-between pt-1">
+              <div className="flex min-w-0 items-center gap-2">{campaignDot}</div>
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="origin-right scale-90">{destinationAvatars}</div>
               </div>
             </div>
           </div>

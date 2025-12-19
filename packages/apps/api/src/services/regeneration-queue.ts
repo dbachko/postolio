@@ -4,6 +4,7 @@ import { generateInstagramContent, type ContentGenerationRequest } from './conte
 import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import { createRedisClient } from './redis.js';
 import { logger as baseLogger } from '@postolio/logger';
+import type { ImageProvider } from './image-providers/types.js';
 
 const regenerationLogger = baseLogger.child({ module: 'regeneration-queue' });
 
@@ -62,6 +63,16 @@ const regenerationWorker = new Worker(
       itemCount: contentIds.length,
     });
 
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { config: true },
+    });
+    const config = campaign?.config as unknown;
+    const campaignImageProvider: ImageProvider | undefined =
+      config && typeof config === 'object' && 'imageProvider' in config
+        ? ((config as { imageProvider?: unknown }).imageProvider as ImageProvider | undefined)
+        : undefined;
+
     const results = {
       completed: 0,
       failed: 0,
@@ -92,6 +103,7 @@ const regenerationWorker = new Worker(
             theme: regenerationParams.themes?.[0] || 'lifestyle',
             style: regenerationParams.style,
             campaignId,
+            imageProvider: campaignImageProvider,
           };
 
           const newContentArray = await generateInstagramContent(

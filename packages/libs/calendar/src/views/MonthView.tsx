@@ -120,18 +120,19 @@ function MonthCell<E extends CalendarEventBase>({
   const ref = useRef<HTMLDivElement>(null);
   // Compute day state before DnD so we can use it in canDrop
   const isOtherMonth = day.getMonth() !== monthDate.getMonth();
-  const today = new Date();
-  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const thisDay = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-  const isPastDay = thisDay < todayDay;
-  const isToday = thisDay.getTime() === todayDay.getTime();
+  const todayKey = localizer.format(new Date(), 'yyyy-LL-dd');
+  const dayKey = localizer.format(day, 'yyyy-LL-dd');
+  const isPastDay = dayKey < todayKey;
+  const isToday = dayKey === todayKey;
   function withinNext30Days(d: Date) {
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const end = new Date(start);
     end.setDate(end.getDate() + 30);
-    const dayOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return dayOnly >= start && dayOnly <= end;
+    const startKey = localizer.format(start, 'yyyy-LL-dd');
+    const endKey = localizer.format(end, 'yyyy-LL-dd');
+    const dKey = localizer.format(d, 'yyyy-LL-dd');
+    return dKey >= startKey && dKey <= endKey;
   }
 
   const [{ isOver, canDrop }, drop] = useDrop(
@@ -185,11 +186,6 @@ function MonthCell<E extends CalendarEventBase>({
       onClick={() => onBackgroundClick?.(day)}
     >
       <div className="pc-day-header">
-        {isToday && (
-          <span className="pc-today-pill" aria-label="Today">
-            Today
-          </span>
-        )}
         <span className="pc-day-label">{label}</span>
       </div>
       <div className="pc-day-events">
