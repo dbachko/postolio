@@ -5,8 +5,12 @@ import { AlertCircle, CalendarClock, CheckCircle2, MessageSquare, Megaphone } fr
 import { brand as brandApi, campaign as campaignApi, content as contentApi } from '@/lib/api';
 import type { Campaign, Content } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
+import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { useInstagramBestTime, useRefreshInstagramBestTime } from '@/hooks/useBestTime';
+import { getPostImageOrPlaceholder } from '@/lib/placeholders';
+import { getMediaBadgeType } from '@/utils/media-type';
+import { MediaTypeBadge } from '@/components/MediaTypeBadge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,12 +98,23 @@ export function Dashboard() {
   }, [contentHistory]);
 
   const upcomingScheduledPosts = useMemo(() => scheduledPosts.slice(0, 3), [scheduledPosts]);
+  const upcomingAssetIds = useMemo(
+    () => upcomingScheduledPosts.map((post) => post.primaryAssetId),
+    [upcomingScheduledPosts]
+  );
+  const upcomingAssetsQuery = useAssetsByIds(upcomingAssetIds);
 
   const drafts = useMemo(
     () => ((draftsQuery.data as any)?.content || []) as Content[],
     [draftsQuery.data]
   );
   const unscheduledDrafts = useMemo(() => drafts.filter((d) => !d.scheduledAt), [drafts]);
+  const draftPreviewDrafts = useMemo(() => unscheduledDrafts.slice(0, 3), [unscheduledDrafts]);
+  const draftPreviewAssetIds = useMemo(
+    () => draftPreviewDrafts.map((draft) => draft.primaryAssetId),
+    [draftPreviewDrafts]
+  );
+  const draftPreviewAssetsQuery = useAssetsByIds(draftPreviewAssetIds);
 
   const campaigns = useMemo(
     () => ((campaignsQuery.data as any)?.campaigns || []) as Campaign[],
@@ -445,9 +460,12 @@ export function Dashboard() {
                     key={i}
                     className="flex items-center justify-between gap-3 rounded-md border p-3"
                   >
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <Skeleton className="h-4 w-2/3" />
-                      <Skeleton className="h-3 w-1/3" />
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-md" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-3 w-1/3" />
+                      </div>
                     </div>
                     <Skeleton className="h-8 w-16" />
                   </div>
@@ -472,33 +490,67 @@ export function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2">
-                {upcomingScheduledPosts.map((post) => (
-                  <div
-                    key={post.id}
-                    className="flex items-center justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {formatInUserTimezone(
-                            post.scheduledAt!,
-                            'EEE, MMM d • h:mm a',
-                            brandTimezone
-                          )}
-                        </span>
-                        {post.campaignName ? (
-                          <Badge variant="secondary">{post.campaignName}</Badge>
-                        ) : null}
+                {upcomingScheduledPosts.map((post) => {
+                  const primaryAsset = post.primaryAssetId
+                    ? (upcomingAssetsQuery.data?.[post.primaryAssetId] ?? null)
+                    : null;
+                  const previewUrl =
+                    primaryAsset?.fileType === 'video'
+                      ? primaryAsset.thumbnailUrl || null
+                      : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
+                  const mediaBadgeType = getMediaBadgeType({
+                    contentType: post.contentType,
+                    mediaAssets: post.mediaAssets,
+                    mediaAssetCount: post.mediaAssetCount,
+                    primaryAssetFileType: primaryAsset?.fileType ?? null,
+                  });
+
+                  return (
+                    <div
+                      key={post.id}
+                      className="flex items-center justify-between gap-3 rounded-md border p-3"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="bg-muted relative h-10 w-10 shrink-0 overflow-hidden rounded-md">
+                          <img
+                            src={getPostImageOrPlaceholder(previewUrl)}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <MediaTypeBadge
+                              type={mediaBadgeType}
+                              className="pointer-events-none p-0.5"
+                              iconClassName="h-3 w-3"
+                            />
+                            <span className="text-sm font-medium">
+                              {formatInUserTimezone(
+                                post.scheduledAt!,
+                                'EEE, MMM d • h:mm a',
+                                brandTimezone
+                              )}
+                            </span>
+                            {post.campaignName ? (
+                              <Badge variant="secondary">{post.campaignName}</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
+                            {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
-                        {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
-                      </p>
+
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={`/posts/${post.id}`}>Open</Link>
+                      </Button>
                     </div>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to={`/posts/${post.id}`}>Open</Link>
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -604,9 +656,12 @@ export function Dashboard() {
                     key={i}
                     className="flex items-center justify-between gap-3 rounded-md border p-3"
                   >
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <Skeleton className="h-4 w-2/3" />
-                      <Skeleton className="h-3 w-1/3" />
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-md" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-3 w-1/3" />
+                      </div>
                     </div>
                     <Skeleton className="h-8 w-16" />
                   </div>
@@ -626,27 +681,67 @@ export function Dashboard() {
                   <Badge variant="secondary">{drafts.length} total</Badge>
                 </div>
                 <div className="space-y-2">
-                  {unscheduledDrafts.slice(0, 3).map((draft) => (
-                    <div
-                      key={draft.id}
-                      className="flex items-center justify-between gap-3 rounded-md border p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium">
-                          <span className="line-clamp-1">
-                            {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
-                          </span>
+                  {draftPreviewDrafts.map((draft) => {
+                    const primaryAsset = draft.primaryAssetId
+                      ? (draftPreviewAssetsQuery.data?.[draft.primaryAssetId] ?? null)
+                      : null;
+                    const previewUrl =
+                      primaryAsset?.fileType === 'video'
+                        ? primaryAsset.thumbnailUrl || null
+                        : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
+                    const mediaBadgeType = getMediaBadgeType({
+                      contentType: draft.contentType,
+                      mediaAssets: draft.mediaAssets,
+                      mediaAssetCount: draft.mediaAssetCount,
+                      primaryAssetFileType: primaryAsset?.fileType ?? null,
+                    });
+
+                    return (
+                      <div
+                        key={draft.id}
+                        className="flex items-center justify-between gap-3 rounded-md border p-3"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <div className="bg-muted relative h-10 w-10 shrink-0 overflow-hidden rounded-md">
+                            <img
+                              src={getPostImageOrPlaceholder(previewUrl)}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium">
+                              <span className="line-clamp-1">
+                                {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
+                              </span>
+                            </div>
+                            <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                              <span>Updated</span>
+                              <MediaTypeBadge
+                                type={mediaBadgeType}
+                                className="pointer-events-none p-0.5"
+                                iconClassName="h-3 w-3"
+                              />
+                              <span>
+                                {formatInUserTimezone(
+                                  draft.updatedAt,
+                                  'MMM d, h:mm a',
+                                  brandTimezone
+                                )}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-muted-foreground mt-1 text-xs">
-                          Updated{' '}
-                          {formatInUserTimezone(draft.updatedAt, 'MMM d, h:mm a', brandTimezone)}
-                        </div>
+
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={`/posts/${draft.id}`}>Open</Link>
+                        </Button>
                       </div>
-                      <Button asChild size="sm" variant="outline">
-                        <Link to={`/posts/${draft.id}`}>Open</Link>
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
