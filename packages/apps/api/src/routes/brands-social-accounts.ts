@@ -281,9 +281,33 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
       await assertBrandOwnership(userId, brandId);
 
+      const parentOrigin = (() => {
+        const origin = request.headers.origin;
+        if (typeof origin === 'string' && origin.trim()) {
+          try {
+            return new URL(origin).origin;
+          } catch {
+            // ignore
+          }
+        }
+        const referer = request.headers.referer;
+        if (typeof referer === 'string' && referer.trim()) {
+          try {
+            return new URL(referer).origin;
+          } catch {
+            // ignore
+          }
+        }
+        return null;
+      })();
+
+      const url =
+        `/api/auth/meta/authorize?brandId=${encodeURIComponent(brandId)}` +
+        (parentOrigin ? `&parentOrigin=${encodeURIComponent(parentOrigin)}` : '');
+
       const r = await fastify.inject({
         method: 'GET',
-        url: `/api/auth/meta/authorize?brandId=${encodeURIComponent(brandId)}`,
+        url,
         headers: { cookie: request.headers.cookie as string },
       });
       return reply.code(r.statusCode).send(r.json());

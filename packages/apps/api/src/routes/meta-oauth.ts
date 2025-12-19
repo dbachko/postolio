@@ -24,6 +24,7 @@ const CONNECT_SESSION_TTL_SECONDS = 15 * 60;
 
 interface AuthorizeQuery {
   brandId: string;
+  parentOrigin?: string;
 }
 
 interface CallbackQuery {
@@ -49,6 +50,7 @@ interface MetaConnectSession {
   userId: string;
   brandId: string;
   state: string;
+  parentOrigin?: string | null;
   createdAt: string;
 }
 
@@ -131,8 +133,12 @@ function getPopupParentOrigin(): string {
   }
 }
 
-function sendMetaPopupSuccessPage(reply: FastifyReply, payload: { connectSessionId: string }) {
-  const parentOrigin = getPopupParentOrigin();
+function sendMetaPopupSuccessPage(
+  reply: FastifyReply,
+  payload: { connectSessionId: string },
+  parentOriginOverride?: string | null
+) {
+  const parentOrigin = parentOriginOverride || getPopupParentOrigin();
   const appUrl = (process.env.APP_URL || 'https://postolio.example').replace(/\/+$/, '');
   const fallbackUrl = `${appUrl}/brands`;
   const html = `<!doctype html>
@@ -163,9 +169,10 @@ function sendMetaPopupSuccessPage(reply: FastifyReply, payload: { connectSession
 
 function sendMetaPopupErrorPage(
   reply: FastifyReply,
-  payload: { error: string; errorDescription?: string }
+  payload: { error: string; errorDescription?: string },
+  parentOriginOverride?: string | null
 ) {
-  const parentOrigin = getPopupParentOrigin();
+  const parentOrigin = parentOriginOverride || getPopupParentOrigin();
   const appUrl = (process.env.APP_URL || 'https://postolio.example').replace(/\/+$/, '');
   const fallbackUrl = `${appUrl}/brands`;
   const html = `<!doctype html>
@@ -201,6 +208,20 @@ function buildRedisKeys(connectSessionId: string, state?: string) {
     tokensKey: `meta:connect-tokens:${connectSessionId}`,
     stateKey: state ? `meta:connect-state:${state}` : null,
   };
+}
+
+function normalizeOrigin(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const origin = new URL(trimmed).origin;
+    if (origin === 'null') return null;
+    if (!/^https?:\/\//.test(origin)) return null;
+    return origin;
+  } catch {
+    return null;
+  }
 }
 
 async function loadConnectSessionByState(state: string): Promise<MetaConnectSession | null> {
@@ -329,12 +350,14 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
         const connectSessionId = crypto.randomUUID();
         const state = crypto.randomBytes(32).toString('hex');
+        const parentOrigin = normalizeOrigin(request.query.parentOrigin);
 
         const session: MetaConnectSession = {
           connectSessionId,
           userId,
           brandId,
           state,
+          parentOrigin,
           createdAt: new Date().toISOString(),
         };
 
@@ -534,7 +557,11 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         candidatesCount: candidates.length,
       });
 
-      return sendMetaPopupSuccessPage(reply, { connectSessionId: session.connectSessionId });
+      return sendMetaPopupSuccessPage(
+        reply,
+        { connectSessionId: session.connectSessionId },
+        session.parentOrigin
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       const safe = truncate(redactOauthSensitiveDetails(message), 2000);

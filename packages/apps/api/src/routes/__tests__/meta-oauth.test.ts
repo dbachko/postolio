@@ -287,7 +287,7 @@ describe('Meta OAuth routes', () => {
   it('runs authorize → callback → candidates → finalize and stores per-account token expiry metadata', async () => {
     const authorize = await app.inject({
       method: 'GET',
-      url: '/api/auth/meta/authorize?brandId=brand-1',
+      url: '/api/auth/meta/authorize?brandId=brand-1&parentOrigin=http%3A%2F%2Flocalhost%3A5173',
       headers: { authorization: authHeader },
     });
 
@@ -307,6 +307,7 @@ describe('Meta OAuth routes', () => {
     });
     expect(callback.statusCode).toBe(200);
     expect(callback.headers['content-type']).toContain('text/html');
+    expect(callback.body).toContain('const parentOrigin = "http://localhost:5173"');
 
     const candidates = await app.inject({
       method: 'GET',

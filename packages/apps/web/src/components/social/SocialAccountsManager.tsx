@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Brand } from '@/lib/api';
 import { brand as brandApi } from '@/lib/api';
@@ -234,6 +234,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
   const [connectError, setConnectError] = useState<string | null>(null);
+  const connectDialogOpenedRef = useRef(false);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectedAccount | null>(null);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
@@ -353,13 +354,28 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
       setConnectError(null);
       setConnectIntent(intent);
       setConnectingIntent(intent);
+      setConnectSessionId(null);
+      connectDialogOpenedRef.current = false;
     },
     onSuccess: (data) => {
+      const initialConnectSessionId =
+        typeof data.connectSessionId === 'string' && data.connectSessionId.trim()
+          ? data.connectSessionId
+          : null;
+      if (initialConnectSessionId) setConnectSessionId(initialConnectSessionId);
+
       const popup = window.open(
         data.authUrl,
         'meta-oauth',
         'width=600,height=750,scrollbars=yes,resizable=yes'
       );
+
+      if (!popup) {
+        setConnectError('Pop-up blocked. Please allow pop-ups and try again.');
+        setIsConnecting(false);
+        setConnectingIntent(null);
+        return;
+      }
 
       const handleMessage = (event: MessageEvent) => {
         if (!allowedMessageOrigins().includes(event.origin)) return;
@@ -370,6 +386,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
           if (typeof id === 'string' && id.trim()) {
             setConnectSessionId(id);
             setConnectDialogOpen(true);
+            connectDialogOpenedRef.current = true;
           }
           setIsConnecting(false);
           setConnectingIntent(null);
@@ -392,6 +409,13 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
           setIsConnecting(false);
           setConnectingIntent(null);
           window.removeEventListener('message', handleMessage);
+
+          if (connectDialogOpenedRef.current) return;
+          if (initialConnectSessionId) {
+            setConnectSessionId(initialConnectSessionId);
+            setConnectDialogOpen(true);
+            connectDialogOpenedRef.current = true;
+          }
         }
       }, 1000);
 
@@ -408,6 +432,23 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
     queryKey: ['meta-connect-candidates', connectSessionId],
     queryFn: () => brandApi.getMetaConnectCandidates(connectSessionId!),
     enabled: !!connectSessionId,
+    refetchInterval: (query) => {
+      if (!connectDialogOpen) return false;
+      if (!connectSessionId) return false;
+      const data = query.state.data as any;
+      const candidates = data?.candidates;
+      if (Array.isArray(candidates) && candidates.length > 0) return false;
+      const error = query.state.error as any;
+      const status = error?.status;
+      const code = error?.data?.error;
+      if (
+        status === 404 &&
+        (code === 'connect_candidates_not_found' || code === 'connect_session_not_found')
+      ) {
+        return 1000;
+      }
+      return false;
+    },
     refetchOnWindowFocus: false,
   });
 
@@ -415,6 +456,13 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
     const data = candidatesQuery.data as any;
     return Array.isArray(data?.candidates) ? (data.candidates as MetaCandidate[]) : [];
   }, [candidatesQuery.data]);
+
+  const candidatesError = candidatesQuery.error as any;
+  const isWaitingForCandidates =
+    candidatesQuery.isError &&
+    candidatesError?.status === 404 &&
+    (candidatesError?.data?.error === 'connect_candidates_not_found' ||
+      candidatesError?.data?.error === 'connect_session_not_found');
 
   const groupedCandidates = useMemo(() => {
     return {
@@ -446,6 +494,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
       setConnectSessionId(null);
       setSelectedCandidateIds(new Set());
       await queryClient.invalidateQueries({ queryKey: ['brand-social-accounts', brand.id] });
+      await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
       onAccountsChanged?.();
     },
     onError: (error: any) => {
@@ -755,7 +804,16 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
         )}
 
         {/* Candidate selection dialog */}
-        <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
+        <Dialog
+          open={connectDialogOpen}
+          onOpenChange={(open) => {
+            setConnectDialogOpen(open);
+            if (!open) {
+              setConnectSessionId(null);
+              setSelectedCandidateIds(new Set());
+            }
+          }}
+        >
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Select accounts to connect</DialogTitle>
@@ -765,15 +823,37 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
               </DialogDescription>
             </DialogHeader>
 
-            {candidatesQuery.isLoading && <div className="bg-muted h-40 animate-pulse rounded" />}
+            {(candidatesQuery.isLoading || candidatesQuery.isFetching) && (
+              <div className="bg-muted h-40 animate-pulse rounded" />
+            )}
 
-            {!candidatesQuery.isLoading && candidates.length === 0 && (
+            {!candidatesQuery.isLoading && isWaitingForCandidates && (
               <Alert>
                 <AlertDescription>
-                  No connectable accounts were found for this Meta login.
+                  Finishing Meta connection… If you just completed the pop-up, this can take a few
+                  seconds.
                 </AlertDescription>
               </Alert>
             )}
+
+            {!candidatesQuery.isLoading && !isWaitingForCandidates && candidatesQuery.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {candidatesError?.message || 'Failed to load connectable accounts.'}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {!candidatesQuery.isLoading &&
+              !isWaitingForCandidates &&
+              !candidatesQuery.isError &&
+              candidates.length === 0 && (
+                <Alert>
+                  <AlertDescription>
+                    No connectable accounts were found for this Meta login.
+                  </AlertDescription>
+                </Alert>
+              )}
 
             {!candidatesQuery.isLoading && candidates.length > 0 && (
               <ScrollArea className="h-[420px] pr-4">

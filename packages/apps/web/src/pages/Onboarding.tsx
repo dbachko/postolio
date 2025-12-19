@@ -33,6 +33,7 @@ export function OnboardingPage() {
   const brands: Brand[] = brandsData?.brands ?? [];
 
   const [step, setStep] = useState<Step>('choice');
+  const [redirectingToDashboard, setRedirectingToDashboard] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     name: '',
     description: '',
@@ -89,9 +90,11 @@ export function OnboardingPage() {
   useEffect(() => {
     if (!onboarding || onboardingLoading) return;
     if (onboarding.status === 'complete') {
-      navigate('/', { replace: true });
-      return;
+      setRedirectingToDashboard(true);
+      const t = setTimeout(() => navigate('/dashboard', { replace: true }), 350);
+      return () => clearTimeout(t);
     }
+    setRedirectingToDashboard(false);
     if (step === 'choice') {
       if (onboarding.status === 'brand_no_social') {
         setStep('connect');
@@ -320,12 +323,28 @@ export function OnboardingPage() {
                           );
                           if (!connected) return;
                           await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
-                          navigate('/', { replace: true });
+                          setRedirectingToDashboard(true);
+                          navigate('/dashboard', { replace: true });
                         } catch (_e) {
                           // ignore
                         }
                       }}
                     />
+
+                    {redirectingToDashboard && (
+                      <Alert variant="info">
+                        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                          <span>All set — taking you to your dashboard.</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => navigate('/dashboard', { replace: true })}
+                          >
+                            Go to dashboard
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 )}
               </CardContent>
