@@ -86,6 +86,12 @@ export function Dashboard() {
     () => contentHistory.filter((post) => post.status === 'failed'),
     [contentHistory]
   );
+  const failedPreviewPosts = useMemo(() => failedPosts.slice(0, 3), [failedPosts]);
+  const failedPreviewAssetIds = useMemo(
+    () => failedPreviewPosts.map((post) => post.primaryAssetId),
+    [failedPreviewPosts]
+  );
+  const failedPreviewAssetsQuery = useAssetsByIds(failedPreviewAssetIds);
   const scheduledPosts = useMemo(() => {
     const now = Date.now();
     return contentHistory
@@ -324,26 +330,64 @@ export function Dashboard() {
                     </div>
 
                     <div className="space-y-2">
-                      {failedPosts.slice(0, 3).map((post) => (
-                        <DashboardPostCard
-                          key={post.id}
-                          action={
-                            <Button asChild size="sm" variant="outline">
-                              <Link to={`/posts/${post.id}`}>Review</Link>
-                            </Button>
-                          }
-                        >
-                          <div className="text-sm font-medium">
-                            <span className="line-clamp-1">
+                      {failedPreviewPosts.map((post) => {
+                        const primaryAsset = post.primaryAssetId
+                          ? (failedPreviewAssetsQuery.data?.[post.primaryAssetId] ?? null)
+                          : null;
+                        const previewThumbnail =
+                          primaryAsset?.fileType === 'video'
+                            ? {
+                                kind: 'video' as const,
+                                src: primaryAsset.url,
+                                posterSrc: primaryAsset.thumbnailUrl || null,
+                              }
+                            : {
+                                kind: 'image' as const,
+                                src: getPostImageOrPlaceholder(
+                                  primaryAsset?.thumbnailUrl || primaryAsset?.url || null
+                                ),
+                              };
+                        const mediaBadgeType = getMediaBadgeType({
+                          contentType: post.contentType,
+                          mediaAssets: post.mediaAssets,
+                          mediaAssetCount: post.mediaAssetCount,
+                          primaryAssetFileType: primaryAsset?.fileType ?? null,
+                        });
+
+                        return (
+                          <DashboardPostCard
+                            key={post.id}
+                            thumbnail={previewThumbnail}
+                            action={
+                              <Button asChild size="sm" variant="outline">
+                                <Link to={`/posts/${post.id}`}>Review</Link>
+                              </Button>
+                            }
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <MediaTypeBadge
+                                type={mediaBadgeType}
+                                className="pointer-events-none p-0.5"
+                                iconClassName="h-3 w-3"
+                              />
+                              <span className="text-sm font-medium">
+                                Last updated:{' '}
+                                {formatInUserTimezone(
+                                  post.updatedAt,
+                                  'EEE, MMM d • h:mm a',
+                                  brandTimezone
+                                )}
+                              </span>
+                              {post.campaignName ? (
+                                <Badge variant="secondary">{post.campaignName}</Badge>
+                              ) : null}
+                            </div>
+                            <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
                               {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
-                            </span>
-                          </div>
-                          <div className="text-muted-foreground mt-1 text-xs">
-                            Updated{' '}
-                            {formatInUserTimezone(post.updatedAt, 'MMM d, h:mm a', brandTimezone)}
-                          </div>
-                        </DashboardPostCard>
-                      ))}
+                            </p>
+                          </DashboardPostCard>
+                        );
+                      })}
                       {failedPosts.length > 3 ? (
                         <p className="text-muted-foreground text-xs">
                           And {failedPosts.length - 3} more failed post
@@ -531,6 +575,7 @@ export function Dashboard() {
                           iconClassName="h-3 w-3"
                         />
                         <span className="text-sm font-medium">
+                          Scheduled:{' '}
                           {formatInUserTimezone(
                             post.scheduledAt!,
                             'EEE, MMM d • h:mm a',
@@ -711,22 +756,27 @@ export function Dashboard() {
                           </Button>
                         }
                       >
-                        <div className="text-sm font-medium">
-                          <span className="line-clamp-1">
-                            {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
-                          </span>
-                        </div>
-                        <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                          <span>Updated</span>
+                        <div className="flex flex-wrap items-center gap-2">
                           <MediaTypeBadge
                             type={mediaBadgeType}
                             className="pointer-events-none p-0.5"
                             iconClassName="h-3 w-3"
                           />
-                          <span>
-                            {formatInUserTimezone(draft.updatedAt, 'MMM d, h:mm a', brandTimezone)}
+                          <span className="text-sm font-medium">
+                            Last updated:{' '}
+                            {formatInUserTimezone(
+                              draft.updatedAt,
+                              'EEE, MMM d • h:mm a',
+                              brandTimezone
+                            )}
                           </span>
+                          {draft.campaignName ? (
+                            <Badge variant="secondary">{draft.campaignName}</Badge>
+                          ) : null}
                         </div>
+                        <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
+                          {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
+                        </p>
                       </DashboardPostCard>
                     );
                   })}
