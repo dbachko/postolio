@@ -185,15 +185,17 @@ function SortableAccountRow({
       data-over={isOver ? 'true' : undefined}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <button
+        <Button
           type="button"
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded p-1 focus-visible:ring-2 focus-visible:ring-offset-2"
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground"
           aria-label="Reorder social account"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-4 w-4" />
-        </button>
+        </Button>
         <ProfileAvatar src={account.profilePictureUrl || null} name={title} alt={title} size="md" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">

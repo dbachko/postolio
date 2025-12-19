@@ -187,52 +187,58 @@ function PostCard({
   const lastEditedLabel = `Last edited ${formatShortDateTime(post.updatedAt || post.createdAt)}`;
 
   return (
-    <button type="button" onClick={onOpen} className="w-full text-left">
-      <div className="space-y-2">
-        <div
-          className="group relative aspect-square overflow-hidden rounded-lg border"
-          style={{ borderColor }}
-        >
-          <div className="absolute top-2 left-2 z-10">
-            <PostStatusTimeBadge
-              status={post.status}
-              variant="pill"
-              title={statusTimeLabel ? `${statusLabel} • ${statusTimeLabel}` : statusLabel}
-              aria-label={statusTimeLabel ? `${statusLabel} • ${statusTimeLabel}` : statusLabel}
-            >
-              {statusTimeLabel ?? statusLabel}
-            </PostStatusTimeBadge>
+    <Button
+      asChild
+      variant="ghost"
+      className="h-auto w-full items-stretch justify-start p-0 text-left whitespace-normal hover:bg-transparent"
+    >
+      <button type="button" onClick={onOpen}>
+        <div className="space-y-2">
+          <div
+            className="group relative aspect-square overflow-hidden rounded-lg border"
+            style={{ borderColor }}
+          >
+            <div className="absolute top-2 left-2 z-10">
+              <PostStatusTimeBadge
+                status={post.status}
+                variant="pill"
+                title={statusTimeLabel ? `${statusLabel} • ${statusTimeLabel}` : statusLabel}
+                aria-label={statusTimeLabel ? `${statusLabel} • ${statusTimeLabel}` : statusLabel}
+              >
+                {statusTimeLabel ?? statusLabel}
+              </PostStatusTimeBadge>
+            </div>
+
+            <div className="absolute top-2 right-2 z-10">
+              <Badge variant="secondary" className="flex items-center gap-1">
+                {mediaIcon}
+                <span>{mediaLabel}</span>
+              </Badge>
+            </div>
+
+            {previewBody}
           </div>
 
-          <div className="absolute top-2 right-2 z-10">
-            <Badge variant="secondary" className="flex items-center gap-1">
-              {mediaIcon}
-              <span>{mediaLabel}</span>
-            </Badge>
+          <div className="space-y-1">
+            <div className="line-clamp-2 text-sm font-semibold">
+              {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
+            </div>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span>{lastEditedLabel}</span>
+              {post.campaignName && (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className={cn('h-2 w-2 rounded-full border', !post.campaignColor && 'bg-muted')}
+                    style={post.campaignColor ? { backgroundColor: post.campaignColor } : undefined}
+                  />
+                  <span className="max-w-[200px] truncate">{post.campaignName}</span>
+                </span>
+              )}
+            </div>
           </div>
-
-          {previewBody}
         </div>
-
-        <div className="space-y-1">
-          <div className="line-clamp-2 text-sm font-semibold">
-            {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
-          </div>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span>{lastEditedLabel}</span>
-            {post.campaignName && (
-              <span className="inline-flex items-center gap-1">
-                <span
-                  className={cn('h-2 w-2 rounded-full border', !post.campaignColor && 'bg-muted')}
-                  style={post.campaignColor ? { backgroundColor: post.campaignColor } : undefined}
-                />
-                <span className="max-w-[200px] truncate">{post.campaignName}</span>
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </button>
+      </button>
+    </Button>
   );
 }
 

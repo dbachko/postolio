@@ -96,11 +96,12 @@ export function Step4ImagePreferences() {
                 const Icon = provider.name.includes('gemini') ? Sparkles : Zap;
 
                 return (
-                  <button
-                    type="button"
+                  <Button
                     key={provider.name}
+                    type="button"
+                    variant="outline"
                     onClick={() => updateField('imageProvider', provider.name)}
-                    className={`hover:border-primary/50 relative rounded-lg border-2 p-4 text-left transition-all ${
+                    className={`hover:border-primary/50 relative h-auto items-start justify-start rounded-lg border-2 p-4 text-left whitespace-normal shadow-none transition-all ${
                       isSelected ? 'border-primary bg-primary/5' : 'border-border bg-background'
                     }`}
                   >
@@ -125,7 +126,7 @@ export function Step4ImagePreferences() {
                         </span>
                       ))}
                     </div>
-                  </button>
+                  </Button>
                 );
               })}
             </div>

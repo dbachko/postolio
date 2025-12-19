@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { assetsApi } from '@/features/assets/api/client';
 import { VideoUploadClient, type UploadProgress } from '@/lib/api/video-client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -539,13 +540,14 @@ export function MultiImageUploader({
 
     // Compact card-style dropzone (used when at least one image exists)
     return (
-      <button
+      <Button
         type="button"
+        variant="outline"
         className={cn(
           baseClasses,
           activeBorderClasses,
           disabledClasses,
-          'bg-muted flex aspect-square flex-col items-center justify-center border text-xs'
+          'bg-muted flex aspect-square h-auto flex-col items-center justify-center border p-0 text-xs shadow-none'
         )}
         onClick={handleDropzoneClick}
         onDragOver={handleDropzoneDragOver}
@@ -557,7 +559,7 @@ export function MultiImageUploader({
         <span className="text-muted-foreground mt-0.5 text-[10px]">
           {allowMixedMedia ? 'Media items' : 'Images only'} · {mediaItems.length}/{maxImages}
         </span>
-      </button>
+      </Button>
     );
   };
 

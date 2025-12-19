@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { Label } from '../../ui/label';
-import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
-import { Input } from '../../ui/input';
+import { Input } from '@/components/ui/input';
 import { frequencyOptions } from '../../../constants/campaign';
 
 interface FrequencyToggleGroupProps {

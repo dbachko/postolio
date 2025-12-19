@@ -63,13 +63,13 @@ export function VariablesPickerButton({ onVariableSelect, disabled }: VariablesP
           </p>
           <div className="mt-4 space-y-1">
             {TEMPLATE_VARIABLES.map((variable) => (
-              <button
+              <Button
                 key={variable.syntax}
                 type="button"
                 onClick={() => handleVariableClick(variable.syntax)}
+                variant="ghost"
                 className={cn(
-                  'hover:bg-accent w-full rounded-md px-3 py-2 text-left transition-colors',
-                  'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none'
+                  'hover:bg-accent h-auto w-full justify-start rounded-md px-3 py-2 text-left transition-colors'
                 )}
               >
                 <div className="flex items-center justify-between">
@@ -81,7 +81,7 @@ export function VariablesPickerButton({ onVariableSelect, disabled }: VariablesP
                     {variable.syntax}
                   </code>
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
         </div>

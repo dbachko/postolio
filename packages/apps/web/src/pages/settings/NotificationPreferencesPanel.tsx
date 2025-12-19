@@ -340,10 +340,11 @@ export default function NotificationPreferencesPanel() {
           return (
             <div key={key} className="rounded-md border">
               <div className="flex items-center justify-between p-3">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setExpanded((s) => ({ ...s, [key]: !isOpen }))}
-                  className="hover:bg-accent/50 group -ml-1 flex flex-1 items-center gap-2 rounded px-1 py-1 text-left"
+                  className="hover:bg-accent/50 group -ml-1 h-auto flex-1 justify-start gap-2 rounded px-1 py-1 text-left"
                   aria-expanded={isOpen}
                 >
                   {isOpen ? (
@@ -357,7 +358,7 @@ export default function NotificationPreferencesPanel() {
                   <div className="text-sm font-medium">
                     {g.category === 'accounts' ? 'Account Settings' : g.title}
                   </div>
-                </button>
+                </Button>
                 <div className="flex items-center gap-2 pr-1">
                   <Label className="text-xs">Enabled</Label>
                   {g.category === 'accounts' ? (

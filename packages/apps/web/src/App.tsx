@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
+import { Button } from '@/components/ui/button';
 import { useAuthStore } from './stores/authStore';
 import { TimezoneProvider } from './contexts/TimezoneContext';
 import { ConnectionStatusProvider } from './contexts/WebSocketContext';
@@ -304,12 +305,9 @@ const router = createBrowserRouter([
                       Something went wrong loading the analytics page. Please refresh to try again.
                     </p>
                   </div>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium"
-                  >
+                  <Button type="button" onClick={() => window.location.reload()}>
                     Refresh Page
-                  </button>
+                  </Button>
                 </div>
               }
             >

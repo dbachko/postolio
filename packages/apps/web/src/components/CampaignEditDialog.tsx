@@ -571,13 +571,15 @@ export function CampaignEditDialog({
                 {palette.map((hex) => {
                   const selected = hex === color;
                   return (
-                    <button
+                    <Button
                       key={hex}
                       type="button"
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => perms.color && setColor(hex)}
                       disabled={!perms.color}
                       className={[
-                        'ring-offset-background focus-visible:ring-ring inline-flex h-6 w-6 items-center justify-center rounded-full border transition-shadow focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+                        'h-6 w-6 rounded-full border p-0 transition-shadow hover:bg-transparent disabled:cursor-not-allowed disabled:opacity-50',
                         selected ? 'ring-ring shadow-sm ring-2' : 'hover:shadow-sm',
                       ].join(' ')}
                       style={{

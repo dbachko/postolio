@@ -5,6 +5,7 @@ import { X, Loader2, Search, Video, Image as ImageIcon, Play } from 'lucide-reac
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import {
   formatBytes,
   sortAssets,
@@ -186,14 +187,16 @@ export default function AssetPicker({
                 {selectedAssets.length > 0 ? `${selectedAssets.length} selected` : ''}
               </div>
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={onClose}
               aria-label="Close"
-              className="ring-offset-background focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground text-muted-foreground inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+              className="text-muted-foreground h-8 w-8"
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
 
           <div className="overflow-y-auto px-4 pt-2 pb-4">
@@ -227,7 +230,7 @@ export default function AssetPicker({
                     const previewUrl = asset.thumbnailUrl || asset.url;
                     const isVideo = asset.fileType === 'video';
                     return (
-                      <button
+                      <Button
                         key={asset.id}
                         type="button"
                         onClick={() => handleSelectAsset(asset)}
@@ -235,7 +238,12 @@ export default function AssetPicker({
                           setSelected(new Map([[asset.id, asset]]));
                           handleConfirm([asset]);
                         }}
-                        className={`group relative aspect-square overflow-hidden rounded-lg border transition ${isSelected ? 'ring-primary border-primary ring-2 ring-offset-2' : 'hover:border-border/80'} `}
+                        variant="ghost"
+                        className={`group relative aspect-square h-auto overflow-hidden rounded-lg border p-0 transition hover:bg-transparent ${
+                          isSelected
+                            ? 'ring-primary border-primary ring-2 ring-offset-2'
+                            : 'hover:border-border/80'
+                        }`}
                       >
                         <div className="bg-card/80 absolute top-2 left-2 z-10 rounded-md px-1 py-1 shadow-sm backdrop-blur">
                           <Checkbox
@@ -291,7 +299,7 @@ export default function AssetPicker({
                             </div>
                           </div>
                         </div>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -307,19 +315,16 @@ export default function AssetPicker({
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 border-t p-4">
-            <button
-              onClick={onClose}
-              className="ring-offset-background focus-visible:ring-ring border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-            >
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
               onClick={() => handleConfirm()}
               disabled={selectedAssets.length === 0}
-              className="ring-offset-background focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-50"
             >
               Attach {selectedAssets.length > 0 ? `(${selectedAssets.length})` : ''}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { type DragEvent } from 'react';
 import { GripVertical, Video as VideoIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 
 interface MediaCardProps {
   type: 'image' | 'video';
@@ -86,13 +87,15 @@ export function MediaCard({
       )}
 
       {onRemove && !isUploading && (
-        <button
+        <Button
           type="button"
+          variant="destructive"
+          size="icon-sm"
           onClick={onRemove}
-          className="absolute right-2 bottom-2 z-10 rounded-full bg-red-500 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+          className="absolute right-2 bottom-2 z-10 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       )}
 
       {type === 'image' ? (

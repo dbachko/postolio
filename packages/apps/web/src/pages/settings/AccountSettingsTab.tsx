@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Shield, AlertTriangle, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -170,9 +171,8 @@ export default function AccountSettingsTab() {
 
               <div className="space-y-2">
                 <Label htmlFor="deletion-feedback">Additional feedback (optional)</Label>
-                <textarea
+                <Textarea
                   id="deletion-feedback"
-                  className="border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2"
                   value={deletionFeedback}
                   onChange={(e) => setDeletionFeedback(e.target.value)}
                   disabled={isDeletingAccount}

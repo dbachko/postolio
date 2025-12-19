@@ -557,9 +557,10 @@ export function AssetSidebar({
                 <Separator />
 
                 <div className="rounded-lg border">
-                  <button
+                  <Button
                     type="button"
-                    className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    variant="ghost"
+                    className="h-auto w-full justify-between px-4 py-3 text-left"
                     onClick={() => setDetailsOpen((prev) => !prev)}
                   >
                     <span className="text-lg font-semibold">Asset Details</span>
@@ -569,7 +570,7 @@ export function AssetSidebar({
                         detailsOpen ? 'rotate-180' : ''
                       )}
                     />
-                  </button>
+                  </Button>
                   {detailsOpen ? (
                     <div className="border-t px-4 pt-2 pb-4">
                       <dl className="grid grid-cols-2 gap-4 text-sm">

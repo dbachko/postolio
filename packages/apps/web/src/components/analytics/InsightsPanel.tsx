@@ -50,7 +50,7 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
 
   if (loading) {
     return (
-      <Card className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950 dark:to-blue-950">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
@@ -78,10 +78,10 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
 
   if (visibleInsights.length === 0) {
     return (
-      <Card className="border-none bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 shadow-lg dark:from-purple-950 dark:via-blue-950 dark:to-indigo-950">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <Sparkles className="text-primary h-5 w-5" />
             <span>AI Insights</span>
             <Badge variant="secondary" className="ml-auto text-xs">
               Preview
@@ -90,8 +90,8 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
         </CardHeader>
         <CardContent>
           <div className="py-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-              <Sparkles className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+            <div className="bg-muted mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+              <Sparkles className="text-primary h-8 w-8" />
             </div>
             <p className="mb-2 text-sm font-medium">Start Building Your Analytics Foundation</p>
             <p className="text-muted-foreground text-xs">
@@ -123,17 +123,17 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
   const getInsightIconColor = (type: InsightType) => {
     switch (type) {
       case 'performance':
-        return 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30';
+        return 'bg-muted text-primary';
       case 'timing':
-        return 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30';
+        return 'bg-muted text-primary';
       case 'content':
-        return 'text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30';
+        return 'bg-muted text-primary';
       case 'audience':
-        return 'text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30';
+        return 'bg-muted text-primary';
       case 'competitive':
-        return 'text-pink-600 dark:text-pink-400 bg-pink-100 dark:bg-pink-900/30';
+        return 'bg-muted text-primary';
       default:
-        return 'text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30';
+        return 'bg-muted text-primary';
     }
   };
 
@@ -163,9 +163,9 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
   const getTrendIcon = (trend?: 'up' | 'down' | 'stable') => {
     if (!trend) return null;
 
-    let className = 'h-3 w-3 text-gray-600 dark:text-gray-400';
-    if (trend === 'up') className = 'h-3 w-3 text-green-600 dark:text-green-400';
-    else if (trend === 'down') className = 'h-3 w-3 text-red-600 dark:text-red-400';
+    let className = 'text-muted-foreground h-3 w-3';
+    if (trend === 'up') className = 'text-primary h-3 w-3';
+    else if (trend === 'down') className = 'text-destructive h-3 w-3';
 
     if (trend === 'up') return <TrendingUp className={className} />;
     if (trend === 'down') return <AlertCircle className={className} />;
@@ -173,11 +173,11 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
   };
 
   return (
-    <Card className="border-none bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 shadow-lg dark:from-purple-950 dark:via-blue-950 dark:to-indigo-950">
+    <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <Sparkles className="text-primary h-5 w-5" />
             <span>AI Insights</span>
           </CardTitle>
           <Badge variant="secondary" className="text-xs">
@@ -218,20 +218,27 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
 
                       {/* Expand button */}
                       {insight.supportingData && insight.supportingData.length > 0 && (
-                        <button
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
                           onClick={() => setExpandedInsight(isExpanded ? null : insight.id)}
-                          className="text-muted-foreground hover:text-foreground transition-transform"
+                          aria-label={
+                            isExpanded ? 'Collapse insight details' : 'Expand insight details'
+                          }
+                          aria-expanded={isExpanded}
+                          className="text-muted-foreground hover:text-foreground shrink-0 transition-transform"
                         >
                           <ChevronRight
                             className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                           />
-                        </button>
+                        </Button>
                       )}
                     </div>
 
                     {/* Impact (only for high priority) */}
                     {insight.priority === 'high' && insight.impact && (
-                      <div className="rounded-md bg-purple-100/50 px-3 py-1.5 text-xs dark:bg-purple-900/20">
+                      <div className="bg-muted rounded-md px-3 py-1.5 text-xs">
                         <span className="font-medium">Impact:</span> {insight.impact}
                       </div>
                     )}
@@ -273,9 +280,9 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
         {/* View all insights link */}
         {insights && insights.length > 5 && (
           <div className="mt-4 text-center">
-            <button className="text-sm font-medium text-purple-600 hover:underline dark:text-purple-400">
+            <Button type="button" variant="link" className="h-auto p-0 text-sm">
               View all {insights.length} insights →
-            </button>
+            </Button>
           </div>
         )}
       </CardContent>

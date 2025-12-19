@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import type { ProfileAvatarProps } from '@/components/ui/profile-avatar';
 import type { Platform } from '@/lib/platform-config';
 import { getPlatformConfig } from '@/lib/platform-config';
@@ -74,10 +75,11 @@ export function SocialAvatarMultiSelect({
           return (
             <Tooltip key={opt.id}>
               <TooltipTrigger asChild>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   className={cn(
-                    'focus-visible:ring-ring focus-visible:ring-offset-background rounded-full focus-visible:ring-2 focus-visible:ring-offset-2',
+                    'h-auto rounded-full p-0',
                     !optionDisabled && 'cursor-pointer',
                     optionDisabled && 'cursor-not-allowed'
                   )}
@@ -95,7 +97,7 @@ export function SocialAvatarMultiSelect({
                     selected={selected}
                     disabled={optionDisabled}
                   />
-                </button>
+                </Button>
               </TooltipTrigger>
               <TooltipContent>
                 <p className="text-sm">{tooltipLabel}</p>

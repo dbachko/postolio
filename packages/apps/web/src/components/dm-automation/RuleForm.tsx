@@ -234,13 +234,16 @@ export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
                   className="bg-secondary inline-flex items-center gap-1 rounded px-2 py-1 text-sm"
                 >
                   {keyword}
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => removeKeyword(keyword)}
-                    className="hover:text-destructive"
+                    className="text-muted-foreground hover:text-destructive h-4 w-4 p-0 hover:bg-transparent"
+                    aria-label={`Remove keyword ${keyword}`}
                   >
                     ×
-                  </button>
+                  </Button>
                 </span>
               ))}
             </div>

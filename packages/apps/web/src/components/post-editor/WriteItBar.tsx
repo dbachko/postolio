@@ -101,13 +101,14 @@ export function WriteItBar(props: WriteItBarProps) {
                 <p className="text-muted-foreground">
                   You can still save drafts, but new scheduled posts will fail until you free up
                   slots or{' '}
-                  <button
+                  <Button
                     type="button"
                     onClick={() => (props.onUpgradePlan ? props.onUpgradePlan() : null)}
-                    className="font-medium underline underline-offset-2"
+                    variant="link"
+                    className="h-auto p-0 align-baseline font-medium underline underline-offset-2"
                   >
                     upgrade your plan
-                  </button>
+                  </Button>
                   .
                 </p>
               </div>

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge } from '../../ui/badge';
-import { Input } from '../../ui/input';
-import { Button } from '../../ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { TrendingUp } from 'lucide-react';
 import { brand as brandApi } from '../../../lib/api';
 import { useBrandStore } from '../../../stores/brandStore';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { themeMeta } from '../../../constants/campaign';
 
 interface ThemeChipInputProps {

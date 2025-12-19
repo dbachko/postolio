@@ -4,6 +4,7 @@ import { brand as brandApi, httpGet, analytics } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3 } from 'lucide-react';
 import { InstagramIcon } from '@/components/icons/BrandIcons';
 import { AnalyticsOverviewTab } from '../components/analytics-tabs/AnalyticsOverviewTab';
@@ -49,9 +50,9 @@ export default function Analytics() {
   const { selectedBrand } = useBrandStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get('tab') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'instagram'>(
-    (['overview', 'instagram'].includes(urlTab) ? urlTab : 'overview') as 'overview' | 'instagram'
-  );
+  const activeTab = (['overview', 'instagram'].includes(urlTab) ? urlTab : 'overview') as
+    | 'overview'
+    | 'instagram';
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -96,18 +97,12 @@ export default function Analytics() {
     loadBrands();
   }, []);
 
-  // Sync active tab with URL param
-  useEffect(() => {
-    const current = searchParams.get('tab') || 'overview';
-    if (current !== activeTab) {
-      setActiveTab(
-        (['overview', 'instagram'].includes(current) ? current : 'overview') as
-          | 'overview'
-          | 'instagram'
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  const handleTabChange = (value: string) => {
+    const nextTab = (value === 'instagram' ? 'instagram' : 'overview') as 'overview' | 'instagram';
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', nextTab);
+    setSearchParams(next, { replace: true });
+  };
 
   // Fetch analytics when brand or period changes
   useEffect(() => {
@@ -391,76 +386,58 @@ export default function Analytics() {
           </div>
         )}
 
-        {/* Enhanced Tab Navigation */}
-        <div className="mb-6 border-b">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                setActiveTab('overview');
-                const next = new URLSearchParams(searchParams);
-                next.set('tab', 'overview');
-                setSearchParams(next, { replace: true });
-              }}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'overview'
-                  ? 'border-primary text-primary'
-                  : 'text-muted-foreground hover:text-foreground border-transparent hover:border-gray-300'
-              }`}
-            >
-              <BarChart3 className="h-4 w-4" />
-              <span>Overview</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('instagram');
-                const next = new URLSearchParams(searchParams);
-                next.set('tab', 'instagram');
-                setSearchParams(next, { replace: true });
-              }}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'instagram'
-                  ? 'border-primary text-primary'
-                  : 'text-muted-foreground hover:text-foreground border-transparent hover:border-gray-300'
-              }`}
-            >
-              <InstagramIcon className="h-4 w-4" aria-hidden="true" />
-              <span>Instagram</span>
-            </button>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
+          <div className="border-border mb-6 border-b">
+            <TabsList className="h-auto w-full justify-start gap-2 rounded-none border-none bg-transparent p-0">
+              <TabsTrigger
+                value="overview"
+                className="text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-primary rounded-none border-b-2 border-transparent px-4 py-3"
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span>Overview</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="instagram"
+                className="text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-primary rounded-none border-b-2 border-transparent px-4 py-3"
+              >
+                <InstagramIcon className="h-4 w-4" aria-hidden="true" />
+                <span>Instagram</span>
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </div>
 
-        {/* Tab Content */}
-        <div className="space-y-6">
-          {activeTab === 'overview' && (
-            <AnalyticsOverviewTab
-              selectedBrand={selectedBrand}
-              report={report}
-              loading={loading}
-              daysPeriod={daysPeriod}
-              setDaysPeriod={setDaysPeriod}
-              aiInsights={aiInsights}
-              insightsLoading={insightsLoading}
-              forecasts={forecasts}
-              forecastsLoading={forecastsLoading}
-              recommendations={recommendations}
-              recommendationsLoading={recommendationsLoading}
-            />
-          )}
+          <div className="space-y-6">
+            <TabsContent value="overview" className="m-0">
+              <AnalyticsOverviewTab
+                selectedBrand={selectedBrand}
+                report={report}
+                loading={loading}
+                daysPeriod={daysPeriod}
+                setDaysPeriod={setDaysPeriod}
+                aiInsights={aiInsights}
+                insightsLoading={insightsLoading}
+                forecasts={forecasts}
+                forecastsLoading={forecastsLoading}
+                recommendations={recommendations}
+                recommendationsLoading={recommendationsLoading}
+              />
+            </TabsContent>
 
-          {activeTab === 'instagram' && (
-            <AnalyticsInstagramTab
-              brandId={selectedBrand?.id}
-              igLoading={igLoading}
-              igOverview={igOverview}
-              igSeries={igSeries}
-              igHashtags={igHashtags}
-              igAudience={igAudience}
-              igPostsDetailed={igPostsDetailed}
-              igPostsPagination={igPostsPagination}
-              onPostsPageChange={handlePostsPageChange}
-            />
-          )}
-        </div>
+            <TabsContent value="instagram" className="m-0">
+              <AnalyticsInstagramTab
+                brandId={selectedBrand?.id}
+                igLoading={igLoading}
+                igOverview={igOverview}
+                igSeries={igSeries}
+                igHashtags={igHashtags}
+                igAudience={igAudience}
+                igPostsDetailed={igPostsDetailed}
+                igPostsPagination={igPostsPagination}
+                onPostsPageChange={handlePostsPageChange}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
       </div>
     </div>
   );

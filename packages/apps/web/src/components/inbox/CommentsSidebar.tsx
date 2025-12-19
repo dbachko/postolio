@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export type InboxPostItem = {
   postId: string;
@@ -23,9 +24,11 @@ export function CommentsSidebar({
   return (
     <div className="space-y-2">
       {items.map((item) => (
-        <button
+        <Button
           key={item.postId}
           onClick={() => onSelect(item.postId)}
+          type="button"
+          variant="ghost"
           className={`hover:bg-accent flex w-full items-center gap-3 rounded-md border p-2 text-left transition-colors ${
             item.postId === selectedPostId ? 'border-primary' : 'border-border'
           }`}
@@ -47,7 +50,7 @@ export function CommentsSidebar({
             </div>
           </div>
           <Badge>{item.newCount} new</Badge>
-        </button>
+        </Button>
       ))}
     </div>
   );

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { DashboardPostCard } from '@/components/dashboard/DashboardPostCard';
 
 export function Dashboard() {
   const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore();
@@ -324,25 +325,24 @@ export function Dashboard() {
 
                     <div className="space-y-2">
                       {failedPosts.slice(0, 3).map((post) => (
-                        <div
+                        <DashboardPostCard
                           key={post.id}
-                          className="flex items-center justify-between gap-3 rounded-md border p-3"
+                          action={
+                            <Button asChild size="sm" variant="outline">
+                              <Link to={`/posts/${post.id}`}>Review</Link>
+                            </Button>
+                          }
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium">
-                              <span className="line-clamp-1">
-                                {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
-                              </span>
-                            </div>
-                            <div className="text-muted-foreground mt-1 text-xs">
-                              Updated{' '}
-                              {formatInUserTimezone(post.updatedAt, 'MMM d, h:mm a', brandTimezone)}
-                            </div>
+                          <div className="text-sm font-medium">
+                            <span className="line-clamp-1">
+                              {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
+                            </span>
                           </div>
-                          <Button asChild size="sm" variant="outline">
-                            <Link to={`/posts/${post.id}`}>Review</Link>
-                          </Button>
-                        </div>
+                          <div className="text-muted-foreground mt-1 text-xs">
+                            Updated{' '}
+                            {formatInUserTimezone(post.updatedAt, 'MMM d, h:mm a', brandTimezone)}
+                          </div>
+                        </DashboardPostCard>
                       ))}
                       {failedPosts.length > 3 ? (
                         <p className="text-muted-foreground text-xs">
@@ -494,10 +494,19 @@ export function Dashboard() {
                   const primaryAsset = post.primaryAssetId
                     ? (upcomingAssetsQuery.data?.[post.primaryAssetId] ?? null)
                     : null;
-                  const previewUrl =
+                  const previewThumbnail =
                     primaryAsset?.fileType === 'video'
-                      ? primaryAsset.thumbnailUrl || null
-                      : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
+                      ? {
+                          kind: 'video' as const,
+                          src: primaryAsset.url,
+                          posterSrc: primaryAsset.thumbnailUrl || null,
+                        }
+                      : {
+                          kind: 'image' as const,
+                          src: getPostImageOrPlaceholder(
+                            primaryAsset?.thumbnailUrl || primaryAsset?.url || null
+                          ),
+                        };
                   const mediaBadgeType = getMediaBadgeType({
                     contentType: post.contentType,
                     mediaAssets: post.mediaAssets,
@@ -506,49 +515,36 @@ export function Dashboard() {
                   });
 
                   return (
-                    <div
+                    <DashboardPostCard
                       key={post.id}
-                      className="flex items-center justify-between gap-3 rounded-md border p-3"
+                      thumbnail={previewThumbnail}
+                      action={
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={`/posts/${post.id}`}>Open</Link>
+                        </Button>
+                      }
                     >
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="bg-muted relative h-10 w-10 shrink-0 overflow-hidden rounded-md">
-                          <img
-                            src={getPostImageOrPlaceholder(previewUrl)}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <MediaTypeBadge
-                              type={mediaBadgeType}
-                              className="pointer-events-none p-0.5"
-                              iconClassName="h-3 w-3"
-                            />
-                            <span className="text-sm font-medium">
-                              {formatInUserTimezone(
-                                post.scheduledAt!,
-                                'EEE, MMM d • h:mm a',
-                                brandTimezone
-                              )}
-                            </span>
-                            {post.campaignName ? (
-                              <Badge variant="secondary">{post.campaignName}</Badge>
-                            ) : null}
-                          </div>
-                          <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
-                            {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
-                          </p>
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <MediaTypeBadge
+                          type={mediaBadgeType}
+                          className="pointer-events-none p-0.5"
+                          iconClassName="h-3 w-3"
+                        />
+                        <span className="text-sm font-medium">
+                          {formatInUserTimezone(
+                            post.scheduledAt!,
+                            'EEE, MMM d • h:mm a',
+                            brandTimezone
+                          )}
+                        </span>
+                        {post.campaignName ? (
+                          <Badge variant="secondary">{post.campaignName}</Badge>
+                        ) : null}
                       </div>
-
-                      <Button asChild size="sm" variant="outline">
-                        <Link to={`/posts/${post.id}`}>Open</Link>
-                      </Button>
-                    </div>
+                      <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
+                        {post.caption?.trim() ? post.caption.trim() : 'Untitled post'}
+                      </p>
+                    </DashboardPostCard>
                   );
                 })}
               </div>
@@ -685,10 +681,19 @@ export function Dashboard() {
                     const primaryAsset = draft.primaryAssetId
                       ? (draftPreviewAssetsQuery.data?.[draft.primaryAssetId] ?? null)
                       : null;
-                    const previewUrl =
+                    const previewThumbnail =
                       primaryAsset?.fileType === 'video'
-                        ? primaryAsset.thumbnailUrl || null
-                        : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
+                        ? {
+                            kind: 'video' as const,
+                            src: primaryAsset.url,
+                            posterSrc: primaryAsset.thumbnailUrl || null,
+                          }
+                        : {
+                            kind: 'image' as const,
+                            src: getPostImageOrPlaceholder(
+                              primaryAsset?.thumbnailUrl || primaryAsset?.url || null
+                            ),
+                          };
                     const mediaBadgeType = getMediaBadgeType({
                       contentType: draft.contentType,
                       mediaAssets: draft.mediaAssets,
@@ -697,49 +702,32 @@ export function Dashboard() {
                     });
 
                     return (
-                      <div
+                      <DashboardPostCard
                         key={draft.id}
-                        className="flex items-center justify-between gap-3 rounded-md border p-3"
+                        thumbnail={previewThumbnail}
+                        action={
+                          <Button asChild size="sm" variant="outline">
+                            <Link to={`/posts/${draft.id}`}>Open</Link>
+                          </Button>
+                        }
                       >
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <div className="bg-muted relative h-10 w-10 shrink-0 overflow-hidden rounded-md">
-                            <img
-                              src={getPostImageOrPlaceholder(previewUrl)}
-                              alt=""
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium">
-                              <span className="line-clamp-1">
-                                {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
-                              </span>
-                            </div>
-                            <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                              <span>Updated</span>
-                              <MediaTypeBadge
-                                type={mediaBadgeType}
-                                className="pointer-events-none p-0.5"
-                                iconClassName="h-3 w-3"
-                              />
-                              <span>
-                                {formatInUserTimezone(
-                                  draft.updatedAt,
-                                  'MMM d, h:mm a',
-                                  brandTimezone
-                                )}
-                              </span>
-                            </div>
-                          </div>
+                        <div className="text-sm font-medium">
+                          <span className="line-clamp-1">
+                            {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
+                          </span>
                         </div>
-
-                        <Button asChild size="sm" variant="outline">
-                          <Link to={`/posts/${draft.id}`}>Open</Link>
-                        </Button>
-                      </div>
+                        <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                          <span>Updated</span>
+                          <MediaTypeBadge
+                            type={mediaBadgeType}
+                            className="pointer-events-none p-0.5"
+                            iconClassName="h-3 w-3"
+                          />
+                          <span>
+                            {formatInUserTimezone(draft.updatedAt, 'MMM d, h:mm a', brandTimezone)}
+                          </span>
+                        </div>
+                      </DashboardPostCard>
                     );
                   })}
                 </div>

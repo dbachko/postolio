@@ -175,49 +175,60 @@ function DraftCard({
   }
 
   return (
-    <button type="button" onClick={onOpen} className="w-full text-left">
-      <div className="space-y-2">
-        <div className="group hover:border-border/80 relative aspect-square overflow-hidden rounded-lg border">
-          <div className="absolute top-2 left-2 z-10">
-            <Badge variant={statusVariant} className="flex items-center gap-1">
-              {isScheduled ? <Calendar className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
-              <span>{statusLabel}</span>
-            </Badge>
+    <Button
+      asChild
+      variant="ghost"
+      className="h-auto w-full items-stretch justify-start p-0 text-left whitespace-normal hover:bg-transparent"
+    >
+      <button type="button" onClick={onOpen}>
+        <div className="space-y-2">
+          <div className="group hover:border-border/80 relative aspect-square overflow-hidden rounded-lg border">
+            <div className="absolute top-2 left-2 z-10">
+              <Badge variant={statusVariant} className="flex items-center gap-1">
+                {isScheduled ? <Calendar className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+                <span>{statusLabel}</span>
+              </Badge>
+            </div>
+
+            <div className="absolute top-2 right-2 z-10">
+              <Badge variant="secondary" className="flex items-center gap-1">
+                {mediaIcon}
+                <span>{mediaLabel}</span>
+              </Badge>
+            </div>
+
+            {previewBody}
           </div>
 
-          <div className="absolute top-2 right-2 z-10">
-            <Badge variant="secondary" className="flex items-center gap-1">
-              {mediaIcon}
-              <span>{mediaLabel}</span>
-            </Badge>
-          </div>
-
-          {previewBody}
-        </div>
-
-        <div className="space-y-1">
-          <div className="line-clamp-2 text-sm font-semibold">
-            {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
-          </div>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span>
-              {isScheduled && draft.scheduledAt
-                ? `Scheduled ${formatShortDateTime(draft.scheduledAt)}`
-                : `Edited ${formatShortDateTime(draft.updatedAt || draft.createdAt)}`}
-            </span>
-            {draft.campaignName && (
-              <span className="inline-flex items-center gap-1">
-                <span
-                  className={cn('h-2 w-2 rounded-full border', !draft.campaignColor && 'bg-muted')}
-                  style={draft.campaignColor ? { backgroundColor: draft.campaignColor } : undefined}
-                />
-                <span className="max-w-[200px] truncate">{draft.campaignName}</span>
+          <div className="space-y-1">
+            <div className="line-clamp-2 text-sm font-semibold">
+              {draft.caption?.trim() ? draft.caption.trim() : 'Untitled draft'}
+            </div>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span>
+                {isScheduled && draft.scheduledAt
+                  ? `Scheduled ${formatShortDateTime(draft.scheduledAt)}`
+                  : `Edited ${formatShortDateTime(draft.updatedAt || draft.createdAt)}`}
               </span>
-            )}
+              {draft.campaignName && (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full border',
+                      !draft.campaignColor && 'bg-muted'
+                    )}
+                    style={
+                      draft.campaignColor ? { backgroundColor: draft.campaignColor } : undefined
+                    }
+                  />
+                  <span className="max-w-[200px] truncate">{draft.campaignName}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+    </Button>
   );
 }
 

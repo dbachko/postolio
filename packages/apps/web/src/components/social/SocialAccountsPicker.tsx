@@ -163,12 +163,13 @@ export function SocialAccountsPicker({
     return (
       <Tooltip key={opt.id}>
         <TooltipTrigger asChild>
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className={cn(
               'inline-flex items-center justify-center p-0',
               triggerBoxClass,
-              'focus-visible:ring-ring focus-visible:ring-offset-background rounded-full focus-visible:ring-2 focus-visible:ring-offset-2',
+              'rounded-full',
               !disabled && 'cursor-pointer',
               disabled && 'cursor-not-allowed'
             )}
@@ -184,7 +185,7 @@ export function SocialAccountsPicker({
               selected
               disabled={disabled}
             />
-          </button>
+          </Button>
         </TooltipTrigger>
         <TooltipContent>
           <p className="text-sm">{tooltipLabel}</p>
