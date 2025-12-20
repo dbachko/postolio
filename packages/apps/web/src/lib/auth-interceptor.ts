@@ -16,6 +16,8 @@ export class AuthInterceptor {
   private static readonly SHARED_REFRESH_GRACE_MS = 15_000; // Avoid double rotation when another tab just refreshed
   private static readonly REFRESH_INTERVAL = 12 * 60 * 1000; // 12 minutes
   private static refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private static autoRefreshEnabled = false;
+  private static listenersAttached = false;
 
   private static isNetworkError(error: unknown): boolean {
     if (!error) return false;
@@ -33,33 +35,40 @@ export class AuthInterceptor {
    * Call this once when the app initializes
    */
   static startAutoRefresh() {
+    this.autoRefreshEnabled = true;
+    if (this.refreshTimer) return;
     console.log('[Auth] Starting automatic token refresh (every 12 minutes)');
 
+    if (!this.listenersAttached) {
+      document.addEventListener('visibilitychange', () => {
+        if (!this.autoRefreshEnabled) return;
+        if (document.visibilityState === 'visible') {
+          void this.refreshIfNeeded('visibility').catch(() => undefined);
+        }
+      });
+
+      window.addEventListener('beforeunload', () => {
+        this.stopAutoRefresh();
+      });
+
+      this.listenersAttached = true;
+    }
+
     // Refresh immediately on start (if user is logged in)
-    this.refreshIfNeeded('startup');
+    void this.refreshIfNeeded('startup').catch(() => undefined);
 
     // Then refresh every 12 minutes
     this.refreshTimer = setInterval(() => {
-      this.refreshIfNeeded('interval');
+      if (!this.autoRefreshEnabled) return;
+      void this.refreshIfNeeded('interval').catch(() => undefined);
     }, this.REFRESH_INTERVAL);
-
-    // Also refresh when tab becomes visible (user returns)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        this.refreshIfNeeded('visibility');
-      }
-    });
-
-    // Cleanup on unmount
-    window.addEventListener('beforeunload', () => {
-      this.stopAutoRefresh();
-    });
   }
 
   /**
    * Stop automatic token refresh
    */
   static stopAutoRefresh() {
+    this.autoRefreshEnabled = false;
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

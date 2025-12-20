@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import './index.css';
 import App from './App.tsx';
-import { AuthInterceptor } from './lib/auth-interceptor';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const sentryDsn = import.meta.env.VITE_SENTRY_FRONTEND_DSN as string | undefined;
@@ -15,9 +14,6 @@ if (sentryDsn) {
     tracesSampleRate: 0,
   });
 }
-
-// Start automatic token refresh
-AuthInterceptor.startAutoRefresh();
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 

@@ -37,6 +37,7 @@ import NotificationsPage from './pages/Notifications';
 import { RouteError } from './components/RouteError';
 import OnboardingPage from './pages/Onboarding';
 import { useOnboardingStatus } from './hooks/useOnboardingStatus';
+import { AuthInterceptor } from './lib/auth-interceptor';
 const PostPage = lazy(() => import('./pages/Post'));
 const InboxComments = lazy(() => import('./pages/InboxComments'));
 const InboxDMs = lazy(() => import('./pages/InboxDMs'));
@@ -492,7 +493,7 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
-  const { checkAuth } = useAuthStore();
+  const { checkAuth, isAuthenticated } = useAuthStore();
   type ThemeProviderProps = React.ComponentProps<typeof ThemeProvider>;
   const ThemeProviderShim = ThemeProvider as unknown as ComponentType<ThemeProviderProps>;
 
@@ -502,6 +503,14 @@ function App() {
     if (path.startsWith('/__tz')) return;
     checkAuth();
   }, [checkAuth]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      AuthInterceptor.startAutoRefresh();
+      return;
+    }
+    AuthInterceptor.stopAutoRefresh();
+  }, [isAuthenticated]);
 
   return (
     <ErrorBoundary>
