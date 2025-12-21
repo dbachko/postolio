@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import {
@@ -53,6 +53,7 @@ type WriteItBarProps =
       createScheduleDisabled: boolean;
       isCreatingPost: boolean;
       validationOk: boolean;
+      previewHandle?: ReactNode;
       onScheduledAtChange: (value: string) => void;
       onSchedule: () => void;
       onSaveDraft: () => void;
@@ -70,6 +71,7 @@ type WriteItBarProps =
       isUnscheduling: boolean;
       validationOk: boolean;
       primaryEditCtaLabel: string;
+      previewHandle?: ReactNode;
       onScheduledAtChange: (value: string) => void;
       onUnschedule: () => void;
       onSave: () => void;
@@ -83,12 +85,17 @@ export function WriteItBar(props: WriteItBarProps) {
   });
 
   const outerClass = cn(
-    'border-border bg-card border-t px-4 py-3',
-    props.layout === 'sidebar' && 'sticky bottom-0 z-20'
+    'border-border bg-card border-t px-4 pb-3',
+    props.previewHandle ? 'pt-8' : 'pt-3',
+    props.layout === 'sidebar' && 'sticky bottom-0 z-20',
+    props.previewHandle && 'relative'
   );
 
   return (
     <div className={outerClass}>
+      {props.previewHandle ? (
+        <div className="absolute -top-5 right-4 z-10">{props.previewHandle}</div>
+      ) : null}
       {props.mode === 'create' ? (
         <div className="space-y-3">
           {props.atCapacity && !scheduleLimitDismissed && (

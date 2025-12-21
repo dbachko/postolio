@@ -40,12 +40,13 @@ import {
   type PostEditorFormState,
 } from '@/components/post-editor/PostEditorMainBody';
 import { WriteItBar } from '@/components/post-editor/WriteItBar';
-import { Check, CircleHelp, Instagram, LayoutTemplate, Plus, X } from 'lucide-react';
+import { Check, CircleHelp, Eye, EyeOff, Instagram, LayoutTemplate, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
 import { cn } from '@/lib/utils';
 import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { useRightSidebarLayout } from '@/right-sidebar/right-sidebar-context';
 import {
   validateContentPayload,
   type InstagramContentType,
@@ -54,6 +55,13 @@ import {
 } from '@postolio/content-validation';
 import type { SocialAccountsPickerOption } from '@/components/social/SocialAccountsPicker';
 import { getEnabledPlatforms, getPlatformConfig, type Platform } from '@/lib/platform-config';
+import { PostPreviewPanel } from '@/components/post-preview/PostPreviewPanel';
+import type {
+  PostPreviewAccount,
+  PostPreviewContent,
+  PostPreviewItem,
+  PreviewMedia,
+} from '@/components/post-preview/types';
 import AssetPicker from '@/features/assets/components/AssetPicker';
 import { assetsApi } from '@/features/assets/api/client';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
@@ -153,6 +161,39 @@ function mergeUniqueAssets(items: AssetReference[], limit: number): AssetReferen
   return result;
 }
 
+const PREVIEW_PANEL_WIDTH = 360;
+
+const normalizePreviewContentType = (value: unknown): InstagramContentType => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'post' || normalized === 'reel' || normalized === 'story') {
+    return normalized as InstagramContentType;
+  }
+  return 'post';
+};
+
+const mapAssetReferencesToPreviewMedia = (assets: AssetReference[]): PreviewMedia[] => {
+  return assets
+    .filter((asset) => typeof asset?.url === 'string' && asset.url.trim().length > 0)
+    .map((asset) => ({
+      url: asset.url,
+      type: asset.type === 'video' ? 'video' : 'image',
+    }));
+};
+
+const toPreviewAccountFromOption = (option: SocialAccountsPickerOption): PostPreviewAccount => {
+  const platformConfig = getPlatformConfig(option.platform);
+  const label = option.label?.trim() || platformConfig.displayName;
+  const avatarName = option.avatarName?.trim() || label || platformConfig.displayName;
+  return {
+    id: option.id,
+    platform: option.platform,
+    label,
+    avatarName,
+    avatarUrl: option.avatarUrl ?? null,
+    disconnected: option.disabled === true,
+  };
+};
+
 type PostEditorLayout = 'sidebar' | 'page';
 
 interface PostEditorProps {
@@ -171,6 +212,7 @@ export function PostEditor({
   const navigate = useNavigate();
   const location = useLocation();
   const { openSidebar } = useRightSidebarRouter();
+  const rightSidebarLayout = useRightSidebarLayout();
   const { timezone, getBrandTimezone } = useTimezone();
   const { selectedBrand } = useBrandStore();
   const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
@@ -410,6 +452,7 @@ export function PostEditor({
   const [createDestinationsHelpOpen, setCreateDestinationsHelpOpen] = useState(false);
   const [editDestinationsPopoverOpen, setEditDestinationsPopoverOpen] = useState(false);
   const [editDestinationsHelpOpen, setEditDestinationsHelpOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [templateFormData, setTemplateFormData] = useState<ContentGroupTemplateFormState>(() =>
     createEmptyTemplateFormState()
@@ -668,6 +711,60 @@ export function PostEditor({
   const templateValidationError = templateValidation.ok
     ? null
     : templateValidation.errors[0]?.message;
+
+  const groupDestinationPreviewData = useMemo(() => {
+    if (!isMultiDestinationGroup) return [];
+    const raw = contentGroupQuery.data as any;
+    const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
+    return destinations
+      .map((entry: any) => {
+        const content = entry?.content ?? {};
+        const social = entry?.socialAccount ?? {};
+        const accountId = typeof social?.id === 'string' ? social.id : null;
+        const platform =
+          typeof social?.platform === 'string' ? (social.platform as Platform) : null;
+        if (!accountId || !platform) return null;
+        const label = social.username
+          ? `@${String(social.username)}`
+          : String(social.displayName || platform);
+        const avatarName = String(social.username || social.displayName || platform);
+        const avatarUrl =
+          typeof social.profilePictureUrl === 'string' ? social.profilePictureUrl : null;
+        const assetIds = Array.isArray(content?.mediaAssets)
+          ? content.mediaAssets.map((asset: any) => asset?.assetId).filter(Boolean)
+          : [];
+        const contentType = normalizePreviewContentType(content?.contentType);
+        return {
+          contentId: typeof content?.id === 'string' ? content.id : '',
+          account: {
+            id: accountId,
+            platform,
+            label,
+            avatarName,
+            avatarUrl,
+            disconnected: social?.disconnected === true,
+          } satisfies PostPreviewAccount,
+          content: {
+            caption: typeof content?.caption === 'string' ? content.caption : '',
+            contentType,
+            shareToFeed: typeof content?.shareToFeed === 'boolean' ? content.shareToFeed : null,
+            firstComment: typeof content?.firstComment === 'string' ? content.firstComment : null,
+            assetIds,
+          },
+        };
+      })
+      .filter(Boolean) as Array<{
+      contentId: string;
+      account: PostPreviewAccount;
+      content: {
+        caption: string;
+        contentType: InstagramContentType;
+        shareToFeed: boolean | null;
+        firstComment: string | null;
+        assetIds: string[];
+      };
+    }>;
+  }, [contentGroupQuery.data, isMultiDestinationGroup]);
 
   const brandIdForAssets = post?.brand?.id ?? selectedBrand?.id ?? null;
   const postAssetIds = useMemo(
@@ -1786,13 +1883,13 @@ export function PostEditor({
 
   const bodyClass =
     layout === 'sidebar'
-      ? 'flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-32'
-      : 'flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4';
+      ? 'flex-1 min-h-0 min-w-0 overflow-y-auto px-4 pt-3 pb-32'
+      : 'flex-1 min-h-0 min-w-0 overflow-y-auto px-4 pt-3 pb-4';
 
   const groupBodyClass =
     layout === 'sidebar'
-      ? 'flex-1 min-h-0 overflow-y-auto px-4 pb-32'
-      : 'flex-1 min-h-0 overflow-y-auto px-4 pb-4';
+      ? 'flex-1 min-h-0 min-w-0 overflow-y-auto px-4 pb-32'
+      : 'flex-1 min-h-0 min-w-0 overflow-y-auto px-4 pb-4';
 
   const activeDestinationLabel = useMemo(() => {
     if (!id || !isMultiDestinationGroup) return null;
@@ -1804,6 +1901,152 @@ export function PostEditor({
   const allowMixedMedia =
     formData.contentType !== 'reel' && !selectedPlatforms.includes('facebook');
   const isVideoMedia = finalMediaType === 'video';
+  const previewLayout = layout === 'sidebar' && rightSidebarLayout?.isSmall ? 'page' : layout;
+  const showPreviewAsBody = previewOpen && layout === 'sidebar';
+  const showPreviewInColumn = previewOpen && previewLayout === 'sidebar' && !showPreviewAsBody;
+  const showPreviewInline = previewOpen && previewLayout === 'page' && !showPreviewAsBody;
+
+  useEffect(() => {
+    if (!rightSidebarLayout) return;
+    if (!showPreviewInColumn) {
+      rightSidebarLayout.setExtraWidthPx(0);
+      return;
+    }
+    rightSidebarLayout.setExtraWidthPx(PREVIEW_PANEL_WIDTH);
+    return () => rightSidebarLayout.setExtraWidthPx(0);
+  }, [rightSidebarLayout, showPreviewInColumn]);
+
+  const previewToggleLabel = previewOpen ? 'Close preview' : 'Open preview';
+  const previewToggleButton = !previewOpen ? (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => setPreviewOpen((open) => !open)}
+      className="shrink-0"
+    >
+      {previewOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      <span className="hidden sm:inline">{previewOpen ? 'Hide preview' : 'Preview'}</span>
+      <span className="sr-only sm:hidden">{previewOpen ? 'Hide preview' : 'Show preview'}</span>
+    </Button>
+  ) : null;
+  const previewHandle =
+    layout === 'sidebar' && !previewOpen ? (
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              onClick={() => setPreviewOpen((open) => !open)}
+              aria-label={previewToggleLabel}
+              aria-pressed={previewOpen}
+              className={cn(
+                'bg-card border-border text-muted-foreground hover:text-foreground h-10 w-12 rounded-t-xl rounded-b-md border-b-0 shadow-sm transition-colors',
+                previewOpen && 'text-foreground'
+              )}
+            >
+              <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="end">
+            <p className="text-sm">{previewToggleLabel}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    ) : null;
+
+  const formPreviewMedia = useMemo(
+    () => mapAssetReferencesToPreviewMedia(formData.carouselAssets),
+    [formData.carouselAssets]
+  );
+  const formPreviewContent = useMemo<PostPreviewContent>(
+    () => ({
+      caption: formData.contentType === 'story' ? '' : formData.caption,
+      contentType: formData.contentType,
+      shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : null,
+      firstComment: formData.firstComment,
+      media: formPreviewMedia,
+    }),
+    [
+      formData.caption,
+      formData.contentType,
+      formData.firstComment,
+      formData.shareToFeed,
+      formPreviewMedia,
+    ]
+  );
+
+  const templatePreviewMedia = useMemo(
+    () => mapAssetReferencesToPreviewMedia(templateFormData.carouselAssets),
+    [templateFormData.carouselAssets]
+  );
+  const templatePreviewContent = useMemo<PostPreviewContent>(
+    () => ({
+      caption: templateFormData.contentType === 'story' ? '' : templateFormData.caption,
+      contentType: templateFormData.contentType,
+      shareToFeed: templateFormData.contentType === 'reel' ? templateFormData.shareToFeed : null,
+      firstComment: templateFormData.firstComment,
+      media: templatePreviewMedia,
+    }),
+    [
+      templateFormData.caption,
+      templateFormData.contentType,
+      templateFormData.firstComment,
+      templateFormData.shareToFeed,
+      templatePreviewMedia,
+    ]
+  );
+
+  const previewAccounts = useMemo(() => {
+    if (!platformPickerOptions.length || selectedPlatformAccountIds.length === 0) {
+      return [] as PostPreviewAccount[];
+    }
+    const byId = new Map(platformPickerOptions.map((opt) => [opt.id, opt]));
+    return selectedPlatformAccountIds
+      .map((id) => byId.get(id))
+      .filter(Boolean)
+      .map((opt) => toPreviewAccountFromOption(opt as SocialAccountsPickerOption));
+  }, [platformPickerOptions, selectedPlatformAccountIds]);
+
+  const previewItems = useMemo<PostPreviewItem[]>(() => {
+    if (isMultiDestinationGroup) {
+      if (groupDestinationPreviewData.length === 0) return [];
+      if (isTemplateTab) {
+        return groupDestinationPreviewData.map((dest) => ({
+          account: dest.account,
+          content: templatePreviewContent,
+          note: getPlatformConfig(dest.account.platform).displayName,
+        }));
+      }
+
+      const activeDestination = groupDestinationPreviewData.find((dest) => dest.contentId === id);
+      if (!activeDestination) return [];
+      return [
+        {
+          account: activeDestination.account,
+          content: formPreviewContent,
+          note: hasChanges ? 'Editing' : undefined,
+        },
+      ];
+    }
+
+    if (previewAccounts.length === 0) return [];
+    return previewAccounts.map((account) => ({
+      account,
+      content: formPreviewContent,
+    }));
+  }, [
+    formPreviewContent,
+    groupDestinationPreviewData,
+    hasChanges,
+    id,
+    isMultiDestinationGroup,
+    isTemplateTab,
+    previewAccounts,
+    templatePreviewContent,
+  ]);
 
   const primaryEditCtaLabel = useMemo(() => {
     if (disabled) return 'Save Changes';
@@ -1842,6 +2085,19 @@ export function PostEditor({
     post?.scheduledAt,
   ]);
 
+  const showInlinePreviewToggle = !showHeader;
+  const previewPanelLayout = showPreviewInColumn ? 'sidebar' : 'page';
+  const previewPanel = previewOpen ? (
+    <PostPreviewPanel
+      layout={previewPanelLayout}
+      open={previewOpen}
+      onOpenChange={setPreviewOpen}
+      items={previewItems}
+      unstyled={showPreviewAsBody}
+    />
+  ) : null;
+  const inlinePreviewPanel = showPreviewInline ? <div className="pb-3">{previewPanel}</div> : null;
+
   return (
     <div className={containerClass} role="complementary" aria-labelledby="right-sidebar-title">
       {showHeader ? (
@@ -1879,34 +2135,35 @@ export function PostEditor({
               </Breadcrumb>
             )}
           </div>
-          {layout === 'sidebar' ? (
-            <div className="flex items-center gap-2 whitespace-nowrap">
-              {id && !isLoading && post ? (
-                <>
-                  <PostStatusBadge
-                    status={(post.status as PostStatus) || 'draft'}
-                    generationParams={post.generationParams}
-                    schedulingError={post.schedulingError || null}
-                    scheduledAt={post.scheduledAt}
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            {layout === 'sidebar' && id && !isLoading && post ? (
+              <>
+                <PostStatusBadge
+                  status={(post.status as PostStatus) || 'draft'}
+                  generationParams={post.generationParams}
+                  schedulingError={post.schedulingError || null}
+                  scheduledAt={post.scheduledAt}
+                  className="shrink-0 whitespace-nowrap"
+                />
+                {post.status === 'published' && post.instagramPermalink ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
                     className="shrink-0 whitespace-nowrap"
-                  />
-                  {post.status === 'published' && post.instagramPermalink ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0 whitespace-nowrap"
-                      onClick={() =>
-                        post.instagramPermalink && window.open(post.instagramPermalink, '_blank')
-                      }
-                    >
-                      <Instagram className="h-4 w-4 sm:mr-1" />
-                      <span className="hidden sm:inline">View on Instagram</span>
-                      <span className="sr-only sm:hidden">View on Instagram</span>
-                    </Button>
-                  ) : null}
-                </>
-              ) : null}
+                    onClick={() =>
+                      post.instagramPermalink && window.open(post.instagramPermalink, '_blank')
+                    }
+                  >
+                    <Instagram className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">View on Instagram</span>
+                    <span className="sr-only sm:hidden">View on Instagram</span>
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            {!isMultiDestinationGroup ? previewToggleButton : null}
+            {layout === 'sidebar' ? (
               <Button
                 variant="ghost"
                 size="icon"
@@ -1915,762 +2172,822 @@ export function PostEditor({
               >
                 <X className="h-4 w-4" />
               </Button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       ) : null}
       {isMultiDestinationGroup ? (
-        <div className="flex min-h-0 flex-1">
-          {/* Left rail: "folder tabs" for destinations */}
-          <DestinationsRail
-            title="Multi-destination group"
-            footer={
-              <>
-                <Popover
-                  open={editDestinationsPopoverOpen}
-                  onOpenChange={setEditDestinationsPopoverOpen}
-                >
+        <>
+          <div className="flex min-h-0 flex-1">
+            {/* Left rail: "folder tabs" for destinations */}
+            <DestinationsRail
+              title="Multi-destination group"
+              footer={
+                <>
+                  <Popover
+                    open={editDestinationsPopoverOpen}
+                    onOpenChange={setEditDestinationsPopoverOpen}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-lg"
+                              aria-label="Add destinations"
+                              className="text-muted-foreground shadow-none"
+                              disabled={
+                                disabled ||
+                                groupHasPublishedDestinations ||
+                                isSaving ||
+                                isAddingDestination ||
+                                isResettingDestination
+                              }
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-sm">
+                          {groupHasPublishedDestinations
+                            ? 'Cannot add destinations after publishing.'
+                            : 'Add destinations'}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <PopoverContent side="right" align="start" className="w-80 p-0">
+                      <Command>
+                        <CommandInput placeholder="Search destinations…" />
+                        <CommandList>
+                          <CommandEmpty>No destinations found.</CommandEmpty>
+                          <CommandGroup>
+                            {platformPickerOptions.map((opt) => {
+                              const isAlreadyInGroup = groupDestinationSocialAccountIds.has(opt.id);
+                              const platformConfig = getPlatformConfig(opt.platform);
+                              const platformLabel = platformConfig.displayName;
+                              const shortLabel = opt.label?.trim() || '';
+                              const avatarName =
+                                opt.avatarName?.trim() || shortLabel || platformLabel;
+                              const searchValue =
+                                `${platformLabel} ${shortLabel} ${avatarName}`.trim();
+
+                              return (
+                                <CommandItem
+                                  key={opt.id}
+                                  value={searchValue}
+                                  onSelect={() => {
+                                    if (isAlreadyInGroup) return;
+                                    setEditDestinationsPopoverOpen(false);
+                                    void handleAddDestinationToGroup(opt.id);
+                                  }}
+                                  disabled={
+                                    Boolean(opt.disabled) ||
+                                    disabled ||
+                                    isAlreadyInGroup ||
+                                    isAddingDestination
+                                  }
+                                  className="py-2"
+                                >
+                                  <SocialAccountAvatar
+                                    platform={opt.platform}
+                                    name={avatarName}
+                                    src={opt.avatarUrl}
+                                    size="sm"
+                                    selected={isAlreadyInGroup}
+                                    disabled={Boolean(opt.disabled) || disabled}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium">
+                                      {platformLabel}
+                                    </div>
+                                    {shortLabel ? (
+                                      <div className="text-muted-foreground truncate text-xs">
+                                        {shortLabel}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {isAlreadyInGroup ? <Check className="ml-auto h-4 w-4" /> : null}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-lg"
-                            aria-label="Add destinations"
-                            className="text-muted-foreground shadow-none"
-                            disabled={
-                              disabled ||
-                              groupHasPublishedDestinations ||
-                              isSaving ||
-                              isAddingDestination ||
-                              isResettingDestination
-                            }
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </PopoverTrigger>
-                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-lg"
+                        aria-label="Destinations help"
+                        className="text-muted-foreground shadow-none"
+                        onClick={() => setEditDestinationsHelpOpen(true)}
+                      >
+                        <CircleHelp className="h-4 w-4" />
+                      </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-sm">
-                        {groupHasPublishedDestinations
-                          ? 'Cannot add destinations after publishing.'
-                          : 'Add destinations'}
-                      </p>
+                      <p className="text-sm">How destinations work</p>
                     </TooltipContent>
                   </Tooltip>
-
-                  <PopoverContent side="right" align="start" className="w-80 p-0">
-                    <Command>
-                      <CommandInput placeholder="Search destinations…" />
-                      <CommandList>
-                        <CommandEmpty>No destinations found.</CommandEmpty>
-                        <CommandGroup>
-                          {platformPickerOptions.map((opt) => {
-                            const isAlreadyInGroup = groupDestinationSocialAccountIds.has(opt.id);
-                            const platformConfig = getPlatformConfig(opt.platform);
-                            const platformLabel = platformConfig.displayName;
-                            const shortLabel = opt.label?.trim() || '';
-                            const avatarName =
-                              opt.avatarName?.trim() || shortLabel || platformLabel;
-                            const searchValue =
-                              `${platformLabel} ${shortLabel} ${avatarName}`.trim();
-
-                            return (
-                              <CommandItem
-                                key={opt.id}
-                                value={searchValue}
-                                onSelect={() => {
-                                  if (isAlreadyInGroup) return;
-                                  setEditDestinationsPopoverOpen(false);
-                                  void handleAddDestinationToGroup(opt.id);
-                                }}
-                                disabled={
-                                  Boolean(opt.disabled) ||
-                                  disabled ||
-                                  isAlreadyInGroup ||
-                                  isAddingDestination
-                                }
-                                className="py-2"
-                              >
-                                <SocialAccountAvatar
-                                  platform={opt.platform}
-                                  name={avatarName}
-                                  src={opt.avatarUrl}
-                                  size="sm"
-                                  selected={isAlreadyInGroup}
-                                  disabled={Boolean(opt.disabled) || disabled}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">
-                                    {platformLabel}
-                                  </div>
-                                  {shortLabel ? (
-                                    <div className="text-muted-foreground truncate text-xs">
-                                      {shortLabel}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                {isAlreadyInGroup ? <Check className="ml-auto h-4 w-4" /> : null}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-lg"
-                      aria-label="Destinations help"
-                      className="text-muted-foreground shadow-none"
-                      onClick={() => setEditDestinationsHelpOpen(true)}
-                    >
-                      <CircleHelp className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-sm">How destinations work</p>
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            }
-          >
-            <DestinationsRailItem
-              tooltip="Edit the base template for all destinations"
-              ariaLabel="Edit template"
-              selected={isTemplateTab}
-              disabled={isSaving}
-              onClick={() => void handleGroupTabChange('template')}
+                </>
+              }
             >
-              <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
-            </DestinationsRailItem>
+              <DestinationsRailItem
+                tooltip="Edit the base template for all destinations"
+                ariaLabel="Edit template"
+                selected={isTemplateTab}
+                disabled={isSaving}
+                onClick={() => void handleGroupTabChange('template')}
+              >
+                <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+              </DestinationsRailItem>
 
-            {groupDestinations.map((dest) => {
-              const selected = dest.contentId === id && !isTemplateTab;
-              const tooltipLabel = dest.disconnected ? `${dest.label} (disconnected)` : dest.label;
-              return (
-                <DestinationsRailItem
-                  key={dest.contentId}
-                  tooltip={tooltipLabel}
-                  ariaLabel={`Switch to ${tooltipLabel}`}
-                  selected={selected}
-                  disabled={isSaving || dest.disconnected}
-                  onClick={() => void handleGroupTabChange(dest.contentId)}
-                >
-                  <SocialAccountAvatar
-                    platform={dest.platform}
-                    name={dest.avatarName}
-                    src={dest.avatarUrl}
-                    size="sm"
+              {groupDestinations.map((dest) => {
+                const selected = dest.contentId === id && !isTemplateTab;
+                const tooltipLabel = dest.disconnected
+                  ? `${dest.label} (disconnected)`
+                  : dest.label;
+                return (
+                  <DestinationsRailItem
+                    key={dest.contentId}
+                    tooltip={tooltipLabel}
+                    ariaLabel={`Switch to ${tooltipLabel}`}
                     selected={selected}
-                    disabled={dest.disconnected}
-                  />
-                </DestinationsRailItem>
-              );
-            })}
-          </DestinationsRail>
-
-          {/* Right panel: editor */}
-          <div className={groupBodyClass}>
-            <div className="bg-card border-border sticky top-0 z-20 -mx-4 mb-3 border-b px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-muted-foreground text-xs font-medium">
-                    {isTemplateTab ? 'Template' : 'Destination'}
-                  </div>
-                  <div className="text-foreground truncate text-sm font-semibold">
-                    {isTemplateTab ? 'Template' : activeDestinationLabel || 'Destination'}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {isTemplateTab ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={
-                                !templateHasChanges ||
-                                isSavingTemplate ||
-                                isApplyingTemplate ||
-                                !templateValidation.ok
-                              }
-                              onClick={() => void handleSaveTemplate()}
-                            >
-                              Save Template
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {!templateValidation.ok ? (
-                          <TooltipContent>
-                            <p className="text-sm">
-                              {templateValidationError ||
-                                'Complete required fields before saving the template.'}
-                            </p>
-                          </TooltipContent>
-                        ) : null}
-                      </Tooltip>
-
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={
-                                isApplyingTemplate || isSavingTemplate || !templateValidation.ok
-                              }
-                              onClick={() => void handleApplyTemplate()}
-                            >
-                              Apply to All
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {!templateValidation.ok ? (
-                          <TooltipContent>
-                            <p className="text-sm">
-                              {templateValidationError ||
-                                'Complete required fields before applying the template.'}
-                            </p>
-                          </TooltipContent>
-                        ) : null}
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    <Button
-                      type="button"
+                    disabled={isSaving || dest.disconnected}
+                    onClick={() => void handleGroupTabChange(dest.contentId)}
+                  >
+                    <SocialAccountAvatar
+                      platform={dest.platform}
+                      name={dest.avatarName}
+                      src={dest.avatarUrl}
                       size="sm"
-                      variant="outline"
-                      disabled={disabled || isResettingDestination}
-                      onClick={() => void handleResetDestinationToTemplate()}
-                    >
-                      Reset to Template
-                    </Button>
+                      selected={selected}
+                      disabled={dest.disconnected}
+                    />
+                  </DestinationsRailItem>
+                );
+              })}
+            </DestinationsRail>
+
+            {/* Right panel: editor */}
+            <div className={groupBodyClass}>
+              {showPreviewAsBody ? (
+                previewPanel
+              ) : (
+                <>
+                  <div className="bg-card border-border sticky top-0 z-20 -mx-4 mb-3 border-b px-4 py-2 sm:h-12 sm:py-0">
+                    <div className="flex flex-col gap-2 sm:h-full sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="text-muted-foreground text-xs font-medium">
+                          {isTemplateTab ? 'Template' : 'Destination'}
+                        </div>
+                        <div className="text-foreground truncate text-sm font-semibold">
+                          {isTemplateTab ? 'Template' : activeDestinationLabel || 'Destination'}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 self-end sm:flex-nowrap sm:self-auto">
+                        {isTemplateTab ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={
+                                      !templateHasChanges ||
+                                      isSavingTemplate ||
+                                      isApplyingTemplate ||
+                                      !templateValidation.ok
+                                    }
+                                    onClick={() => void handleSaveTemplate()}
+                                  >
+                                    Save Template
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {!templateValidation.ok ? (
+                                <TooltipContent>
+                                  <p className="text-sm">
+                                    {templateValidationError ||
+                                      'Complete required fields before saving the template.'}
+                                  </p>
+                                </TooltipContent>
+                              ) : null}
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={
+                                      isApplyingTemplate ||
+                                      isSavingTemplate ||
+                                      !templateValidation.ok
+                                    }
+                                    onClick={() => void handleApplyTemplate()}
+                                  >
+                                    Apply to All
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {!templateValidation.ok ? (
+                                <TooltipContent>
+                                  <p className="text-sm">
+                                    {templateValidationError ||
+                                      'Complete required fields before applying the template.'}
+                                  </p>
+                                </TooltipContent>
+                              ) : null}
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={disabled || isResettingDestination}
+                            onClick={() => void handleResetDestinationToTemplate()}
+                          >
+                            Reset to Template
+                          </Button>
+                        )}
+                        {previewToggleButton}
+                      </div>
+                    </div>
+                  </div>
+
+                  {inlinePreviewPanel}
+
+                  {isTemplateTab ? (
+                    contentGroupQuery.isLoading || !contentGroupTemplate ? (
+                      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+                        Loading template...
+                      </div>
+                    ) : !brandIdForAssets ? (
+                      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+                        Template editor unavailable: missing brand context.
+                      </div>
+                    ) : (
+                      <ContentGroupTemplateEditor
+                        brandId={brandIdForAssets}
+                        platforms={groupPlatforms}
+                        value={templateFormData}
+                        onChange={(updater) => setTemplateFormData((prev) => updater(prev))}
+                        firstCommentOpen={templateFirstCommentOpen}
+                        onFirstCommentOpenChange={setTemplateFirstCommentOpen}
+                        onOpenAssetPicker={() => {
+                          setAssetPickerTarget('template');
+                          setShowAssetPicker(true);
+                        }}
+                      />
+                    )
+                  ) : (
+                    <PostEditorMainBody
+                      mode="edit"
+                      allowMixedMedia={allowMixedMedia}
+                      disabled={disabled}
+                      isLoading={isLoading}
+                      isVideoMedia={isVideoMedia}
+                      post={post}
+                      selectedBrand={selectedBrand}
+                      formData={formData}
+                      setFormData={(updater) => setFormData((prev) => updater(prev))}
+                      firstCommentOpen={firstCommentOpen}
+                      setFirstCommentOpen={setFirstCommentOpen}
+                      campaigns={campaigns}
+                      isLoadingCampaigns={isLoadingCampaigns}
+                      selectedCampaign={selectedCampaign}
+                      setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
+                      selectedCampaignPaused={Boolean(selectedCampaignPaused)}
+                      onOpenAssetPicker={() => {
+                        setAssetPickerTarget('destination');
+                        setShowAssetPicker(true);
+                      }}
+                      platformOptions={platformPickerOptions}
+                      selectedPlatformAccountIds={selectedPlatformAccountIds}
+                      onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
+                    />
                   )}
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
-            {isTemplateTab ? (
-              contentGroupQuery.isLoading || !contentGroupTemplate ? (
-                <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                  Loading template...
+            {showPreviewInColumn ? previewPanel : null}
+            <Dialog open={editDestinationsHelpOpen} onOpenChange={setEditDestinationsHelpOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Destinations</DialogTitle>
+                  <DialogDescription>
+                    Multi-destination posts let you keep one shared template while customizing each
+                    destination.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 text-sm">
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">Template vs destination</div>
+                    <p className="text-muted-foreground">
+                      Use the template tab to edit the shared baseline. Switch destinations to
+                      fine-tune per-platform details.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">Add destinations</div>
+                    <p className="text-muted-foreground">
+                      Use the <span className="text-foreground font-medium">+</span> button to add
+                      another connected social account to this group.
+                    </p>
+                  </div>
                 </div>
-              ) : !brandIdForAssets ? (
-                <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                  Template editor unavailable: missing brand context.
-                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </>
+      ) : isCreating ? (
+        <>
+          <div className="flex min-h-0 flex-1">
+            <DestinationsRail
+              title="Destinations"
+              required
+              footer={
+                <>
+                  <Popover
+                    open={createDestinationsPopoverOpen}
+                    onOpenChange={setCreateDestinationsPopoverOpen}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-lg"
+                              aria-label="Add destinations"
+                              aria-invalid={showDestinationsRequiredError}
+                              className={cn(
+                                'text-muted-foreground shadow-none',
+                                showDestinationsRequiredError &&
+                                  'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20 dark:border-destructive dark:bg-destructive/10 dark:hover:bg-destructive/20'
+                              )}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-sm">Add destinations</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <PopoverContent side="right" align="start" className="w-80 p-0">
+                      <Command>
+                        <CommandInput placeholder="Search destinations…" />
+                        <CommandList>
+                          <CommandEmpty>No destinations found.</CommandEmpty>
+                          <CommandGroup>
+                            {platformPickerOptions.map((opt) => {
+                              const isSelected = selectedPlatformAccountIds.includes(opt.id);
+                              const platformConfig = getPlatformConfig(opt.platform);
+                              const platformLabel = platformConfig.displayName;
+                              const shortLabel = opt.label?.trim() || '';
+                              const avatarName =
+                                opt.avatarName?.trim() || shortLabel || platformLabel;
+                              const searchValue =
+                                `${platformLabel} ${shortLabel} ${avatarName}`.trim();
+
+                              return (
+                                <CommandItem
+                                  key={opt.id}
+                                  value={searchValue}
+                                  onSelect={() => toggleCreateDestination(opt.id)}
+                                  className="py-2"
+                                >
+                                  <SocialAccountAvatar
+                                    platform={opt.platform}
+                                    name={avatarName}
+                                    src={opt.avatarUrl}
+                                    size="sm"
+                                    selected={isSelected}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium">
+                                      {platformLabel}
+                                    </div>
+                                    {shortLabel ? (
+                                      <div className="text-muted-foreground truncate text-xs">
+                                        {shortLabel}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {isSelected ? <Check className="ml-auto h-4 w-4" /> : null}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-lg"
+                        aria-label="Destinations help"
+                        className="text-muted-foreground shadow-none"
+                        onClick={() => setCreateDestinationsHelpOpen(true)}
+                      >
+                        <CircleHelp className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-sm">How destinations work</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              }
+            >
+              {createSelectedDestinations.map((opt) => {
+                const platformConfig = getPlatformConfig(opt.platform);
+                const platformLabel = platformConfig.displayName;
+                const shortLabel = opt.label?.trim() || '';
+                const tooltipLabel = shortLabel
+                  ? `${platformLabel} · ${shortLabel}`
+                  : platformLabel;
+                const avatarName = opt.avatarName?.trim() || shortLabel || platformLabel;
+
+                return (
+                  <DestinationsRailItem
+                    key={opt.id}
+                    tooltip={tooltipLabel}
+                    ariaLabel={`Remove ${tooltipLabel}`}
+                    selected
+                    onClick={() => toggleCreateDestination(opt.id)}
+                  >
+                    <SocialAccountAvatar
+                      platform={opt.platform}
+                      name={avatarName}
+                      src={opt.avatarUrl}
+                      size="sm"
+                      selected
+                    />
+                  </DestinationsRailItem>
+                );
+              })}
+            </DestinationsRail>
+
+            <div className={bodyClass}>
+              {showPreviewAsBody ? (
+                previewPanel
               ) : (
-                <ContentGroupTemplateEditor
-                  brandId={brandIdForAssets}
-                  platforms={groupPlatforms}
-                  value={templateFormData}
-                  onChange={(updater) => setTemplateFormData((prev) => updater(prev))}
-                  firstCommentOpen={templateFirstCommentOpen}
-                  onFirstCommentOpenChange={setTemplateFirstCommentOpen}
+                <>
+                  {inlinePreviewPanel}
+                  {showInlinePreviewToggle ? (
+                    <div className="flex items-center justify-end pb-2">{previewToggleButton}</div>
+                  ) : null}
+                  <PostEditorMainBody
+                    mode="create"
+                    allowMixedMedia={allowMixedMedia}
+                    disabled={disabled}
+                    isLoading={isLoading}
+                    isVideoMedia={isVideoMedia}
+                    post={post}
+                    selectedBrand={selectedBrand}
+                    formData={formData}
+                    setFormData={(updater) => setFormData((prev) => updater(prev))}
+                    firstCommentOpen={firstCommentOpen}
+                    setFirstCommentOpen={setFirstCommentOpen}
+                    campaigns={campaigns}
+                    isLoadingCampaigns={isLoadingCampaigns}
+                    selectedCampaign={selectedCampaign}
+                    setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
+                    selectedCampaignPaused={Boolean(selectedCampaignPaused)}
+                    onOpenAssetPicker={() => {
+                      setAssetPickerTarget('destination');
+                      setShowAssetPicker(true);
+                    }}
+                    platformOptions={platformPickerOptions}
+                    selectedPlatformAccountIds={selectedPlatformAccountIds}
+                    onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
+                    showDestinationsPicker={false}
+                  />
+                </>
+              )}
+            </div>
+
+            {showPreviewInColumn ? previewPanel : null}
+            <Dialog open={createDestinationsHelpOpen} onOpenChange={setCreateDestinationsHelpOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Destinations</DialogTitle>
+                  <DialogDescription>
+                    Choose which social accounts this post should publish to.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 text-sm">
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">Single destination</div>
+                    <p className="text-muted-foreground">
+                      Creates one post for one social account.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">Multiple destinations</div>
+                    <p className="text-muted-foreground">
+                      Creates a grouped post. After saving, you can customize each destination in
+                      tabs while keeping a shared template.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">How to select</div>
+                    <p className="text-muted-foreground">
+                      Use the <span className="text-foreground font-medium">+</span> button to add
+                      or remove destinations.
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </>
+      ) : layout === 'sidebar' && id ? (
+        <>
+          <div className="flex min-h-0 flex-1">
+            <DestinationsRail
+              title="Destinations"
+              required
+              footer={
+                <>
+                  <Popover
+                    open={editDestinationsPopoverOpen}
+                    onOpenChange={setEditDestinationsPopoverOpen}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-lg"
+                              aria-label="Add destinations"
+                              aria-invalid={showDestinationsRequiredError}
+                              className={cn(
+                                'text-muted-foreground shadow-none',
+                                showDestinationsRequiredError &&
+                                  'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20 dark:border-destructive dark:bg-destructive/10 dark:hover:bg-destructive/20'
+                              )}
+                              disabled={disabled || isSaving || isAddingContentDestination}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-sm">
+                          {disabled
+                            ? 'Cannot add destinations after publishing.'
+                            : 'Add destinations'}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <PopoverContent side="right" align="start" className="w-80 p-0">
+                      <Command>
+                        <CommandInput placeholder="Search destinations…" />
+                        <CommandList>
+                          <CommandEmpty>No destinations found.</CommandEmpty>
+                          <CommandGroup>
+                            {platformPickerOptions.map((opt) => {
+                              const isAlreadySelected = opt.id === selectedTargetSocialAccountId;
+                              const platformConfig = getPlatformConfig(opt.platform);
+                              const platformLabel = platformConfig.displayName;
+                              const shortLabel = opt.label?.trim() || '';
+                              const avatarName =
+                                opt.avatarName?.trim() || shortLabel || platformLabel;
+                              const searchValue =
+                                `${platformLabel} ${shortLabel} ${avatarName}`.trim();
+
+                              return (
+                                <CommandItem
+                                  key={opt.id}
+                                  value={searchValue}
+                                  onSelect={() => {
+                                    if (isAlreadySelected) return;
+                                    setEditDestinationsPopoverOpen(false);
+                                    void handleAddDestinationToSingle(opt.id);
+                                  }}
+                                  disabled={
+                                    Boolean(opt.disabled) ||
+                                    disabled ||
+                                    isAlreadySelected ||
+                                    isAddingContentDestination
+                                  }
+                                  className="py-2"
+                                >
+                                  <SocialAccountAvatar
+                                    platform={opt.platform}
+                                    name={avatarName}
+                                    src={opt.avatarUrl}
+                                    size="sm"
+                                    selected={isAlreadySelected}
+                                    disabled={Boolean(opt.disabled) || disabled}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium">
+                                      {platformLabel}
+                                    </div>
+                                    {shortLabel ? (
+                                      <div className="text-muted-foreground truncate text-xs">
+                                        {shortLabel}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {isAlreadySelected ? <Check className="ml-auto h-4 w-4" /> : null}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-lg"
+                        aria-label="Destinations help"
+                        className="text-muted-foreground shadow-none"
+                        onClick={() => setEditDestinationsHelpOpen(true)}
+                      >
+                        <CircleHelp className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-sm">How destinations work</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              }
+            >
+              {(() => {
+                if (!selectedTargetSocialAccountId) return null;
+                const opt = platformPickerOptions.find(
+                  (entry) => entry.id === selectedTargetSocialAccountId
+                );
+                if (!opt) return null;
+                const platformConfig = getPlatformConfig(opt.platform);
+                const platformLabel = platformConfig.displayName;
+                const shortLabel = opt.label?.trim() || '';
+                const tooltipLabel = shortLabel
+                  ? `${platformLabel} · ${shortLabel}`
+                  : platformLabel;
+                const avatarName = opt.avatarName?.trim() || shortLabel || platformLabel;
+                return (
+                  <DestinationsRailItem tooltip={tooltipLabel} ariaLabel={tooltipLabel} selected>
+                    <SocialAccountAvatar
+                      platform={opt.platform}
+                      name={avatarName}
+                      src={opt.avatarUrl}
+                      size="sm"
+                      selected
+                    />
+                  </DestinationsRailItem>
+                );
+              })()}
+            </DestinationsRail>
+
+            <div className={bodyClass}>
+              {showPreviewAsBody ? (
+                previewPanel
+              ) : (
+                <>
+                  {inlinePreviewPanel}
+                  {showInlinePreviewToggle ? (
+                    <div className="flex items-center justify-end pb-2">{previewToggleButton}</div>
+                  ) : null}
+                  <PostEditorMainBody
+                    mode="edit"
+                    allowMixedMedia={allowMixedMedia}
+                    disabled={disabled}
+                    isLoading={isLoading}
+                    isVideoMedia={isVideoMedia}
+                    post={post}
+                    selectedBrand={selectedBrand}
+                    formData={formData}
+                    setFormData={(updater) => setFormData((prev) => updater(prev))}
+                    firstCommentOpen={firstCommentOpen}
+                    setFirstCommentOpen={setFirstCommentOpen}
+                    campaigns={campaigns}
+                    isLoadingCampaigns={isLoadingCampaigns}
+                    selectedCampaign={selectedCampaign}
+                    setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
+                    selectedCampaignPaused={Boolean(selectedCampaignPaused)}
+                    onOpenAssetPicker={() => {
+                      setAssetPickerTarget('destination');
+                      setShowAssetPicker(true);
+                    }}
+                    platformOptions={platformPickerOptions}
+                    selectedPlatformAccountIds={selectedPlatformAccountIds}
+                    onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
+                  />
+                </>
+              )}
+            </div>
+
+            {showPreviewInColumn ? previewPanel : null}
+            <Dialog open={editDestinationsHelpOpen} onOpenChange={setEditDestinationsHelpOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Destinations</DialogTitle>
+                  <DialogDescription>
+                    Add more destinations to turn this post into a multi-destination group.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 text-sm">
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">What happens when you add</div>
+                    <p className="text-muted-foreground">
+                      We create a shared template from your current post and generate a destination
+                      post for each social account you add.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-foreground font-medium">Editing</div>
+                    <p className="text-muted-foreground">
+                      You can keep one template for the group and customize each destination
+                      individually.
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={bodyClass}>
+            {showPreviewAsBody ? (
+              previewPanel
+            ) : (
+              <>
+                {inlinePreviewPanel}
+                {showInlinePreviewToggle ? (
+                  <div className="flex items-center justify-end pb-2">{previewToggleButton}</div>
+                ) : null}
+                <PostEditorMainBody
+                  mode={isCreating ? 'create' : 'edit'}
+                  allowMixedMedia={allowMixedMedia}
+                  disabled={disabled}
+                  isLoading={isLoading}
+                  isVideoMedia={isVideoMedia}
+                  post={post}
+                  selectedBrand={selectedBrand}
+                  formData={formData}
+                  setFormData={(updater) => setFormData((prev) => updater(prev))}
+                  firstCommentOpen={firstCommentOpen}
+                  setFirstCommentOpen={setFirstCommentOpen}
+                  campaigns={campaigns}
+                  isLoadingCampaigns={isLoadingCampaigns}
+                  selectedCampaign={selectedCampaign}
+                  setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
+                  selectedCampaignPaused={Boolean(selectedCampaignPaused)}
                   onOpenAssetPicker={() => {
-                    setAssetPickerTarget('template');
+                    setAssetPickerTarget('destination');
                     setShowAssetPicker(true);
                   }}
+                  platformOptions={platformPickerOptions}
+                  selectedPlatformAccountIds={selectedPlatformAccountIds}
+                  onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
                 />
-              )
-            ) : (
-              <PostEditorMainBody
-                mode="edit"
-                allowMixedMedia={allowMixedMedia}
-                disabled={disabled}
-                isLoading={isLoading}
-                isVideoMedia={isVideoMedia}
-                post={post}
-                selectedBrand={selectedBrand}
-                formData={formData}
-                setFormData={(updater) => setFormData((prev) => updater(prev))}
-                firstCommentOpen={firstCommentOpen}
-                setFirstCommentOpen={setFirstCommentOpen}
-                campaigns={campaigns}
-                isLoadingCampaigns={isLoadingCampaigns}
-                selectedCampaign={selectedCampaign}
-                setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
-                selectedCampaignPaused={Boolean(selectedCampaignPaused)}
-                onOpenAssetPicker={() => {
-                  setAssetPickerTarget('destination');
-                  setShowAssetPicker(true);
-                }}
-                platformOptions={platformPickerOptions}
-                selectedPlatformAccountIds={selectedPlatformAccountIds}
-                onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
-              />
+              </>
             )}
           </div>
-
-          <Dialog open={editDestinationsHelpOpen} onOpenChange={setEditDestinationsHelpOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Destinations</DialogTitle>
-                <DialogDescription>
-                  Multi-destination posts let you keep one shared template while customizing each
-                  destination.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-3 text-sm">
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">Template vs destination</div>
-                  <p className="text-muted-foreground">
-                    Use the template tab to edit the shared baseline. Switch destinations to
-                    fine-tune per-platform details.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">Add destinations</div>
-                  <p className="text-muted-foreground">
-                    Use the <span className="text-foreground font-medium">+</span> button to add
-                    another connected social account to this group.
-                  </p>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      ) : isCreating ? (
-        <div className="flex min-h-0 flex-1">
-          <DestinationsRail
-            title="Destinations"
-            required
-            footer={
-              <>
-                <Popover
-                  open={createDestinationsPopoverOpen}
-                  onOpenChange={setCreateDestinationsPopoverOpen}
-                >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-lg"
-                            aria-label="Add destinations"
-                            aria-invalid={showDestinationsRequiredError}
-                            className={cn(
-                              'text-muted-foreground shadow-none',
-                              showDestinationsRequiredError &&
-                                'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20 dark:border-destructive dark:bg-destructive/10 dark:hover:bg-destructive/20'
-                            )}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </PopoverTrigger>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-sm">Add destinations</p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <PopoverContent side="right" align="start" className="w-80 p-0">
-                    <Command>
-                      <CommandInput placeholder="Search destinations…" />
-                      <CommandList>
-                        <CommandEmpty>No destinations found.</CommandEmpty>
-                        <CommandGroup>
-                          {platformPickerOptions.map((opt) => {
-                            const isSelected = selectedPlatformAccountIds.includes(opt.id);
-                            const platformConfig = getPlatformConfig(opt.platform);
-                            const platformLabel = platformConfig.displayName;
-                            const shortLabel = opt.label?.trim() || '';
-                            const avatarName =
-                              opt.avatarName?.trim() || shortLabel || platformLabel;
-                            const searchValue =
-                              `${platformLabel} ${shortLabel} ${avatarName}`.trim();
-
-                            return (
-                              <CommandItem
-                                key={opt.id}
-                                value={searchValue}
-                                onSelect={() => toggleCreateDestination(opt.id)}
-                                className="py-2"
-                              >
-                                <SocialAccountAvatar
-                                  platform={opt.platform}
-                                  name={avatarName}
-                                  src={opt.avatarUrl}
-                                  size="sm"
-                                  selected={isSelected}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">
-                                    {platformLabel}
-                                  </div>
-                                  {shortLabel ? (
-                                    <div className="text-muted-foreground truncate text-xs">
-                                      {shortLabel}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                {isSelected ? <Check className="ml-auto h-4 w-4" /> : null}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-lg"
-                      aria-label="Destinations help"
-                      className="text-muted-foreground shadow-none"
-                      onClick={() => setCreateDestinationsHelpOpen(true)}
-                    >
-                      <CircleHelp className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-sm">How destinations work</p>
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            }
-          >
-            {createSelectedDestinations.map((opt) => {
-              const platformConfig = getPlatformConfig(opt.platform);
-              const platformLabel = platformConfig.displayName;
-              const shortLabel = opt.label?.trim() || '';
-              const tooltipLabel = shortLabel ? `${platformLabel} · ${shortLabel}` : platformLabel;
-              const avatarName = opt.avatarName?.trim() || shortLabel || platformLabel;
-
-              return (
-                <DestinationsRailItem
-                  key={opt.id}
-                  tooltip={tooltipLabel}
-                  ariaLabel={`Remove ${tooltipLabel}`}
-                  selected
-                  onClick={() => toggleCreateDestination(opt.id)}
-                >
-                  <SocialAccountAvatar
-                    platform={opt.platform}
-                    name={avatarName}
-                    src={opt.avatarUrl}
-                    size="sm"
-                    selected
-                  />
-                </DestinationsRailItem>
-              );
-            })}
-          </DestinationsRail>
-
-          <div className={bodyClass}>
-            <PostEditorMainBody
-              mode="create"
-              allowMixedMedia={allowMixedMedia}
-              disabled={disabled}
-              isLoading={isLoading}
-              isVideoMedia={isVideoMedia}
-              post={post}
-              selectedBrand={selectedBrand}
-              formData={formData}
-              setFormData={(updater) => setFormData((prev) => updater(prev))}
-              firstCommentOpen={firstCommentOpen}
-              setFirstCommentOpen={setFirstCommentOpen}
-              campaigns={campaigns}
-              isLoadingCampaigns={isLoadingCampaigns}
-              selectedCampaign={selectedCampaign}
-              setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
-              selectedCampaignPaused={Boolean(selectedCampaignPaused)}
-              onOpenAssetPicker={() => {
-                setAssetPickerTarget('destination');
-                setShowAssetPicker(true);
-              }}
-              platformOptions={platformPickerOptions}
-              selectedPlatformAccountIds={selectedPlatformAccountIds}
-              onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
-              showDestinationsPicker={false}
-            />
-          </div>
-
-          <Dialog open={createDestinationsHelpOpen} onOpenChange={setCreateDestinationsHelpOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Destinations</DialogTitle>
-                <DialogDescription>
-                  Choose which social accounts this post should publish to.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-3 text-sm">
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">Single destination</div>
-                  <p className="text-muted-foreground">Creates one post for one social account.</p>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">Multiple destinations</div>
-                  <p className="text-muted-foreground">
-                    Creates a grouped post. After saving, you can customize each destination in tabs
-                    while keeping a shared template.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">How to select</div>
-                  <p className="text-muted-foreground">
-                    Use the <span className="text-foreground font-medium">+</span> button to add or
-                    remove destinations.
-                  </p>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      ) : layout === 'sidebar' && id ? (
-        <div className="flex min-h-0 flex-1">
-          <DestinationsRail
-            title="Destinations"
-            required
-            footer={
-              <>
-                <Popover
-                  open={editDestinationsPopoverOpen}
-                  onOpenChange={setEditDestinationsPopoverOpen}
-                >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-lg"
-                            aria-label="Add destinations"
-                            aria-invalid={showDestinationsRequiredError}
-                            className={cn(
-                              'text-muted-foreground shadow-none',
-                              showDestinationsRequiredError &&
-                                'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20 dark:border-destructive dark:bg-destructive/10 dark:hover:bg-destructive/20'
-                            )}
-                            disabled={disabled || isSaving || isAddingContentDestination}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </PopoverTrigger>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-sm">
-                        {disabled
-                          ? 'Cannot add destinations after publishing.'
-                          : 'Add destinations'}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <PopoverContent side="right" align="start" className="w-80 p-0">
-                    <Command>
-                      <CommandInput placeholder="Search destinations…" />
-                      <CommandList>
-                        <CommandEmpty>No destinations found.</CommandEmpty>
-                        <CommandGroup>
-                          {platformPickerOptions.map((opt) => {
-                            const isAlreadySelected = opt.id === selectedTargetSocialAccountId;
-                            const platformConfig = getPlatformConfig(opt.platform);
-                            const platformLabel = platformConfig.displayName;
-                            const shortLabel = opt.label?.trim() || '';
-                            const avatarName =
-                              opt.avatarName?.trim() || shortLabel || platformLabel;
-                            const searchValue =
-                              `${platformLabel} ${shortLabel} ${avatarName}`.trim();
-
-                            return (
-                              <CommandItem
-                                key={opt.id}
-                                value={searchValue}
-                                onSelect={() => {
-                                  if (isAlreadySelected) return;
-                                  setEditDestinationsPopoverOpen(false);
-                                  void handleAddDestinationToSingle(opt.id);
-                                }}
-                                disabled={
-                                  Boolean(opt.disabled) ||
-                                  disabled ||
-                                  isAlreadySelected ||
-                                  isAddingContentDestination
-                                }
-                                className="py-2"
-                              >
-                                <SocialAccountAvatar
-                                  platform={opt.platform}
-                                  name={avatarName}
-                                  src={opt.avatarUrl}
-                                  size="sm"
-                                  selected={isAlreadySelected}
-                                  disabled={Boolean(opt.disabled) || disabled}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">
-                                    {platformLabel}
-                                  </div>
-                                  {shortLabel ? (
-                                    <div className="text-muted-foreground truncate text-xs">
-                                      {shortLabel}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                {isAlreadySelected ? <Check className="ml-auto h-4 w-4" /> : null}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-lg"
-                      aria-label="Destinations help"
-                      className="text-muted-foreground shadow-none"
-                      onClick={() => setEditDestinationsHelpOpen(true)}
-                    >
-                      <CircleHelp className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-sm">How destinations work</p>
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            }
-          >
-            {(() => {
-              if (!selectedTargetSocialAccountId) return null;
-              const opt = platformPickerOptions.find(
-                (entry) => entry.id === selectedTargetSocialAccountId
-              );
-              if (!opt) return null;
-              const platformConfig = getPlatformConfig(opt.platform);
-              const platformLabel = platformConfig.displayName;
-              const shortLabel = opt.label?.trim() || '';
-              const tooltipLabel = shortLabel ? `${platformLabel} · ${shortLabel}` : platformLabel;
-              const avatarName = opt.avatarName?.trim() || shortLabel || platformLabel;
-              return (
-                <DestinationsRailItem tooltip={tooltipLabel} ariaLabel={tooltipLabel} selected>
-                  <SocialAccountAvatar
-                    platform={opt.platform}
-                    name={avatarName}
-                    src={opt.avatarUrl}
-                    size="sm"
-                    selected
-                  />
-                </DestinationsRailItem>
-              );
-            })()}
-          </DestinationsRail>
-
-          <div className={bodyClass}>
-            <PostEditorMainBody
-              mode="edit"
-              allowMixedMedia={allowMixedMedia}
-              disabled={disabled}
-              isLoading={isLoading}
-              isVideoMedia={isVideoMedia}
-              post={post}
-              selectedBrand={selectedBrand}
-              formData={formData}
-              setFormData={(updater) => setFormData((prev) => updater(prev))}
-              firstCommentOpen={firstCommentOpen}
-              setFirstCommentOpen={setFirstCommentOpen}
-              campaigns={campaigns}
-              isLoadingCampaigns={isLoadingCampaigns}
-              selectedCampaign={selectedCampaign}
-              setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
-              selectedCampaignPaused={Boolean(selectedCampaignPaused)}
-              onOpenAssetPicker={() => {
-                setAssetPickerTarget('destination');
-                setShowAssetPicker(true);
-              }}
-              platformOptions={platformPickerOptions}
-              selectedPlatformAccountIds={selectedPlatformAccountIds}
-              onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
-            />
-          </div>
-
-          <Dialog open={editDestinationsHelpOpen} onOpenChange={setEditDestinationsHelpOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Destinations</DialogTitle>
-                <DialogDescription>
-                  Add more destinations to turn this post into a multi-destination group.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-3 text-sm">
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">What happens when you add</div>
-                  <p className="text-muted-foreground">
-                    We create a shared template from your current post and generate a destination
-                    post for each social account you add.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-foreground font-medium">Editing</div>
-                  <p className="text-muted-foreground">
-                    You can keep one template for the group and customize each destination
-                    individually.
-                  </p>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      ) : (
-        <div className={bodyClass}>
-          <PostEditorMainBody
-            mode={isCreating ? 'create' : 'edit'}
-            allowMixedMedia={allowMixedMedia}
-            disabled={disabled}
-            isLoading={isLoading}
-            isVideoMedia={isVideoMedia}
-            post={post}
-            selectedBrand={selectedBrand}
-            formData={formData}
-            setFormData={(updater) => setFormData((prev) => updater(prev))}
-            firstCommentOpen={firstCommentOpen}
-            setFirstCommentOpen={setFirstCommentOpen}
-            campaigns={campaigns}
-            isLoadingCampaigns={isLoadingCampaigns}
-            selectedCampaign={selectedCampaign}
-            setSelectedCampaign={(campaignId) => setSelectedCampaign(campaignId)}
-            selectedCampaignPaused={Boolean(selectedCampaignPaused)}
-            onOpenAssetPicker={() => {
-              setAssetPickerTarget('destination');
-              setShowAssetPicker(true);
-            }}
-            platformOptions={platformPickerOptions}
-            selectedPlatformAccountIds={selectedPlatformAccountIds}
-            onSelectedPlatformAccountIdsChange={handlePlatformAccountsChange}
-          />
-        </div>
+        </>
       )}
       {(() => {
         if (isTemplateTab && isMultiDestinationGroup) return null;
@@ -2680,6 +2997,7 @@ export function PostEditor({
             <WriteItBar
               mode="create"
               layout={layout}
+              previewHandle={previewHandle}
               scheduledAt={formData.scheduledAt}
               minScheduleInput={minScheduleInput}
               brandTimezone={brandTimezone}
@@ -2702,6 +3020,7 @@ export function PostEditor({
           <WriteItBar
             mode="edit"
             layout={layout}
+            previewHandle={previewHandle}
             scheduledAt={formData.scheduledAt}
             minScheduleInput={minScheduleInput}
             brandTimezone={brandTimezone}

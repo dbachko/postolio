@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { SidebarRegistry } from './registry';
@@ -6,6 +6,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { auth as authApi } from '@/lib/api';
 import { DndContext, PointerSensor, useDraggable, useSensor, useSensors } from '@dnd-kit/core';
 import { getNumberSetting, setNumberSetting } from '@/lib/settings/localSettings';
+import { RightSidebarLayoutContext } from './right-sidebar-context';
 
 export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   const { type, id, open, close } = useRightSidebarRouter();
@@ -16,6 +17,7 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const asideRef = useRef<HTMLDivElement | null>(null);
   const [widthPx, setWidthPx] = useState<number>(() => defaultWidthPx || 460);
+  const [extraWidthPx, setExtraWidthPx] = useState<number>(0);
   const minWidth = 360;
   const maxWidth = 960;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 2 } }));
@@ -26,6 +28,11 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   const persistedType = type === 'post-create' ? 'post' : type;
   const storageKey = persistedType ? `ui:rightSidebar:${persistedType}:width` : undefined;
   const widthRef = useRef<number>(defaultWidthPx || 460);
+  const effectiveWidthPx = widthPx + extraWidthPx;
+  const contextValue = useMemo(
+    () => ({ open, isSmall, extraWidthPx, setExtraWidthPx }),
+    [open, isSmall, extraWidthPx]
+  );
 
   const clamp = useCallback(
     (w: number) => Math.max(minWidth, Math.min(maxWidth, Math.round(w))),
@@ -179,157 +186,178 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
     };
   }, [open, isSmall, close]);
 
+  useEffect(() => {
+    if (!open) {
+      setExtraWidthPx(0);
+    }
+  }, [open]);
+
   // Mobile: render as Sheet; Desktop: resizable panel
   if (isSmall) {
     return (
-      <>
-        <div ref={containerRef} className="min-h-[60vh]">
-          {children}
-        </div>
-        <Sheet open={open} onOpenChange={(o) => (!o ? close() : null)}>
-          <SheetContent side="right" className="p-0" style={{ width: 'calc(100vw - 50px)' }}>
-            {Sidebar ? <Sidebar id={id} /> : null}
-          </SheetContent>
-        </Sheet>
-      </>
+      <RightSidebarLayoutContext.Provider value={contextValue}>
+        <>
+          <div ref={containerRef} className="min-h-[60vh]">
+            {children}
+          </div>
+          <Sheet open={open} onOpenChange={(o) => (!o ? close() : null)}>
+            <SheetContent side="right" className="p-0" style={{ width: 'calc(100vw - 50px)' }}>
+              {Sidebar ? <Sidebar id={id} /> : null}
+            </SheetContent>
+          </Sheet>
+        </>
+      </RightSidebarLayoutContext.Provider>
     );
   }
 
   // Desktop overlay below the sticky nav (h-14 = 3.5rem)
   return (
-    <div ref={containerRef} className="relative min-h-[60vh]">
-      {children}
-      {open && (
-        <DndContext
-          sensors={sensors}
-          onDragStart={() => {
-            dragStartWidthRef.current = widthRef.current;
-            setGlobalDragging(true);
-          }}
-          onDragMove={(event: { delta: { x: number; y: number } }) => {
-            const dx = event.delta.x || 0; // positive when moving right
-            // Expected for right-anchored panel: moving RIGHT decreases width; LEFT increases
-            applyWidth(dragStartWidthRef.current - dx);
-          }}
-          onDragEnd={async () => {
-            setGlobalDragging(false);
-            try {
-              const domW = asideRef.current?.getBoundingClientRect().width;
-              const finalW = clamp(typeof domW === 'number' ? domW : widthRef.current);
-              widthRef.current = finalW;
-              if (storageKey) setNumberSetting(storageKey, finalW);
-            } catch {}
-            if (persistedType) {
+    <RightSidebarLayoutContext.Provider value={contextValue}>
+      <div ref={containerRef} className="relative min-h-[60vh]">
+        {children}
+        {open && (
+          <DndContext
+            sensors={sensors}
+            onDragStart={() => {
+              dragStartWidthRef.current = widthRef.current;
+              setGlobalDragging(true);
+            }}
+            onDragMove={(event: { delta: { x: number; y: number } }) => {
+              const dx = event.delta.x || 0; // positive when moving right
+              // Expected for right-anchored panel: moving RIGHT decreases width; LEFT increases
+              applyWidth(dragStartWidthRef.current - dx);
+            }}
+            onDragEnd={async () => {
+              setGlobalDragging(false);
               try {
-                await authApi.updateRightSidebarWidth({
-                  type: persistedType,
-                  width: widthRef.current,
-                });
-              } catch {
-                // ignore persist errors
+                const domW = asideRef.current?.getBoundingClientRect().width;
+                const nextBase = typeof domW === 'number' ? domW - extraWidthPx : widthRef.current;
+                const finalW = clamp(nextBase);
+                widthRef.current = finalW;
+                if (storageKey) setNumberSetting(storageKey, finalW);
+              } catch {}
+              if (persistedType) {
+                try {
+                  await authApi.updateRightSidebarWidth({
+                    type: persistedType,
+                    width: widthRef.current,
+                  });
+                } catch {
+                  // ignore persist errors
+                }
               }
-            }
-          }}
-        >
-          <aside
-            role="complementary"
-            aria-labelledby="right-sidebar-title"
-            className="bg-card border-border animate-in fade-in-0 slide-in-from-right group fixed right-0 z-50 h-screen border-l"
-            style={{ top: 0, width: `${widthPx}px` }}
-            ref={asideRef}
+            }}
           >
-            {/* Visual 1–2px border line (and semantic separator) */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize sidebar"
-              className="bg-border pointer-events-none absolute top-0 left-0 z-50 h-full w-px"
-            />
+            <aside
+              role="complementary"
+              aria-labelledby="right-sidebar-title"
+              className="bg-card border-border animate-in fade-in-0 slide-in-from-right group fixed right-0 z-50 h-screen border-l"
+              style={{ top: 0, width: `${effectiveWidthPx}px` }}
+              ref={asideRef}
+            >
+              {/* Visual 1–2px border line (and semantic separator) */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize sidebar"
+                className="bg-border pointer-events-none absolute top-0 left-0 z-50 h-full w-px"
+              />
 
-            {/* Resize handle hotspot (transparent until hover) - keep thin */}
-            <div
-              ref={setNodeRef}
-              {...listeners}
-              {...attributes}
-              aria-hidden="true"
-              className="absolute top-0 -left-2 z-40 h-full w-4 cursor-col-resize bg-transparent"
-              style={{ touchAction: 'none' }}
-              onMouseDown={(e) => {
-                // Native fallback to ensure resize always works
-                e.preventDefault();
-                nativeActiveRef.current = true;
-                nativeStartXRef.current = e.clientX;
-                dragStartWidthRef.current = widthRef.current;
-                setGlobalDragging(true);
-                const onMove = (ev: MouseEvent) => {
-                  if (!nativeActiveRef.current) return;
-                  const dx = (ev.clientX || 0) - nativeStartXRef.current;
-                  // Right-anchored: moving RIGHT decreases width
-                  applyWidth(dragStartWidthRef.current - dx);
-                };
-                const onUp = async () => {
-                  nativeActiveRef.current = false;
-                  window.removeEventListener('mousemove', onMove);
-                  window.removeEventListener('mouseup', onUp);
-                  setGlobalDragging(false);
-                  if (persistedType) {
-                    try {
-                      const domW = asideRef.current?.getBoundingClientRect().width;
-                      const finalW = clamp(typeof domW === 'number' ? domW : widthRef.current);
-                      widthRef.current = finalW;
-                      if (storageKey) setNumberSetting(storageKey, finalW);
-                      await authApi.updateRightSidebarWidth({ type: persistedType, width: finalW });
-                    } catch {
-                      // ignore
+              {/* Resize handle hotspot (transparent until hover) - keep thin */}
+              <div
+                ref={setNodeRef}
+                {...listeners}
+                {...attributes}
+                aria-hidden="true"
+                className="absolute top-0 -left-2 z-40 h-full w-4 cursor-col-resize bg-transparent"
+                style={{ touchAction: 'none' }}
+                onMouseDown={(e) => {
+                  // Native fallback to ensure resize always works
+                  e.preventDefault();
+                  nativeActiveRef.current = true;
+                  nativeStartXRef.current = e.clientX;
+                  dragStartWidthRef.current = widthRef.current;
+                  setGlobalDragging(true);
+                  const onMove = (ev: MouseEvent) => {
+                    if (!nativeActiveRef.current) return;
+                    const dx = (ev.clientX || 0) - nativeStartXRef.current;
+                    // Right-anchored: moving RIGHT decreases width
+                    applyWidth(dragStartWidthRef.current - dx);
+                  };
+                  const onUp = async () => {
+                    nativeActiveRef.current = false;
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                    setGlobalDragging(false);
+                    if (persistedType) {
+                      try {
+                        const domW = asideRef.current?.getBoundingClientRect().width;
+                        const nextBase =
+                          typeof domW === 'number' ? domW - extraWidthPx : widthRef.current;
+                        const finalW = clamp(nextBase);
+                        widthRef.current = finalW;
+                        if (storageKey) setNumberSetting(storageKey, finalW);
+                        await authApi.updateRightSidebarWidth({
+                          type: persistedType,
+                          width: finalW,
+                        });
+                      } catch {
+                        // ignore
+                      }
                     }
-                  }
-                };
-                window.addEventListener('mousemove', onMove);
-                window.addEventListener('mouseup', onUp);
-              }}
-              onTouchStart={(e) => {
-                // Native touch fallback
-                if (!e.touches || e.touches.length === 0) return;
-                nativeActiveRef.current = true;
-                nativeStartXRef.current = e.touches[0].clientX;
-                dragStartWidthRef.current = widthRef.current;
-                setGlobalDragging(true);
-                const onMove = (ev: TouchEvent) => {
-                  if (!nativeActiveRef.current) return;
-                  const t = ev.touches && ev.touches[0];
-                  if (!t) return;
-                  const dx = t.clientX - nativeStartXRef.current;
-                  // Right-anchored: moving RIGHT decreases width
-                  applyWidth(dragStartWidthRef.current - dx);
-                };
-                const onUp = async () => {
-                  nativeActiveRef.current = false;
-                  window.removeEventListener('touchmove', onMove);
-                  window.removeEventListener('touchend', onUp);
-                  setGlobalDragging(false);
-                  if (persistedType) {
-                    try {
-                      const domW = asideRef.current?.getBoundingClientRect().width;
-                      const finalW = clamp(typeof domW === 'number' ? domW : widthRef.current);
-                      widthRef.current = finalW;
-                      if (storageKey) setNumberSetting(storageKey, finalW);
-                      await authApi.updateRightSidebarWidth({ type: persistedType, width: finalW });
-                    } catch {
-                      // ignore
+                  };
+                  window.addEventListener('mousemove', onMove);
+                  window.addEventListener('mouseup', onUp);
+                }}
+                onTouchStart={(e) => {
+                  // Native touch fallback
+                  if (!e.touches || e.touches.length === 0) return;
+                  nativeActiveRef.current = true;
+                  nativeStartXRef.current = e.touches[0].clientX;
+                  dragStartWidthRef.current = widthRef.current;
+                  setGlobalDragging(true);
+                  const onMove = (ev: TouchEvent) => {
+                    if (!nativeActiveRef.current) return;
+                    const t = ev.touches && ev.touches[0];
+                    if (!t) return;
+                    const dx = t.clientX - nativeStartXRef.current;
+                    // Right-anchored: moving RIGHT decreases width
+                    applyWidth(dragStartWidthRef.current - dx);
+                  };
+                  const onUp = async () => {
+                    nativeActiveRef.current = false;
+                    window.removeEventListener('touchmove', onMove);
+                    window.removeEventListener('touchend', onUp);
+                    setGlobalDragging(false);
+                    if (persistedType) {
+                      try {
+                        const domW = asideRef.current?.getBoundingClientRect().width;
+                        const nextBase =
+                          typeof domW === 'number' ? domW - extraWidthPx : widthRef.current;
+                        const finalW = clamp(nextBase);
+                        widthRef.current = finalW;
+                        if (storageKey) setNumberSetting(storageKey, finalW);
+                        await authApi.updateRightSidebarWidth({
+                          type: persistedType,
+                          width: finalW,
+                        });
+                      } catch {
+                        // ignore
+                      }
                     }
-                  }
-                };
-                window.addEventListener('touchmove', onMove, { passive: true });
-                window.addEventListener('touchend', onUp);
-              }}
-            />
+                  };
+                  window.addEventListener('touchmove', onMove, { passive: true });
+                  window.addEventListener('touchend', onUp);
+                }}
+              />
 
-            {Sidebar ? (
-              <div className="flex h-full flex-col overflow-auto">{<Sidebar id={id} />}</div>
-            ) : null}
-          </aside>
-        </DndContext>
-      )}
-    </div>
+              {Sidebar ? (
+                <div className="flex h-full flex-col overflow-auto">{<Sidebar id={id} />}</div>
+              ) : null}
+            </aside>
+          </DndContext>
+        )}
+      </div>
+    </RightSidebarLayoutContext.Provider>
   );
 }
