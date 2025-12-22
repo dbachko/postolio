@@ -46,7 +46,7 @@ import {
 } from '@/components/post-editor/PostEditorMainBody';
 import { QueueSlotPickerDialog } from '@/components/post-editor/QueueSlotPickerDialog';
 import { WriteItBar } from '@/components/post-editor/WriteItBar';
-import { Check, CircleHelp, Eye, EyeOff, Instagram, LayoutTemplate, Plus, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Instagram, LayoutTemplate, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
 import { cn } from '@/lib/utils';
@@ -2224,7 +2224,6 @@ export function PostEditor({
     return () => rightSidebarLayout.setExtraWidthPx(0);
   }, [rightSidebarLayout, showPreviewInColumn]);
 
-  const previewToggleLabel = previewOpen ? 'Close preview' : 'Open preview';
   const previewToggleButton = !previewOpen ? (
     <Button
       type="button"
@@ -2238,32 +2237,6 @@ export function PostEditor({
       <span className="sr-only sm:hidden">{previewOpen ? 'Hide preview' : 'Show preview'}</span>
     </Button>
   ) : null;
-  const previewHandle =
-    layout === 'sidebar' && !previewOpen ? (
-      <TooltipProvider delayDuration={0}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-lg"
-              onClick={() => setPreviewOpen((open) => !open)}
-              aria-label={previewToggleLabel}
-              aria-pressed={previewOpen}
-              className={cn(
-                'bg-card border-border text-muted-foreground hover:text-foreground h-10 w-12 rounded-t-xl rounded-b-md border-b-0 shadow-sm transition-colors',
-                previewOpen && 'text-foreground'
-              )}
-            >
-              <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="end">
-            <p className="text-sm">{previewToggleLabel}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    ) : null;
 
   const formPreviewMedia = useMemo(
     () => mapAssetReferencesToPreviewMedia(formData.carouselAssets),
@@ -2470,7 +2443,6 @@ export function PostEditor({
                 ) : null}
               </>
             ) : null}
-            {!isMultiDestinationGroup ? previewToggleButton : null}
             {layout === 'sidebar' ? (
               <Button
                 variant="ghost"
@@ -2595,15 +2567,15 @@ export function PostEditor({
                         type="button"
                         variant="outline"
                         size="icon-lg"
-                        aria-label="Destinations help"
+                        aria-label={previewOpen ? 'Hide preview' : 'Open preview'}
                         className="text-muted-foreground shadow-none"
-                        onClick={() => setEditDestinationsHelpOpen(true)}
+                        onClick={() => setPreviewOpen((open) => !open)}
                       >
-                        <CircleHelp className="h-4 w-4" />
+                        {previewOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-sm">How destinations work</p>
+                      <p className="text-sm">{previewOpen ? 'Hide preview' : 'Open preview'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </>
@@ -2919,15 +2891,15 @@ export function PostEditor({
                         type="button"
                         variant="outline"
                         size="icon-lg"
-                        aria-label="Destinations help"
+                        aria-label={previewOpen ? 'Hide preview' : 'Open preview'}
                         className="text-muted-foreground shadow-none"
-                        onClick={() => setCreateDestinationsHelpOpen(true)}
+                        onClick={() => setPreviewOpen((open) => !open)}
                       >
-                        <CircleHelp className="h-4 w-4" />
+                        {previewOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-sm">How destinations work</p>
+                      <p className="text-sm">{previewOpen ? 'Hide preview' : 'Open preview'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </>
@@ -3148,15 +3120,15 @@ export function PostEditor({
                         type="button"
                         variant="outline"
                         size="icon-lg"
-                        aria-label="Destinations help"
+                        aria-label={previewOpen ? 'Hide preview' : 'Open preview'}
                         className="text-muted-foreground shadow-none"
-                        onClick={() => setEditDestinationsHelpOpen(true)}
+                        onClick={() => setPreviewOpen((open) => !open)}
                       >
-                        <CircleHelp className="h-4 w-4" />
+                        {previewOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-sm">How destinations work</p>
+                      <p className="text-sm">{previewOpen ? 'Hide preview' : 'Open preview'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </>
@@ -3306,7 +3278,6 @@ export function PostEditor({
             <WriteItBar
               mode="create"
               layout={layout}
-              previewHandle={previewHandle}
               scheduledAt={formData.scheduledAt}
               minScheduleInput={minScheduleInput}
               brandTimezone={brandTimezone}
@@ -3339,7 +3310,6 @@ export function PostEditor({
           <WriteItBar
             mode="edit"
             layout={layout}
-            previewHandle={previewHandle}
             scheduledAt={formData.scheduledAt}
             minScheduleInput={minScheduleInput}
             brandTimezone={brandTimezone}
