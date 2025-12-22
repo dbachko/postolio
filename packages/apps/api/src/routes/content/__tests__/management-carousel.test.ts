@@ -219,7 +219,7 @@ describe('Content management carousel assets', () => {
     expect(payload?.content?.id).toBeDefined();
   });
 
-  it('rejects content when carousel assets have mismatched aspect ratios', async () => {
+  it('allows drafts when carousel assets have mismatched aspect ratios', async () => {
     (getAssetsClient as any).mockImplementation(() => ({
       getBatchAssets: vi.fn(async (assetIds: string[]) =>
         assetIds.map((assetId, index) => ({
@@ -247,6 +247,43 @@ describe('Content management carousel assets', () => {
         mediaType: 'image',
         contentType: 'post',
         assetIds: ['asset-1', 'asset-2'],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const payload = JSON.parse(response.payload);
+    expect(payload?.content?.id).toBeDefined();
+  });
+
+  it('rejects scheduled content when carousel assets have mismatched aspect ratios', async () => {
+    (getAssetsClient as any).mockImplementation(() => ({
+      getBatchAssets: vi.fn(async (assetIds: string[]) =>
+        assetIds.map((assetId, index) => ({
+          id: assetId,
+          brandId: 'brand-1',
+          url: `https://cdn.example.com/assets/${assetId}.jpg`,
+          // First asset square, second asset wide to trigger mismatch
+          width: index === 0 ? 1080 : 1920,
+          height: 1080,
+        }))
+      ),
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/content',
+      headers: {
+        authorization: authHeader,
+        'content-type': 'application/json',
+      },
+      payload: {
+        brandId: 'brand-1',
+        caption: 'Test scheduled carousel caption',
+        hashtags: [],
+        mediaType: 'image',
+        contentType: 'post',
+        assetIds: ['asset-1', 'asset-2'],
+        scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       },
     });
 

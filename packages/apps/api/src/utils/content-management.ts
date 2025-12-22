@@ -130,13 +130,15 @@ export function validateRequestBody(body: CreateManualContentBody) {
       .filter((v) => v.length > 0);
 
     if (normalized.length === 0) {
-      return {
-        ok: false,
-        error: {
-          error: 'targetSocialAccountIds must include at least one destination',
-          details: ['targetSocialAccountIds must include at least one destination'],
-        },
-      };
+      if (body.scheduledAt) {
+        return {
+          ok: false,
+          error: {
+            error: 'targetSocialAccountIds must include at least one destination',
+            details: ['targetSocialAccountIds must include at least one destination'],
+          },
+        };
+      }
     }
   }
 
@@ -230,7 +232,8 @@ export async function verifyBrandAndCampaign(
 export async function resolveAssets(
   assetIds: string[] | undefined,
   brandId: string,
-  request: any
+  request: any,
+  options?: { enforceUniformAspectRatio?: boolean }
 ): Promise<{
   success: boolean;
   code?: number;
@@ -271,8 +274,10 @@ export async function resolveAssets(
       };
     }
 
+    const enforceUniformAspectRatio = options?.enforceUniformAspectRatio !== false;
+
     // When creating a carousel, require all assets to share the same aspect ratio.
-    if (assetIds.length > 1 && !haveUniformAspectRatio(validAssets)) {
+    if (enforceUniformAspectRatio && assetIds.length > 1 && !haveUniformAspectRatio(validAssets)) {
       return {
         success: false,
         code: 400,

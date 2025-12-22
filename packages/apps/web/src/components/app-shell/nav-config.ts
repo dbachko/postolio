@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Send,
   Settings,
+  Users,
 } from 'lucide-react';
 
 export type NavMatchType = 'exact' | 'startsWith';
@@ -67,6 +68,13 @@ export const mainNavItems: NavigationItem[] = [
 
 // Secondary destinations that live in the lower portion of the nav.
 export const secondaryNavItems: NavigationItem[] = [
+  {
+    label: 'Social Accounts',
+    path: '/social-accounts',
+    icon: Users,
+    description: 'Connect accounts and set weekly calendars',
+    matchType: 'exact',
+  },
   {
     label: 'Settings',
     path: '/settings',

@@ -45,6 +45,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         include: {
           brand: { select: { id: true } },
+          publishingQueueItem: { select: { id: true } },
         },
       });
 
@@ -147,6 +148,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         include: {
           brand: { select: { id: true } },
+          publishingQueueItem: { select: { id: true } },
         },
       });
 
@@ -194,8 +196,15 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
             .send({ error: 'All media assets must belong to the same brand as the content' });
         }
 
-        // When updating a carousel (multiple assets), require a consistent aspect ratio.
-        if (assetIds.length > 1 && !haveUniformAspectRatio(validAssets)) {
+        const requiresUniformAspectRatio =
+          content.status === 'scheduled' || Boolean(content.publishingQueueItem);
+
+        // When updating scheduled or queued carousels, require a consistent aspect ratio.
+        if (
+          requiresUniformAspectRatio &&
+          assetIds.length > 1 &&
+          !haveUniformAspectRatio(validAssets)
+        ) {
           return reply.code(400).send({
             error:
               'All carousel items must have the same aspect ratio. Please crop or resize your media so they match.',

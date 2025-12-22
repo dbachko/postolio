@@ -22,6 +22,34 @@ type CampaignAccessPayload = Prisma.CampaignGetPayload<{
   };
 }>;
 
+type SocialAccountAccessPayload = Prisma.SocialAccountGetPayload<{
+  select: {
+    id: true;
+    brandId: true;
+    platform: true;
+  };
+}>;
+
+type PublishingQueueAccessPayload = Prisma.PublishingQueueGetPayload<{
+  select: {
+    id: true;
+    socialAccountId: true;
+    name: true;
+    paused: true;
+    isDefault: true;
+    socialAccount: {
+      select: {
+        brandId: true;
+        brand: {
+          select: {
+            id: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
 export async function assertBrandOwnership(
   userId: string,
   brandId: string
@@ -44,6 +72,72 @@ export async function assertBrandOwnership(
   }
 
   return brand;
+}
+
+export async function assertSocialAccountAccess(
+  userId: string,
+  socialAccountId: string
+): Promise<SocialAccountAccessPayload> {
+  const account = await prisma.socialAccount.findFirst({
+    where: {
+      id: socialAccountId,
+      brand: { userId },
+    },
+    select: {
+      id: true,
+      brandId: true,
+      platform: true,
+    },
+  });
+
+  if (!account) {
+    throw new APIError(
+      'Social account not found or access denied',
+      'SOCIAL_ACCOUNT_NOT_FOUND',
+      404,
+      { socialAccountId }
+    );
+  }
+
+  return account;
+}
+
+export async function assertPublishingQueueAccess(
+  userId: string,
+  queueId: string
+): Promise<PublishingQueueAccessPayload> {
+  const queue = await prisma.publishingQueue.findFirst({
+    where: {
+      id: queueId,
+      socialAccount: {
+        brand: { userId },
+      },
+    },
+    select: {
+      id: true,
+      socialAccountId: true,
+      name: true,
+      paused: true,
+      isDefault: true,
+      socialAccount: {
+        select: {
+          brandId: true,
+          brand: { select: { id: true } },
+        },
+      },
+    },
+  });
+
+  if (!queue) {
+    throw new APIError(
+      'Publishing queue not found or access denied',
+      'PUBLISHING_QUEUE_NOT_FOUND',
+      404,
+      { queueId }
+    );
+  }
+
+  return queue;
 }
 
 export async function assertCampaignAccess(

@@ -12,6 +12,7 @@ export enum JobType {
   TOKEN_INTEGRITY_CHECK = 'token-integrity-check',
   AUDIT_LOG_CLEANUP = 'audit-log-cleanup',
   CAMPAIGN_WINDOW_MAINTENANCE = 'campaign-window-maintenance',
+  PUBLISHING_QUEUE_WINDOW_MAINTENANCE = 'publishing-queue-window-maintenance',
   NOTIFICATION_RETENTION = 'notification-retention',
 }
 
@@ -80,6 +81,10 @@ export class BackgroundJobQueue {
 
     this.queue.process(JobType.CAMPAIGN_WINDOW_MAINTENANCE, async () => {
       return await this.processCampaignWindowMaintenance();
+    });
+
+    this.queue.process(JobType.PUBLISHING_QUEUE_WINDOW_MAINTENANCE, async () => {
+      return await this.processPublishingQueueWindowMaintenance();
     });
 
     this.queue.process(JobType.NOTIFICATION_RETENTION, async () => {
@@ -402,6 +407,17 @@ export class BackgroundJobQueue {
       }
     );
 
+    // Publishing queue window maintenance - every 5 minutes
+    await this.queue.add(
+      JobType.PUBLISHING_QUEUE_WINDOW_MAINTENANCE,
+      { type: JobType.PUBLISHING_QUEUE_WINDOW_MAINTENANCE },
+      {
+        repeat: {
+          cron: '*/5 * * * *',
+        },
+      }
+    );
+
     // Notification retention cleanup - daily at 2:30 AM
     await this.queue.add(
       JobType.NOTIFICATION_RETENTION,
@@ -512,6 +528,88 @@ export class BackgroundJobQueue {
         },
       });
       return { processed, generated };
+    }
+  }
+
+  private async processPublishingQueueWindowMaintenance(): Promise<{
+    processed: number;
+    assigned: number;
+    scheduled: number;
+    rescheduled: number;
+    cancelled: number;
+    errors: number;
+  }> {
+    const start = Date.now();
+    let processed = 0;
+    let assigned = 0;
+    let scheduled = 0;
+    let rescheduled = 0;
+    let cancelled = 0;
+    let errors = 0;
+
+    try {
+      const prisma = (await import('../config/database.js')).getDatabaseClient();
+      const { publishingQueueScheduler } = await import('./publishing-queue/queue-scheduler.js');
+
+      const batchSize = (() => {
+        const raw = process.env.PUBLISHING_QUEUE_WINDOW_MAINTENANCE_BATCH_SIZE;
+        const n = raw ? parseInt(raw, 10) : 50;
+        return Number.isFinite(n) ? Math.max(1, Math.min(500, n)) : 50;
+      })();
+
+      const lookbackMinutes = (() => {
+        const raw = process.env.PUBLISHING_QUEUE_WINDOW_MAINTENANCE_LOOKBACK_MINUTES;
+        const n = raw ? parseInt(raw, 10) : 15;
+        return Number.isFinite(n) ? Math.max(1, Math.min(180, n)) : 15;
+      })();
+      const since = new Date(Date.now() - lookbackMinutes * 60 * 1000);
+
+      const brands = await prisma.content.findMany({
+        where: {
+          updatedAt: { gte: since },
+          publishingQueueItem: { isNot: null },
+        },
+        select: { brandId: true },
+        distinct: ['brandId'],
+        take: batchSize,
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      for (const b of brands) {
+        processed += 1;
+        try {
+          const res = await publishingQueueScheduler.recomputeBrandWindow(b.brandId);
+          assigned += res.assigned;
+          scheduled += res.scheduled;
+          rescheduled += res.rescheduled;
+          cancelled += res.cancelled;
+          errors += res.errors.length;
+        } catch {
+          errors += 1;
+        }
+      }
+
+      this.logger.info('Publishing queue window maintenance completed', {
+        processed,
+        assigned,
+        scheduled,
+        rescheduled,
+        cancelled,
+        errors,
+        durationMs: Date.now() - start,
+      });
+
+      return { processed, assigned, scheduled, rescheduled, cancelled, errors };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error('Publishing queue window maintenance error', {
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+      });
+      return { processed, assigned, scheduled, rescheduled, cancelled, errors };
     }
   }
 

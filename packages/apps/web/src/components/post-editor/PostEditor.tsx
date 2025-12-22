@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { brand as brandApi, content as contentApi, campaign as campaignApi } from '@/lib/api';
+import {
+  brand as brandApi,
+  content as contentApi,
+  campaign as campaignApi,
+  publishingQueues as publishingQueuesApi,
+} from '@/lib/api';
 import type { Campaign } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +44,7 @@ import {
   PostEditorMainBody,
   type PostEditorFormState,
 } from '@/components/post-editor/PostEditorMainBody';
+import { QueueSlotPickerDialog } from '@/components/post-editor/QueueSlotPickerDialog';
 import { WriteItBar } from '@/components/post-editor/WriteItBar';
 import { Check, CircleHelp, Eye, EyeOff, Instagram, LayoutTemplate, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -453,6 +459,7 @@ export function PostEditor({
   const [editDestinationsPopoverOpen, setEditDestinationsPopoverOpen] = useState(false);
   const [editDestinationsHelpOpen, setEditDestinationsHelpOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [slotPickerOpen, setSlotPickerOpen] = useState(false);
 
   const [templateFormData, setTemplateFormData] = useState<ContentGroupTemplateFormState>(() =>
     createEmptyTemplateFormState()
@@ -561,6 +568,11 @@ export function PostEditor({
     return selectedPlatforms.every((p) => getPlatformConfig(p).features.scheduling);
   }, [selectedPlatforms]);
 
+  const publishingSupported = useMemo(() => {
+    if (selectedPlatforms.length === 0) return false;
+    return selectedPlatforms.every((p) => getPlatformConfig(p).features.publishing);
+  }, [selectedPlatforms]);
+
   const effectiveSchedulingSupported = useMemo(() => {
     if (!isMultiDestinationGroup) return schedulingSupported;
     if (groupDestinations.length === 0) return false;
@@ -641,6 +653,19 @@ export function PostEditor({
 
   const validationError = validation.ok ? null : validation.errors[0]?.message;
   const hasSelectedPlatforms = selectedPlatformAccountIds.length > 0;
+  const queueSupportedForSelection = useMemo(() => {
+    if (selectedPlatformAccountIds.length === 0) return false;
+    const byId = new Map(platformPickerOptions.map((o) => [o.id, o]));
+    return selectedPlatformAccountIds.every((id) => {
+      const opt = byId.get(id);
+      if (!opt) return false;
+      try {
+        return getPlatformConfig(opt.platform).features.scheduling;
+      } catch {
+        return false;
+      }
+    });
+  }, [platformPickerOptions, selectedPlatformAccountIds]);
 
   const templateValidation = useMemo(() => {
     if (!isMultiDestinationGroup) return { ok: true, errors: [] as any[] };
@@ -909,6 +934,39 @@ export function PostEditor({
   const isScheduled = isMultiDestinationGroup
     ? contentGroupSchedule.kind !== 'none'
     : post?.status === 'scheduled';
+  const queueSupportedForPost = useMemo(() => {
+    if (isCreating) return queueSupportedForSelection;
+    if (isMultiDestinationGroup) {
+      const platforms = groupPlatforms.length ? groupPlatforms : (['instagram'] as Platform[]);
+      return platforms.every((p) => {
+        try {
+          return getPlatformConfig(p).features.scheduling;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    const targetId =
+      typeof (post as any)?.targetSocialAccountId === 'string'
+        ? String((post as any).targetSocialAccountId)
+        : null;
+    if (!targetId) return false;
+    const opt = platformPickerOptions.find((o) => o.id === targetId) || null;
+    if (!opt) return false;
+    try {
+      return getPlatformConfig(opt.platform).features.scheduling;
+    } catch {
+      return false;
+    }
+  }, [
+    groupPlatforms,
+    isCreating,
+    isMultiDestinationGroup,
+    platformPickerOptions,
+    post,
+    queueSupportedForSelection,
+  ]);
 
   const minScheduleInput = useMemo(
     () => formatInTimeZone(new Date(), brandTimezone, "yyyy-MM-dd'T'HH:mm"),
@@ -926,6 +984,35 @@ export function PostEditor({
     if (error?.data?.error) return error.data.error;
     if (typeof error?.message === 'string' && error.message) return error.message;
     return fallback;
+  };
+
+  const getQueueErrorMessage = (
+    error: any,
+    fallback: string = 'Failed to add to queue. Please try again.'
+  ): string => {
+    const code =
+      (typeof error === 'string' && error) ||
+      (typeof error?.data?.error === 'string' && error.data.error) ||
+      (typeof error?.message === 'string' && error.message) ||
+      null;
+
+    if (code === 'queue_depth_limit') {
+      const maxAllowed = error?.data?.maxAllowed;
+      if (typeof maxAllowed === 'number' && Number.isFinite(maxAllowed)) {
+        return `Queue limit reached for this social account (max ${maxAllowed}).`;
+      }
+      return 'Queue limit reached for this social account.';
+    }
+
+    if (code === 'missing_destination') {
+      return 'Pick a destination social account before adding to queue.';
+    }
+
+    if (code === 'missing_queue') {
+      return 'No default queue found for this social account.';
+    }
+
+    return getScheduleErrorMessage(error, fallback);
   };
 
   const { mutateAsync: mutateContentAsync, isPending: isSaving } = useMutation({
@@ -1125,9 +1212,46 @@ export function PostEditor({
       toast.error(getScheduleErrorMessage(error, 'Failed to update destination schedules.')),
   });
 
+  const { mutate: addToQueue, isPending: isQueueing } = useMutation({
+    mutationFn: async () => {
+      if (isMultiDestinationGroup) {
+        if (!contentGroupId) throw new Error('Missing contentGroupId');
+        return contentApi.queueContentGroup(contentGroupId);
+      }
+
+      if (!id) throw new Error('Missing contentId');
+      const targetSocialAccountId =
+        typeof (post as any)?.targetSocialAccountId === 'string'
+          ? String((post as any).targetSocialAccountId)
+          : null;
+      if (!targetSocialAccountId) throw new Error('Missing target social account');
+
+      const queues = await publishingQueuesApi.listQueuesForSocialAccount(targetSocialAccountId);
+      const list = Array.isArray((queues as any)?.data?.queues) ? (queues as any).data.queues : [];
+      const defaultQueue = list.find((q: any) => q?.isDefault) || list[0] || null;
+      if (!defaultQueue?.id) throw new Error('Missing default queue');
+
+      return publishingQueuesApi.addQueueItem(String(defaultQueue.id), id);
+    },
+    onSuccess: () => {
+      toast.success('Added to queue');
+      const brandId = post?.brand?.id ?? selectedBrand?.id ?? null;
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
+      }
+      if (id) queryClient.invalidateQueries({ queryKey: ['post', id] });
+      if (contentGroupId)
+        queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
+    },
+    onError: (error: any) => {
+      toast.error(getQueueErrorMessage(error));
+    },
+  });
+
   // Create post mutation (for creation mode)
   const { mutate: createPost, isPending: isCreatingPost } = useMutation({
-    mutationFn: async (mode: 'draft' | 'schedule') => {
+    mutationFn: async (mode: 'draft' | 'schedule' | 'queue' | 'now') => {
       if (!selectedBrand) throw new Error('No brand selected');
 
       // Determine final mediaType based on contentType
@@ -1146,7 +1270,7 @@ export function PostEditor({
         }
       }
 
-      return contentApi.createManualContent({
+      const response = await contentApi.createManualContent({
         brandId: selectedBrand.id,
         caption: isStory ? '' : formData.caption.trim(),
         assetIds: formData.carouselAssets.map((a) => a.id),
@@ -1157,8 +1281,95 @@ export function PostEditor({
         scheduledAt: scheduledUtc ? scheduledUtc.toISOString() : undefined,
         targetSocialAccountIds: selectedPlatformAccountIds,
       });
+
+      if (mode !== 'queue' && mode !== 'now') {
+        return { response, mode, queued: null as any, publishedNow: null as any };
+      }
+
+      const groupId =
+        typeof (response as any)?.contentGroupId === 'string' &&
+        String((response as any).contentGroupId).trim().length > 0
+          ? String((response as any).contentGroupId).trim()
+          : null;
+
+      if (mode === 'queue') {
+        try {
+          if (groupId) {
+            await contentApi.queueContentGroup(groupId);
+            return { response, mode, queued: { success: true }, publishedNow: null as any };
+          }
+
+          const contentId =
+            typeof (response as any)?.content?.id === 'string'
+              ? String((response as any).content.id)
+              : null;
+          const targetSocialAccountId =
+            typeof (response as any)?.content?.targetSocialAccountId === 'string'
+              ? String((response as any).content.targetSocialAccountId)
+              : selectedPlatformAccountIds[0] || null;
+
+          if (!contentId || !targetSocialAccountId) {
+            return {
+              response,
+              mode,
+              queued: { success: false, error: 'missing_destination' },
+              publishedNow: null as any,
+            };
+          }
+
+          const queues =
+            await publishingQueuesApi.listQueuesForSocialAccount(targetSocialAccountId);
+          const list = Array.isArray((queues as any)?.data?.queues)
+            ? (queues as any).data.queues
+            : [];
+          const defaultQueue = list.find((q: any) => q?.isDefault) || list[0] || null;
+          if (!defaultQueue?.id) {
+            return {
+              response,
+              mode,
+              queued: { success: false, error: 'missing_queue' },
+              publishedNow: null as any,
+            };
+          }
+
+          await publishingQueuesApi.addQueueItem(String(defaultQueue.id), contentId);
+          return { response, mode, queued: { success: true }, publishedNow: null as any };
+        } catch (error) {
+          return { response, mode, queued: { success: false, error }, publishedNow: null as any };
+        }
+      }
+
+      try {
+        if (groupId) {
+          await contentApi.publishContentGroupNow(groupId);
+          return { response, mode, queued: null as any, publishedNow: { success: true } };
+        }
+
+        const contentId =
+          typeof (response as any)?.content?.id === 'string'
+            ? String((response as any).content.id)
+            : Array.isArray((response as any)?.contents) &&
+                typeof (response as any).contents[0]?.id === 'string'
+              ? String((response as any).contents[0].id)
+              : null;
+        if (!contentId) {
+          return {
+            response,
+            mode,
+            queued: null as any,
+            publishedNow: { success: false, error: 'missing_content' },
+          };
+        }
+
+        await contentApi.publishNow(contentId);
+        return { response, mode, queued: null as any, publishedNow: { success: true } };
+      } catch (error) {
+        return { response, mode, queued: null as any, publishedNow: { success: false, error } };
+      }
     },
-    onSuccess: (response: any, mode) => {
+    onSuccess: (result: any) => {
+      const response = result?.response;
+      const mode = result?.mode as 'draft' | 'schedule' | 'queue' | 'now';
       queryClient.invalidateQueries({ queryKey: ['content'] });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.invalidateQueries({ queryKey: ['drafts'] });
@@ -1167,7 +1378,11 @@ export function PostEditor({
       const hasCampaign = !!selectedCampaign;
 
       let message = 'Post created successfully!';
-      if (isScheduled && hasCampaign) {
+      if (mode === 'queue') {
+        message = 'Added to queue';
+      } else if (mode === 'now') {
+        message = 'Publishing started';
+      } else if (isScheduled && hasCampaign) {
         message = 'Scheduling started and added to campaign';
       } else if (isScheduled) {
         message = 'Scheduling started';
@@ -1175,11 +1390,35 @@ export function PostEditor({
         message = 'Post created and added to campaign!';
       }
 
-      toast.success(message, {
-        description: isScheduled
-          ? 'Scheduling started. You can keep editing while we prepare it.'
-          : 'Draft created. You can keep editing it here.',
-      });
+      if (mode === 'queue') {
+        const queued = result?.queued;
+        if (queued?.success) {
+          toast.success(message, {
+            description: 'We’ll auto-schedule it into upcoming slots.',
+          });
+        } else {
+          toast.error(getQueueErrorMessage(queued?.error), {
+            description: 'Your post was created as a draft (not queued).',
+          });
+        }
+      } else if (mode === 'now') {
+        const published = result?.publishedNow;
+        if (published?.success) {
+          toast.success(message, {
+            description: 'We’re publishing it now.',
+          });
+        } else {
+          toast.error(getScheduleErrorMessage(published?.error, 'Failed to publish now.'), {
+            description: 'Your post was created as a draft (not published).',
+          });
+        }
+      } else {
+        toast.success(message, {
+          description: isScheduled
+            ? 'Scheduling started. You can keep editing while we prepare it.'
+            : 'Draft created. You can keep editing it here.',
+        });
+      }
 
       const createdContentId =
         typeof response?.content?.id === 'string'
@@ -1202,7 +1441,7 @@ export function PostEditor({
       navigate('/content');
       onRequestClose?.();
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('Failed to create post:', error);
       toast.error(getScheduleErrorMessage(error, 'Failed to create post. Please try again.'));
     },
@@ -1701,6 +1940,8 @@ export function PostEditor({
   const qCaption = searchParams.get('caption');
   const qScheduledAt = searchParams.get('scheduledAt');
   const qCampaignId = searchParams.get('campaignId');
+  const qContentType = searchParams.get('contentType');
+  const qTargetSocialAccountId = searchParams.get('targetSocialAccountId');
   const qAssetId = searchParams.get('assetId');
   const qAssetIdsParam = searchParams.get('assetIds');
   const prefillAssetIds = useMemo(() => {
@@ -1759,10 +2000,20 @@ export function PostEditor({
 
   useEffect(() => {
     if (!isCreating || prefillAppliedRef.current === true) return;
+    const normalizedTargetSocialAccountId =
+      typeof qTargetSocialAccountId === 'string' && qTargetSocialAccountId.trim().length > 0
+        ? qTargetSocialAccountId.trim()
+        : null;
+    const normalizedContentType =
+      qContentType === 'post' || qContentType === 'reel' || qContentType === 'story'
+        ? (qContentType as InstagramContentType)
+        : null;
     const hasPrefillInput =
       Boolean(qCaption) ||
       Boolean(qScheduledAt) ||
       Boolean(qCampaignId) ||
+      Boolean(normalizedTargetSocialAccountId) ||
+      Boolean(normalizedContentType) ||
       prefillAssetIds.length > 0;
     if (!hasPrefillInput) {
       return;
@@ -1770,6 +2021,11 @@ export function PostEditor({
 
     // If we have assetIds, wait until the query finishes (success or error)
     if (prefillAssetIds.length > 0 && isPrefillAssetsLoading) {
+      return;
+    }
+
+    // If we need to prefill a destination, wait until platform options load.
+    if (normalizedTargetSocialAccountId && platformPickerOptions.length === 0) {
       return;
     }
 
@@ -1785,7 +2041,10 @@ export function PostEditor({
       return {
         ...prev,
         caption: qCaption ?? prev.caption,
-        scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
+        scheduledAt: qScheduledAt
+          ? formatScheduledInput(qScheduledAt, brandTimezone)
+          : prev.scheduledAt,
+        contentType: normalizedContentType ?? prev.contentType,
         ...(nextAssets.length
           ? {
               carouselAssets: nextAssets,
@@ -1794,15 +2053,29 @@ export function PostEditor({
       };
     });
     if (qCampaignId) setSelectedCampaign(qCampaignId);
+
+    if (normalizedTargetSocialAccountId) {
+      const exists = platformPickerOptions.some(
+        (opt) => opt.id === normalizedTargetSocialAccountId
+      );
+      if (exists) {
+        setSelectedPlatformAccountIds([normalizedTargetSocialAccountId]);
+        platformsInitializedRef.current = true;
+      }
+    }
     prefillAppliedRef.current = true;
   }, [
     isCreating,
     qCaption,
     qScheduledAt,
     qCampaignId,
+    qContentType,
+    qTargetSocialAccountId,
     prefillAssetIds,
     isPrefillAssetsLoading,
     prefillAssets,
+    brandTimezone,
+    platformPickerOptions,
   ]);
 
   // Fetch campaigns for the brand
@@ -1844,6 +2117,41 @@ export function PostEditor({
     schedulingSupported: effectiveSchedulingSupported,
   });
   const createScheduleDisabled = isCreatingPost || Boolean(scheduleBlocker);
+
+  const saveDraftDisabled = false;
+  const saveDraftBlocker = null;
+
+  const publishNowDisabled =
+    !validation.ok ||
+    !hasSelectedPlatforms ||
+    !publishingSupported ||
+    Boolean(selectedCampaignPaused);
+  const publishNowBlocker = (() => {
+    if (!hasSelectedPlatforms) return 'Select at least one destination in Destinations.';
+    if (!publishingSupported) return 'Publishing is not available for this destination.';
+    if (selectedCampaignPaused) return 'Cannot publish content for a paused campaign.';
+    if (!validation.ok) return validationError || 'Please fix validation errors before continuing.';
+    return null;
+  })();
+
+  const queueDisabled = !validation.ok || !hasSelectedPlatforms || !queueSupportedForSelection;
+  const queueBlocker = (() => {
+    if (!hasSelectedPlatforms) return 'Select at least one destination in Destinations.';
+    if (!queueSupportedForSelection)
+      return 'Queue scheduling is not available for this destination.';
+    if (!validation.ok) return validationError || 'Please fix validation errors before continuing.';
+    return null;
+  })();
+
+  const pickSlotDisabled = selectedPlatformAccountIds.length !== 1 || !queueSupportedForSelection;
+  const pickSlotBlocker = (() => {
+    if (!hasSelectedPlatforms) return 'Select at least one destination in Destinations.';
+    if (!queueSupportedForSelection)
+      return 'Slot schedules are not available for this destination.';
+    if (selectedPlatformAccountIds.length !== 1)
+      return 'Select exactly one destination to pick a slot.';
+    return null;
+  })();
 
   const handleCloseSidebar = () => {
     if (layout === 'sidebar') {
@@ -2049,7 +2357,7 @@ export function PostEditor({
   ]);
 
   const primaryEditCtaLabel = useMemo(() => {
-    if (disabled) return 'Save Changes';
+    if (disabled) return 'Save';
     const hadScheduled = isMultiDestinationGroup
       ? contentGroupSchedule.kind !== 'none'
       : Boolean(post?.scheduledAt);
@@ -2074,7 +2382,7 @@ export function PostEditor({
       return 'Save & Update Schedule';
     }
     // Pure content changes on an unscheduled post
-    return 'Save Changes';
+    return 'Save';
   }, [
     brandTimezone,
     contentGroupSchedule.kind,
@@ -3006,10 +3314,20 @@ export function PostEditor({
               scheduleBlocker={scheduleBlocker}
               createScheduleDisabled={createScheduleDisabled}
               isCreatingPost={isCreatingPost}
-              validationOk={validation.ok && hasSelectedPlatforms}
+              saveDraftDisabled={saveDraftDisabled}
+              saveDraftBlocker={saveDraftBlocker}
+              publishNowDisabled={publishNowDisabled}
+              publishNowBlocker={publishNowBlocker}
               onScheduledAtChange={(value) => setFormData((s) => ({ ...s, scheduledAt: value }))}
               onSchedule={() => createPost('schedule')}
               onSaveDraft={() => createPost('draft')}
+              onAddToQueue={() => createPost('queue')}
+              onPublishNow={() => createPost('now')}
+              queueDisabled={queueDisabled}
+              queueBlocker={queueBlocker}
+              onPickSlot={() => setSlotPickerOpen(true)}
+              pickSlotDisabled={pickSlotDisabled}
+              pickSlotBlocker={pickSlotBlocker}
               onUpgradePlan={() => (window.location.href = '/limits')}
             />
           );
@@ -3040,9 +3358,35 @@ export function PostEditor({
               if (id) unschedulePost(id);
             }}
             onSave={handleSaveChanges}
+            onAddToQueue={() => addToQueue()}
+            queueDisabled={!queueSupportedForPost || isScheduled}
+            isQueueing={isQueueing}
           />
         );
       })()}
+
+      <QueueSlotPickerDialog
+        open={slotPickerOpen}
+        onOpenChange={setSlotPickerOpen}
+        socialAccountId={
+          isCreating && selectedPlatformAccountIds.length === 1
+            ? selectedPlatformAccountIds[0]!
+            : null
+        }
+        laneKey={
+          formData.contentType === 'reel' || formData.contentType === 'story'
+            ? formData.contentType
+            : 'post'
+        }
+        brandTimezone={brandTimezone}
+        onPick={(scheduledAtIso) =>
+          setFormData((s) => ({
+            ...s,
+            scheduledAt: formatScheduledInput(scheduledAtIso, brandTimezone),
+          }))
+        }
+      />
+
       {showAssetPicker && brandIdForAssets && (
         <AssetPicker
           brandId={brandIdForAssets}

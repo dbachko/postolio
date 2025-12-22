@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/select';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
-import { SocialAccountsManager } from '@/components/social/SocialAccountsManager';
 import { BrandAnalysisPanel } from '@/components/BrandAnalysisPanel';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { Label } from '@/components/ui/label';
@@ -497,11 +496,6 @@ export function Brands() {
                     </div>
                   )}
 
-                  {/* Social Accounts Section */}
-                  <div className="mt-4 border-t pt-4">
-                    <SocialAccountsManager brand={selectedBrand} />
-                  </div>
-
                   {/* Brand Analysis Section */}
                   <div id="brand-analysis-panel" className="mt-6">
                     <BrandAnalysisPanel brandId={selectedBrand.id} />
@@ -647,11 +641,6 @@ export function Brands() {
                         </div>
                       </div>
                     )}
-
-                    {/* Social Accounts Section */}
-                    <div className="mt-4 border-t pt-4">
-                      <SocialAccountsManager brand={brand} />
-                    </div>
                   </div>
                 ))}
             </div>

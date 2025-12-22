@@ -26,7 +26,7 @@ import type { SocialAccountsById } from '@/types/social-accounts';
 export interface FullCalendarProps {
   brandId: string;
   brandTimezone: string;
-  view: 'month' | 'week' | 'three-day' | 'schedule';
+  view: 'month' | 'week' | 'three-day';
   date: Date;
   content?: Content[];
   placeholders?: PlaceholderItem[];
@@ -93,7 +93,6 @@ function FullCalendarImpl({
   }, [socialAccountsQuery.data]);
 
   const calendarView = CALENDAR_VIEW_MAP[view] ?? 'month';
-  const calendarDate = calendarView === 'agenda' ? new Date() : date;
   const isTouch = isTouchDevice();
   const touchDndOptions = isTouch
     ? {
@@ -172,7 +171,7 @@ function FullCalendarImpl({
       <PostolioCalendar
         localizer={localizer}
         view={calendarView as never}
-        date={calendarView === 'agenda' ? new Date() : calendarDate}
+        date={date}
         events={events as never}
         weekStartsOn={weekStartsOn}
         dragAndDrop

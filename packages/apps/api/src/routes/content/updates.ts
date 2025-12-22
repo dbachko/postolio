@@ -8,6 +8,7 @@ import { Prisma } from '@postolio/database';
 
 import learningService from '../../services/learning.js';
 import { schedulerService } from '../../services/scheduler.js';
+import { publishingQueueScheduler } from '../../services/publishing-queue/queue-scheduler.js';
 import { buildContentResponse } from '../../services/content-response-builder.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
@@ -74,6 +75,9 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           },
           campaign: {
             select: { id: true, status: true },
+          },
+          publishingQueueItem: {
+            select: { id: true, queueId: true, laneKey: true },
           },
           mediaAssets: {
             select: { assetId: true, displayOrder: true },
@@ -221,76 +225,85 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         .map((asset) => asset.assetId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
-      let resolvedAssets: (AssetRecord | null)[] = [];
-      if (assetIds.length > 0) {
-        try {
-          const assetsClient = getAssetsClient();
-          resolvedAssets = await assetsClient.getBatchAssets(assetIds);
-        } catch (error) {
-          request.log.error(
-            { err: error, contentId, assetCount: assetIds.length },
-            'Failed to fetch media assets'
-          );
-          return reply
-            .code(400)
-            .send({ error: 'Failed to fetch linked media assets. Please try again.' });
+      const isUnscheduling = scheduledAt !== undefined && !scheduledAt;
+      const requiresPublishableValidation =
+        !isUnscheduling &&
+        (Boolean(content.publishingQueueItem) ||
+          content.status === 'scheduled' ||
+          (scheduledAt !== undefined && Boolean(scheduledAt)));
+
+      if (requiresPublishableValidation) {
+        let resolvedAssets: (AssetRecord | null)[] = [];
+        if (assetIds.length > 0) {
+          try {
+            const assetsClient = getAssetsClient();
+            resolvedAssets = await assetsClient.getBatchAssets(assetIds);
+          } catch (error) {
+            request.log.error(
+              { err: error, contentId, assetCount: assetIds.length },
+              'Failed to fetch media assets'
+            );
+            return reply
+              .code(400)
+              .send({ error: 'Failed to fetch linked media assets. Please try again.' });
+          }
         }
-      }
 
-      const missingAssets = resolvedAssets
-        .map((asset, idx) => (!asset ? assetIds[idx] : null))
-        .filter((id): id is string => Boolean(id));
-      if (missingAssets.length > 0) {
-        return reply.code(400).send({
-          error: 'Some linked media assets could not be found',
-          details: missingAssets,
-        });
-      }
+        const missingAssets = resolvedAssets
+          .map((asset, idx) => (!asset ? assetIds[idx] : null))
+          .filter((id): id is string => Boolean(id));
+        if (missingAssets.length > 0) {
+          return reply.code(400).send({
+            error: 'Some linked media assets could not be found',
+            details: missingAssets,
+          });
+        }
 
-      const resolvedById = new Map(
-        (resolvedAssets.filter(Boolean) as AssetRecord[]).map((asset) => [asset.id, asset])
-      );
-      const mediaAssetsForValidation: { key: string; type: 'image' | 'video' }[] = joinMediaAssets
-        .map((asset) => {
-          const resolved = resolvedById.get(asset.assetId);
-          if (!resolved) return null;
-          return {
-            key: resolved.id,
-            type: resolved.fileType === 'video' ? 'video' : 'image',
-          };
-        })
-        .filter((asset): asset is { key: string; type: 'image' | 'video' } => Boolean(asset));
+        const resolvedById = new Map(
+          (resolvedAssets.filter(Boolean) as AssetRecord[]).map((asset) => [asset.id, asset])
+        );
+        const mediaAssetsForValidation: { key: string; type: 'image' | 'video' }[] = joinMediaAssets
+          .map((asset) => {
+            const resolved = resolvedById.get(asset.assetId);
+            if (!resolved) return null;
+            return {
+              key: resolved.id,
+              type: resolved.fileType === 'video' ? 'video' : 'image',
+            };
+          })
+          .filter((asset): asset is { key: string; type: 'image' | 'video' } => Boolean(asset));
 
-      const mediaTypeHint: ValidationMediaType | undefined =
-        effectiveContentType === 'reel'
-          ? 'video'
-          : mediaAssetsForValidation.some((asset) => asset.type === 'video')
+        const mediaTypeHint: ValidationMediaType | undefined =
+          effectiveContentType === 'reel'
             ? 'video'
-            : mediaAssetsForValidation.length > 0
-              ? 'image'
-              : undefined;
+            : mediaAssetsForValidation.some((asset) => asset.type === 'video')
+              ? 'video'
+              : mediaAssetsForValidation.length > 0
+                ? 'image'
+                : undefined;
 
-      const validationPlatform = toValidationPlatform(destinationPlatform);
-      if (!validationPlatform) {
-        return reply.code(400).send({
-          error: 'unsupported_platform',
-          message: `Platform ${destinationPlatform} is not supported for content updates yet`,
+        const validationPlatform = toValidationPlatform(destinationPlatform);
+        if (!validationPlatform) {
+          return reply.code(400).send({
+            error: 'unsupported_platform',
+            message: `Platform ${destinationPlatform} is not supported for content updates yet`,
+          });
+        }
+
+        const validation = validateContentPayload({
+          platform: validationPlatform,
+          contentType: effectiveContentType,
+          mediaType: mediaTypeHint,
+          caption: effectiveContentType === 'story' ? '' : effectiveCaption,
+          mediaAssets: mediaAssetsForValidation,
         });
-      }
 
-      const validation = validateContentPayload({
-        platform: validationPlatform,
-        contentType: effectiveContentType,
-        mediaType: mediaTypeHint,
-        caption: effectiveContentType === 'story' ? '' : effectiveCaption,
-        mediaAssets: mediaAssetsForValidation,
-      });
-
-      if (!validation.ok) {
-        return reply.code(400).send({
-          error: validation.errors[0]?.message || 'Invalid content payload',
-          details: validation.errors,
-        });
+        if (!validation.ok) {
+          return reply.code(400).send({
+            error: validation.errors[0]?.message || 'Invalid content payload',
+            details: validation.errors,
+          });
+        }
       }
 
       if (caption !== undefined) {
@@ -691,6 +704,46 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             'Error syncing schedule payload after content update'
           );
         }
+      }
+
+      // Queue triggers:
+      // - If a queued post is manually scheduled at a fixed time, remove it from the queue (becomes fixed-time).
+      // - If a queued post's contentType changes, move it to the end of the new lane and recompute.
+      const queueItem = content.publishingQueueItem;
+      const manualScheduled = scheduledAt !== undefined && Boolean(scheduledAt);
+      const requestedLaneKey =
+        contentType === 'reel' || contentType === 'story' || contentType === 'post'
+          ? contentType
+          : null;
+
+      try {
+        if (queueItem) {
+          if (manualScheduled) {
+            await prisma.publishingQueueItem.delete({ where: { id: queueItem.id } });
+            await publishingQueueScheduler.recomputeBrandWindow(content.brand.id);
+          } else if (requestedLaneKey && requestedLaneKey !== String(queueItem.laneKey)) {
+            const maxPosition = await prisma.publishingQueueItem.findFirst({
+              where: { queueId: queueItem.queueId, laneKey: requestedLaneKey },
+              select: { position: true },
+              orderBy: { position: 'desc' },
+            });
+
+            await prisma.publishingQueueItem.update({
+              where: { id: queueItem.id },
+              data: {
+                laneKey: requestedLaneKey,
+                position: (maxPosition?.position ?? 0) + 1,
+              },
+            });
+
+            await publishingQueueScheduler.recomputeBrandWindow(content.brand.id);
+          }
+        }
+      } catch (queueError) {
+        request.log.warn(
+          { err: queueError, contentId },
+          'Queue maintenance failed after content update'
+        );
       }
 
       // Apply AI learning if there were changes

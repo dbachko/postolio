@@ -96,19 +96,19 @@ model Brand {
 }
 
 model ContentGroup {
-  id                 String   @id @default(cuid())
-  brandId            String
-  templateInitialized Boolean  @default(false)
-  templateCaption    String?
-  templateContentType String?
-  templateShareToFeed Boolean?
-  templateThumbOffset Int?
+  id                   String   @id @default(cuid())
+  brandId              String
+  templateInitialized  Boolean  @default(false)
+  templateCaption      String?
+  templateContentType  String?
+  templateShareToFeed  Boolean?
+  templateThumbOffset  Int?
   templateFirstComment String?
-  templateAssetIds    String[] @default([])
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  templateAssetIds     String[] @default([])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  brand    Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand    Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   contents Content[]
 
   @@index([brandId])
@@ -116,33 +116,34 @@ model ContentGroup {
 }
 
 model Content {
-  id                   String               @id @default(cuid())
-  caption              String
-  hashtags             String[]
-  status               ContentStatus        @default(draft)
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  scheduledAt          DateTime?
-  postedAt             DateTime?
-  generationParams     Json?
-  brandId              String
-  campaignId           String?
-  contentGroupId       String?
+  id                    String               @id @default(cuid())
+  caption               String
+  hashtags              String[]
+  status                ContentStatus        @default(draft)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  scheduledAt           DateTime?
+  postedAt              DateTime?
+  generationParams      Json?
+  brandId               String
+  campaignId            String?
+  contentGroupId        String?
   targetSocialAccountId String?
-  schedulingError      String?
-  contentType          String               @default("post") // 'post' | 'reel' | 'story'
-  shareToFeed          Boolean? // For reels: show in both feed and Reels tab
-  thumbOffset          Int? // Optional thumbnail offset in milliseconds
-  firstComment         String? // Optional first comment text (max 2200 chars)
-  firstCommentStatus   String? // 'pending' | 'posted' | 'failed' | 'retrying'
-  firstCommentPostedAt DateTime? // ISO timestamp of successful comment
-  firstCommentError    String? // Error message if comment failed
-  brand                Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  campaign             Campaign?            @relation(fields: [campaignId], references: [id])
-  contentGroup         ContentGroup?        @relation(fields: [contentGroupId], references: [id], onDelete: SetNull)
+  schedulingError       String?
+  contentType           String               @default("post") // 'post' | 'reel' | 'story'
+  shareToFeed           Boolean? // For reels: show in both feed and Reels tab
+  thumbOffset           Int? // Optional thumbnail offset in milliseconds
+  firstComment          String? // Optional first comment text (max 2200 chars)
+  firstCommentStatus    String? // 'pending' | 'posted' | 'failed' | 'retrying'
+  firstCommentPostedAt  DateTime? // ISO timestamp of successful comment
+  firstCommentError     String? // Error message if comment failed
+  brand                 Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  campaign              Campaign?            @relation(fields: [campaignId], references: [id])
+  contentGroup          ContentGroup?        @relation(fields: [contentGroupId], references: [id], onDelete: SetNull)
   targetSocialAccount   SocialAccount?       @relation(fields: [targetSocialAccountId], references: [id])
-  mediaAssets          ContentMediaAsset[]
-  publications         ContentPublication[]
+  mediaAssets           ContentMediaAsset[]
+  publications          ContentPublication[]
+  publishingQueueItem   PublishingQueueItem?
 
   @@index([brandId, status])
   @@index([scheduledAt])
@@ -315,6 +316,7 @@ model SocialAccount {
   brand                Brand                 @relation(fields: [brandId], references: [id], onDelete: Cascade)
   publications         ContentPublication[]
   targetedContent      Content[]
+  publishingQueues     PublishingQueue[]
   accountMetricSamples AccountMetricSample[]
   accountMetricsLatest AccountMetricsLatest?
 
@@ -322,6 +324,61 @@ model SocialAccount {
   @@index([brandId, platform])
   @@index([brandId, sortOrder])
   @@map("social_accounts")
+}
+
+model PublishingQueue {
+  id              String   @id @default(cuid())
+  socialAccountId String
+  name            String
+  paused          Boolean  @default(false)
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  socialAccount SocialAccount         @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  slots         PublishingQueueSlot[]
+  items         PublishingQueueItem[]
+
+  @@unique([socialAccountId, name])
+  @@index([socialAccountId])
+  @@map("publishing_queues")
+}
+
+model PublishingQueueSlot {
+  id              String   @id @default(cuid())
+  queueId         String
+  socialAccountId String // denormalized for uniqueness across queues per account
+  dayOfWeek       Int // 0=Sun..6=Sat
+  localTime       String // "HH:mm"
+  enabled         Boolean  @default(true)
+  laneKey         String   @default("post") // "post" | "reel" | "story" | "any"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  queue PublishingQueue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+
+  // Prevent double-booking: one social account can only have one slot at a given day+time across all queues.
+  @@unique([socialAccountId, dayOfWeek, localTime])
+  @@index([queueId])
+  @@map("publishing_queue_slots")
+}
+
+model PublishingQueueItem {
+  id        String    @id @default(cuid())
+  queueId   String
+  contentId String    @unique
+  laneKey   String    @default("post") // "post" | "reel" | "story"
+  position  Int // order within lane
+  notBefore DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  queue   PublishingQueue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  content Content         @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([queueId])
+  @@index([queueId, laneKey, position])
+  @@map("publishing_queue_items")
 }
 
 model ContentPublication {

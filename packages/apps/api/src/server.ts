@@ -55,6 +55,7 @@ import instagramWebhookRoutes from './routes/instagram-webhook.js';
 import dmAutomationRoutes from './routes/dm-automation.js';
 import savedRepliesRoutes from './routes/saved-replies.js';
 import imageProviderRoutes from './routes/image-providers.js';
+import publishingQueuesRoutes from './routes/publishing-queues.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import type { Redis } from 'ioredis';
@@ -314,6 +315,9 @@ export function buildFastify(): FastifyInstance {
 
   // Saved Replies API
   app.register(savedRepliesRoutes, { prefix: '/api' });
+
+  // Publishing queues (slot-based scheduling)
+  app.register(publishingQueuesRoutes, { prefix: '/api' });
 
   // Image Providers API
   app.register(imageProviderRoutes, { prefix: '/api/image-providers' });

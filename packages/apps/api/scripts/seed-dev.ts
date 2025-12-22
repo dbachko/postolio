@@ -312,6 +312,180 @@ async function main() {
     },
   });
 
+  console.log('==> Seeding publishing queues + weekly calendars (slot templates)…');
+
+  const seedQueuesForSocialAccount = async (
+    socialAccountId: string
+  ): Promise<{
+    defaultQueueId: string;
+    evergreenQueueId: string;
+    defaultSlotCount: number;
+    evergreenSlotCount: number;
+  }> => {
+    const defaultQueue = await prisma.publishingQueue.create({
+      data: {
+        socialAccountId,
+        name: 'Default',
+        paused: false,
+        isDefault: true,
+      },
+      select: { id: true },
+    });
+
+    const evergreenQueue = await prisma.publishingQueue.create({
+      data: {
+        socialAccountId,
+        name: 'Evergreen',
+        paused: false,
+        isDefault: false,
+      },
+      select: { id: true },
+    });
+
+    const defaultStorySlots = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId,
+      dayOfWeek,
+      localTime: '08:30',
+      laneKey: 'story',
+      enabled: true,
+    }));
+
+    const defaultPostSlots = [1, 3, 5].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId,
+      dayOfWeek,
+      localTime: '11:00',
+      laneKey: 'post',
+      enabled: true,
+    }));
+
+    const defaultReelSlots = [2, 4, 6].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId,
+      dayOfWeek,
+      localTime: '14:00',
+      laneKey: 'reel',
+      enabled: true,
+    }));
+
+    const defaultAnySlots = [0, 2, 4].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId,
+      dayOfWeek,
+      localTime: '16:30',
+      laneKey: 'any',
+      enabled: true,
+    }));
+
+    const evergreenPostSlots = [0, 2, 4].map((dayOfWeek) => ({
+      queueId: evergreenQueue.id,
+      socialAccountId,
+      dayOfWeek,
+      localTime: '18:00',
+      laneKey: 'post',
+      enabled: true,
+    }));
+
+    const defaultSlots = [
+      ...defaultStorySlots,
+      ...defaultPostSlots,
+      ...defaultReelSlots,
+      ...defaultAnySlots,
+    ];
+    await prisma.publishingQueueSlot.createMany({ data: defaultSlots });
+
+    const evergreenSlots = [...evergreenPostSlots];
+    await prisma.publishingQueueSlot.createMany({ data: evergreenSlots });
+
+    return {
+      defaultQueueId: defaultQueue.id,
+      evergreenQueueId: evergreenQueue.id,
+      defaultSlotCount: defaultSlots.length,
+      evergreenSlotCount: evergreenSlots.length,
+    };
+  };
+
+  const instagramQueues = await seedQueuesForSocialAccount(instagramSocialAccount.id);
+  const facebookQueues = await seedQueuesForSocialAccount(facebookSocialAccount.id);
+
+  console.log(
+    [
+      `✅ Seeded queues:`,
+      `IG(Default)=${instagramQueues.defaultQueueId} (${instagramQueues.defaultSlotCount} slots), IG(Evergreen)=${instagramQueues.evergreenQueueId} (${instagramQueues.evergreenSlotCount} slots)`,
+      `FB(Default)=${facebookQueues.defaultQueueId} (${facebookQueues.defaultSlotCount} slots), FB(Evergreen)=${facebookQueues.evergreenQueueId} (${facebookQueues.evergreenSlotCount} slots)`,
+    ].join(' ')
+  );
+
+  console.log('==> Seeding a few queued items for calendar previews…');
+
+  async function seedQueuedDraft(opts: {
+    targetSocialAccountId: string;
+    queueId: string;
+    laneKey: 'post' | 'reel' | 'story';
+    position: number;
+    caption: string;
+  }) {
+    const created = await prisma.content.create({
+      data: {
+        brandId: brand.id,
+        targetSocialAccountId: opts.targetSocialAccountId,
+        caption: opts.caption,
+        hashtags: [],
+        status: 'draft',
+        contentType: opts.laneKey,
+      },
+      select: { id: true },
+    });
+
+    await prisma.publishingQueueItem.create({
+      data: {
+        queueId: opts.queueId,
+        contentId: created.id,
+        laneKey: opts.laneKey,
+        position: opts.position,
+      },
+      select: { id: true },
+    });
+  }
+
+  await seedQueuedDraft({
+    targetSocialAccountId: instagramSocialAccount.id,
+    queueId: instagramQueues.defaultQueueId,
+    laneKey: 'post',
+    position: 1,
+    caption: 'Queued (post) — Demo item',
+  });
+  await seedQueuedDraft({
+    targetSocialAccountId: instagramSocialAccount.id,
+    queueId: instagramQueues.defaultQueueId,
+    laneKey: 'reel',
+    position: 1,
+    caption: 'Queued (reel) — Demo item',
+  });
+  await seedQueuedDraft({
+    targetSocialAccountId: instagramSocialAccount.id,
+    queueId: instagramQueues.defaultQueueId,
+    laneKey: 'story',
+    position: 1,
+    caption: '',
+  });
+  await seedQueuedDraft({
+    targetSocialAccountId: instagramSocialAccount.id,
+    queueId: instagramQueues.evergreenQueueId,
+    laneKey: 'post',
+    position: 1,
+    caption: 'Evergreen queue — Demo item',
+  });
+
+  await seedQueuedDraft({
+    targetSocialAccountId: facebookSocialAccount.id,
+    queueId: facebookQueues.defaultQueueId,
+    laneKey: 'post',
+    position: 1,
+    caption: 'Queued (Facebook post) — Demo item',
+  });
+
   // Helper for date formatting to yyyy-MM-dd
   const pad = (n: number) => String(n).padStart(2, '0');
   const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

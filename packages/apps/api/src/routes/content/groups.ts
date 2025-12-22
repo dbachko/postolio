@@ -9,8 +9,11 @@ import { validateContentPayload } from '@postolio/content-validation';
 import type { AssetRecord } from '@postolio/assets-client';
 
 import { getDatabaseClient } from '../../config/database.js';
+import { getMaxQueueDepthForTier } from '../../constants/subscription.js';
 import { getAssetsClient } from '../../services/assets-media.js';
 import { assertBrandOwnership } from '../../services/ownership.js';
+import { validateQueueableContent } from '../../services/publishing-queue/queue-content-validation.js';
+import { publishingQueueScheduler } from '../../services/publishing-queue/queue-scheduler.js';
 import { schedulerService } from '../../services/scheduler.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
@@ -1273,6 +1276,253 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send({ success: true, contentId: destination.id });
+    }
+  );
+
+  // POST /api/content/groups/:contentGroupId/queue
+  // Fan-out into each destination account’s Default queue (Buffer-style).
+  fastify.post<{ Params: { contentGroupId: string } }>(
+    '/groups/:contentGroupId/queue',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const userId = request.user!.id;
+      const { contentGroupId } = request.params;
+
+      if (!contentGroupId || typeof contentGroupId !== 'string') {
+        return reply.code(400).send({ success: false, error: 'invalid_content_group_id' });
+      }
+
+      const group = await prisma.contentGroup.findUnique({
+        where: { id: contentGroupId },
+        include: {
+          brand: {
+            select: { id: true, userId: true, user: { select: { subscriptionTier: true } } },
+          },
+          contents: {
+            select: {
+              id: true,
+              status: true,
+              contentType: true,
+              targetSocialAccountId: true,
+            },
+          },
+        },
+      });
+
+      if (!group || !group.brand) {
+        return reply.code(404).send({ success: false, error: 'content_group_not_found' });
+      }
+
+      if (group.brand.userId !== userId) {
+        return reply.code(404).send({ success: false, error: 'content_group_not_found' });
+      }
+
+      await assertBrandOwnership(userId, group.brandId);
+
+      if (group.contents.some((c) => c.status === 'published')) {
+        return reply.code(400).send({
+          success: false,
+          error: 'content_group_immutable',
+          message: 'This content group contains published posts and cannot be enqueued',
+        });
+      }
+
+      const destinations = group.contents
+        .map((c) => ({
+          contentId: c.id,
+          contentType: c.contentType,
+          targetSocialAccountId: c.targetSocialAccountId,
+        }))
+        .filter(
+          (c): c is { contentId: string; contentType: string; targetSocialAccountId: string } =>
+            Boolean(c.targetSocialAccountId && c.targetSocialAccountId.trim())
+        )
+        .map((c) => ({
+          ...c,
+          targetSocialAccountId: c.targetSocialAccountId.trim(),
+        }));
+
+      if (destinations.length !== group.contents.length) {
+        return reply.code(400).send({
+          success: false,
+          error: 'invalid_target_social_account',
+          message: 'One or more destination social accounts are missing from this group',
+        });
+      }
+
+      for (const dest of destinations) {
+        const readiness = await validateQueueableContent({
+          contentId: dest.contentId,
+          brandId: group.brandId,
+          socialAccountId: dest.targetSocialAccountId,
+        });
+        if (!readiness.ok) {
+          return reply.code(400).send({
+            success: false,
+            error: readiness.code,
+            message: readiness.message,
+            details: {
+              contentId: dest.contentId,
+              socialAccountId: dest.targetSocialAccountId,
+              readinessDetails: readiness.details,
+            },
+          });
+        }
+      }
+
+      const tier = group.brand.user?.subscriptionTier || 'free';
+      const maxDepth = getMaxQueueDepthForTier(tier);
+
+      const normalizeLaneKey = (raw: unknown): 'post' | 'reel' | 'story' => {
+        if (raw === 'reel' || raw === 'story') return raw;
+        return 'post';
+      };
+
+      const enqueued: Array<{
+        contentId: string;
+        socialAccountId: string;
+        queueId: string;
+        itemId: string;
+      }> = [];
+
+      try {
+        await prisma.$transaction(async (tx) => {
+          const uniqueSocialAccountIds = Array.from(
+            new Set(destinations.map((d) => d.targetSocialAccountId))
+          );
+
+          const currentDepthByAccount = new Map<string, number>();
+          if (Number.isFinite(maxDepth)) {
+            for (const saId of uniqueSocialAccountIds) {
+              const count = await tx.publishingQueueItem.count({
+                where: { queue: { socialAccountId: saId } },
+              });
+              currentDepthByAccount.set(saId, count);
+            }
+          }
+
+          const resolveDefaultQueueId = async (socialAccountId: string): Promise<string> => {
+            const existingDefault = await tx.publishingQueue.findFirst({
+              where: { socialAccountId, isDefault: true },
+              select: { id: true },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (existingDefault) return existingDefault.id;
+
+            const byName = await tx.publishingQueue.findFirst({
+              where: { socialAccountId, name: 'Default' },
+              select: { id: true },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (byName) {
+              await tx.publishingQueue.update({
+                where: { id: byName.id },
+                data: { isDefault: true },
+              });
+              return byName.id;
+            }
+
+            const created = await tx.publishingQueue.create({
+              data: {
+                socialAccountId,
+                name: 'Default',
+                isDefault: true,
+              },
+              select: { id: true },
+            });
+            return created.id;
+          };
+
+          const defaultQueueIdByAccount = new Map<string, string>();
+          for (const saId of uniqueSocialAccountIds) {
+            defaultQueueIdByAccount.set(saId, await resolveDefaultQueueId(saId));
+          }
+
+          const nextPositionByQueueLane = new Map<string, number>();
+          const resolveNextPosition = async (queueId: string, laneKey: string): Promise<number> => {
+            const key = `${queueId}:${laneKey}`;
+            const existing = nextPositionByQueueLane.get(key);
+            if (typeof existing === 'number') {
+              nextPositionByQueueLane.set(key, existing + 1);
+              return existing;
+            }
+
+            const maxRow = await tx.publishingQueueItem.findFirst({
+              where: { queueId, laneKey },
+              select: { position: true },
+              orderBy: { position: 'desc' },
+            });
+            const start = (maxRow?.position ?? 0) + 1;
+            nextPositionByQueueLane.set(key, start + 1);
+            return start;
+          };
+
+          for (const dest of destinations) {
+            const socialAccountId = dest.targetSocialAccountId;
+            const queueId = defaultQueueIdByAccount.get(socialAccountId)!;
+            const laneKey = normalizeLaneKey(dest.contentType);
+
+            const existingItem = await tx.publishingQueueItem.findUnique({
+              where: { contentId: dest.contentId },
+              select: { id: true },
+            });
+
+            if (!existingItem && Number.isFinite(maxDepth)) {
+              const current = currentDepthByAccount.get(socialAccountId) ?? 0;
+              if (current + 1 > (maxDepth as number)) {
+                throw new Error('queue_depth_limit');
+              }
+              currentDepthByAccount.set(socialAccountId, current + 1);
+            }
+
+            const position = await resolveNextPosition(queueId, laneKey);
+
+            const item = await tx.publishingQueueItem.upsert({
+              where: { contentId: dest.contentId },
+              create: {
+                queueId,
+                contentId: dest.contentId,
+                laneKey,
+                position,
+              },
+              update: {
+                queueId,
+                laneKey,
+                position,
+              },
+              select: { id: true, queueId: true, contentId: true },
+            });
+
+            enqueued.push({
+              contentId: item.contentId,
+              socialAccountId,
+              queueId: item.queueId,
+              itemId: item.id,
+            });
+          }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'queue_depth_limit') {
+          return reply.code(402).send({
+            success: false,
+            error: 'queue_depth_limit',
+            maxAllowed: maxDepth,
+          });
+        }
+        request.log.error({ err: error }, 'Failed to enqueue content group');
+        return reply.code(500).send({ success: false, error: 'failed_to_enqueue_group' });
+      }
+
+      const recompute = await publishingQueueScheduler.recomputeBrandWindow(group.brandId);
+
+      return reply.send({
+        success: true,
+        data: {
+          contentGroupId,
+          enqueued,
+          recompute,
+        },
+      });
     }
   );
 

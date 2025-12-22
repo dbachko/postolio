@@ -93,6 +93,12 @@ export class ContentClient {
     });
   }
 
+  queueContentGroup(contentGroupId: string) {
+    return this.request(`/api/content/groups/${encodeURIComponent(contentGroupId)}/queue`, {
+      method: 'POST',
+    });
+  }
+
   updateContentGroupTemplate(
     contentGroupId: string,
     template: {

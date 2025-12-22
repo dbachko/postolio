@@ -8,6 +8,7 @@ import { AnalyticsClient } from './analytics-client';
 import { OnboardingClient } from './onboarding-client';
 import { DMAutomationClient } from './dm-automation-client';
 import { SavedRepliesClient } from './saved-replies-client';
+import { PublishingQueuesClient } from './publishing-queues-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -22,6 +23,7 @@ export const onboarding = new OnboardingClient(http);
 export const analytics = new AnalyticsClient(http);
 export const dmAutomation = new DMAutomationClient(http);
 export const savedReplies = new SavedRepliesClient(http);
+export const publishingQueues = new PublishingQueuesClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 

@@ -6,6 +6,7 @@ import { FullCalendar } from './calendar/FullCalendar';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CalendarFilters } from './calendar/CalendarFilters/index';
 import { CalendarExport } from './calendar/CalendarExport/index';
+import { QueueSchedulesView } from './calendar/QueueSchedules/QueueSchedulesView';
 import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
@@ -28,7 +29,7 @@ import { formatGmtOffset } from './calendar/FullCalendar/utils/timezone';
 
 // type guard no longer needed for the month grid only
 
-type ViewMode = 'month' | 'week' | 'three-day' | 'schedule';
+type ViewMode = 'month' | 'week' | 'three-day' | 'queue';
 
 interface ContentCalendarProps {
   brandId: string;
@@ -72,7 +73,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   // Read view + date from URL once
   useEffect(() => {
     const v = searchParams.get('view');
-    if (v === 'month' || v === 'week' || v === 'three-day' || v === 'schedule') {
+    if (v === 'month' || v === 'week' || v === 'three-day' || v === 'queue') {
       setViewMode(v as ViewMode);
     } else {
       // Default to a mobile-friendly 3-day view on small screens
@@ -86,7 +87,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       const d = isYm ? new Date(`${dateParam}-01T00:00:00`) : new Date(dateParam);
       if (!isNaN(d.getTime())) {
         // For week/3-day views, if the URL only carries year-month, prefer today's date
-        if ((v === 'week' || v === 'three-day') && isYm) {
+        if ((v === 'week' || v === 'three-day' || v === 'queue') && isYm) {
           setCurrentDate(new Date());
         } else {
           setCurrentDate(d);
@@ -222,7 +223,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     setCurrentDate((prev) => {
       let next = prev;
       if (viewMode === 'month') next = subMonths(prev, 1);
-      else if (viewMode === 'week' || viewMode === 'schedule')
+      else if (viewMode === 'week' || viewMode === 'queue')
         next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
       else if (viewMode === 'three-day')
         next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 3);
@@ -235,7 +236,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     setCurrentDate((prev) => {
       let next = prev;
       if (viewMode === 'month') next = addMonths(prev, 1);
-      else if (viewMode === 'week' || viewMode === 'schedule')
+      else if (viewMode === 'week' || viewMode === 'queue')
         next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
       else if (viewMode === 'three-day')
         next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 3);
@@ -330,7 +331,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
               <SelectItem value="month">Month</SelectItem>
               <SelectItem value="week">Week</SelectItem>
               <SelectItem value="three-day">3 Days</SelectItem>
-              <SelectItem value="schedule">Schedule</SelectItem>
+              <SelectItem value="queue">Queues</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -388,6 +389,13 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       {/* FullCalendar (no extra wrapper card/border) */}
       {calendarDisabled ? (
         <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
+      ) : viewMode === 'queue' ? (
+        <QueueSchedulesView
+          brandId={brandId}
+          brandTimezone={brandTimezone}
+          date={currentDate}
+          calendarContent={content}
+        />
       ) : (
         <ErrorBoundary
           fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}

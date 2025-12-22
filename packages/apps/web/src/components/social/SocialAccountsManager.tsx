@@ -9,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ProfileAvatar } from '@/components/ui/profile-avatar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
 import {
   closestCenter,
   DndContext,
@@ -30,9 +30,10 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { GripVertical, Link2, Loader2, Plus } from 'lucide-react';
+import { Calendar, GripVertical, Link2, Loader2, Plus, RefreshCw, Unlink } from 'lucide-react';
 import { FacebookIcon, InstagramIcon } from '@/components/icons/BrandIcons';
 import { SocialAccountsPicker } from '@/components/social/SocialAccountsPicker';
+import { SocialAccountQueueSettingsDialog } from '@/components/social/SocialAccountQueueSettingsDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,40 +98,34 @@ function SortableAccountRow({
   isPrimary,
   isSyncing,
   onSync,
+  onQueueSettings,
   onDisconnect,
 }: {
   account: ConnectedAccount;
   isPrimary: boolean;
   isSyncing: boolean;
   onSync: (() => void) | null;
+  onQueueSettings: () => void;
   onDisconnect: () => void;
 }) {
-  const config = (() => {
-    try {
-      return getPlatformConfig(account.platform as any);
-    } catch {
-      return null;
-    }
-  })();
-
   const title = account.displayName || account.username || account.externalAccountId;
   const subtitle =
     account.platform === 'instagram' && account.username ? `@${account.username}` : null;
   const tokenBadge = (() => {
     const status = account.tokenStatus || (account.disconnected ? 'disconnected' : 'unknown');
-    const label = (() => {
+    const { longLabel, shortLabel } = (() => {
       switch (status) {
         case 'healthy':
-          return 'Token OK';
+          return { longLabel: 'Token OK', shortLabel: 'OK' };
         case 'expiring':
-          return 'Token expiring';
+          return { longLabel: 'Token expiring', shortLabel: 'Expiring' };
         case 'expired':
-          return 'Token expired';
+          return { longLabel: 'Token expired', shortLabel: 'Expired' };
         case 'disconnected':
-          return 'Disconnected';
+          return { longLabel: 'Disconnected', shortLabel: 'Disconnected' };
         case 'unknown':
         default:
-          return 'Token unknown';
+          return { longLabel: 'Token unknown', shortLabel: 'Unknown' };
       }
     })();
 
@@ -153,7 +148,8 @@ function SortableAccountRow({
     const title = account.tokenExpiresAt ? `Expires at ${account.tokenExpiresAt}` : undefined;
     return (
       <Badge variant={variant} className="shrink-0" title={title}>
-        {label}
+        <span className="sm:hidden">{shortLabel}</span>
+        <span className="hidden sm:inline">{longLabel}</span>
       </Badge>
     );
   })();
@@ -180,7 +176,7 @@ function SortableAccountRow({
     <div
       ref={setRefs}
       style={style}
-      className="bg-card flex items-center justify-between gap-3 rounded-lg border p-3"
+      className="bg-card flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
       data-dragging={isDragging ? 'true' : undefined}
       data-over={isOver ? 'true' : undefined}
     >
@@ -196,13 +192,16 @@ function SortableAccountRow({
         >
           <GripVertical className="h-4 w-4" />
         </Button>
-        <ProfileAvatar src={account.profilePictureUrl || null} name={title} alt={title} size="md" />
+        <SocialAccountAvatar
+          platform={account.platform as Platform}
+          name={title}
+          src={account.profilePictureUrl || null}
+          size="md"
+          muted={false}
+        />
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="truncate text-sm font-medium">{title}</div>
-            <Badge variant="secondary" className="shrink-0">
-              {config?.displayName || account.platform}
-            </Badge>
             {isPrimary && (
               <Badge variant="default" className="shrink-0">
                 Primary
@@ -213,14 +212,30 @@ function SortableAccountRow({
           {subtitle && <div className="text-muted-foreground truncate text-xs">{subtitle}</div>}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+        <Button variant="outline" size="sm" onClick={onQueueSettings} aria-label="Weekly Calendar">
+          <Calendar className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Weekly Calendar</span>
+        </Button>
         {onSync ? (
-          <Button variant="outline" disabled={isSyncing} onClick={onSync}>
-            {isSyncing ? 'Syncing…' : 'Sync'}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isSyncing}
+            onClick={onSync}
+            aria-label="Sync"
+          >
+            {isSyncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">{isSyncing ? 'Syncing…' : 'Sync'}</span>
           </Button>
         ) : null}
-        <Button variant="outline" onClick={onDisconnect}>
-          Disconnect
+        <Button variant="outline" size="sm" onClick={onDisconnect} aria-label="Disconnect">
+          <Unlink className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Disconnect</span>
         </Button>
       </div>
     </div>
@@ -241,6 +256,8 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectedAccount | null>(null);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
   const [orderedConnectedIds, setOrderedConnectedIds] = useState<string[]>([]);
+  const [queueSettingsOpen, setQueueSettingsOpen] = useState(false);
+  const [queueSettingsAccountId, setQueueSettingsAccountId] = useState<string | null>(null);
 
   const accountsQuery = useQuery({
     queryKey: ['brand-social-accounts', brand.id],
@@ -613,6 +630,33 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
     return orderedConnectedIds.map((id) => byId.get(id)).filter(Boolean) as ConnectedAccount[];
   }, [connectedAccounts, orderedConnectedIds]);
 
+  const queueSettingsAccount = useMemo(() => {
+    if (!queueSettingsAccountId) return null;
+    const match = socialAccounts.find((a) => a.id === queueSettingsAccountId);
+    if (!match) return null;
+    return {
+      id: match.id,
+      platform: match.platform,
+      username: match.username ?? null,
+      displayName: match.displayName ?? null,
+      externalAccountId: match.externalAccountId ?? null,
+      profilePictureUrl: match.profilePictureUrl ?? null,
+    };
+  }, [queueSettingsAccountId, socialAccounts]);
+
+  const allAccountOptions = useMemo(
+    () =>
+      socialAccounts.map((a) => ({
+        id: a.id,
+        platform: a.platform,
+        username: a.username ?? null,
+        displayName: a.displayName ?? null,
+        externalAccountId: a.externalAccountId ?? null,
+        profilePictureUrl: a.profilePictureUrl ?? null,
+      })),
+    [socialAccounts]
+  );
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function moveId(list: string[], activeId: string, overId: string): string[] {
@@ -631,8 +675,8 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
 
   const connectButtons = (
     <TooltipProvider>
-      <div className="flex items-center gap-2">
-        <div className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="text-muted-foreground flex w-full items-center gap-1 text-xs font-medium sm:w-auto">
           {connectActionLabel === 'Add' ? (
             <Plus className="h-3.5 w-3.5" />
           ) : (
@@ -662,7 +706,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
               ) : (
                 <InstagramIcon className="h-4 w-4" aria-hidden="true" />
               )}
-              <span>Instagram</span>
+              <span className="hidden sm:inline">Instagram</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Connect Instagram (Business/Creator)</TooltipContent>
@@ -688,7 +732,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
               ) : (
                 <FacebookIcon className="h-4 w-4" aria-hidden="true" />
               )}
-              <span>Facebook</span>
+              <span className="hidden sm:inline">Facebook</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Connect Facebook (Pages)</TooltipContent>
@@ -725,7 +769,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
 
         {!accountsQuery.isLoading && connectedAccounts.length > 0 && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground text-sm">
                 Connected:{' '}
                 <span className="text-foreground font-medium">{connectedAccounts.length}</span>
@@ -762,6 +806,10 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                       isPrimary={primarySocialAccountId === account.id}
                       isSyncing={isSyncing}
                       onSync={canSync ? () => syncPostsMutation.mutate(account) : null}
+                      onQueueSettings={() => {
+                        setQueueSettingsAccountId(account.id);
+                        setQueueSettingsOpen(true);
+                      }}
                       onDisconnect={() => handleDisconnect(account)}
                     />
                   );
@@ -877,11 +925,12 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                                 checked={checked}
                                 onCheckedChange={(v) => toggleCandidate(c.candidateId, v === true)}
                               />
-                              <ProfileAvatar
-                                src={c.profilePictureUrl || null}
+                              <SocialAccountAvatar
+                                platform="instagram"
                                 name={title}
-                                alt={title}
+                                src={c.profilePictureUrl || null}
                                 size="md"
+                                muted={false}
                               />
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium">{title}</div>
@@ -890,9 +939,6 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                                     {subtitle}
                                   </div>
                                 )}
-                              </div>
-                              <div className="ml-auto">
-                                <Badge variant="secondary">Instagram</Badge>
                               </div>
                             </label>
                           );
@@ -917,14 +963,18 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                                 checked={checked}
                                 onCheckedChange={(v) => toggleCandidate(c.candidateId, v === true)}
                               />
+                              <SocialAccountAvatar
+                                platform="facebook"
+                                name={title}
+                                src={c.profilePictureUrl || null}
+                                size="md"
+                                muted={false}
+                              />
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium">{title}</div>
                                 <div className="text-muted-foreground truncate text-xs">
                                   Page ID: {c.externalAccountId}
                                 </div>
-                              </div>
-                              <div className="ml-auto">
-                                <Badge variant="secondary">Facebook</Badge>
                               </div>
                             </label>
                           );
@@ -958,6 +1008,16 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <SocialAccountQueueSettingsDialog
+          open={queueSettingsOpen}
+          onOpenChange={(next) => {
+            setQueueSettingsOpen(next);
+            if (!next) setQueueSettingsAccountId(null);
+          }}
+          account={queueSettingsAccount}
+          allAccounts={allAccountOptions}
+        />
 
         {/* Disconnect dialog */}
         <AlertDialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>

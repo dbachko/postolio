@@ -17,6 +17,7 @@ import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
 import { DMAutomation } from './pages/DMAutomation';
+import { SocialAccounts } from './pages/SocialAccounts';
 import { Settings } from './pages/Settings';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
@@ -226,6 +227,19 @@ const router = createBrowserRouter([
         <OnboardingGuard>
           <Layout>
             <Brands />
+          </Layout>
+        </OnboardingGuard>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/social-accounts',
+    element: (
+      <ProtectedRoute>
+        <OnboardingGuard>
+          <Layout>
+            <SocialAccounts />
           </Layout>
         </OnboardingGuard>
       </ProtectedRoute>

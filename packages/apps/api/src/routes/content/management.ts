@@ -120,8 +120,12 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        const isDraftCreate = !body.scheduledAt;
+
         // Resolve assets (unified for single and carousel)
-        const assetResult = await resolveAssets(body.assetIds, body.brandId, request);
+        const assetResult = await resolveAssets(body.assetIds, body.brandId, request, {
+          enforceUniformAspectRatio: !isDraftCreate,
+        });
         if (!assetResult.success) {
           return reply.code(assetResult.code || 500).send({ error: assetResult.error });
         }
@@ -129,69 +133,71 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         const normalizedContentType = (body.contentType ?? 'post') as any;
         const resolvedAssets = assetResult.resolvedAssets ?? [];
 
-        // Extra constraints (current product limitations):
-        // - Reels require exactly one video asset
-        // - Carousels currently support images only
-        if (normalizedContentType === 'reel') {
-          if (resolvedAssets.length !== 1 || resolvedAssets[0]?.fileType !== 'video') {
-            return reply.code(400).send({
-              error: 'invalid_media',
-              message: 'Reels require exactly one video asset',
-            });
+        if (!isDraftCreate) {
+          // Extra constraints (current product limitations):
+          // - Reels require exactly one video asset
+          // - Carousels currently support images only
+          if (normalizedContentType === 'reel') {
+            if (resolvedAssets.length !== 1 || resolvedAssets[0]?.fileType !== 'video') {
+              return reply.code(400).send({
+                error: 'invalid_media',
+                message: 'Reels require exactly one video asset',
+              });
+            }
           }
-        }
-        if (resolvedAssets.length > 1) {
-          const nonImages = resolvedAssets.filter((a) => a.fileType !== 'image');
-          if (nonImages.length > 0) {
-            return reply.code(400).send({
-              error: 'invalid_media',
-              message: 'Carousels currently support images only',
-            });
-          }
-        }
-
-        const mediaAssetsForValidation = resolvedAssets.map((asset) => ({
-          key: asset.id,
-          type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
-        }));
-        const mediaTypeHint =
-          normalizedContentType === 'reel' ||
-          mediaAssetsForValidation.some((a) => a.type === 'video')
-            ? 'video'
-            : mediaAssetsForValidation.length > 0
-              ? 'image'
-              : undefined;
-        const captionForValidation = normalizedContentType === 'story' ? '' : body.caption;
-
-        const platformsToValidate =
-          resolvedDestinations.length > 0
-            ? resolvedDestinations.map((d) => d.platform)
-            : ['instagram'];
-
-        for (const platform of platformsToValidate) {
-          const validationPlatform = toValidationPlatform(platform);
-          if (!validationPlatform) {
-            return reply.code(400).send({
-              error: 'unsupported_platform',
-              message: `Platform ${platform} is not supported for content creation yet`,
-            });
+          if (resolvedAssets.length > 1) {
+            const nonImages = resolvedAssets.filter((a) => a.fileType !== 'image');
+            if (nonImages.length > 0) {
+              return reply.code(400).send({
+                error: 'invalid_media',
+                message: 'Carousels currently support images only',
+              });
+            }
           }
 
-          const validation = validateContentPayload({
-            platform: validationPlatform,
-            contentType: normalizedContentType,
-            mediaType: mediaTypeHint,
-            caption: captionForValidation,
-            mediaAssets: mediaAssetsForValidation,
-          });
+          const mediaAssetsForValidation = resolvedAssets.map((asset) => ({
+            key: asset.id,
+            type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
+          }));
+          const mediaTypeHint =
+            normalizedContentType === 'reel' ||
+            mediaAssetsForValidation.some((a) => a.type === 'video')
+              ? 'video'
+              : mediaAssetsForValidation.length > 0
+                ? 'image'
+                : undefined;
+          const captionForValidation = normalizedContentType === 'story' ? '' : body.caption;
 
-          if (!validation.ok) {
-            return reply.code(400).send({
-              error: 'invalid_content',
-              message: validation.errors[0]?.message || 'Invalid content payload',
-              platform,
-              details: validation.errors,
+          const platformsToValidate =
+            resolvedDestinations.length > 0
+              ? resolvedDestinations.map((d) => d.platform)
+              : ['instagram'];
+
+          for (const platform of platformsToValidate) {
+            const validationPlatform = toValidationPlatform(platform);
+            if (!validationPlatform) {
+              return reply.code(400).send({
+                error: 'unsupported_platform',
+                message: `Platform ${platform} is not supported for content creation yet`,
+              });
+            }
+
+            const validation = validateContentPayload({
+              platform: validationPlatform,
+              contentType: normalizedContentType,
+              mediaType: mediaTypeHint,
+              caption: captionForValidation,
+              mediaAssets: mediaAssetsForValidation,
             });
+
+            if (!validation.ok) {
+              return reply.code(400).send({
+                error: 'invalid_content',
+                message: validation.errors[0]?.message || 'Invalid content payload',
+                platform,
+                details: validation.errors,
+              });
+            }
           }
         }
 
