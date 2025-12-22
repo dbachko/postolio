@@ -534,6 +534,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
             where: { id: contentId },
             data: {
               status: 'published',
+              postedAt: new Date(publishResult.publishedAt),
               updatedAt: new Date(),
             },
           });

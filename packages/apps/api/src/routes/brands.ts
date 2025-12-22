@@ -189,21 +189,35 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           brandTimezone
         );
 
+        const whereWithoutPublications = {
+          brandId,
+          OR: [
+            { scheduledAt: { gte: monthStart, lte: monthEnd } },
+            { postedAt: { gte: monthStart, lte: monthEnd } },
+          ],
+        };
+
+        const whereWithPublications = {
+          ...whereWithoutPublications,
+          OR: [
+            ...whereWithoutPublications.OR,
+            {
+              publications: {
+                some: { publishedAt: { gte: monthStart, lte: monthEnd } },
+              },
+            },
+          ],
+        };
+
         // Get existing content for the month with campaign info for color coding
         let content: Array<any> = [];
         let hasPublications = true;
         try {
           content = await prisma.content.findMany({
-            where: {
-              brandId,
-              OR: [
-                { scheduledAt: { gte: monthStart, lte: monthEnd } },
-                { postedAt: { gte: monthStart, lte: monthEnd } },
-              ],
-            },
+            where: whereWithPublications,
             include: {
               campaign: { select: { id: true, name: true, color: true } },
-              publications: { select: { platform: true, permalink: true } },
+              publications: { select: { platform: true, permalink: true, publishedAt: true } },
               mediaAssets: {
                 select: { assetId: true, displayOrder: true },
                 orderBy: { displayOrder: 'asc' },
@@ -218,13 +232,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           if (code === 'P2021' || /content_publications/.test(String(e?.message || ''))) {
             hasPublications = false;
             content = await prisma.content.findMany({
-              where: {
-                brandId,
-                OR: [
-                  { scheduledAt: { gte: monthStart, lte: monthEnd } },
-                  { postedAt: { gte: monthStart, lte: monthEnd } },
-                ],
-              },
+              where: whereWithoutPublications,
               include: {
                 campaign: { select: { id: true, name: true, color: true } },
                 mediaAssets: {
@@ -265,6 +273,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           const primaryPermalink = hasPublications
             ? ig?.permalink || pubs[0]?.permalink || null
             : null;
+          const derivedPostedAt = hasPublications
+            ? (item.postedAt ?? ig?.publishedAt ?? pubs[0]?.publishedAt ?? null)
+            : (item.postedAt ?? null);
           const normalizedMediaAssets = Array.isArray((item as any).mediaAssets)
             ? ((item as any).mediaAssets as Array<{ assetId: string; displayOrder: number }>)
             : [];
@@ -276,7 +287,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             hashtags: item.hashtags,
             status: item.status,
             scheduledAt: item.scheduledAt,
-            postedAt: item.postedAt,
+            postedAt: derivedPostedAt,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
             brandId: item.brandId,
