@@ -9,6 +9,7 @@ import { getStatusBroadcaster } from './broadcast-registry.js';
 import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
 import type { ImageProvider } from './image-providers/types.js';
+import { resolvePostDestinationSocialAccountIds } from './post-destination-resolver.js';
 
 const prisma = getDatabaseClient();
 const campaignJobsLogger = baseLogger.child({ module: 'campaign-jobs' });
@@ -90,10 +91,23 @@ class CampaignJobService {
       const configRaw = campaign.config as unknown;
       const config =
         configRaw && typeof configRaw === 'object'
-          ? (configRaw as { themes: string[]; style?: string; imageProvider?: ImageProvider })
+          ? (configRaw as {
+              themes: string[];
+              style?: string;
+              imageProvider?: ImageProvider;
+              targetSocialAccountIds?: unknown;
+            })
           : { themes: [] as string[], style: undefined, imageProvider: undefined };
 
       // No numeric progress updates stored in DB
+      const destinations = await resolvePostDestinationSocialAccountIds({
+        brandId: campaign.brandId,
+        explicitSocialAccountIds: config.targetSocialAccountIds,
+      });
+      const targetSocialAccountId = destinations.socialAccountIds[0] ?? null;
+      if (!targetSocialAccountId) {
+        throw new Error('No connected destinations available for this brand');
+      }
 
       // Generate preview content using themes from campaign config
       const contentRequests: ContentGenerationRequest[] = config.themes.map((theme: string) => ({
@@ -191,6 +205,7 @@ class CampaignJobService {
             hashtags: extractHashtagsFromCaption(post.caption),
             brandId: campaign.brandId,
             campaignId: campaign.id,
+            targetSocialAccountId,
             status: 'draft', // Preview posts start as draft
             generationParams: {
               theme: config.themes?.[0] || 'preview',

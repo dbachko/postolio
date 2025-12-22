@@ -124,6 +124,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       .optional(),
     // Image provider selection (optional - falls back to brand or system default)
     imageProvider: z.enum(IMAGE_PROVIDERS).optional(),
+    // Optional: override brand default destinations for campaign posts
+    targetSocialAccountIds: z.array(z.string()).optional(),
   });
 
   type ConfigureBody = z.infer<typeof ConfigureSchema>;
@@ -260,6 +262,14 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
               .join('; ')
           : body.style?.trim();
 
+        const sanitizedTargetSocialAccountIds = Array.isArray(body.targetSocialAccountIds)
+          ? Array.from(
+              new Set(
+                body.targetSocialAccountIds.map((id) => id.trim()).filter((id) => id.length > 0)
+              )
+            )
+          : undefined;
+
         const config: CampaignConfig = {
           name: body.name,
           brandId: body.brandId,
@@ -280,6 +290,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             ? { seasonalityAssist: body.seasonalityAssist }
             : {}),
           ...(body.imageProvider ? { imageProvider: body.imageProvider } : {}),
+          ...(sanitizedTargetSocialAccountIds && sanitizedTargetSocialAccountIds.length > 0
+            ? { targetSocialAccountIds: sanitizedTargetSocialAccountIds }
+            : {}),
         };
 
         // Validate campaign configuration

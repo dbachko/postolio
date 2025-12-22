@@ -4,6 +4,7 @@ import type { ImageProvider } from '../image-providers/types.js';
 export interface CampaignConfig {
   name?: string; // Optional: Auto-generated if not provided
   brandId: string;
+  targetSocialAccountIds?: string[]; // Optional: overrides brand default destinations for campaign posts
   duration: {
     start: Date;
     end: Date;

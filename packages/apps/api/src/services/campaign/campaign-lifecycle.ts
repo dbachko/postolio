@@ -8,6 +8,7 @@ import { logger as baseLogger } from '@postolio/logger';
 import { APIError } from '@postolio/errors';
 import { SCHEDULING_BUFFER_MS } from './campaign-constants.js';
 import type { CampaignStartResult } from './campaign-types.js';
+import { resolvePostDestinationSocialAccountIds } from '../post-destination-resolver.js';
 
 const prisma = getDatabaseClient();
 const logger = baseLogger.child({ module: 'campaign-lifecycle-service' });
@@ -59,6 +60,7 @@ export class CampaignLifecycleService {
               postingTime?: string;
               themes?: string[];
               style?: string;
+              targetSocialAccountIds?: unknown;
             })
           : {};
 
@@ -83,6 +85,20 @@ export class CampaignLifecycleService {
         config.postingTime,
         campaign.brandId
       );
+
+      const destinations = await resolvePostDestinationSocialAccountIds({
+        brandId: campaign.brandId,
+        explicitSocialAccountIds: config.targetSocialAccountIds,
+      });
+      const fallbackTargetSocialAccountId = destinations.socialAccountIds[0] ?? null;
+      if (!fallbackTargetSocialAccountId) {
+        throw new APIError(
+          'No connected destinations available for this brand',
+          'CAMPAIGN_NO_DESTINATIONS',
+          400,
+          { campaignId, brandId: campaign.brandId }
+        );
+      }
 
       // Get existing preview posts for this campaign
       const existingPreviews = await prisma.content.findMany({
@@ -137,6 +153,8 @@ export class CampaignLifecycleService {
           data: {
             status: 'draft', // Keep as draft until AWS sync confirms scheduling
             scheduledAt: hasValidScheduledDate ? scheduledDate : null,
+            targetSocialAccountId:
+              existingPost.targetSocialAccountId || fallbackTargetSocialAccountId,
             generationParams: {
               ...((existingPost?.generationParams as Record<string, unknown>) || {}),
               campaignGenerated: true,

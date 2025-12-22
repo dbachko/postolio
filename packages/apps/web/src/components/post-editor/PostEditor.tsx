@@ -33,8 +33,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { AssetReference } from '@/components/MultiImageUploader';
-import type { PostStatus } from '@/components/PostStatusCard';
-import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { toUTCFromInput, getUserTimezone } from '@/lib/timezone';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -2419,13 +2417,6 @@ export function PostEditor({
           <div className="flex items-center gap-2 whitespace-nowrap">
             {layout === 'sidebar' && id && !isLoading && post ? (
               <>
-                <PostStatusBadge
-                  status={(post.status as PostStatus) || 'draft'}
-                  generationParams={post.generationParams}
-                  schedulingError={post.schedulingError || null}
-                  scheduledAt={post.scheduledAt}
-                  className="shrink-0 whitespace-nowrap"
-                />
                 {post.status === 'published' && post.instagramPermalink ? (
                   <Button
                     type="button"
@@ -2705,7 +2696,6 @@ export function PostEditor({
                             Reset to Template
                           </Button>
                         )}
-                        {previewToggleButton}
                       </div>
                     </div>
                   </div>

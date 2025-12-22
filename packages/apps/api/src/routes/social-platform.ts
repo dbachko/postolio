@@ -773,6 +773,26 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
 
           if (existingByBrand) {
+            // Best-effort backfill: ensure imported/published content has a destination set.
+            // This helps older synced content rows that predate targetSocialAccountId usage.
+            try {
+              const contentId = (existingByBrand as any)?.contentId;
+              const destinationId =
+                typeof (existingByBrand as any)?.socialAccountId === 'string' &&
+                (existingByBrand as any).socialAccountId.trim()
+                  ? (existingByBrand as any).socialAccountId.trim()
+                  : socialAccount.id;
+
+              if (typeof contentId === 'string' && contentId.trim() && destinationId) {
+                await prisma.content.updateMany({
+                  where: { id: contentId.trim(), targetSocialAccountId: null },
+                  data: { targetSocialAccountId: destinationId },
+                });
+              }
+            } catch {
+              // Ignore backfill failures; do not block sync.
+            }
+
             skippedCount++;
             continue;
           }
@@ -786,6 +806,19 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
 
           if (existingByAccount) {
+            // Best-effort backfill for legacy rows missing destination.
+            try {
+              const contentId = (existingByAccount as any)?.contentId;
+              if (typeof contentId === 'string' && contentId.trim()) {
+                await prisma.content.updateMany({
+                  where: { id: contentId.trim(), targetSocialAccountId: null },
+                  data: { targetSocialAccountId: socialAccount.id },
+                });
+              }
+            } catch {
+              // Ignore backfill failures; do not block sync.
+            }
+
             skippedCount++;
             continue;
           }
@@ -820,6 +853,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
             content = await prisma.content.create({
               data: {
                 brandId,
+                targetSocialAccountId: socialAccount.id,
                 caption: post.caption,
                 hashtags: extractHashtagsFromCaption(post.caption),
                 status: 'published',

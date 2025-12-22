@@ -37,6 +37,8 @@ const initialState: CampaignWizardState = {
   imageProvider: null, // NEW: Image generation provider (for AI images)
   frequency: '',
   postingTime: '12:00',
+  useDefaultDestinations: true,
+  targetSocialAccountIds: [],
   priority: 5,
   promotionDetails: null,
   contentPillars: null,

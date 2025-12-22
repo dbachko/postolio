@@ -35,6 +35,8 @@ export interface CampaignWizardState {
   imageProvider: ImageProvider | null; // NEW: Image generation provider (for AI images)
   frequency: string; // allow custom schedules
   postingTime: string; // HH:mm
+  useDefaultDestinations: boolean;
+  targetSocialAccountIds: string[];
   priority: number;
   promotionDetails: PromotionDetails | null;
   contentPillars?: {

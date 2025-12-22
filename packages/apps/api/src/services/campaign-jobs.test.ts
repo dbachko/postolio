@@ -8,6 +8,7 @@ const dbState = {
     brand: { id: string; name: string; styleProfile: unknown };
   },
   createdContentIds: [] as string[],
+  createdContentArgs: [] as any[],
 };
 
 vi.mock('../config/database.js', () => {
@@ -22,7 +23,8 @@ vi.mock('../config/database.js', () => {
     content: {
       findMany: vi.fn(async () => []),
       deleteMany: vi.fn(async () => ({ count: 0 })),
-      create: vi.fn(async () => {
+      create: vi.fn(async (args: any) => {
+        dbState.createdContentArgs.push(args);
         const id = `content-${dbState.createdContentIds.length + 1}`;
         dbState.createdContentIds.push(id);
         return { id };
@@ -59,11 +61,20 @@ vi.mock('../utils/hashtag-extractor.js', () => ({
   extractHashtagsFromCaption: vi.fn(() => []),
 }));
 
+vi.mock('./post-destination-resolver.js', () => ({
+  resolvePostDestinationSocialAccountIds: vi.fn(async () => ({
+    socialAccountIds: ['sa-1'],
+    primarySocialAccountId: 'sa-1',
+    source: 'primary',
+  })),
+}));
+
 const { campaignJobService } = await import('./campaign-jobs.js');
 
 describe('campaign jobs', () => {
   beforeEach(() => {
     dbState.createdContentIds.length = 0;
+    dbState.createdContentArgs.length = 0;
     generateInstagramContent.mockClear();
 
     dbState.campaign = {
@@ -92,6 +103,10 @@ describe('campaign jobs', () => {
     for (const call of generateInstagramContent.mock.calls) {
       const request = call[1] as { imageProvider?: unknown };
       expect(request.imageProvider).toBe('gemini-2.5-flash');
+    }
+
+    for (const args of dbState.createdContentArgs) {
+      expect(args?.data?.targetSocialAccountId).toBe('sa-1');
     }
   });
 });

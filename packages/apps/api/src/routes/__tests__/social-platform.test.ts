@@ -56,6 +56,7 @@ vi.mock('../../config/database.js', () => {
     content: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       create: vi.fn(),
     },
     contentPublication: {
@@ -527,6 +528,13 @@ describe('Social Platform Routes', () => {
       expect(payload.success).toBe(true);
       expect(payload.synced).toBeGreaterThanOrEqual(0);
       expect(payload.results.synced).toBeGreaterThanOrEqual(0);
+      expect(mockPrisma.content.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            targetSocialAccountId: socialAccount.id,
+          }),
+        })
+      );
     });
 
     it('should skip posts that already exist for the brand and platform', async () => {

@@ -38,9 +38,15 @@ export function PostPreviewPanel({
     const account = items[0]?.account;
     if (!account) return 'Preview';
     const label = (account.label || '').trim();
-    if (label) return label;
+    if (label) {
+      return account.platform === 'instagram' && label.startsWith('@') ? label.slice(1) : label;
+    }
     const avatarName = (account.avatarName || '').trim();
-    if (avatarName) return avatarName;
+    if (avatarName) {
+      return account.platform === 'instagram' && avatarName.startsWith('@')
+        ? avatarName.slice(1)
+        : avatarName;
+    }
     return getPlatformConfig(account.platform).displayName;
   })();
 
@@ -63,7 +69,7 @@ export function PostPreviewPanel({
     </div>
   ) : (
     <div className={unstyled ? 'py-6' : 'p-4'}>
-      <Empty className="min-h-[240px]">
+      <Empty className="min-h-[240px] rounded-none border-0 bg-none">
         <EmptyMedia>
           <EyeOff className="h-5 w-5" />
         </EmptyMedia>

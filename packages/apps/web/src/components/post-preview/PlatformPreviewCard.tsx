@@ -31,6 +31,8 @@ const FB_REACTIONS_LABEL = '1.2K';
 const FB_COMMENTS_LABEL = '246 comments';
 const FB_SHARES_LABEL = '32 shares';
 
+const stripLeadingAt = (value: string) => (value.startsWith('@') ? value.slice(1) : value);
+
 const getAccountDisplayName = (account: PostPreviewItem['account']) => {
   const label = (account.label || '').trim();
   if (label) return label;
@@ -117,7 +119,7 @@ function MediaFrame({
 function InstagramPreviewCard({ item }: { item: PostPreviewItem }) {
   const { account, content } = item;
   const caption = (content.caption || '').trim();
-  const displayName = getAccountDisplayName(account);
+  const displayName = stripLeadingAt(getAccountDisplayName(account));
   const media = content.media || [];
   const mediaCount = media.length;
   const isVertical = content.contentType === 'story' || content.contentType === 'reel';

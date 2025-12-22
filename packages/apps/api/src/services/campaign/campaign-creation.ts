@@ -17,6 +17,7 @@ import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { APIError } from '@postolio/errors';
 import { buildConflictSummary } from './campaign-conflicts.js';
+import { resolvePostDestinationSocialAccountIds } from '../post-destination-resolver.js';
 import {
   calculateDurationDays,
   calculateEstimatedPosts,
@@ -172,6 +173,9 @@ export class CampaignCreationService {
             themes: config.themes,
             ...(config.style && config.style.trim().length > 0 ? { style: config.style } : {}),
             ...(config.imageProvider ? { imageProvider: config.imageProvider } : {}),
+            ...(Array.isArray(config.targetSocialAccountIds) && config.targetSocialAccountIds.length
+              ? { targetSocialAccountIds: config.targetSocialAccountIds }
+              : {}),
             postingTime: config.postingTime,
             estimatedPosts,
             durationDays,
@@ -258,6 +262,7 @@ export class CampaignCreationService {
         style?: string;
         themes?: string[];
         imageProvider?: ImageProvider;
+        targetSocialAccountIds?: unknown;
         estimatedPosts?: number;
         frequency?: string;
         durationDays?: number;
@@ -327,6 +332,20 @@ export class CampaignCreationService {
       // Trim to exact count requested
       examplePosts = examplePosts.slice(0, exampleCount);
 
+      const destinations = await resolvePostDestinationSocialAccountIds({
+        brandId: campaign.brandId,
+        explicitSocialAccountIds: config.targetSocialAccountIds,
+      });
+      const targetSocialAccountId = destinations.socialAccountIds[0] ?? null;
+      if (!targetSocialAccountId) {
+        throw new APIError(
+          'No connected destinations available for this brand',
+          'CAMPAIGN_NO_DESTINATIONS',
+          400,
+          { campaignId, brandId: campaign.brandId }
+        );
+      }
+
       // Check if preview posts already exist for this campaign
       const existingPreviews = await prisma.content.findMany({
         where: {
@@ -370,6 +389,7 @@ export class CampaignCreationService {
             hashtags: extractHashtagsFromCaption(post.caption),
             brandId: campaign.brandId,
             campaignId: campaignId,
+            targetSocialAccountId,
             status: 'draft', // Preview posts start as draft
             generationParams: {
               theme: config.themes?.[0] || 'preview',

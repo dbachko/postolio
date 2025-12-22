@@ -7,6 +7,7 @@ import { schedulerService } from './scheduler.js';
 import { computeUpcomingSlots } from './slot-utils.js';
 import { resolveGeneratedImageAsset, attachAssetToContent } from './assets-media.js';
 import type { ImageProvider } from './image-providers/types.js';
+import { resolvePostDestinationSocialAccountIds } from './post-destination-resolver.js';
 
 const prisma = getDatabaseClient();
 const slidingWindowLogger = baseLogger.child({ module: 'campaign-sliding-window' });
@@ -67,6 +68,7 @@ export class CampaignSlidingWindowService {
             themes?: string[];
             style?: string;
             imageProvider?: ImageProvider;
+            targetSocialAccountIds?: unknown;
           })
         : {};
 
@@ -80,6 +82,19 @@ export class CampaignSlidingWindowService {
 
     if (!durationStart || !durationEnd) {
       return { success: false, generated: 0, message: 'Campaign has no valid duration' };
+    }
+
+    const destinations = await resolvePostDestinationSocialAccountIds({
+      brandId: campaign.brandId,
+      explicitSocialAccountIds: config.targetSocialAccountIds,
+    });
+    const targetSocialAccountId = destinations.socialAccountIds[0] ?? null;
+    if (!targetSocialAccountId) {
+      return {
+        success: false,
+        generated: 0,
+        message: 'No connected destinations available for this brand',
+      };
     }
 
     // Timezone context
@@ -319,6 +334,7 @@ export class CampaignSlidingWindowService {
               hashtags: post.hashtags,
               brandId: campaign.brandId,
               campaignId: campaign.id,
+              targetSocialAccountId,
               status: 'draft',
               scheduledAt: slot, // store UTC; TimezoneService handles conversion in scheduler
               generationParams: {
