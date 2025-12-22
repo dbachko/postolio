@@ -118,6 +118,7 @@ body {
   position: absolute;
   top: 4px;
   left: 6px;
+  width: 22px;
   height: 18px;
   padding: 0 8px;
   border-radius: 9999px;
@@ -129,9 +130,6 @@ body {
   line-height: 18px;
   pointer-events: none;
   box-shadow: none;
-}
-.pc-day--today .pc-day-events {
-  margin-top: var(--pc-today-pill-clearance);
 }
 .pc-day-events {
   display: flex;
