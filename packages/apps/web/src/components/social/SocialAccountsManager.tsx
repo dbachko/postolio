@@ -33,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Calendar, GripVertical, Link2, Loader2, Plus, RefreshCw, Unlink } from 'lucide-react';
 import { FacebookIcon, InstagramIcon } from '@/components/icons/BrandIcons';
 import { SocialAccountsPicker } from '@/components/social/SocialAccountsPicker';
-import { SocialAccountQueueSettingsDialog } from '@/components/social/SocialAccountQueueSettingsDialog';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -244,6 +244,7 @@ function SortableAccountRow({
 
 export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccountsManagerProps) {
   const queryClient = useQueryClient();
+  const { openSidebar } = useRightSidebarRouter();
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectIntent, setConnectIntent] = useState<ConnectIntent>('instagram');
   const [connectingIntent, setConnectingIntent] = useState<ConnectIntent | null>(null);
@@ -256,8 +257,6 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectedAccount | null>(null);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
   const [orderedConnectedIds, setOrderedConnectedIds] = useState<string[]>([]);
-  const [queueSettingsOpen, setQueueSettingsOpen] = useState(false);
-  const [queueSettingsAccountId, setQueueSettingsAccountId] = useState<string | null>(null);
 
   const accountsQuery = useQuery({
     queryKey: ['brand-social-accounts', brand.id],
@@ -630,33 +629,6 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
     return orderedConnectedIds.map((id) => byId.get(id)).filter(Boolean) as ConnectedAccount[];
   }, [connectedAccounts, orderedConnectedIds]);
 
-  const queueSettingsAccount = useMemo(() => {
-    if (!queueSettingsAccountId) return null;
-    const match = socialAccounts.find((a) => a.id === queueSettingsAccountId);
-    if (!match) return null;
-    return {
-      id: match.id,
-      platform: match.platform,
-      username: match.username ?? null,
-      displayName: match.displayName ?? null,
-      externalAccountId: match.externalAccountId ?? null,
-      profilePictureUrl: match.profilePictureUrl ?? null,
-    };
-  }, [queueSettingsAccountId, socialAccounts]);
-
-  const allAccountOptions = useMemo(
-    () =>
-      socialAccounts.map((a) => ({
-        id: a.id,
-        platform: a.platform,
-        username: a.username ?? null,
-        displayName: a.displayName ?? null,
-        externalAccountId: a.externalAccountId ?? null,
-        profilePictureUrl: a.profilePictureUrl ?? null,
-      })),
-    [socialAccounts]
-  );
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function moveId(list: string[], activeId: string, overId: string): string[] {
@@ -806,10 +778,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                       isPrimary={primarySocialAccountId === account.id}
                       isSyncing={isSyncing}
                       onSync={canSync ? () => syncPostsMutation.mutate(account) : null}
-                      onQueueSettings={() => {
-                        setQueueSettingsAccountId(account.id);
-                        setQueueSettingsOpen(true);
-                      }}
+                      onQueueSettings={() => openSidebar('weekly-calendar', { id: account.id })}
                       onDisconnect={() => handleDisconnect(account)}
                     />
                   );
@@ -1008,16 +977,6 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <SocialAccountQueueSettingsDialog
-          open={queueSettingsOpen}
-          onOpenChange={(next) => {
-            setQueueSettingsOpen(next);
-            if (!next) setQueueSettingsAccountId(null);
-          }}
-          account={queueSettingsAccount}
-          allAccounts={allAccountOptions}
-        />
 
         {/* Disconnect dialog */}
         <AlertDialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>

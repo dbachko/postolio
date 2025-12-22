@@ -7,6 +7,7 @@ export type SidebarType =
   | 'brand-profile'
   | 'asset'
   | 'asset-upload'
+  | 'weekly-calendar'
   | (string & {});
 
 export interface SidebarRegistration {

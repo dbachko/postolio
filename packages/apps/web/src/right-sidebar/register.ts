@@ -4,6 +4,7 @@ import { PostSidebar } from './PostSidebar';
 import { BrandProfileSidebar } from './BrandProfileSidebar';
 import { AssetSidebar } from './AssetSidebar';
 import { AssetUploadSidebar } from './AssetUploadSidebar';
+import { WeeklyCalendarSidebar } from './WeeklyCalendarSidebar';
 
 // Register built-in sidebars
 SidebarRegistry['notifications'] = {
@@ -40,4 +41,10 @@ SidebarRegistry['asset-upload'] = {
   title: 'Upload Assets',
   Component: AssetUploadSidebar,
   defaultWidthPx: 560,
+};
+
+SidebarRegistry['weekly-calendar'] = {
+  title: 'Weekly Calendar',
+  Component: WeeklyCalendarSidebar,
+  defaultWidthPx: 900,
 };
