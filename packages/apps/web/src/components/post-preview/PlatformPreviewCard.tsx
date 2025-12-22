@@ -24,7 +24,6 @@ const contentTypeLabel: Record<string, string> = {
   story: 'Story',
 };
 
-const IG_LIKES_LABEL = '1,024 likes';
 const IG_COMMENTS_LABEL = 'View all comments';
 const IG_TIMESTAMP_LABEL = '1 minute ago';
 const FB_REACTIONS_LABEL = '1.2K';
@@ -180,7 +179,6 @@ function InstagramPreviewCard({ item }: { item: PostPreviewItem }) {
           </div>
 
           <div className="space-y-1 px-3 pb-3 text-sm">
-            <div className="text-foreground font-medium">{IG_LIKES_LABEL}</div>
             <p className="text-foreground line-clamp-2 text-sm">
               <span className="font-semibold">{displayName}</span>
               <span className={cn('ml-1', caption ? 'text-foreground' : 'text-muted-foreground')}>
