@@ -1,7 +1,22 @@
-import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { ensureDatabaseSchema } from '../src/config/database-setup.js';
 import type { ContentStatus, Campaign, CampaignStatus } from '@postolio/database';
+
+const envCandidates = [
+  path.resolve(process.cwd(), '.env'),
+  // When running from packages/apps/api
+  path.resolve(process.cwd(), '../../../.env'),
+  // When running from deeper paths
+  path.resolve(process.cwd(), '../../../../.env'),
+];
+
+for (const candidate of envCandidates) {
+  if (!fs.existsSync(candidate)) continue;
+  dotenv.config({ path: candidate, override: false });
+}
 
 type Args = {
   email: string;
@@ -312,6 +327,65 @@ async function main() {
     },
   });
 
+  const POST_SEED_IMAGE_BASE = process.env.POST_SEED_IMAGE_BASE
+    ? process.env.POST_SEED_IMAGE_BASE.replace(/\/$/, '')
+    : 'https://picsum.photos';
+
+  const seededAssetIds: string[] = [];
+  const seedImageCountRaw = process.env.POST_SEED_IMAGE_COUNT;
+  const seedImageCount = Number.isFinite(Number(seedImageCountRaw))
+    ? Math.max(0, Number(seedImageCountRaw))
+    : 8;
+
+  const seedAssetsBucket =
+    process.env.ASSETS_S3_BUCKET || process.env.S3_BUCKET || 'external_demo_assets';
+
+  if (seedImageCount > 0) {
+    console.log(`==> Seeding ${seedImageCount} demo image assets (no upload)…`);
+    try {
+      const { prismaAssets } = await import('@postolio/database-assets');
+      for (let i = 0; i < seedImageCount; i++) {
+        const seed = `${brand.id}-${i + 1}`;
+        const url = `${POST_SEED_IMAGE_BASE}/seed/${encodeURIComponent(seed)}/1080/1080`;
+        try {
+          const asset = await prismaAssets.asset.create({
+            data: {
+              brandId: brand.id,
+              uploadedBy: user.id,
+              fileName: `seed-${i + 1}.jpg`,
+              fileType: 'image',
+              mimeType: 'image/jpeg',
+              fileSize: 512_000,
+              width: 1080,
+              height: 1080,
+              s3Key: url, // External URL; assets-api returns it as `url` without requiring S3
+              s3Bucket: seedAssetsBucket,
+              tags: ['seed', 'demo'],
+              processingStatus: 'completed',
+            },
+            select: { id: true },
+          });
+          seededAssetIds.push(asset.id);
+        } catch (err) {
+          console.warn('⚠️  Failed to seed demo asset', { i: i + 1, err });
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️  Failed to seed demo assets; posts will not have media attached', { err });
+    }
+  }
+
+  if (seededAssetIds.length === 0) {
+    console.warn('⚠️  No seed assets were created; posts will not have media attached');
+  } else {
+    console.log(`✅ Seeded ${seededAssetIds.length} demo assets`);
+  }
+
+  const pickSeedAssetId = (): string | null => {
+    if (seededAssetIds.length === 0) return null;
+    return seededAssetIds[Math.floor(Math.random() * seededAssetIds.length)]!;
+  };
+
   console.log('==> Seeding publishing queues + weekly calendars (slot templates)…');
 
   const seedQueuesForSocialAccount = async (
@@ -426,6 +500,7 @@ async function main() {
     position: number;
     caption: string;
   }) {
+    const assetId = pickSeedAssetId();
     const created = await prisma.content.create({
       data: {
         brandId: brand.id,
@@ -434,6 +509,7 @@ async function main() {
         hashtags: [],
         status: 'draft',
         contentType: opts.laneKey,
+        ...(assetId ? { mediaAssets: { create: { assetId, displayOrder: 0 } } } : {}),
       },
       select: { id: true },
     });
@@ -528,8 +604,9 @@ async function main() {
     });
 
     const created = await prisma.$transaction(
-      opts.destinations.map((destination) =>
-        prisma.content.create({
+      opts.destinations.map((destination) => {
+        const assetId = pickSeedAssetId();
+        return prisma.content.create({
           data: {
             brandId: brand.id,
             campaignId: opts.campaignId,
@@ -541,10 +618,11 @@ async function main() {
             scheduledAt: destination.scheduledAt ?? null,
             postedAt: destination.postedAt ?? null,
             schedulingError: destination.schedulingError ?? null,
+            ...(assetId ? { mediaAssets: { create: { assetId, displayOrder: 0 } } } : {}),
           },
           select: { id: true },
-        })
-      )
+        });
+      })
     );
 
     return { contentGroupId: group.id, contentIds: created.map((c) => c.id) };
@@ -573,10 +651,6 @@ async function main() {
     startedAt?: Date | null;
     completedAt?: Date | null;
   };
-
-  const POST_SEED_IMAGE_BASE = process.env.POST_SEED_IMAGE_BASE
-    ? process.env.POST_SEED_IMAGE_BASE.replace(/\/$/, '')
-    : 'https://picsum.photos';
 
   const campaignSpecs: SeedCampaignSpec[] = [
     {
@@ -753,7 +827,18 @@ async function main() {
   const pick = <T>(arr: T[]) => arr[rng(0, arr.length - 1)];
 
   const baseHashtags = ['#postolio', '#dev', '#demo', '#socialmedia', '#content'];
-  const campaignContentPayload: Parameters<typeof prisma.content.createMany>[0]['data'] = [];
+  const campaignContentPayload: Array<{
+    brandId: string;
+    campaignId: string;
+    targetSocialAccountId: string;
+    caption: string;
+    hashtags: string[];
+    status: ContentStatus;
+    scheduledAt?: Date | null;
+    postedAt?: Date | null;
+    schedulingError?: string | null;
+    withImage: boolean;
+  }> = [];
 
   function pushContent(opts: {
     campaign: Campaign;
@@ -791,6 +876,7 @@ async function main() {
     campaignContentPayload.push({
       brandId: brand.id,
       campaignId: campaign.id,
+      targetSocialAccountId: instagramSocialAccount.id,
       caption,
       hashtags: [
         pick(baseHashtags),
@@ -801,6 +887,7 @@ async function main() {
       scheduledAt,
       postedAt,
       schedulingError: err,
+      withImage: opts.withImage !== false,
     });
   }
 
@@ -858,7 +945,6 @@ async function main() {
             caption: `Skipped during pause ${i + 1}`,
             when: 'past',
             themeHint: themes[i % themes.length],
-            withImage: false,
           });
         for (let i = 0; i < 2; i++)
           pushContent({
@@ -996,7 +1082,21 @@ async function main() {
   };
 
   if (campaignContentPayload.length > 0) {
-    await prisma.content.createMany({ data: normalizeStatuses(campaignContentPayload) });
+    const normalized = normalizeStatuses(campaignContentPayload);
+    await prisma.$transaction(
+      normalized.map((raw) => {
+        const record = raw as unknown as (typeof campaignContentPayload)[number];
+        const { withImage, ...data } = record as any;
+        const assetId = withImage ? pickSeedAssetId() : null;
+        return prisma.content.create({
+          data: {
+            ...data,
+            ...(assetId ? { mediaAssets: { create: { assetId, displayOrder: 0 } } } : {}),
+          },
+          select: { id: true },
+        });
+      })
+    );
   }
 
   // Keep the original brand-only content generation (draft/scheduled),
@@ -1004,6 +1104,7 @@ async function main() {
   console.log(`==> Creating ${posts} brand-only content items (draft/scheduled)`);
   const contentPayload: Array<{
     brandId: string;
+    targetSocialAccountId: string;
     caption: string;
     hashtags: string[];
     status: ContentStatus;
@@ -1019,6 +1120,7 @@ async function main() {
     const scheduledAt = isScheduled ? new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000) : null;
     contentPayload.push({
       brandId: brand.id,
+      targetSocialAccountId: instagramSocialAccount.id,
       caption: `Seeded content ${i + 1}: tips and tricks #${i + 1}`,
       hashtags: ['#postolio', '#dev', '#demo'],
       status: isScheduled ? ('scheduled' as ContentStatus) : ('draft' as ContentStatus),
@@ -1031,6 +1133,7 @@ async function main() {
   const brandCoverage: typeof contentPayload = [
     {
       brandId: brand.id,
+      targetSocialAccountId: instagramSocialAccount.id,
       caption: 'Brand-only published example',
       hashtags: ['#postolio', '#published'],
       status: 'published',
@@ -1040,6 +1143,7 @@ async function main() {
     },
     {
       brandId: brand.id,
+      targetSocialAccountId: instagramSocialAccount.id,
       caption: 'Brand-only failed example',
       hashtags: ['#postolio', '#failed'],
       status: 'failed',
@@ -1050,6 +1154,7 @@ async function main() {
     },
     {
       brandId: brand.id,
+      targetSocialAccountId: instagramSocialAccount.id,
       caption: 'Brand-only skipped example',
       hashtags: ['#postolio', '#skipped'],
       status: 'skipped',
@@ -1059,9 +1164,18 @@ async function main() {
     },
   ];
 
-  await prisma.content.createMany({
-    data: normalizeStatuses(contentPayload.concat(brandCoverage)),
-  });
+  await prisma.$transaction(
+    normalizeStatuses(contentPayload.concat(brandCoverage)).map((data) => {
+      const assetId = pickSeedAssetId();
+      return prisma.content.create({
+        data: {
+          ...data,
+          ...(assetId ? { mediaAssets: { create: { assetId, displayOrder: 0 } } } : {}),
+        },
+        select: { id: true },
+      });
+    })
+  );
 
   console.log('==> Creating multi-destination content groups (ContentGroup)');
   await createSeededContentGroup({
@@ -1438,6 +1552,7 @@ async function main() {
 
     historicalContent.push({
       brandId: brand.id,
+      targetSocialAccountId: instagramSocialAccount.id,
       caption: `${caption} #${theme}`,
       hashtags: ['#postolio', '#socialmedia', `#${theme}`, '#content', '#marketing'],
       status: 'published',
@@ -1447,7 +1562,18 @@ async function main() {
     });
   }
 
-  await prisma.content.createMany({ data: historicalContent });
+  await prisma.$transaction(
+    historicalContent.map((data) => {
+      const assetId = pickSeedAssetId();
+      return prisma.content.create({
+        data: {
+          ...data,
+          ...(assetId ? { mediaAssets: { create: { assetId, displayOrder: 0 } } } : {}),
+        },
+        select: { id: true },
+      });
+    })
+  );
   console.log(
     `✅ Generated ${totalHistoricalPosts} historical posts spanning ${historicalDays} days`
   );
@@ -1688,6 +1814,13 @@ main()
     try {
       const { disconnectDatabase } = await import('../src/config/database.js');
       await disconnectDatabase();
+    } catch {
+      // ignore
+    }
+
+    try {
+      const { prismaAssets } = await import('@postolio/database-assets');
+      await prismaAssets.$disconnect();
     } catch {
       // ignore
     }
