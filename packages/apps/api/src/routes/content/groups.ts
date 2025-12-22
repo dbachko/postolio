@@ -303,13 +303,24 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       return delegateToGroup(content.contentGroupId.trim());
     }
 
-    const existingDestinationId =
+    let existingDestinationId =
       typeof content.targetSocialAccountId === 'string' ? content.targetSocialAccountId.trim() : '';
     if (!existingDestinationId) {
-      return reply.code(400).send({
-        error: 'invalid_target_social_account',
-        message: 'This post does not have a destination social account set yet',
+      const fallbackId = targetSocialAccountIds[0];
+      const account = await prisma.socialAccount.findFirst({
+        where: { id: fallbackId, brandId: content.brandId },
+        select: { id: true, metadata: true },
       });
+
+      if (!account || isDisconnected(account.metadata)) {
+        return reply.code(400).send({
+          error: 'invalid_target_social_account',
+          message: 'One or more destination social accounts are not connected to this brand',
+          details: [fallbackId],
+        });
+      }
+
+      existingDestinationId = fallbackId;
     }
 
     const assetIds = Array.isArray(content.mediaAssets)
@@ -342,6 +353,7 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           contentGroupId: createdGroup.id,
           generationParams: Prisma.JsonNull,
+          targetSocialAccountId: existingDestinationId,
         },
       });
 

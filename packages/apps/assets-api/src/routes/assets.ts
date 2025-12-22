@@ -165,6 +165,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       aspectRatio?: string;
       aspectRatios?: string | string[];
       orientationType?: 'portrait' | 'landscape' | 'square';
+      orientationTypes?: string | string[];
       minWidth?: string;
       maxWidth?: string;
       minHeight?: string;
@@ -176,6 +177,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Usage filter
       usageStatus?: 'used' | 'unused';
+      usageStatuses?: string | string[];
     };
 
     try {
@@ -253,7 +255,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         where.aspectRatio = { in: ratios };
       }
 
-      if (query.orientationType) {
+      if (query.orientationTypes) {
+        const orientations = Array.isArray(query.orientationTypes)
+          ? query.orientationTypes
+          : [query.orientationTypes];
+        if (orientations.length > 0) {
+          where.orientationType = { in: orientations };
+        }
+      } else if (query.orientationType) {
         where.orientationType = query.orientationType;
       }
 
@@ -322,10 +331,20 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Usage status filter
-      if (query.usageStatus === 'used') {
-        where.usageCount = { gt: 0 };
-      } else if (query.usageStatus === 'unused') {
-        where.usageCount = 0;
+      const usageStatusList = query.usageStatuses
+        ? Array.isArray(query.usageStatuses)
+          ? query.usageStatuses
+          : [query.usageStatuses]
+        : query.usageStatus
+          ? [query.usageStatus]
+          : [];
+
+      if (usageStatusList.length === 1) {
+        if (usageStatusList[0] === 'used') {
+          where.usageCount = { gt: 0 };
+        } else if (usageStatusList[0] === 'unused') {
+          where.usageCount = 0;
+        }
       }
 
       // Fetch assets with pagination

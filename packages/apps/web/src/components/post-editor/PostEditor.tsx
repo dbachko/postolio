@@ -2640,6 +2640,7 @@ export function PostEditor({
                     tooltip={tooltipLabel}
                     ariaLabel={`Remove ${tooltipLabel}`}
                     selected
+                    showDeleteOnHover
                     onClick={() => toggleCreateDestination(opt.id)}
                   >
                     <SocialAccountAvatar

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Layers } from 'lucide-react';
+import { Layers, Trash2 } from 'lucide-react';
 
 interface DestinationsRailProps {
   title: string;
@@ -63,6 +63,7 @@ interface DestinationsRailItemProps {
   ariaLabel: string;
   selected?: boolean;
   disabled?: boolean;
+  showDeleteOnHover?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }
@@ -72,6 +73,7 @@ export function DestinationsRailItem({
   ariaLabel,
   selected = false,
   disabled = false,
+  showDeleteOnHover = false,
   onClick,
   children,
 }: DestinationsRailItemProps) {
@@ -90,10 +92,16 @@ export function DestinationsRailItem({
       className={cn(
         'border-input bg-background text-muted-foreground shadow-none',
         selected && 'border-primary bg-accent/50 text-foreground',
-        isStatic && 'cursor-default'
+        isStatic && 'cursor-default',
+        showDeleteOnHover && 'group relative'
       )}
     >
       {children}
+      {showDeleteOnHover ? (
+        <span className="bg-background/90 text-muted-foreground pointer-events-none absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          <Trash2 className="h-3 w-3" aria-hidden="true" />
+        </span>
+      ) : null}
     </Button>
   );
 

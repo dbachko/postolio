@@ -33,7 +33,7 @@ SidebarRegistry['brand-profile'] = {
 SidebarRegistry['asset'] = {
   title: 'Edit Asset',
   Component: AssetSidebar,
-  defaultWidthPx: 560,
+  defaultWidthPx: 640,
 };
 
 SidebarRegistry['asset-upload'] = {

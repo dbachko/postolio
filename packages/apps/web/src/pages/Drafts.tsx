@@ -178,11 +178,11 @@ function DraftCard({
     <Button
       asChild
       variant="ghost"
-      className="h-auto w-full items-stretch justify-start p-0 text-left whitespace-normal hover:bg-transparent"
+      className="h-auto w-full flex-col items-stretch justify-start p-0 text-left whitespace-normal hover:bg-transparent"
     >
       <button type="button" onClick={onOpen}>
-        <div className="space-y-2">
-          <div className="group hover:border-border/80 relative aspect-square overflow-hidden rounded-lg border">
+        <div className="w-full space-y-2">
+          <div className="group hover:border-border/80 relative aspect-square w-full overflow-hidden rounded-lg border">
             <div className="absolute top-2 left-2 z-10">
               <Badge variant={statusVariant} className="flex items-center gap-1">
                 {isScheduled ? <Calendar className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
