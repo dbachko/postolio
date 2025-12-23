@@ -44,7 +44,7 @@ import {
 } from '@/components/post-editor/PostEditorMainBody';
 import { QueueSlotPickerDialog } from '@/components/post-editor/QueueSlotPickerDialog';
 import { WriteItBar } from '@/components/post-editor/WriteItBar';
-import { Check, Eye, EyeOff, Instagram, LayoutTemplate, Plus, X } from 'lucide-react';
+import { Check, Eye, EyeOff, LayoutTemplate, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
 import { cn } from '@/lib/utils';
@@ -75,6 +75,7 @@ import {
   type ContentGroupTemplateFormState,
 } from '@/components/post-editor/ContentGroupTemplateEditor';
 import { DestinationsRail, DestinationsRailItem } from '@/components/post-editor/DestinationsRail';
+import { PostPublicationFooter } from '@/components/post-editor/PostPublicationFooter';
 
 function toValidationPlatform(platform: Platform): ValidationPlatform | null {
   if (platform === 'x') return 'twitter';
@@ -2327,6 +2328,31 @@ export function PostEditor({
     templatePreviewContent,
   ]);
 
+  const publicationLinks = useMemo(() => {
+    const links: Array<{ platform: string; url: string }> = [];
+    if (post?.status === 'published' && post.instagramPermalink) {
+      links.push({ platform: 'instagram', url: String(post.instagramPermalink) });
+    }
+    return links;
+  }, [post?.instagramPermalink, post?.status]);
+
+  const publicationPreview = useMemo(() => {
+    const isTemplatePreview = isTemplateTab && isMultiDestinationGroup;
+    const media = (isTemplatePreview ? templatePreviewMedia : formPreviewMedia) || [];
+    const contentType = isTemplatePreview ? templateFormData.contentType : formData.contentType;
+    return {
+      contentType,
+      media,
+    };
+  }, [
+    formData.contentType,
+    formPreviewMedia,
+    isMultiDestinationGroup,
+    isTemplateTab,
+    templateFormData.contentType,
+    templatePreviewMedia,
+  ]);
+
   const primaryEditCtaLabel = useMemo(() => {
     if (disabled) return 'Save';
     const hadScheduled = isMultiDestinationGroup
@@ -2415,25 +2441,6 @@ export function PostEditor({
             )}
           </div>
           <div className="flex items-center gap-2 whitespace-nowrap">
-            {layout === 'sidebar' && id && !isLoading && post ? (
-              <>
-                {post.status === 'published' && post.instagramPermalink ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 whitespace-nowrap"
-                    onClick={() =>
-                      post.instagramPermalink && window.open(post.instagramPermalink, '_blank')
-                    }
-                  >
-                    <Instagram className="h-4 w-4 sm:mr-1" />
-                    <span className="hidden sm:inline">View on Instagram</span>
-                    <span className="sr-only sm:hidden">View on Instagram</span>
-                  </Button>
-                ) : null}
-              </>
-            ) : null}
             {layout === 'sidebar' ? (
               <Button
                 variant="ghost"
@@ -3294,7 +3301,19 @@ export function PostEditor({
           );
         }
 
-        if (isLoading || !post || disabled) return null;
+        if (isLoading || !post) return null;
+
+        if (disabled) {
+          return (
+            <PostPublicationFooter
+              layout={layout}
+              publishedAt={post.postedAt}
+              brandTimezone={brandTimezone}
+              preview={publicationPreview}
+              links={publicationLinks}
+            />
+          );
+        }
 
         return (
           <WriteItBar

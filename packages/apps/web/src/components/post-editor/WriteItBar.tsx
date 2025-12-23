@@ -168,6 +168,29 @@ export function WriteItBar(props: WriteItBarProps) {
     [props.brandTimezone, props.scheduledAt]
   );
 
+  const handleEditPrimaryAction = () => {
+    if (props.mode !== 'edit') return;
+
+    if (props.hasChanges) {
+      props.onSave();
+      return;
+    }
+
+    if (
+      postingAction === 'queue' &&
+      props.onAddToQueue &&
+      !props.isScheduled &&
+      !props.queueDisabled &&
+      props.validationOk &&
+      !props.isQueueing
+    ) {
+      props.onAddToQueue();
+      return;
+    }
+
+    props.onSave();
+  };
+
   const outerClass = cn(
     'border-border bg-card border-t px-4 pb-3',
     props.previewHandle ? 'pt-8' : 'pt-3',
@@ -741,14 +764,30 @@ export function WriteItBar(props: WriteItBarProps) {
 
                 <Button
                   size="sm"
-                  onClick={props.onSave}
+                  onClick={handleEditPrimaryAction}
                   disabled={
-                    !props.hasChanges ||
                     props.isSaving ||
-                    (props.isScheduled && !props.validationOk)
+                    props.isUnscheduling ||
+                    (props.hasChanges && props.isScheduled && !props.validationOk) ||
+                    (!props.hasChanges && postingAction !== 'queue') ||
+                    (postingAction === 'queue' &&
+                      (!props.onAddToQueue ||
+                        props.isScheduled ||
+                        Boolean(props.queueDisabled) ||
+                        props.hasChanges ||
+                        !props.validationOk ||
+                        props.isQueueing))
                   }
                 >
-                  {props.isSaving ? <>Saving...</> : <>{props.primaryEditCtaLabel}</>}
+                  {props.isSaving ? (
+                    <>Saving...</>
+                  ) : props.hasChanges ? (
+                    <>{props.primaryEditCtaLabel}</>
+                  ) : postingAction === 'queue' ? (
+                    <>Add to queue</>
+                  ) : (
+                    <>{props.primaryEditCtaLabel}</>
+                  )}
                 </Button>
               </ButtonGroup>
 
@@ -763,11 +802,7 @@ export function WriteItBar(props: WriteItBarProps) {
                     })
                   : renderPostingMenu({
                       mode: 'edit',
-                      onSetQueue: () => {
-                        if (!props.onAddToQueue || props.isScheduled) return;
-                        if (props.queueDisabled || props.hasChanges || !props.validationOk) return;
-                        props.onAddToQueue();
-                      },
+                      onSetQueue: () => null,
                       onOpenDateTime: () => {
                         if (!props.scheduledAt) {
                           props.onScheduledAtChange(
