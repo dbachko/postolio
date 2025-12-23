@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -17,13 +8,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Globe, Clock, Info, Save, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTimezone } from '../../contexts/TimezoneContext';
-import { COMMON_TIMEZONES, getUserTimezone, getTimezoneAbbr } from '../../lib/timezone';
+import { getUserTimezone, getTimezoneAbbr } from '../../lib/timezone';
 import { useBrandStore } from '../../stores/brandStore';
 import { useAuthStore } from '../../stores/authStore';
 import { auth as authApi, brand as brandApi } from '../../lib/api';
 import BrandTimezoneCard from './BrandTimezoneCard';
 import BrandImageProviderCard from './BrandImageProviderCard';
 import type { ImageProvider } from '@/types/campaign-wizard';
+import { AsyncTimezoneCombobox } from '@/components/timezone/AsyncTimezoneCombobox';
 
 export default function TimezoneSettingsTab() {
   const { timezone, isAutoDetected, setTimezone } = useTimezone();
@@ -73,13 +65,8 @@ export default function TimezoneSettingsTab() {
   }, [selectedBrand]);
 
   const handleTimezoneChange = (value: string) => {
-    if (value === 'auto') {
-      setAutoDetect(true);
-      setLocalTimezone(detectedTimezone);
-    } else {
-      setAutoDetect(false);
-      setLocalTimezone(value);
-    }
+    setAutoDetect(false);
+    setLocalTimezone(value);
   };
 
   const handleAutoDetectToggle = (checked: boolean) => {
@@ -212,39 +199,13 @@ export default function TimezoneSettingsTab() {
           {!autoDetect && (
             <div className="space-y-2">
               <Label htmlFor="timezone-select">Select timezone</Label>
-              <Select value={localTimezone} onValueChange={handleTimezoneChange}>
-                <SelectTrigger id="timezone-select" className="w-full">
-                  <SelectValue>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      {COMMON_TIMEZONES.find((tz) => tz.value === localTimezone)?.label ||
-                        localTimezone}
-                    </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="max-h-72 overflow-y-auto">
-                  {Object.entries(
-                    COMMON_TIMEZONES.reduce(
-                      (groups, tz) => {
-                        const group = tz.group || 'Other';
-                        if (!groups[group]) groups[group] = [];
-                        groups[group].push(tz);
-                        return groups;
-                      },
-                      {} as Record<string, typeof COMMON_TIMEZONES>
-                    )
-                  ).map(([group, timezones]) => (
-                    <SelectGroup key={group}>
-                      <SelectLabel>{group}</SelectLabel>
-                      {timezones.map((tz) => (
-                        <SelectItem key={tz.value} value={tz.value}>
-                          {tz.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AsyncTimezoneCombobox
+                id="timezone-select"
+                value={localTimezone}
+                onValueChange={handleTimezoneChange}
+                leadingIcon={<Clock className="h-4 w-4" />}
+                buttonClassName="w-full"
+              />
             </div>
           )}
 

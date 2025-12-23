@@ -40,51 +40,6 @@ export async function complianceRoutes(app: FastifyInstance) {
     }
   );
 
-  // GDPR - Export user data
-  app.get(
-    '/api/compliance/gdpr-export',
-    {
-      preHandler: app.authenticate,
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        const user = request.user;
-        if (!user?.id) {
-          return reply.code(401).send({ error: 'Unauthorized' });
-        }
-
-        // Get all user data from database
-        const userData = await prisma.user.findUnique({
-          where: { id: user.id },
-          include: {
-            brands: {
-              include: {
-                content: true,
-                campaigns: true,
-              },
-            },
-          },
-        });
-
-        // Remove sensitive fields
-        if (userData && typeof userData === 'object' && 'password' in userData) {
-          delete (userData as { password?: string }).password;
-        }
-
-        return reply
-          .header('Content-Type', 'application/json')
-          .header('Content-Disposition', 'attachment; filename="user-data-export.json"')
-          .send({
-            exportDate: new Date().toISOString(),
-            userData,
-          });
-      } catch (error) {
-        app.log.error({ error }, 'GDPR export failed');
-        return reply.code(500).send({ error: 'Failed to export user data' });
-      }
-    }
-  );
-
   // Get retention statistics (admin only)
   app.get(
     '/api/compliance/retention-stats',

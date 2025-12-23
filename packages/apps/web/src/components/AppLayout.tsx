@@ -374,7 +374,7 @@ function AppLayoutInner({ children }: LayoutProps) {
               </Button>
 
               {/* Mobile navigation menu */}
-              <div className="relative md:hidden" ref={menuRef}>
+              <div className="relative sm:-ml-2 md:hidden" ref={menuRef}>
                 <Button
                   variant="ghost"
                   size="icon"

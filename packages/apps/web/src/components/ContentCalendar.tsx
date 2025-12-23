@@ -5,9 +5,7 @@ import { format, addMonths, subMonths } from 'date-fns';
 import { FullCalendar } from './calendar/FullCalendar';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CalendarFilters } from './calendar/CalendarFilters/index';
-import { CalendarExport } from './calendar/CalendarExport/index';
 import { QueueSchedulesView } from './calendar/QueueSchedules/QueueSchedulesView';
-import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
 import { useShallow } from 'zustand/react/shallow';
@@ -15,8 +13,9 @@ import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { Placeholder } from '../types/calendar';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
+import { AsyncTimezoneCombobox } from '@/components/timezone/AsyncTimezoneCombobox';
 import {
   Select,
   SelectContent,
@@ -24,8 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { COMMON_TIMEZONES, getTimezoneAbbr, getTimezoneOffset } from '@/lib/timezone';
-import { formatGmtOffset } from './calendar/FullCalendar/utils/timezone';
 
 // type guard no longer needed for the month grid only
 
@@ -36,7 +33,7 @@ interface ContentCalendarProps {
   brandName?: string;
 }
 
-export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
+export function ContentCalendar({ brandId }: ContentCalendarProps) {
   // Sync filters with URL
   useURLFilterSync();
 
@@ -46,12 +43,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const brandTimezoneLabel = useMemo(() => {
-    const abbr = getTimezoneAbbr(brandTimezone);
-    const offset = formatGmtOffset(getTimezoneOffset(brandTimezone));
-    return `${abbr} · ${offset}`;
-  }, [brandTimezone]);
-  const timezoneOptions = useMemo(() => COMMON_TIMEZONES.filter((tz) => tz.value !== 'auto'), []);
 
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
@@ -113,7 +104,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     gcTime: GC_TIMES.STANDARD,
   });
 
-  // Prefetch adjacent months for smooth navigation (kept for export and misc)
+  // Prefetch adjacent months for smooth navigation
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -151,27 +142,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   );
 
   // Schedule-ahead capacity banner is now shown globally in AppLayout
-
-  // Combine content and placeholders for unified handling
-  type ContentItem = Content & { type: 'content'; scheduledAt?: string | null };
-  type UnifiedItem = (ContentItem & { type: 'content' }) | (Placeholder & { type: 'placeholder' });
-  const allItems: UnifiedItem[] = useMemo(() => {
-    const items: UnifiedItem[] = [
-      ...content.map((item) => ({
-        ...item,
-        type: 'content' as const,
-      })),
-      ...placeholders.map((p) => ({
-        ...p,
-        type: 'placeholder' as const,
-      })),
-    ];
-    return items.sort((a, b) => {
-      const dateA = new Date((a as any).scheduledAt || (a as any).createdAt).getTime();
-      const dateB = new Date((b as any).scheduledAt || (b as any).createdAt).getTime();
-      return dateA - dateB;
-    });
-  }, [content, placeholders]);
 
   // Apply filters to content
   const selectFilters = useShallow((s: ReturnType<typeof useCalendarFilterStore.getState>) => ({
@@ -211,12 +181,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     statuses.length,
   ]);
   const isFiltersActive = showFilters || hasAnyActiveFilters;
-  const { filteredItems } = useFilteredContent(allItems as any);
-  useEffect(() => {
-    try {
-      (window as any).__pc_filtered_items = (filteredItems || []).length;
-    } catch {}
-  }, [filteredItems]);
 
   // Navigation handlers (step depends on current view)
   const handlePrevious = () => {
@@ -293,29 +257,13 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
         </div>
 
         <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
-          <Select
+          <AsyncTimezoneCombobox
             value={brandTimezone}
             onValueChange={(tz) => {
               setBrandTimezone(tz);
             }}
-          >
-            <SelectTrigger className="w-full sm:w-[220px]">
-              <SelectValue className="truncate text-left">
-                {brandTimezoneLabel} ({brandTimezone})
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="max-h-80">
-              {timezoneOptions.map((tz) => (
-                <SelectItem key={tz.value} value={tz.value} className="min-w-0">
-                  <span className="block min-w-0 truncate">
-                    {`${tz.label} (${getTimezoneAbbr(tz.value)} · ${formatGmtOffset(
-                      getTimezoneOffset(tz.value)
-                    )})`}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            buttonClassName="w-auto"
+          />
           <Select
             value={viewMode}
             onValueChange={(v) => {
@@ -324,7 +272,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
               setParam('view', next);
             }}
           >
-            <SelectTrigger className="w-full sm:w-[140px]">
+            <SelectTrigger className="w-auto justify-start gap-2">
               <SelectValue placeholder="View" />
             </SelectTrigger>
             <SelectContent>
@@ -336,14 +284,16 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
           </Select>
           <Button
             variant={isFiltersActive ? 'default' : 'outline'}
+            size="icon"
+            aria-label={isFiltersActive ? 'Hide filters' : 'Show filters'}
             aria-pressed={isFiltersActive}
             onClick={() => setShowFilters((s) => !s)}
-            className="relative h-10"
+            className="relative h-10 w-10"
           >
-            Filters
+            <Filter className="h-4 w-4" />
             {hasAnyActiveFilters && (
               <span
-                className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                className={`absolute -top-1 -right-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
                   isFiltersActive
                     ? 'bg-background text-foreground ring-ring ring-1'
                     : 'bg-foreground text-background'
@@ -353,21 +303,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
               </span>
             )}
           </Button>
-          <CalendarExport
-            content={filteredItems.map((item: any) => ({
-              id: item.id,
-              type: item.type,
-              caption: item.caption || '',
-              hashtags: item.hashtags || [],
-              status: item.status,
-              scheduledAt: item.scheduledAt || undefined,
-              postedAt: item.postedAt || undefined,
-              campaignId: item.campaignId || undefined,
-              permalink: item.permalink || undefined,
-            }))}
-            brandName={brandName || 'Brand'}
-            dateRange={dateRange}
-          />
           {hasAnyActiveFilters && (
             <Button
               variant="ghost"
