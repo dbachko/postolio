@@ -233,9 +233,8 @@ describe('Publishing queues routes', () => {
 
     expect(save.statusCode).toBe(200);
 
-    const { publishingQueueScheduler } = await import(
-      '../../services/publishing-queue/queue-scheduler.js'
-    );
+    const { publishingQueueScheduler } =
+      await import('../../services/publishing-queue/queue-scheduler.js');
     expect(vi.mocked(publishingQueueScheduler.recomputeBrandWindow)).toHaveBeenCalledWith(
       'brand-1'
     );

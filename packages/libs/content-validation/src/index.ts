@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 
 export type Platform = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
 
@@ -109,9 +109,9 @@ const instagramBase = z.object({
 function validateInstagram(payload: ValidateContentPayload): ValidationResult {
   const parsed = instagramBase.safeParse(payload);
   if (!parsed.success) {
-    const errors: ValidationErrorItem[] = parsed.error.errors.map((e) => ({
-      field: e.path.join('.') || 'root',
-      message: e.message,
+    const errors: ValidationErrorItem[] = parsed.error.issues.map((issue: ZodIssue) => ({
+      field: issue.path.join('.') || 'root',
+      message: issue.message,
       code: 'INVALID_FIELD',
     }));
     return { ok: false, errors };
@@ -186,9 +186,9 @@ function validateFacebook(payload: ValidateContentPayload): ValidationResult {
   if (!parsed.success) {
     return {
       ok: false,
-      errors: parsed.error.errors.map((e) => ({
-        field: e.path.join('.') || 'root',
-        message: e.message,
+      errors: parsed.error.issues.map((issue: ZodIssue) => ({
+        field: issue.path.join('.') || 'root',
+        message: issue.message,
         code: 'INVALID_FIELD',
       })),
     };
@@ -264,9 +264,9 @@ function validateTwitter(payload: ValidateContentPayload): ValidationResult {
   if (!parsed.success) {
     return {
       ok: false,
-      errors: parsed.error.errors.map((e) => ({
-        field: e.path.join('.') || 'root',
-        message: e.message,
+      errors: parsed.error.issues.map((issue: ZodIssue) => ({
+        field: issue.path.join('.') || 'root',
+        message: issue.message,
         code: 'INVALID_FIELD',
       })),
     };
@@ -306,9 +306,9 @@ function validateLinkedIn(payload: ValidateContentPayload): ValidationResult {
   if (!parsed.success) {
     return {
       ok: false,
-      errors: parsed.error.errors.map((e) => ({
-        field: e.path.join('.') || 'root',
-        message: e.message,
+      errors: parsed.error.issues.map((issue: ZodIssue) => ({
+        field: issue.path.join('.') || 'root',
+        message: issue.message,
         code: 'INVALID_FIELD',
       })),
     };
@@ -351,9 +351,9 @@ function validateYouTube(payload: ValidateContentPayload): ValidationResult {
   if (!parsed.success) {
     return {
       ok: false,
-      errors: parsed.error.errors.map((e) => ({
-        field: e.path.join('.') || 'root',
-        message: e.message,
+      errors: parsed.error.issues.map((issue: ZodIssue) => ({
+        field: issue.path.join('.') || 'root',
+        message: issue.message,
         code: 'INVALID_FIELD',
       })),
     };

@@ -11,17 +11,17 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-eventbridge": "^3.932.0",
+    "@aws-sdk/client-eventbridge": "^3.956.0",
     "@postolio/aws": "workspace:*",
-    "@postolio/observability": "workspace:*",
     "@postolio/connectors": "workspace:*",
     "@postolio/database": "workspace:*",
+    "@postolio/observability": "workspace:*",
     "ioredis": "^5.8.2",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "tsx": "^4.20.6",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

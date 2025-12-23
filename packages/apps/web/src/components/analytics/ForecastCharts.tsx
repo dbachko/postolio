@@ -278,11 +278,17 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
                   borderRadius: '8px',
                 }}
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
-                formatter={(value: any, name: string) => {
-                  if (name === 'Predicted') return [formatValue(value, selectedMetric), name];
-                  if (name === 'Lower Bound') return [formatValue(value, selectedMetric), name];
-                  if (name === 'Upper Bound') return [formatValue(value, selectedMetric), name];
-                  return [value, name];
+                formatter={(value: unknown, name?: string) => {
+                  const label = name ?? '';
+                  const numericValue = typeof value === 'number' ? value : Number(value);
+                  const formattedValue = Number.isFinite(numericValue)
+                    ? formatValue(numericValue, selectedMetric)
+                    : String(value);
+
+                  if (label === 'Predicted') return [formattedValue, label];
+                  if (label === 'Lower Bound') return [formattedValue, label];
+                  if (label === 'Upper Bound') return [formattedValue, label];
+                  return [value as any, label];
                 }}
               />
               <Legend />

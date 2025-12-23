@@ -17,7 +17,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
