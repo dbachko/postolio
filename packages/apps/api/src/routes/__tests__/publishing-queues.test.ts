@@ -39,6 +39,12 @@ vi.mock('../../services/redis.js', () => {
   };
 });
 
+// Avoid initializing the assets DB Prisma client in unit tests.
+vi.mock('../../services/assets-folders.js', () => ({
+  ensureAnalysisFolder: vi.fn(async () => null),
+  disconnectAssetsFolderClient: vi.fn(async () => {}),
+}));
+
 vi.mock('../../services/ownership.js', () => ({
   assertSocialAccountAccess: vi.fn(async () => {}),
   assertPublishingQueueAccess: vi.fn(async (_userId: string, queueId: string) => ({
@@ -68,6 +74,16 @@ vi.mock('../../services/scheduler.js', () => ({
   schedulerService: {
     cancelScheduledPost: vi.fn(async () => ({ success: true })),
   },
+}));
+
+vi.mock('../../services/timezone.js', () => ({
+  TimezoneService: {
+    getBrandTimezone: vi.fn(async () => 'UTC'),
+  },
+}));
+
+vi.mock('../../services/publishing-queue/slot-instance-generator.js', () => ({
+  generateSlotInstances: vi.fn(() => []),
 }));
 
 // Minimal Prisma mock for publishing-queues routes (in-memory).
@@ -142,6 +158,18 @@ vi.mock('../../config/database.js', () => {
         }
         return { count: data.length };
       }),
+    },
+    publishingQueueItem: {
+      findMany: vi.fn(async () => []),
+      count: vi.fn(async () => 0),
+      findFirst: vi.fn(async () => null),
+      findUnique: vi.fn(async () => null),
+      upsert: vi.fn(async () => ({})),
+    },
+    content: {
+      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+      count: vi.fn(async () => 0),
     },
     $transaction: vi.fn(async (arg: any) => {
       if (Array.isArray(arg)) return Promise.all(arg);
@@ -248,5 +276,69 @@ describe('Publishing queues routes', () => {
     const slotsPayload = getSlots.json() as any;
     expect(slotsPayload?.success).toBe(true);
     expect(slotsPayload?.data?.slots).toHaveLength(3);
+  });
+
+  it('filters published content out of queue items list', async () => {
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+    });
+    const queueId = (list.json() as any)?.data?.queues?.[0]?.id;
+    expect(typeof queueId).toBe('string');
+
+    const { prisma } = await import('../../config/database.js');
+    vi.mocked(prisma.publishingQueueItem.findMany).mockImplementation(async (args: any) => {
+      const lk = args?.where?.laneKey;
+      if (lk !== 'post') return [];
+      return [
+        {
+          id: 'item-published',
+          queueId,
+          contentId: 'content-published',
+          laneKey: 'post',
+          position: 1,
+          notBefore: null,
+          createdAt: new Date('2025-01-01T00:00:00Z'),
+          updatedAt: new Date('2025-01-01T00:00:00Z'),
+          content: {
+            id: 'content-published',
+            caption: 'already posted',
+            status: 'published',
+            scheduledAt: null,
+            contentType: 'post',
+          },
+        },
+        {
+          id: 'item-draft',
+          queueId,
+          contentId: 'content-draft',
+          laneKey: 'post',
+          position: 2,
+          notBefore: null,
+          createdAt: new Date('2025-01-02T00:00:00Z'),
+          updatedAt: new Date('2025-01-02T00:00:00Z'),
+          content: {
+            id: 'content-draft',
+            caption: 'still queued',
+            status: 'draft',
+            scheduledAt: null,
+            contentType: 'post',
+          },
+        },
+      ];
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/queues/${queueId}/items?after=2025-01-01T00:00:00Z&limit=50`,
+      headers: { authorization: authHeader },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.json() as any;
+    expect(payload?.success).toBe(true);
+    const postLane = payload?.data?.lanes?.find((l: any) => l?.laneKey === 'post');
+    expect(postLane?.items?.map((i: any) => i?.contentId)).toEqual(['content-draft']);
   });
 });

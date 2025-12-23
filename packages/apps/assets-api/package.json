@@ -9,6 +9,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
+    "predev": "pnpm --filter @postolio/database-assets run build",
     "dev": "pnpm run dev:server",
     "dev:server": "tsx watch src/index.ts",
     "build:server": "tsc -p tsconfig.server.json || true",

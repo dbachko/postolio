@@ -579,7 +579,10 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!existingItem && Number.isFinite(maxDepth)) {
         const currentDepth = await prisma.publishingQueueItem.count({
-          where: { queue: { socialAccountId: queue.socialAccountId } },
+          where: {
+            queue: { socialAccountId: queue.socialAccountId },
+            content: { status: { notIn: ['published', 'unavailable'] } },
+          },
         });
         if (currentDepth + 1 > (maxDepth as number)) {
           return reply.code(402).send({
@@ -662,6 +665,9 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
 
     const timezone = await TimezoneService.getBrandTimezone(queue.socialAccount.brandId);
 
+    const shouldHideFromQueueList = (status: unknown) =>
+      status === 'published' || status === 'unavailable';
+
     const [itemsByLane, slots, reservedScheduled] = await Promise.all([
       (async () => {
         const lanes: ContentLaneKey[] = ['post', 'reel', 'story'];
@@ -683,7 +689,10 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
               orderBy: { position: 'asc' },
               take: limit,
             });
-            return [lk, items] as const;
+            return [
+              lk,
+              items.filter((item) => !shouldHideFromQueueList(item.content?.status)),
+            ] as const;
           })
         );
         return new Map(pairs);
