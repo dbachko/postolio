@@ -98,7 +98,7 @@ export function DestinationsRailItem({
     >
       {children}
       {showDeleteOnHover ? (
-        <span className="bg-background/90 text-muted-foreground pointer-events-none absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="bg-background/90 text-muted-foreground pointer-events-none invisible absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full opacity-0 shadow-sm transition-opacity group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100">
           <Trash2 className="h-3 w-3" aria-hidden="true" />
         </span>
       ) : null}

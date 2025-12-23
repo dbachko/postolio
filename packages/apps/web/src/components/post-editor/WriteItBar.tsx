@@ -21,14 +21,23 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { getTimezoneAbbr, toUTCFromInput } from '@/lib/timezone';
+import { getPlatformConfig, type Platform } from '@/lib/platform-config';
+import {
+  FacebookIcon,
+  InstagramIcon,
+  XBrandIcon,
+  YouTubeIcon,
+} from '@/components/icons/BrandIcons';
 import {
   AlertTriangle,
+  ArrowLeft,
+  Briefcase,
   CalendarClock,
   Check,
   ChevronDown,
   Clock,
   ListPlus,
-  Save,
+  Music,
   X,
   Zap,
 } from 'lucide-react';
@@ -76,6 +85,70 @@ function formatScheduledAtLabel(value: string, timezone?: string): string | null
   } catch {
     return null;
   }
+}
+
+function formatTimezoneLocationLabel(timezone?: string): string | null {
+  const trimmed = (timezone || '').trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split('/').filter(Boolean);
+  const last = parts[parts.length - 1] || trimmed;
+  const label = last.replaceAll('_', ' ');
+  return label || null;
+}
+
+function parsePlatformPrefixedMessage(message: string): {
+  platform: Platform | null;
+  message: string;
+} {
+  const trimmed = (message || '').trim();
+  const match = /^(instagram|facebook|linkedin|x|youtube|tiktok):\s*/i.exec(trimmed);
+  if (!match) return { platform: null, message: trimmed };
+  const platform = match[1]?.toLowerCase() as Platform;
+  const next = trimmed.slice(match[0].length).trim();
+  return { platform, message: next || trimmed };
+}
+
+function getPlatformIcon(platform: Platform, className: string): ReactNode {
+  switch (platform) {
+    case 'instagram':
+      return <InstagramIcon className={className} aria-hidden="true" />;
+    case 'facebook':
+      return <FacebookIcon className={className} aria-hidden="true" />;
+    case 'linkedin':
+      return <Briefcase className={className} aria-hidden="true" />;
+    case 'x':
+      return <XBrandIcon className={className} aria-hidden="true" />;
+    case 'youtube':
+      return <YouTubeIcon className={className} aria-hidden="true" />;
+    case 'tiktok':
+      return <Music className={className} aria-hidden="true" />;
+    default:
+      return null;
+  }
+}
+
+function BlockerTooltipMessage({ message }: { message: string }) {
+  const parsed = parsePlatformPrefixedMessage(message);
+  const icon = parsed.platform ? getPlatformIcon(parsed.platform, 'h-4 w-4') : null;
+  const color = (() => {
+    if (!parsed.platform) return null;
+    try {
+      return getPlatformConfig(parsed.platform).color;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!icon) return <p className="text-sm">{parsed.message}</p>;
+
+  return (
+    <div className="flex items-start gap-2">
+      <span className="mt-0.5" style={color ? { color } : undefined}>
+        {icon}
+      </span>
+      <p className="text-sm">{parsed.message}</p>
+    </div>
+  );
 }
 
 function getPostingActionLabel(action: PostingAction): string {
@@ -156,12 +229,6 @@ export function WriteItBar(props: WriteItBarProps) {
     setPostingPopoverView('menu');
   }, [props.mode]);
 
-  useEffect(() => {
-    if (!props.scheduledAt) return;
-    if (postingAction === 'datetime') return;
-    setPostingAction('datetime');
-  }, [postingAction, props.scheduledAt]);
-
   const scheduledAtLabel = useMemo(
     () =>
       props.scheduledAt ? formatScheduledAtLabel(props.scheduledAt, props.brandTimezone) : null,
@@ -179,7 +246,6 @@ export function WriteItBar(props: WriteItBarProps) {
     if (
       postingAction === 'queue' &&
       props.onAddToQueue &&
-      !props.isScheduled &&
       !props.queueDisabled &&
       props.validationOk &&
       !props.isQueueing
@@ -200,20 +266,12 @@ export function WriteItBar(props: WriteItBarProps) {
 
   const renderPostingMenu = (opts: {
     mode: 'create' | 'edit';
-    onSetQueue: () => void;
     onSetNow?: () => void;
     onOpenDateTime: () => void;
     onPickSlot?: (() => void) | null;
     pickSlotDisabled?: boolean;
     pickSlotBlocker?: string | null;
-    queueDisabled?: boolean;
-    queueBlocker?: string | null;
-    nowDisabled?: boolean;
-    nowBlocker?: string | null;
   }) => {
-    const queueBlocked = Boolean(opts.queueDisabled && opts.queueBlocker);
-    const slotBlocked = Boolean(opts.pickSlotDisabled && opts.pickSlotBlocker);
-    const nowBlocked = Boolean(opts.nowDisabled && opts.nowBlocker);
     const showNow = Boolean(opts.onSetNow);
 
     return (
@@ -231,14 +289,10 @@ export function WriteItBar(props: WriteItBarProps) {
             variant="ghost"
             size="sm"
             className={cn(
-              'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left',
-              postingAction === 'queue' && 'bg-muted',
-              opts.queueDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent'
+              'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left whitespace-normal',
+              postingAction === 'queue' && 'bg-muted'
             )}
-            disabled={Boolean(opts.queueDisabled)}
             onClick={() => {
-              if (opts.queueDisabled) return;
-              opts.onSetQueue();
               setPostingAction('queue');
               setPostingPopoverOpen(false);
               setPostingPopoverView('menu');
@@ -265,14 +319,10 @@ export function WriteItBar(props: WriteItBarProps) {
               variant="ghost"
               size="sm"
               className={cn(
-                'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left',
-                postingAction === 'now' && 'bg-muted',
-                opts.nowDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent'
+                'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left whitespace-normal',
+                postingAction === 'now' && 'bg-muted'
               )}
-              disabled={Boolean(opts.nowDisabled)}
               onClick={() => {
-                if (opts.nowDisabled) return;
-                opts.onSetNow?.();
                 setPostingAction('now');
                 setPostingPopoverOpen(false);
                 setPostingPopoverView('menu');
@@ -297,7 +347,7 @@ export function WriteItBar(props: WriteItBarProps) {
             variant="ghost"
             size="sm"
             className={cn(
-              'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left',
+              'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left whitespace-normal',
               postingAction === 'datetime' && 'bg-muted'
             )}
             onClick={() => {
@@ -319,63 +369,57 @@ export function WriteItBar(props: WriteItBarProps) {
           </Button>
 
           {opts.onPickSlot ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn(
-                'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left',
-                opts.pickSlotDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent'
-              )}
-              disabled={Boolean(opts.pickSlotDisabled)}
-              onClick={() => {
-                if (opts.pickSlotDisabled) return;
-                setPostingAction('datetime');
-                setPostingPopoverOpen(false);
-                setPostingPopoverView('menu');
-                opts.onPickSlot?.();
-              }}
-            >
-              <div className="mt-0.5 flex h-5 w-5 items-center justify-center">
-                <CalendarClock className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-medium">Pick a slot</div>
-                <div className="text-muted-foreground text-xs">
-                  Choose a recommended time from your publishing schedule.
-                </div>
-              </div>
-            </Button>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <span className="block w-full">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left whitespace-normal',
+                      opts.pickSlotDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent'
+                    )}
+                    disabled={Boolean(opts.pickSlotDisabled)}
+                    onClick={() => {
+                      if (opts.pickSlotDisabled) return;
+                      setPostingAction('datetime');
+                      setPostingPopoverOpen(false);
+                      setPostingPopoverView('menu');
+                      opts.onPickSlot?.();
+                    }}
+                  >
+                    <div className="mt-0.5 flex h-5 w-5 items-center justify-center">
+                      <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">Pick a slot</div>
+                      <div className="text-muted-foreground text-xs">
+                        Choose a recommended time from your publishing schedule.
+                      </div>
+                    </div>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {opts.pickSlotDisabled ? (
+                <TooltipContent>
+                  {opts.pickSlotBlocker ? (
+                    <BlockerTooltipMessage message={opts.pickSlotBlocker} />
+                  ) : (
+                    <p className="text-sm">This option is not available right now.</p>
+                  )}
+                </TooltipContent>
+              ) : null}
+            </Tooltip>
           ) : null}
         </div>
-
-        {queueBlocked || slotBlocked || nowBlocked ? (
-          <div className="text-muted-foreground bg-background space-y-1 rounded-md border p-2 text-xs">
-            {queueBlocked ? (
-              <p>
-                <span className="text-foreground font-medium">Next available:</span>{' '}
-                {opts.queueBlocker}
-              </p>
-            ) : null}
-            {nowBlocked ? (
-              <p>
-                <span className="text-foreground font-medium">Now:</span> {opts.nowBlocker}
-              </p>
-            ) : null}
-            {slotBlocked ? (
-              <p>
-                <span className="text-foreground font-medium">Pick a slot:</span>{' '}
-                {opts.pickSlotBlocker}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     );
   };
 
   const renderDateTimePicker = (opts: { onDone: () => void; onBack: () => void }) => {
     const timezone = props.brandTimezone;
+    const timezoneLabel = formatTimezoneLocationLabel(timezone);
     const parts =
       props.scheduledAt && normalizeScheduledAtInput(props.scheduledAt)
         ? normalizeScheduledAtInput(props.scheduledAt)!
@@ -386,7 +430,6 @@ export function WriteItBar(props: WriteItBarProps) {
       <div className="space-y-3">
         <div className="space-y-1">
           <div className="text-sm font-medium">Set date and time</div>
-          {timezone ? <div className="text-muted-foreground text-xs">{timezone}</div> : null}
         </div>
 
         <Calendar
@@ -400,8 +443,15 @@ export function WriteItBar(props: WriteItBarProps) {
         />
 
         <div className="space-y-2">
-          <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Select time
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Select time
+            </div>
+            {timezoneLabel ? (
+              <div className="bg-muted border-border text-foreground rounded-full border px-2 py-0.5 text-xs font-medium">
+                {timezoneLabel}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <div className="bg-background border-border flex flex-1 items-center gap-2 rounded-md border px-3 py-2">
@@ -417,15 +467,13 @@ export function WriteItBar(props: WriteItBarProps) {
                 className="h-8 border-none bg-transparent p-0 shadow-none focus-visible:ring-0"
               />
             </div>
-            {timezone ? (
-              <div className="text-muted-foreground hidden text-xs sm:block">{timezone}</div>
-            ) : null}
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-1">
-          <Button type="button" variant="ghost" onClick={opts.onBack} className="px-0">
-            More posting actions
+          <Button type="button" variant="ghost" size="sm" onClick={opts.onBack}>
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            More actions
           </Button>
           <Button type="button" onClick={opts.onDone}>
             Done
@@ -482,13 +530,13 @@ export function WriteItBar(props: WriteItBarProps) {
           )}
 
           <TooltipProvider>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <Tooltip>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto sm:pr-2">
+                <Tooltip delayDuration={0}>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => {
                         if (props.saveDraftDisabled) return;
@@ -499,10 +547,9 @@ export function WriteItBar(props: WriteItBarProps) {
                       className={cn(
                         props.saveDraftDisabled &&
                           !props.isCreatingPost &&
-                          'hover:bg-primary cursor-not-allowed opacity-50'
+                          'hover:text-foreground cursor-not-allowed opacity-50 hover:bg-transparent'
                       )}
                     >
-                      <Save className="mr-2 h-4 w-4" />
                       Save draft
                     </Button>
                   </TooltipTrigger>
@@ -514,185 +561,161 @@ export function WriteItBar(props: WriteItBarProps) {
                 </Tooltip>
               </div>
 
-              <Popover
-                open={postingPopoverOpen}
-                onOpenChange={(open) => {
-                  setPostingPopoverOpen(open);
-                  if (!open) setPostingPopoverView('menu');
-                }}
-              >
-                <ButtonGroup className="w-full sm:w-auto">
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-w-0 flex-1 justify-between sm:min-w-[240px] sm:flex-none"
-                      disabled={props.isCreatingPost}
-                    >
-                      <span className="flex items-center gap-2">
-                        {postingAction === 'queue' ? (
-                          <ListPlus className="h-4 w-4" />
-                        ) : postingAction === 'now' ? (
-                          <Zap className="h-4 w-4" />
-                        ) : (
-                          <CalendarClock className="h-4 w-4" />
-                        )}
-                        <span className="truncate">
-                          {postingAction === 'datetime' && scheduledAtLabel
-                            ? scheduledAtLabel
-                            : getPostingActionLabel(postingAction)}
+              <div className="w-full space-y-2 sm:w-auto">
+                <Popover
+                  open={postingPopoverOpen}
+                  onOpenChange={(open) => {
+                    setPostingPopoverOpen(open);
+                    if (!open) setPostingPopoverView('menu');
+                  }}
+                >
+                  <ButtonGroup className="w-full sm:w-auto">
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-w-0 flex-1 justify-between sm:flex-none"
+                        disabled={props.isCreatingPost}
+                      >
+                        <span className="flex items-center gap-2">
+                          {postingAction === 'queue' ? (
+                            <ListPlus className="h-4 w-4" />
+                          ) : postingAction === 'now' ? (
+                            <Zap className="h-4 w-4" />
+                          ) : (
+                            <CalendarClock className="h-4 w-4" />
+                          )}
+                          <span className="truncate">
+                            {postingAction === 'datetime' && scheduledAtLabel
+                              ? scheduledAtLabel
+                              : getPostingActionLabel(postingAction)}
+                          </span>
                         </span>
-                      </span>
-                      <ChevronDown className="text-muted-foreground size-4" aria-hidden="true" />
-                    </Button>
-                  </PopoverTrigger>
+                        <ChevronDown className="text-muted-foreground size-4" aria-hidden="true" />
+                      </Button>
+                    </PopoverTrigger>
 
-                  {postingAction === 'queue' ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            if (props.queueDisabled) return;
-                            props.onAddToQueue();
-                          }}
-                          disabled={props.isCreatingPost}
-                          aria-disabled={props.queueDisabled}
-                          className={cn(
-                            props.queueDisabled &&
-                              !props.isCreatingPost &&
-                              'hover:bg-primary cursor-not-allowed opacity-50'
-                          )}
-                        >
-                          {props.isCreatingPost ? (
-                            <>
-                              <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                              Creating...
-                            </>
-                          ) : (
-                            <>
-                              <ListPlus className="mr-2 h-4 w-4" />
-                              Add to queue
-                            </>
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      {props.queueBlocker ? (
-                        <TooltipContent>
-                          <p className="text-sm">{props.queueBlocker}</p>
-                        </TooltipContent>
-                      ) : null}
-                    </Tooltip>
-                  ) : postingAction === 'now' ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            if (props.publishNowDisabled) return;
-                            props.onPublishNow();
-                          }}
-                          disabled={props.isCreatingPost}
-                          aria-disabled={props.publishNowDisabled}
-                          className={cn(
-                            props.publishNowDisabled &&
-                              !props.isCreatingPost &&
-                              'hover:bg-primary cursor-not-allowed opacity-50'
-                          )}
-                        >
-                          {props.isCreatingPost ? (
-                            <>
-                              <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                              Creating...
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="mr-2 h-4 w-4" />
-                              Publish now
-                            </>
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      {props.publishNowBlocker ? (
-                        <TooltipContent>
-                          <p className="text-sm">{props.publishNowBlocker}</p>
-                        </TooltipContent>
-                      ) : null}
-                    </Tooltip>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            if (props.createScheduleDisabled) return;
-                            props.onSchedule();
-                          }}
-                          disabled={props.isCreatingPost}
-                          aria-disabled={props.createScheduleDisabled}
-                          className={cn(
-                            props.createScheduleDisabled &&
-                              !props.isCreatingPost &&
-                              'hover:bg-primary cursor-not-allowed opacity-50'
-                          )}
-                        >
-                          {props.isCreatingPost ? (
-                            <>
-                              <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                              Creating...
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="mr-2 h-4 w-4" />
-                              Schedule
-                            </>
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      {props.scheduleBlocker ? (
-                        <TooltipContent>
-                          <p className="text-sm">{props.scheduleBlocker}</p>
-                        </TooltipContent>
-                      ) : null}
-                    </Tooltip>
-                  )}
-                </ButtonGroup>
+                    {postingAction === 'queue' ? (
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if (props.isCreatingPost) return;
+                              if (props.queueDisabled) return;
+                              props.onAddToQueue();
+                            }}
+                            disabled={props.isCreatingPost}
+                            aria-disabled={props.queueDisabled}
+                            className={cn(
+                              props.queueDisabled &&
+                                !props.isCreatingPost &&
+                                'hover:bg-primary cursor-not-allowed opacity-50'
+                            )}
+                          >
+                            {props.isCreatingPost ? <>Creating...</> : <>Add to queue</>}
+                          </Button>
+                        </TooltipTrigger>
+                        {props.queueBlocker ? (
+                          <TooltipContent>
+                            <BlockerTooltipMessage message={props.queueBlocker} />
+                          </TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    ) : postingAction === 'now' ? (
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if (props.isCreatingPost) return;
+                              if (props.publishNowDisabled) return;
+                              props.onPublishNow();
+                            }}
+                            disabled={props.isCreatingPost}
+                            aria-disabled={props.publishNowDisabled}
+                            className={cn(
+                              props.publishNowDisabled &&
+                                !props.isCreatingPost &&
+                                'hover:bg-primary cursor-not-allowed opacity-50'
+                            )}
+                          >
+                            {props.isCreatingPost ? <>Creating...</> : <>Publish</>}
+                          </Button>
+                        </TooltipTrigger>
+                        {props.publishNowBlocker ? (
+                          <TooltipContent>
+                            <BlockerTooltipMessage message={props.publishNowBlocker} />
+                          </TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    ) : (
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if (props.isCreatingPost) return;
+                              if (props.createScheduleDisabled) return;
+                              props.onSchedule();
+                            }}
+                            disabled={props.isCreatingPost}
+                            aria-disabled={props.createScheduleDisabled}
+                            className={cn(
+                              props.createScheduleDisabled &&
+                                !props.isCreatingPost &&
+                                'hover:bg-primary cursor-not-allowed opacity-50'
+                            )}
+                          >
+                            {props.isCreatingPost ? <>Creating...</> : <>Schedule</>}
+                          </Button>
+                        </TooltipTrigger>
+                        {props.scheduleBlocker ? (
+                          <TooltipContent>
+                            <BlockerTooltipMessage message={props.scheduleBlocker} />
+                          </TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    )}
+                  </ButtonGroup>
 
-                <PopoverContent align="end" className="w-[340px] max-w-[calc(100vw-2rem)] p-3">
-                  {postingPopoverView === 'datetime'
-                    ? renderDateTimePicker({
-                        onBack: () => setPostingPopoverView('menu'),
-                        onDone: () => {
-                          setPostingPopoverOpen(false);
-                          setPostingPopoverView('menu');
-                        },
-                      })
-                    : renderPostingMenu({
-                        mode: 'create',
-                        onSetQueue: () => props.onScheduledAtChange(''),
-                        onSetNow: () => props.onScheduledAtChange(''),
-                        onOpenDateTime: () => {
-                          if (!props.scheduledAt) {
-                            props.onScheduledAtChange(
-                              getDefaultScheduledAtInput(props.brandTimezone)
-                            );
-                          }
-                          setPostingPopoverView('datetime');
-                        },
-                        onPickSlot: props.onPickSlot,
-                        pickSlotDisabled: props.isCreatingPost || props.pickSlotDisabled,
-                        pickSlotBlocker: props.pickSlotBlocker,
-                        queueDisabled: props.queueDisabled,
-                        queueBlocker: props.queueBlocker,
-                        nowDisabled: props.publishNowDisabled,
-                        nowBlocker: props.publishNowBlocker,
-                      })}
-                </PopoverContent>
-              </Popover>
+                  <PopoverContent
+                    align="end"
+                    className={cn(
+                      postingPopoverView === 'datetime' ? 'w-fit' : 'w-[340px]',
+                      'max-w-[calc(100vw-2rem)] p-3'
+                    )}
+                  >
+                    {postingPopoverView === 'datetime'
+                      ? renderDateTimePicker({
+                          onBack: () => setPostingPopoverView('menu'),
+                          onDone: () => {
+                            setPostingPopoverOpen(false);
+                            setPostingPopoverView('menu');
+                          },
+                        })
+                      : renderPostingMenu({
+                          mode: 'create',
+                          onSetNow: () => null,
+                          onOpenDateTime: () => {
+                            if (!props.scheduledAt) {
+                              props.onScheduledAtChange(
+                                getDefaultScheduledAtInput(props.brandTimezone)
+                              );
+                            }
+                            setPostingPopoverView('datetime');
+                          },
+                          onPickSlot: props.onPickSlot,
+                          pickSlotDisabled: props.isCreatingPost || props.pickSlotDisabled,
+                          pickSlotBlocker: props.pickSlotBlocker,
+                        })}
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
           </TooltipProvider>
         </div>
@@ -743,7 +766,7 @@ export function WriteItBar(props: WriteItBarProps) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="min-w-0 flex-1 justify-between sm:min-w-[240px] sm:flex-none"
+                    className="min-w-0 flex-1 justify-between sm:flex-none"
                     disabled={props.isSaving || props.isUnscheduling}
                   >
                     <span className="flex items-center gap-2">
@@ -762,36 +785,111 @@ export function WriteItBar(props: WriteItBarProps) {
                   </Button>
                 </PopoverTrigger>
 
-                <Button
-                  size="sm"
-                  onClick={handleEditPrimaryAction}
-                  disabled={
-                    props.isSaving ||
-                    props.isUnscheduling ||
-                    (props.hasChanges && props.isScheduled && !props.validationOk) ||
-                    (!props.hasChanges && postingAction !== 'queue') ||
-                    (postingAction === 'queue' &&
-                      (!props.onAddToQueue ||
-                        props.isScheduled ||
-                        Boolean(props.queueDisabled) ||
-                        props.hasChanges ||
-                        !props.validationOk ||
-                        props.isQueueing))
-                  }
-                >
-                  {props.isSaving ? (
-                    <>Saving...</>
-                  ) : props.hasChanges ? (
-                    <>{props.primaryEditCtaLabel}</>
-                  ) : postingAction === 'queue' ? (
-                    <>Add to queue</>
-                  ) : (
-                    <>{props.primaryEditCtaLabel}</>
-                  )}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const blocked =
+                          (props.hasChanges && props.isScheduled && !props.validationOk) ||
+                          (!props.hasChanges && postingAction !== 'queue') ||
+                          (postingAction === 'queue' &&
+                            (!props.onAddToQueue ||
+                              Boolean(props.queueDisabled) ||
+                              props.hasChanges ||
+                              !props.validationOk ||
+                              props.isQueueing));
+                        if (props.isSaving || props.isUnscheduling) return;
+                        if (blocked) return;
+                        handleEditPrimaryAction();
+                      }}
+                      disabled={props.isSaving || props.isUnscheduling}
+                      aria-disabled={
+                        (props.hasChanges && props.isScheduled && !props.validationOk) ||
+                        (!props.hasChanges && postingAction !== 'queue') ||
+                        (postingAction === 'queue' &&
+                          (!props.onAddToQueue ||
+                            Boolean(props.queueDisabled) ||
+                            props.hasChanges ||
+                            !props.validationOk ||
+                            props.isQueueing))
+                      }
+                      className={cn(
+                        ((props.hasChanges && props.isScheduled && !props.validationOk) ||
+                          (!props.hasChanges && postingAction !== 'queue') ||
+                          (postingAction === 'queue' &&
+                            (!props.onAddToQueue ||
+                              Boolean(props.queueDisabled) ||
+                              props.hasChanges ||
+                              !props.validationOk ||
+                              props.isQueueing))) &&
+                          !props.isSaving &&
+                          !props.isUnscheduling &&
+                          'hover:bg-primary cursor-not-allowed opacity-50'
+                      )}
+                    >
+                      {props.isSaving ? (
+                        <>Saving...</>
+                      ) : props.hasChanges ? (
+                        <>{props.primaryEditCtaLabel}</>
+                      ) : postingAction === 'queue' ? (
+                        <>Add to queue</>
+                      ) : (
+                        <>{props.primaryEditCtaLabel}</>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  {(() => {
+                    if (props.isSaving || props.isUnscheduling) return null;
+                    if (props.hasChanges) {
+                      if (props.isScheduled && !props.validationOk) {
+                        return (
+                          <TooltipContent>
+                            <p className="text-sm">Fix validation errors before saving.</p>
+                          </TooltipContent>
+                        );
+                      }
+                      return null;
+                    }
+
+                    if (postingAction !== 'queue') {
+                      return (
+                        <TooltipContent>
+                          <p className="text-sm">No changes to save.</p>
+                        </TooltipContent>
+                      );
+                    }
+
+                    if (!props.onAddToQueue || Boolean(props.queueDisabled)) {
+                      return (
+                        <TooltipContent>
+                          <p className="text-sm">
+                            Queue scheduling is not available for this post.
+                          </p>
+                        </TooltipContent>
+                      );
+                    }
+
+                    if (!props.validationOk) {
+                      return (
+                        <TooltipContent>
+                          <p className="text-sm">Fix validation errors before adding to queue.</p>
+                        </TooltipContent>
+                      );
+                    }
+
+                    return null;
+                  })()}
+                </Tooltip>
               </ButtonGroup>
 
-              <PopoverContent align="end" className="w-[340px] max-w-[calc(100vw-2rem)] p-3">
+              <PopoverContent
+                align="end"
+                className={cn(
+                  postingPopoverView === 'datetime' ? 'w-fit' : 'w-[340px]',
+                  'max-w-[calc(100vw-2rem)] p-3'
+                )}
+              >
                 {postingPopoverView === 'datetime'
                   ? renderDateTimePicker({
                       onBack: () => setPostingPopoverView('menu'),
@@ -802,7 +900,6 @@ export function WriteItBar(props: WriteItBarProps) {
                     })
                   : renderPostingMenu({
                       mode: 'edit',
-                      onSetQueue: () => null,
                       onOpenDateTime: () => {
                         if (!props.scheduledAt) {
                           props.onScheduledAtChange(
@@ -811,23 +908,6 @@ export function WriteItBar(props: WriteItBarProps) {
                         }
                         setPostingPopoverView('datetime');
                       },
-                      queueDisabled:
-                        !props.onAddToQueue ||
-                        props.isScheduled ||
-                        Boolean(props.queueDisabled) ||
-                        props.hasChanges ||
-                        !props.validationOk ||
-                        props.isQueueing,
-                      queueBlocker: (() => {
-                        if (!props.onAddToQueue)
-                          return 'Queue scheduling is not available for this post.';
-                        if (props.isScheduled)
-                          return 'Unschedule this post before adding it to a queue.';
-                        if (props.hasChanges) return 'Save your changes before adding to queue.';
-                        if (!props.validationOk)
-                          return 'Fix validation errors before adding to queue.';
-                        return null;
-                      })(),
                     })}
               </PopoverContent>
             </Popover>

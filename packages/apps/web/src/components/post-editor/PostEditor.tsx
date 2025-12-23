@@ -1211,7 +1211,7 @@ export function PostEditor({
       toast.error(getScheduleErrorMessage(error, 'Failed to update destination schedules.')),
   });
 
-  const { mutate: addToQueue, isPending: isQueueing } = useMutation({
+  const { mutateAsync: addToQueueAsync, isPending: isQueueing } = useMutation({
     mutationFn: async () => {
       if (isMultiDestinationGroup) {
         if (!contentGroupId) throw new Error('Missing contentGroupId');
@@ -1247,6 +1247,45 @@ export function PostEditor({
       toast.error(getQueueErrorMessage(error));
     },
   });
+
+  const moveToQueue = async (): Promise<void> => {
+    if (isQueueing) return;
+    if (!queueSupportedForPost) {
+      toast.error('Queue scheduling is not available for this post.');
+      return;
+    }
+    if (!validation.ok) {
+      toast.error(validationError || 'Please fix validation errors before continuing.');
+      return;
+    }
+
+    try {
+      if (isMultiDestinationGroup) {
+        if (contentGroupSchedule.kind !== 'none') {
+          await scheduleContentGroup(null);
+        }
+      } else if (id && post?.scheduledAt) {
+        await contentApi.updateContent({
+          contentId: id,
+          scheduledAt: null,
+        });
+        queryClient.invalidateQueries({ queryKey: ['post', id] });
+        const brandId = post?.brand?.id ?? selectedBrand?.id ?? null;
+        if (brandId) {
+          queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
+        }
+      }
+
+      await addToQueueAsync();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ||
+        error?.message ||
+        'Failed to move post to the next available slot. Please try again.';
+      toast.error(message);
+    }
+  };
 
   // Create post mutation (for creation mode)
   const { mutate: createPost, isPending: isCreatingPost } = useMutation({
@@ -2117,8 +2156,15 @@ export function PostEditor({
   });
   const createScheduleDisabled = isCreatingPost || Boolean(scheduleBlocker);
 
-  const saveDraftDisabled = false;
-  const saveDraftBlocker = null;
+  const hasDraftInputs =
+    Boolean((formData.caption || '').trim()) ||
+    Boolean((formData.firstComment || '').trim()) ||
+    (formData.carouselAssets?.length ?? 0) > 0 ||
+    Boolean(selectedCampaign);
+  const saveDraftDisabled = !hasDraftInputs;
+  const saveDraftBlocker = saveDraftDisabled
+    ? 'Add a caption, media, first comment, or campaign before saving a draft.'
+    : null;
 
   const publishNowDisabled =
     !validation.ok ||
@@ -3337,8 +3383,8 @@ export function PostEditor({
               if (id) unschedulePost(id);
             }}
             onSave={handleSaveChanges}
-            onAddToQueue={() => addToQueue()}
-            queueDisabled={!queueSupportedForPost || isScheduled}
+            onAddToQueue={() => void moveToQueue()}
+            queueDisabled={!queueSupportedForPost}
             isQueueing={isQueueing}
           />
         );
