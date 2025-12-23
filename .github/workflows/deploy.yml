@@ -179,7 +179,9 @@ jobs:
               - 'packages/infra/cdk/lib/stacks/web-stack.ts'
             frontend:
               - 'packages/apps/web/**'
-              - 'packages/libs/**'
+              - 'packages/libs/calendar/**'
+              - 'packages/libs/content-validation/**'
+              - 'packages/libs/csrf-client/**'
             infra:
               - 'packages/infra/**'
             any-stack:
@@ -215,7 +217,7 @@ jobs:
             [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("api")
             [[ "${{ steps.changes.outputs.asset-library }}" == "true" ]] && STACKS+=("asset-library")
             [[ "${{ steps.changes.outputs.analytics }}" == "true" ]] && STACKS+=("analytics")
-            [[ "${{ steps.changes.outputs.web-infra }}" == "true" ]] && STACKS+=("web")
+            [[ "${{ steps.changes.outputs.web-infra }}" == "true" || "${{ steps.changes.outputs.frontend }}" == "true" ]] && STACKS+=("web")
 
             # If infra changed, deploy all stacks
             if [[ "${{ steps.changes.outputs.infra }}" == "true" ]]; then
