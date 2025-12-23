@@ -61,7 +61,8 @@ jobs:
       api-changed: ${{ steps.changes.outputs.api }}
       asset-library-changed: ${{ steps.changes.outputs.asset-library }}
       analytics-changed: ${{ steps.changes.outputs.analytics }}
-      web-changed: ${{ steps.changes.outputs.web }}
+      web-infra-changed: ${{ steps.changes.outputs.web-infra }}
+      frontend-changed: ${{ steps.changes.outputs.frontend }}
       infra-changed: ${{ steps.changes.outputs.infra }}
       any-stack-changed: ${{ steps.changes.outputs.any-stack }}
       stack-matrix: ${{ steps.matrix.outputs.stack-matrix }}
@@ -174,9 +175,10 @@ jobs:
               - 'packages/services/analytics-ingestor/**'
               - 'packages/infra/cdk/lib/stacks/analytics-stack.ts'
               - 'packages/libs/**'
-            web:
-              - 'packages/apps/web/**'
+            web-infra:
               - 'packages/infra/cdk/lib/stacks/web-stack.ts'
+            frontend:
+              - 'packages/apps/web/**'
               - 'packages/libs/**'
             infra:
               - 'packages/infra/**'
@@ -214,7 +216,7 @@ jobs:
             [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("api")
             [[ "${{ steps.changes.outputs.asset-library }}" == "true" ]] && STACKS+=("asset-library")
             [[ "${{ steps.changes.outputs.analytics }}" == "true" ]] && STACKS+=("analytics")
-            [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("web")
+            [[ "${{ steps.changes.outputs.web-infra }}" == "true" ]] && STACKS+=("web")
 
             # If infra changed, deploy all stacks
             if [[ "${{ steps.changes.outputs.infra }}" == "true" ]]; then
@@ -339,7 +341,8 @@ jobs:
           echo "api=${{ steps.changes.outputs.api }}"
           echo "asset-library=${{ steps.changes.outputs.asset-library }}"
           echo "analytics=${{ steps.changes.outputs.analytics }}"
-          echo "web=${{ steps.changes.outputs.web }}"
+          echo "web-infra=${{ steps.changes.outputs.web-infra }}"
+          echo "frontend=${{ steps.changes.outputs.frontend }}"
           echo "infra=${{ steps.changes.outputs.infra }}"
           echo "any-stack=${{ steps.changes.outputs.any-stack }}"
           echo "stack-matrix=${{ steps.matrix.outputs.stack-matrix }}"
@@ -782,6 +785,7 @@ jobs:
       github.event_name != 'pull_request' &&
       (needs.deploy-stacks.result == 'success' || needs.deploy-stacks.result == 'skipped') &&
       (
+        needs.detect-changes.outputs.frontend-changed == 'true' ||
         contains(needs.detect-changes.outputs.stack-matrix, 'web') ||
         github.event_name == 'workflow_dispatch'
       )

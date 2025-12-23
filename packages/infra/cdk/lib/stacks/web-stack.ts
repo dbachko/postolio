@@ -289,6 +289,17 @@ export class WebStack extends cdk.Stack {
     }
 
     // ==================== CloudFront Distribution ====================
+    const staticAssetsCachePolicy = new cloudfront.CachePolicy(this, 'StaticAssetsCachePolicy', {
+      cachePolicyName: `${prefix}-static-cache-policy`,
+      comment: 'Cache policy for static assets with long TTL',
+      defaultTtl: cdk.Duration.days(30),
+      maxTtl: cdk.Duration.days(365),
+      minTtl: cdk.Duration.seconds(0),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+    });
+
     const distributionProps: cloudfront.DistributionProps = {
       comment: `${prefix} - Frontend Distribution`,
       defaultRootObject: 'index.html',
@@ -308,16 +319,10 @@ export class WebStack extends cdk.Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
         compress: true,
-        cachePolicy: new cloudfront.CachePolicy(this, 'StaticAssetsCachePolicy', {
-          cachePolicyName: `${prefix}-static-cache-policy`,
-          comment: 'Cache policy for static assets with long TTL',
-          defaultTtl: cdk.Duration.days(30),
-          maxTtl: cdk.Duration.days(365),
-          minTtl: cdk.Duration.seconds(0),
-          headerBehavior: cloudfront.CacheHeaderBehavior.none(),
-          queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
-          cookieBehavior: cloudfront.CacheCookieBehavior.none(),
-        }),
+        // Disable caching on the default behavior because the SPA rewrite function can turn
+        // arbitrary paths (e.g. /drafts) into /index.html. If this behavior is cached, CloudFront
+        // can serve stale HTML for a long time, causing chunk hash mismatches after deploys.
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         functionAssociations: [
           {
             function: spaRewriteFunction,
@@ -326,6 +331,15 @@ export class WebStack extends cdk.Stack {
         ],
       },
       additionalBehaviors: {
+        // Cache built static assets (Vite emits hashed files under /assets/*)
+        '/assets/*': {
+          origin: s3Origin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          compress: true,
+          cachePolicy: staticAssetsCachePolicy,
+        },
         // Special handling for index.html - no caching
         '/index.html': {
           origin: s3Origin,
