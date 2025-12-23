@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type UIEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -8,6 +8,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarSeparator,
+} from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Brand } from '@/lib/api';
 import { useNotificationsStore } from '@/stores/notificationsStore';
@@ -41,6 +51,8 @@ export function SidebarNav({
   onLogout,
 }: SidebarNavProps) {
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
+  const [isContentScrolled, setIsContentScrolled] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   const { unreadCount, fetchLatest } = useNotificationsStore();
   const { openSidebar } = useRightSidebarRouter();
 
@@ -49,6 +61,19 @@ export function SidebarNav({
   }, [fetchLatest]);
 
   const revealClass = cn('transition-opacity duration-200', 'opacity-0 group-hover:opacity-100');
+
+  const handleContentScroll = (event: UIEvent<HTMLDivElement>) => {
+    const { scrollTop } = event.currentTarget;
+    const scrolled = scrollTop > 0;
+    setIsContentScrolled((prev) => (prev === scrolled ? prev : scrolled));
+  };
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const { scrollTop } = el;
+    setIsContentScrolled(scrollTop > 0);
+  }, [currentPath, mainItems, secondaryItems]);
 
   const toggleParent = (path: string) => {
     setExpandedParents((prev) => ({ ...prev, [path]: !prev[path] }));
@@ -72,8 +97,8 @@ export function SidebarNav({
     const rowClass = cn(
       'flex w-full items-center gap-2 justify-start rounded-md p-2 text-sm transition-colors',
       active
-        ? 'bg-accent text-foreground'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
     );
 
     return (
@@ -131,48 +156,32 @@ export function SidebarNav({
         {hasChildren && (
           <div
             className={cn(
-              'mt-0 ml-6 overflow-hidden transition-[max-height,opacity,margin-top] duration-200 ease-out',
+              'mt-0 overflow-hidden transition-[max-height,opacity,margin-top] duration-200 ease-out',
               isOpen
                 ? 'max-h-0 opacity-0 group-hover:mt-1 group-hover:max-h-64 group-hover:opacity-100'
                 : 'max-h-0 opacity-0'
             )}
           >
-            <div className="relative py-0.5 pl-4">
-              <div
-                aria-hidden="true"
-                className="bg-border absolute top-2 bottom-2 left-0.5 w-px rounded-full opacity-60"
-              />
-              <nav className="space-y-0.5">
-                {children.map((child) => {
-                  const childActive =
-                    currentPath === child.path || currentPath.startsWith(child.path + '/');
-                  return (
-                    <Link
-                      key={child.path}
-                      to={child.path}
-                      className={cn(
-                        'flex items-center gap-2 rounded-md p-2 text-sm transition-colors',
-                        childActive
-                          ? 'bg-accent text-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      {child.icon && (
-                        <child.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                      )}
-                      <span
-                        className={cn(
-                          'min-w-0 flex-1 truncate text-left text-sm whitespace-nowrap',
-                          revealClass
-                        )}
-                      >
-                        {child.label}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
+            <SidebarMenuSub>
+              {children.map((child) => {
+                const childActive =
+                  currentPath === child.path || currentPath.startsWith(child.path + '/');
+                return (
+                  <SidebarMenuSubItem key={child.path}>
+                    <SidebarMenuSubButton asChild isActive={childActive}>
+                      <Link to={child.path}>
+                        {child.icon && <child.icon aria-hidden="true" />}
+                        <span
+                          className={cn('min-w-0 flex-1 truncate whitespace-nowrap', revealClass)}
+                        >
+                          {child.label}
+                        </span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                );
+              })}
+            </SidebarMenuSub>
           </div>
         )}
       </div>
@@ -182,57 +191,68 @@ export function SidebarNav({
   return (
     <aside
       className={cn(
-        'bg-card group fixed inset-y-0 left-0 z-50 h-full w-[52px] border-r shadow-lg transition-[width] duration-300 ease-out hover:w-[225px]'
+        'bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-50 h-full w-[52px] border-r shadow-lg transition-[width] duration-300 ease-out hover:w-[225px]'
       )}
       aria-label="Primary navigation"
     >
-      <div className="flex h-full flex-col gap-2 px-2 py-3">
-        <Link
-          to="/dashboard"
-          className="text-foreground hover:bg-accent hover:text-accent-foreground flex w-full items-center justify-start gap-2 rounded-md p-2 text-sm font-medium transition-colors"
-          aria-label="Dashboard"
+      <div className="flex h-full min-h-0 flex-col">
+        <SidebarHeader
+          className={cn(
+            'bg-sidebar sticky top-0 z-20 p-2',
+            isContentScrolled && 'border-sidebar-border border-b shadow-sm'
+          )}
         >
-          <img
-            src="/postolio-icon.svg"
-            alt=""
-            className="block h-5 min-h-5 w-5 min-w-5 flex-shrink-0"
-            aria-hidden="true"
-          />
-          <span
-            className={cn(
-              'min-w-0 flex-1 truncate text-left text-sm font-semibold whitespace-nowrap',
-              revealClass
-            )}
+          <Link
+            to="/dashboard"
+            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full items-center justify-start gap-2 rounded-md p-2 text-sm font-medium transition-colors"
+            aria-label="Dashboard"
           >
-            Postolio
-          </span>
-        </Link>
+            <img
+              src="/postolio-icon.svg"
+              alt=""
+              className="block h-5 min-h-5 w-5 min-w-5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate text-left text-sm font-semibold whitespace-nowrap',
+                revealClass
+              )}
+            >
+              Postolio
+            </span>
+          </Link>
+        </SidebarHeader>
 
-        <div className="flex-1 overflow-y-auto">
-          <nav className="space-y-1">{mainItems.map(renderItem)}</nav>
-        </div>
+        <SidebarContent ref={contentRef} onScroll={handleContentScroll} className="px-1">
+          <SidebarGroup className="p-0">
+            <nav className="space-y-1 p-1">{mainItems.map(renderItem)}</nav>
+          </SidebarGroup>
 
-        <div className="mt-auto space-y-1 pt-2">
           {secondaryItems.length > 0 && (
             <>
-              <div className="bg-border my-1 h-px w-full" aria-hidden="true" />
-              <nav className="space-y-1">{secondaryItems.map(renderItem)}</nav>
+              <SidebarSeparator />
+              <SidebarGroup className="p-0">
+                <nav className="space-y-1 p-1">{secondaryItems.map(renderItem)}</nav>
+              </SidebarGroup>
             </>
           )}
+        </SidebarContent>
 
+        <SidebarFooter className="bg-sidebar border-sidebar-border sticky bottom-0 z-20 border-t p-2">
           <button
             type="button"
             onClick={() => openSidebar('notifications')}
             aria-label="Open notifications"
             className={cn(
               'flex w-full items-center justify-start gap-2 rounded-md p-2 text-sm transition-colors',
-              'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
             )}
           >
             <div className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
               <BellIcon className="h-5 w-5" aria-hidden="true" />
               {unreadCount > 0 && (
-                <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 grid h-4 min-w-[16px] place-items-center rounded-full px-0.5 text-[9px] font-medium">
+                <span className="bg-sidebar-primary text-sidebar-primary-foreground absolute -top-1 -right-1 grid h-4 min-w-[16px] place-items-center rounded-full px-0.5 text-[9px] font-medium">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -255,11 +275,11 @@ export function SidebarNav({
                   aria-label="Account menu"
                   className={cn(
                     'flex w-full items-center justify-start gap-2 rounded-md p-2 text-sm transition-colors',
-                    'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                   )}
                 >
-                  <div className="bg-primary flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full">
-                    <span className="text-primary-foreground text-[10px] leading-none font-semibold">
+                  <div className="bg-sidebar-primary flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full">
+                    <span className="text-sidebar-primary-foreground text-[10px] leading-none font-semibold">
                       {selectedBrand?.name?.charAt(0) || userEmail.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -321,7 +341,7 @@ export function SidebarNav({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-        </div>
+        </SidebarFooter>
       </div>
     </aside>
   );
