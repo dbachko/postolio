@@ -86,18 +86,82 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma clients
+        if: |
+          contains(fromJson(needs.detect-changes.outputs.packages), 'api') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'token-service') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'publisher') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'retry-handler') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'dlq-processor') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'schedule-management') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'schedule-cleanup') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'status-sync')
         run: |
           pnpm --filter=@postolio/database build
           pnpm --filter=@postolio/database-assets build
 
       - name: Run linting
-        run: npx turbo lint --filter='...[origin/${{ github.base_ref }}]'
+        shell: bash
+        run: |
+          CHANGES='${{ needs.detect-changes.outputs.packages }}'
+          FILTER_ARGS=()
+
+          if echo "$CHANGES" | jq -e 'index("api") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=api)
+          fi
+          if echo "$CHANGES" | jq -e 'index("web") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=@postolio/web)
+          fi
+          if echo "$CHANGES" | jq -e 'index("infra") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=postolio-infrastructure)
+          fi
+          if echo "$CHANGES" | jq -e 'index("libs") != null' >/dev/null; then
+            FILTER_ARGS+=("--filter=./packages/libs/*")
+          fi
+
+          for svc in token-service publisher retry-handler dlq-processor schedule-management schedule-cleanup status-sync; do
+            if echo "$CHANGES" | jq -e --arg svc "$svc" 'index($svc) != null' >/dev/null; then
+              FILTER_ARGS+=(--filter="@postolio/$svc")
+            fi
+          done
+
+          if [[ ${#FILTER_ARGS[@]} -eq 0 ]]; then
+            echo "No matching packages for lint. Skipping."
+            exit 0
+          fi
+
+          npx turbo lint "${FILTER_ARGS[@]}"
 
       - name: Run type checking
+        shell: bash
         run: |
-          # Try typecheck first, fallback to build if not available
-          npx turbo typecheck --filter='...[origin/${{ github.base_ref }}]' || \
-          npx turbo build --filter='...[origin/${{ github.base_ref }}]'
+          CHANGES='${{ needs.detect-changes.outputs.packages }}'
+          FILTER_ARGS=()
+
+          if echo "$CHANGES" | jq -e 'index("api") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=api)
+          fi
+          if echo "$CHANGES" | jq -e 'index("web") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=@postolio/web)
+          fi
+          if echo "$CHANGES" | jq -e 'index("infra") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=postolio-infrastructure)
+          fi
+          if echo "$CHANGES" | jq -e 'index("libs") != null' >/dev/null; then
+            FILTER_ARGS+=("--filter=./packages/libs/*")
+          fi
+
+          for svc in token-service publisher retry-handler dlq-processor schedule-management schedule-cleanup status-sync; do
+            if echo "$CHANGES" | jq -e --arg svc "$svc" 'index($svc) != null' >/dev/null; then
+              FILTER_ARGS+=(--filter="@postolio/$svc")
+            fi
+          done
+
+          if [[ ${#FILTER_ARGS[@]} -eq 0 ]]; then
+            echo "No matching packages for typecheck. Skipping."
+            exit 0
+          fi
+
+          npx turbo typecheck "${FILTER_ARGS[@]}" || npx turbo build "${FILTER_ARGS[@]}"
 
       - name: Check formatting
         run: |
@@ -149,12 +213,50 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma clients
+        if: |
+          contains(fromJson(needs.detect-changes.outputs.packages), 'api') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'token-service') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'publisher') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'retry-handler') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'dlq-processor') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'schedule-management') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'schedule-cleanup') ||
+          contains(fromJson(needs.detect-changes.outputs.packages), 'status-sync')
         run: |
           pnpm --filter=@postolio/database build
           pnpm --filter=@postolio/database-assets build
 
       - name: Run tests with coverage
-        run: npx turbo test --filter='...[origin/${{ github.base_ref }}]'
+        shell: bash
+        run: |
+          CHANGES='${{ needs.detect-changes.outputs.packages }}'
+          FILTER_ARGS=()
+
+          if echo "$CHANGES" | jq -e 'index("api") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=api)
+          fi
+          if echo "$CHANGES" | jq -e 'index("web") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=@postolio/web)
+          fi
+          if echo "$CHANGES" | jq -e 'index("infra") != null' >/dev/null; then
+            FILTER_ARGS+=(--filter=postolio-infrastructure)
+          fi
+          if echo "$CHANGES" | jq -e 'index("libs") != null' >/dev/null; then
+            FILTER_ARGS+=("--filter=./packages/libs/*")
+          fi
+
+          for svc in token-service publisher retry-handler dlq-processor schedule-management schedule-cleanup status-sync; do
+            if echo "$CHANGES" | jq -e --arg svc "$svc" 'index($svc) != null' >/dev/null; then
+              FILTER_ARGS+=(--filter="@postolio/$svc")
+            fi
+          done
+
+          if [[ ${#FILTER_ARGS[@]} -eq 0 ]]; then
+            echo "No matching packages for tests. Skipping."
+            exit 0
+          fi
+
+          npx turbo test "${FILTER_ARGS[@]}"
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -221,6 +323,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    needs: detect-changes
     permissions:
       contents: read
       security-events: write
@@ -270,7 +373,10 @@ jobs:
   cdk-diff:
     name: CDK Diff
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'infrastructure') || contains(github.event.pull_request.files.*.filename, 'packages/infra')
+    needs: detect-changes
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'infrastructure') ||
+      contains(fromJson(needs.detect-changes.outputs.packages), 'infra')
 
     steps:
       - name: Checkout code

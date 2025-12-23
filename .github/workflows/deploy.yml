@@ -182,7 +182,6 @@ jobs:
               - 'packages/libs/**'
             infra:
               - 'packages/infra/**'
-              - '.github/workflows/**'
             any-stack:
               - 'packages/services/**'
               - 'packages/apps/**'
@@ -233,25 +232,25 @@ jobs:
           # Expand to include transitive dependents so that changes in a base stack
           # also redeploy stacks that depend on it (scheduler -> publishing, api, etc.)
           if [ ${#STACKS[@]} -gt 0 ]; then
-            # Convert to simple comma string for membership checks
-            STACKS_STR=$(IFS=,; echo "${STACKS[*]}")
             add_unique() {
               local name="$1"
-              if [[ ",$STACKS_STR," != *",\"$name\","* ]]; then
-                STACKS+=("\"$name\"")
-                STACKS_STR=$(IFS=,; echo "${STACKS[*]}")
-              fi
+              for existing in "${STACKS[@]}"; do
+                if [[ "$existing" == "$name" ]]; then
+                  return 0
+                fi
+              done
+              STACKS+=("$name")
             }
 
             # If foundation changed -> everything depends on it
-            if [[ "$STACKS_STR" == *"\"foundation\""* ]]; then
+            if printf '%s\n' "${STACKS[@]}" | grep -qx 'foundation'; then
               for s in "${ALL_STACKS[@]}"; do
                 add_unique "$s"
               done
             fi
 
             # If auth changed -> scheduling, publishing, api depend on it
-            if [[ "$STACKS_STR" == *"\"auth\""* ]]; then
+            if printf '%s\n' "${STACKS[@]}" | grep -qx 'auth'; then
               add_unique "scheduling"
               add_unique "publishing"
               add_unique "api"
@@ -259,13 +258,13 @@ jobs:
             fi
 
             # If scheduling changed -> publishing and api depend on it
-            if [[ "$STACKS_STR" == *"\"scheduling\""* ]]; then
+            if printf '%s\n' "${STACKS[@]}" | grep -qx 'scheduling'; then
               add_unique "publishing"
               add_unique "api"
             fi
 
             # If publishing changed -> api depends on it
-            if [[ "$STACKS_STR" == *"\"publishing\""* ]]; then
+            if printf '%s\n' "${STACKS[@]}" | grep -qx 'publishing'; then
               add_unique "api"
             fi
           fi
@@ -274,11 +273,9 @@ jobs:
             echo "stack-matrix=[]" >> $GITHUB_OUTPUT
             echo "Stacks to deploy: []"
           else
-            # Build valid JSON array (e.g., ["foundation","auth"]) without double-escaping
-            JSON_ARRAY=$(printf '"%s",' "${STACKS[@]}")
-            JSON_ARRAY="[${JSON_ARRAY%,}]"
-          echo "stack-matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
-          echo "Stacks to deploy: $JSON_ARRAY"
+            JSON_ARRAY=$(jq -cn '$ARGS.positional' --args "${STACKS[@]}")
+            echo "stack-matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
+            echo "Stacks to deploy: $JSON_ARRAY"
           fi
 
       - name: Generate images build matrix
