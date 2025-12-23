@@ -72,8 +72,8 @@ export const secondaryNavItems: NavigationItem[] = [
     label: 'Social Accounts',
     path: '/social-accounts',
     icon: Users,
-    description: 'Connect accounts and set weekly calendars',
-    matchType: 'exact',
+    description: 'Connect accounts and set publishing schedules',
+    matchType: 'startsWith',
   },
   {
     label: 'Settings',

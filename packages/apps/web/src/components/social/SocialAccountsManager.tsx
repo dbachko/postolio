@@ -213,9 +213,14 @@ function SortableAccountRow({
         </div>
       </div>
       <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-        <Button variant="outline" size="sm" onClick={onQueueSettings} aria-label="Weekly Calendar">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onQueueSettings}
+          aria-label="Publishing Schedule"
+        >
           <Calendar className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Weekly Calendar</span>
+          <span className="hidden sm:inline">Publishing Schedule</span>
         </Button>
         {onSync ? (
           <Button
@@ -778,7 +783,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                       isPrimary={primarySocialAccountId === account.id}
                       isSyncing={isSyncing}
                       onSync={canSync ? () => syncPostsMutation.mutate(account) : null}
-                      onQueueSettings={() => openSidebar('weekly-calendar', { id: account.id })}
+                      onQueueSettings={() => openSidebar('publishing-schedule', { id: account.id })}
                       onDisconnect={() => handleDisconnect(account)}
                     />
                   );

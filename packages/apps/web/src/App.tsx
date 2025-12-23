@@ -17,7 +17,8 @@ import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
 import { DMAutomation } from './pages/DMAutomation';
-import { SocialAccounts } from './pages/SocialAccounts';
+import { SocialAccountsConnections } from './pages/social-accounts/SocialAccountsConnections';
+import { SocialAccountsPublishingSchedule } from './pages/social-accounts/SocialAccountsPublishingSchedule';
 import { Settings } from './pages/Settings';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
@@ -235,11 +236,34 @@ const router = createBrowserRouter([
   },
   {
     path: '/social-accounts',
+    element: <Navigate to="/social-accounts/connections" replace />,
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/social-accounts/connections',
     element: (
       <ProtectedRoute>
         <OnboardingGuard>
           <Layout>
-            <SocialAccounts />
+            <SocialAccountsConnections />
+          </Layout>
+        </OnboardingGuard>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/social-accounts/weekly-calendar',
+    element: <Navigate to="/social-accounts/publishing-schedule" replace />,
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/social-accounts/publishing-schedule',
+    element: (
+      <ProtectedRoute>
+        <OnboardingGuard>
+          <Layout>
+            <SocialAccountsPublishingSchedule />
           </Layout>
         </OnboardingGuard>
       </ProtectedRoute>

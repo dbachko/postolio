@@ -65,7 +65,7 @@ export function QueueScheduleLane({
             asChild
             className="h-auto p-0 text-sm font-medium underline underline-offset-4"
           >
-            <Link to="/social-accounts">Social Accounts</Link>
+            <Link to="/social-accounts/publishing-schedule">Social Accounts</Link>
           </Button>
           .
         </div>

@@ -342,7 +342,7 @@ export function WriteItBar(props: WriteItBarProps) {
               <div className="min-w-0">
                 <div className="text-sm font-medium">Pick a slot</div>
                 <div className="text-muted-foreground text-xs">
-                  Choose a recommended time from your weekly calendar.
+                  Choose a recommended time from your publishing schedule.
                 </div>
               </div>
             </Button>

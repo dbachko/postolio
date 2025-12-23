@@ -322,7 +322,7 @@ export function QueueSchedulesView({
                     asChild
                     className="h-auto p-0 text-sm font-medium underline underline-offset-4"
                   >
-                    <Link to="/social-accounts">Social Accounts</Link>
+                    <Link to="/social-accounts/connections">Social Accounts</Link>
                   </Button>
                   .
                 </div>

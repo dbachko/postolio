@@ -268,7 +268,7 @@ export function SocialAccountQueueSettingsPanel({
     <div className="space-y-6">
       {!account ? (
         <div className="text-muted-foreground text-sm">
-          Select a social account to edit its weekly calendar.
+          Select a social account to edit its publishing schedule.
         </div>
       ) : (
         <>
@@ -340,7 +340,7 @@ export function SocialAccountQueueSettingsPanel({
                       <div className="space-y-1">
                         <div className="text-sm font-medium">Create queue</div>
                         <div className="text-muted-foreground text-xs">
-                          Starts with an empty weekly calendar.
+                          Starts with an empty publishing schedule.
                         </div>
                       </div>
 
@@ -753,7 +753,7 @@ export function SocialAccountQueueSettingsPanel({
                   disabled={!selectedQueue?.id || saveSlotsMutation.isPending || !slotsDirty}
                   onClick={() => saveSlotsMutation.mutate()}
                 >
-                  Save weekly calendar
+                  Save publishing schedule
                 </Button>
               </DialogFooter>
             </>
@@ -781,7 +781,7 @@ export function SocialAccountQueueSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Weekly Calendar</DialogTitle>
+          <DialogTitle>Publishing Schedule</DialogTitle>
           <DialogDescription>Configure weekly time slots per queue.</DialogDescription>
         </DialogHeader>
         <SocialAccountQueueSettingsPanel

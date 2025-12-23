@@ -118,7 +118,7 @@ export function QueueSlotPickerDialog({
               <div className="divide-border divide-y">
                 {instances.length === 0 ? (
                   <div className="text-muted-foreground p-4 text-sm">
-                    No upcoming slots found. Add slots in Social Accounts → Weekly Calendar.
+                    No upcoming slots found. Add slots in Social Accounts → Publishing Schedule.
                   </div>
                 ) : (
                   instances.map((inst) => {

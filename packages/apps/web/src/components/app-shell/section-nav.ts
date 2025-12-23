@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from 'react';
-import { MessageCircle, Send, Bookmark } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, Plug, CalendarClock } from 'lucide-react';
 import type { NavigationItem } from './nav-config';
 
 export interface SectionNavItem {
@@ -36,11 +36,30 @@ const inboxSectionItems: SectionNavItem[] = [
   },
 ];
 
+const socialAccountsSectionItems: SectionNavItem[] = [
+  {
+    label: 'Connections',
+    path: '/social-accounts/connections',
+    icon: Plug,
+    description: 'Connect and manage accounts',
+  },
+  {
+    label: 'Publishing Schedule',
+    path: '/social-accounts/publishing-schedule',
+    icon: CalendarClock,
+    description: 'Configure recurring publishing time slots',
+  },
+];
+
 export function getSectionNavItems(section: NavigationItem | null): SectionNavItem[] {
   if (!section) return [];
 
   if (section.path === '/inbox') {
     return inboxSectionItems;
+  }
+
+  if (section.path === '/social-accounts') {
+    return socialAccountsSectionItems;
   }
 
   return [];

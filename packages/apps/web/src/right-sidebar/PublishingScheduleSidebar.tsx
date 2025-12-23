@@ -39,7 +39,7 @@ function toAccountOption(a: ConnectedAccount): SocialAccountOption {
   };
 }
 
-export function WeeklyCalendarSidebar({ id }: { id?: string }) {
+export function PublishingScheduleSidebar({ id }: { id?: string }) {
   const { close } = useRightSidebarRouter();
   const selectedBrand = useBrandStore((s) => s.selectedBrand);
   const accountId = typeof id === 'string' && id.trim().length ? id.trim() : null;
@@ -72,7 +72,7 @@ export function WeeklyCalendarSidebar({ id }: { id?: string }) {
         <Breadcrumb aria-label="right-sidebar-title">
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbPage>Weekly Calendar</BreadcrumbPage>
+              <BreadcrumbPage>Publishing Schedule</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -83,7 +83,9 @@ export function WeeklyCalendarSidebar({ id }: { id?: string }) {
 
       <ScrollArea className="flex-1 px-4 py-4">
         {!selectedBrand ? (
-          <div className="text-muted-foreground text-sm">Select a brand to configure queues.</div>
+          <div className="text-muted-foreground text-sm">
+            Select a brand to configure publishing time slots.
+          </div>
         ) : accountsQuery.isLoading ? (
           <div className="bg-muted h-24 animate-pulse rounded-lg" />
         ) : (
