@@ -7,6 +7,11 @@ export function applyFilters(
   const { campaigns, statuses, searchQuery } = filters;
 
   return items.filter((item) => {
+    // Queue slots are structural calendar affordances; content filters should never hide them.
+    if (isQueueSlotPlaceholder(item)) {
+      return true;
+    }
+
     if (campaigns.length > 0 && !matchesCampaign(item, campaigns)) {
       return false;
     }
@@ -21,6 +26,11 @@ export function applyFilters(
 
     return true;
   });
+}
+
+function isQueueSlotPlaceholder(item: CalendarDataItem): boolean {
+  if (item.type !== 'placeholder') return false;
+  return item.message === 'Queue slot';
 }
 
 function matchesCampaign(item: CalendarDataItem, campaigns: string[]): boolean {

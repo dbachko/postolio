@@ -1,12 +1,17 @@
 import { memo, useState, useCallback, useMemo } from 'react';
-import { startOfDay, isBefore } from 'date-fns';
+import { addDays, isBefore, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { brand as brandApi, content as contentApi, type Content } from '@/lib/api';
+import {
+  brand as brandApi,
+  content as contentApi,
+  publishingQueues as publishingQueuesApi,
+  type Content,
+} from '@/lib/api';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { convertLocalToUTC } from '@/lib/timezone';
 import { useCalendarItems } from './hooks/useCalendarItems';
@@ -22,6 +27,8 @@ import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import type { Platform } from '@/lib/platform-config';
 import type { SocialAccountsById } from '@/types/social-accounts';
+import { getDefaultQueueId } from '@/components/publishing-queues/queue-utils';
+import type { PublishingQueueSlotInstance } from '@/lib/api/publishing-queues-client';
 
 export interface FullCalendarProps {
   brandId: string;
@@ -30,7 +37,47 @@ export interface FullCalendarProps {
   date: Date;
   content?: Content[];
   placeholders?: PlaceholderItem[];
+  targetSocialAccountIds?: string[] | null;
   theme?: 'default' | 'monarch';
+}
+
+function getQueueSlotRange(opts: {
+  view: FullCalendarProps['view'];
+  date: Date;
+  timezone: string;
+  weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+}): { afterUtcIso: string; endUtcMs: number; limit: number } {
+  const { view, date, timezone, weekStartsOn } = opts;
+  const zoned = toZonedTime(date, timezone);
+
+  if (view === 'month') {
+    const monthStart = startOfMonth(zoned);
+    const localStart = startOfWeek(monthStart, { weekStartsOn });
+    const localEnd = addDays(localStart, 42);
+    return {
+      afterUtcIso: convertLocalToUTC(localStart, timezone).toISOString(),
+      endUtcMs: convertLocalToUTC(localEnd, timezone).getTime(),
+      limit: 600,
+    };
+  }
+
+  if (view === 'week') {
+    const localStart = startOfWeek(zoned, { weekStartsOn });
+    const localEnd = addDays(localStart, 7);
+    return {
+      afterUtcIso: convertLocalToUTC(localStart, timezone).toISOString(),
+      endUtcMs: convertLocalToUTC(localEnd, timezone).getTime(),
+      limit: 250,
+    };
+  }
+
+  const localStart = startOfDay(zoned);
+  const localEnd = addDays(localStart, 3);
+  return {
+    afterUtcIso: convertLocalToUTC(localStart, timezone).toISOString(),
+    endUtcMs: convertLocalToUTC(localEnd, timezone).getTime(),
+    limit: 150,
+  };
 }
 
 function FullCalendarImpl({
@@ -40,6 +87,7 @@ function FullCalendarImpl({
   date,
   content = [],
   placeholders = [],
+  targetSocialAccountIds = null,
 }: FullCalendarProps) {
   const queryClient = useQueryClient();
   const { openSidebar } = useRightSidebarRouter();
@@ -53,7 +101,83 @@ function FullCalendarImpl({
     return luxon.create({ weekStartsOn, timezone: brandTimezone });
   }, [weekStartsOn, brandTimezone]);
 
-  const items = useCalendarItems(content, placeholders);
+  const effectiveSingleDestinationId = useMemo(() => {
+    if (!Array.isArray(targetSocialAccountIds) || targetSocialAccountIds.length !== 1) return null;
+    const id = targetSocialAccountIds[0];
+    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+  }, [targetSocialAccountIds]);
+
+  const slotRange = useMemo(
+    () =>
+      effectiveSingleDestinationId
+        ? getQueueSlotRange({ view, date, timezone: brandTimezone, weekStartsOn })
+        : null,
+    [brandTimezone, date, effectiveSingleDestinationId, view, weekStartsOn]
+  );
+
+  const queuesQuery = useQuery({
+    queryKey: ['publishing-queues', effectiveSingleDestinationId],
+    queryFn: () => publishingQueuesApi.listQueuesForSocialAccount(effectiveSingleDestinationId!),
+    enabled: Boolean(effectiveSingleDestinationId),
+    staleTime: CACHE_TIMES.STANDARD,
+    gcTime: GC_TIMES.STANDARD,
+    refetchOnWindowFocus: false,
+  });
+
+  const queueId = useMemo(() => getDefaultQueueId(queuesQuery.data as any), [queuesQuery.data]);
+
+  const slotInstancesQuery = useQuery({
+    queryKey: ['publishing-queue-slot-instances-calendar', queueId, slotRange?.afterUtcIso, view],
+    queryFn: () =>
+      publishingQueuesApi.listSlotInstances({
+        queueId: queueId!,
+        limit: slotRange?.limit ?? 200,
+        after: slotRange?.afterUtcIso,
+      }),
+    enabled: Boolean(queueId && effectiveSingleDestinationId && slotRange?.afterUtcIso),
+    staleTime: 0,
+    gcTime: GC_TIMES.STANDARD,
+    refetchOnWindowFocus: false,
+  });
+
+  const queueSlotPlaceholders = useMemo(() => {
+    if (!effectiveSingleDestinationId) return [] as PlaceholderItem[];
+    if (!slotRange) return [] as PlaceholderItem[];
+    const raw = slotInstancesQuery.data as any;
+    const list = raw?.data?.instances;
+    const instances = Array.isArray(list) ? (list as PublishingQueueSlotInstance[]) : [];
+    const endUtcMs = slotRange.endUtcMs;
+    const nowUtcMs = Date.now();
+
+    return instances
+      .filter((i) => !i.occupied)
+      .filter((i) => {
+        const ms = new Date(i.scheduledAt).getTime();
+        return Number.isFinite(ms) && ms >= nowUtcMs && ms < endUtcMs;
+      })
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+      .map((i) => {
+        return {
+          id: `queue-slot:${i.queueId}:${i.laneKey}:${i.scheduledAt}`,
+          scheduledAt: i.scheduledAt,
+          message: 'Queue slot',
+          campaignId: null,
+          campaignName: null,
+          campaignColor: null,
+          // Extra fields consumed by PostPreviewCard -> open create with prefill
+          targetSocialAccountId: effectiveSingleDestinationId,
+          laneKey: i.laneKey,
+          caption: 'Queue slot',
+        } as unknown as PlaceholderItem;
+      });
+  }, [effectiveSingleDestinationId, slotInstancesQuery.data, slotRange]);
+
+  const mergedPlaceholders = useMemo(() => {
+    if (!effectiveSingleDestinationId) return placeholders;
+    return [...placeholders, ...queueSlotPlaceholders];
+  }, [effectiveSingleDestinationId, placeholders, queueSlotPlaceholders]);
+
+  const items = useCalendarItems(content, mergedPlaceholders);
   const filters = useCalendarFilters();
   const events = useFilteredEvents(items, filters, tzRef.current);
 
@@ -155,15 +279,21 @@ function FullCalendarImpl({
           local.setHours(10, 0, 0, 0);
         }
         const utcISO = convertLocalToUTC(local, brandTz).toISOString();
-        const url = new URL(window.location.href);
-        url.searchParams.set('scheduledAt', utcISO);
-        window.history.replaceState({}, '', url.toString());
-        openSidebar('post-create');
+        openSidebar('post-create', {
+          params: {
+            scheduledAt: utcISO,
+            ...(Array.isArray(targetSocialAccountIds) && targetSocialAccountIds.length > 0
+              ? targetSocialAccountIds.length === 1
+                ? { targetSocialAccountId: targetSocialAccountIds[0] }
+                : { targetSocialAccountIds: targetSocialAccountIds.join(',') }
+              : {}),
+          },
+        });
       } catch (error) {
         console.error(error);
       }
     },
-    [calendarView, openSidebar, tzRef]
+    [calendarView, openSidebar, targetSocialAccountIds, tzRef]
   );
 
   return (
@@ -187,6 +317,7 @@ function FullCalendarImpl({
               onReschedule={(item) => setReschedule({ open: true, item })}
               assetsById={assetsById}
               socialAccountsById={socialAccountsById}
+              hideDestinations={Boolean(effectiveSingleDestinationId)}
             />
           ),
         }}
@@ -210,6 +341,7 @@ export const FullCalendar = memo(FullCalendarImpl, (prev, next) => {
     prev.date.getTime() === next.date.getTime() &&
     prev.content === next.content &&
     prev.placeholders === next.placeholders &&
+    prev.targetSocialAccountIds === next.targetSocialAccountIds &&
     prev.theme === next.theme
   );
 });

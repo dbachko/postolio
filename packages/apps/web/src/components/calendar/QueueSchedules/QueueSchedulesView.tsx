@@ -10,7 +10,6 @@ import {
 } from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
-import { cn } from '@/lib/utils';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 
@@ -47,11 +46,13 @@ export function QueueSchedulesView({
   brandTimezone,
   date,
   calendarContent,
+  selectedSocialAccountIds,
 }: {
   brandId: string;
   brandTimezone: string;
   date: Date;
   calendarContent: Content[];
+  selectedSocialAccountIds: string[] | null;
 }) {
   const { openSidebar } = useRightSidebarRouter();
 
@@ -109,25 +110,21 @@ export function QueueSchedulesView({
       .filter((a) => Boolean(a.id && a.platform));
   }, [accountsQuery.data]);
 
-  const [selectedSocialAccountId, setSelectedSocialAccountId] = useState<string | null>(null);
   const [selectedLane, setSelectedLane] = useState<'all' | Exclude<PublishingQueueLaneKey, 'any'>>(
     'all'
   );
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (selectedSocialAccountId) return;
-    const first =
-      socialAccounts.find((a) => a.schedulingSupported && !a.disconnected) ||
-      socialAccounts[0] ||
-      null;
-    if (first?.id) setSelectedSocialAccountId(first.id);
-  }, [selectedSocialAccountId, socialAccounts]);
+  const effectiveSocialAccountId = useMemo(() => {
+    if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length !== 1)
+      return null;
+    return selectedSocialAccountIds[0];
+  }, [selectedSocialAccountIds]);
 
   const queuesQuery = useQuery({
-    queryKey: ['publishing-queues', selectedSocialAccountId],
-    queryFn: () => publishingQueuesApi.listQueuesForSocialAccount(selectedSocialAccountId!),
-    enabled: Boolean(selectedSocialAccountId),
+    queryKey: ['publishing-queues', effectiveSocialAccountId],
+    queryFn: () => publishingQueuesApi.listQueuesForSocialAccount(effectiveSocialAccountId!),
+    enabled: Boolean(effectiveSocialAccountId),
     staleTime: CACHE_TIMES.STANDARD,
     gcTime: GC_TIMES.STANDARD,
     refetchOnWindowFocus: false,
@@ -143,6 +140,10 @@ export function QueueSchedulesView({
     if (!queueId) return;
     setSelectedQueueId(queueId);
   }, [queueId]);
+
+  useEffect(() => {
+    setSelectedQueueId(null);
+  }, [effectiveSocialAccountId]);
 
   const rangeStartUtcIso = useMemo(
     () => getBrandRangeStartUtcIso(date, brandTimezone),
@@ -244,9 +245,9 @@ export function QueueSchedulesView({
   );
 
   const selectedAccountMeta = useMemo(() => {
-    if (!selectedSocialAccountId) return null;
-    return socialAccounts.find((a) => a.id === selectedSocialAccountId) || null;
-  }, [selectedSocialAccountId, socialAccounts]);
+    if (!effectiveSocialAccountId) return null;
+    return socialAccounts.find((a) => a.id === effectiveSocialAccountId) || null;
+  }, [effectiveSocialAccountId, socialAccounts]);
 
   return (
     <div className="space-y-4">
@@ -254,7 +255,7 @@ export function QueueSchedulesView({
         <div className="flex min-w-0 items-center gap-2">
           <div className="text-sm font-semibold">Queues</div>
           <span className="text-muted-foreground text-xs">
-            {formatInTimeZone(date, brandTimezone, 'MMM d, yyyy')} · {brandTimezone}
+            {formatInTimeZone(date, brandTimezone, 'MMM d, yyyy')}
           </span>
         </div>
 
@@ -295,12 +296,12 @@ export function QueueSchedulesView({
             onClick={() => {
               openSidebar('post-create', {
                 params: {
-                  targetSocialAccountId: selectedSocialAccountId,
+                  targetSocialAccountId: effectiveSocialAccountId,
                   contentType: selectedLane === 'all' ? undefined : selectedLane,
                 },
               });
             }}
-            disabled={!selectedSocialAccountId || !selectedAccountMeta?.schedulingSupported}
+            disabled={!effectiveSocialAccountId || !selectedAccountMeta?.schedulingSupported}
           >
             Create
           </Button>
@@ -326,45 +327,28 @@ export function QueueSchedulesView({
                   </Button>
                   .
                 </div>
+              ) : !effectiveSocialAccountId && Array.isArray(selectedSocialAccountIds) ? (
+                <div className="text-muted-foreground text-sm">
+                  Select exactly one destination in the header to manage queue scheduling.
+                </div>
+              ) : !effectiveSocialAccountId ? (
+                <div className="text-muted-foreground text-sm">
+                  Select a destination in the header to manage queue scheduling.
+                </div>
+              ) : !selectedAccountMeta ? (
+                <div className="text-muted-foreground text-sm">Loading social account…</div>
               ) : (
                 <div className="flex items-center gap-2">
-                  {socialAccounts.map((account) => {
-                    const active = account.id === selectedSocialAccountId;
-                    const disabled = account.disconnected || !account.schedulingSupported;
-                    return (
-                      <Button
-                        key={account.id}
-                        type="button"
-                        aria-label={account.label}
-                        onClick={() => {
-                          if (disabled) return;
-                          setSelectedSocialAccountId(account.id);
-                          setSelectedQueueId(null);
-                        }}
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={disabled}
-                        className={cn('rounded-full', disabled && 'opacity-50')}
-                        title={
-                          disabled
-                            ? account.disconnected
-                              ? 'Account disconnected'
-                              : 'Queue scheduling not available for this platform'
-                            : account.label
-                        }
-                      >
-                        <SocialAccountAvatar
-                          platform={account.platform!}
-                          name={account.avatarName}
-                          src={account.avatarUrl}
-                          size="sm"
-                          selected={active}
-                          disabled={account.disconnected}
-                          muted={!account.schedulingSupported}
-                        />
-                      </Button>
-                    );
-                  })}
+                  <SocialAccountAvatar
+                    platform={selectedAccountMeta.platform!}
+                    name={selectedAccountMeta.avatarName}
+                    src={selectedAccountMeta.avatarUrl}
+                    size="sm"
+                    selected
+                    muted={false}
+                    disabled={selectedAccountMeta.disconnected}
+                  />
+                  <span className="text-sm font-medium">{selectedAccountMeta.label}</span>
                 </div>
               )}
             </div>
@@ -420,7 +404,7 @@ export function QueueSchedulesView({
             openSidebar('post-create', {
               params: {
                 scheduledAt: slotIso,
-                targetSocialAccountId: selectedSocialAccountId,
+                targetSocialAccountId: effectiveSocialAccountId,
                 contentType,
               },
             });

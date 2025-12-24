@@ -11,9 +11,11 @@ import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { Placeholder } from '../types/calendar';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Globe2 } from 'lucide-react';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { AsyncTimezoneCombobox } from '@/components/timezone/AsyncTimezoneCombobox';
+import { ContentViewSelector } from '@/components/content/ContentViewSelector';
+import { useContentViewStore } from '@/stores/contentViewStore';
 import {
   Select,
   SelectContent,
@@ -138,6 +140,18 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
     [calendarQuery.data?.data?.placeholders]
   );
 
+  const selectedSocialAccountIds = useContentViewStore(
+    (s) => s.selectedSocialAccountIdsByBrandId[brandId]
+  );
+  const scopedContent = useMemo(() => {
+    if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length === 0)
+      return content;
+    const allowed = new Set(selectedSocialAccountIds);
+    return content.filter(
+      (item) => item.targetSocialAccountId && allowed.has(item.targetSocialAccountId)
+    );
+  }, [content, selectedSocialAccountIds]);
+
   // Schedule-ahead capacity banner is now shown globally in AppLayout
 
   // Navigation handlers (step depends on current view)
@@ -215,11 +229,13 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
         </div>
 
         <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+          <ContentViewSelector brandId={brandId} />
           <AsyncTimezoneCombobox
             value={brandTimezone}
             onValueChange={(tz) => {
               setBrandTimezone(tz);
             }}
+            leadingIcon={<Globe2 className="text-muted-foreground h-4 w-4" aria-hidden="true" />}
             buttonClassName="w-auto"
           />
           <Select
@@ -254,7 +270,10 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
           brandId={brandId}
           brandTimezone={brandTimezone}
           date={currentDate}
-          calendarContent={content}
+          calendarContent={scopedContent}
+          selectedSocialAccountIds={
+            Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : null
+          }
         />
       ) : (
         <ErrorBoundary
@@ -265,9 +284,12 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
             brandTimezone={brandTimezone}
             view={viewMode}
             date={currentDate}
-            content={content}
+            content={scopedContent}
             placeholders={placeholders}
             theme="monarch"
+            targetSocialAccountIds={
+              Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : null
+            }
           />
         </ErrorBoundary>
       )}

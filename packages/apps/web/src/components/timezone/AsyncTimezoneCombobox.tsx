@@ -1,6 +1,5 @@
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { ChevronsUpDown, Loader2 } from 'lucide-react';
-import { formatInTimeZone } from 'date-fns-tz';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -20,19 +19,9 @@ function formatTimezoneLabel(timezone: string): string {
   return lastPart.replace(/_/g, ' ');
 }
 
-function formatTimezoneOffsetLabel(timezone: string, now: Date): string | null {
-  try {
-    const formatted = formatInTimeZone(now, timezone, 'O');
-    return formatted === 'GMT+0' ? 'GMT' : formatted;
-  } catch {
-    return null;
-  }
-}
-
 function TriggerPlaceholder(props: Props & { onRequestLoad: () => void; showSpinner: boolean }) {
   const selectedValue = props.value;
   const allowClear = props.allowClear === true;
-  const now = useMemo(() => new Date(), []);
 
   const triggerText =
     selectedValue == null
@@ -40,11 +29,6 @@ function TriggerPlaceholder(props: Props & { onRequestLoad: () => void; showSpin
         ? props.clearLabel
         : props.placeholder || 'Select timezone'
       : formatTimezoneLabel(selectedValue);
-
-  const offsetText = useMemo(() => {
-    if (selectedValue == null) return null;
-    return formatTimezoneOffsetLabel(selectedValue, now);
-  }, [now, selectedValue]);
 
   return (
     <Button
@@ -61,9 +45,6 @@ function TriggerPlaceholder(props: Props & { onRequestLoad: () => void; showSpin
         <span className="min-w-0 truncate text-left">{triggerText}</span>
       </span>
       <span className="ml-2 flex shrink-0 items-center gap-2">
-        {selectedValue != null && offsetText && (
-          <span className="text-muted-foreground text-xs">{offsetText}</span>
-        )}
         {props.showSpinner ? (
           <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />
         ) : (

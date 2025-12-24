@@ -1980,6 +1980,7 @@ export function PostEditor({
   const qCampaignId = searchParams.get('campaignId');
   const qContentType = searchParams.get('contentType');
   const qTargetSocialAccountId = searchParams.get('targetSocialAccountId');
+  const qTargetSocialAccountIds = searchParams.get('targetSocialAccountIds');
   const qAssetId = searchParams.get('assetId');
   const qAssetIdsParam = searchParams.get('assetIds');
   const prefillAssetIds = useMemo(() => {
@@ -2038,10 +2039,22 @@ export function PostEditor({
 
   useEffect(() => {
     if (!isCreating || prefillAppliedRef.current === true) return;
-    const normalizedTargetSocialAccountId =
-      typeof qTargetSocialAccountId === 'string' && qTargetSocialAccountId.trim().length > 0
-        ? qTargetSocialAccountId.trim()
-        : null;
+    const normalizedTargetSocialAccountIds = (() => {
+      const raw = typeof qTargetSocialAccountIds === 'string' ? qTargetSocialAccountIds.trim() : '';
+      if (raw) {
+        const ids = raw
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean);
+        const unique = Array.from(new Set(ids));
+        return unique.length > 0 ? unique : null;
+      }
+      const single =
+        typeof qTargetSocialAccountId === 'string' && qTargetSocialAccountId.trim().length > 0
+          ? qTargetSocialAccountId.trim()
+          : null;
+      return single ? [single] : null;
+    })();
     const normalizedContentType =
       qContentType === 'post' || qContentType === 'reel' || qContentType === 'story'
         ? (qContentType as InstagramContentType)
@@ -2050,7 +2063,7 @@ export function PostEditor({
       Boolean(qCaption) ||
       Boolean(qScheduledAt) ||
       Boolean(qCampaignId) ||
-      Boolean(normalizedTargetSocialAccountId) ||
+      Boolean(normalizedTargetSocialAccountIds?.length) ||
       Boolean(normalizedContentType) ||
       prefillAssetIds.length > 0;
     if (!hasPrefillInput) {
@@ -2063,7 +2076,7 @@ export function PostEditor({
     }
 
     // If we need to prefill a destination, wait until platform options load.
-    if (normalizedTargetSocialAccountId && platformPickerOptions.length === 0) {
+    if (normalizedTargetSocialAccountIds?.length && platformPickerOptions.length === 0) {
       return;
     }
 
@@ -2092,12 +2105,11 @@ export function PostEditor({
     });
     if (qCampaignId) setSelectedCampaign(qCampaignId);
 
-    if (normalizedTargetSocialAccountId) {
-      const exists = platformPickerOptions.some(
-        (opt) => opt.id === normalizedTargetSocialAccountId
-      );
-      if (exists) {
-        setSelectedPlatformAccountIds([normalizedTargetSocialAccountId]);
+    if (normalizedTargetSocialAccountIds?.length) {
+      const allowed = new Set(platformPickerOptions.map((opt) => opt.id));
+      const next = normalizedTargetSocialAccountIds.filter((id) => allowed.has(id));
+      if (next.length > 0) {
+        setSelectedPlatformAccountIds(next);
         platformsInitializedRef.current = true;
       }
     }
@@ -2109,6 +2121,7 @@ export function PostEditor({
     qCampaignId,
     qContentType,
     qTargetSocialAccountId,
+    qTargetSocialAccountIds,
     prefillAssetIds,
     isPrefillAssetsLoading,
     prefillAssets,

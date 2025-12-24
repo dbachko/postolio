@@ -12,6 +12,7 @@ interface EventRendererProps {
   onReschedule: (item: CalendarItem) => void;
   assetsById?: Record<string, AssetType | null>;
   socialAccountsById?: SocialAccountsById;
+  hideDestinations?: boolean;
 }
 
 export function EventRenderer({
@@ -21,6 +22,7 @@ export function EventRenderer({
   onReschedule,
   assetsById,
   socialAccountsById,
+  hideDestinations = false,
 }: EventRendererProps) {
   const rawResource = event.resource as unknown as Record<string, unknown> | undefined;
   if (rawResource?.type === 'more') {
@@ -49,6 +51,7 @@ export function EventRenderer({
         onReschedule={onReschedule}
         primaryAsset={primaryAsset}
         socialAccountsById={socialAccountsById}
+        hideDestinations={hideDestinations}
       />
     </div>
   );
@@ -77,6 +80,24 @@ function buildCardItem(resource: CalendarEvent['resource'], brandId: string): Ca
       createdAt: toStringOrDefault(record.createdAt, resource.scheduledAt, nowIso),
       postedAt: undefined,
     } as CalendarItem;
+
+    const targetSocialAccountId =
+      typeof record.targetSocialAccountId === 'string' && record.targetSocialAccountId.trim()
+        ? record.targetSocialAccountId.trim()
+        : null;
+    if (targetSocialAccountId) (placeholder as any).targetSocialAccountId = targetSocialAccountId;
+
+    const targetSocialAccountIds = Array.isArray(record.targetSocialAccountIds)
+      ? (record.targetSocialAccountIds as unknown[])
+          .filter((v): v is string => typeof v === 'string')
+          .map((v) => v.trim())
+          .filter(Boolean)
+      : [];
+    if (targetSocialAccountIds.length > 0)
+      (placeholder as any).targetSocialAccountIds = targetSocialAccountIds;
+
+    const laneKey = typeof record.laneKey === 'string' ? record.laneKey : null;
+    if (laneKey) (placeholder as any).laneKey = laneKey;
 
     return placeholder;
   }

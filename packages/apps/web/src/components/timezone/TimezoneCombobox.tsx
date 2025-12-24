@@ -190,13 +190,6 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
     return formatTimezoneLabel(selectedValue);
   }, [selectedValue]);
 
-  const selectedOffsetLabel = useMemo(() => {
-    if (selectedValue == null) return null;
-    if (timezoneOffsets.labelByName.size)
-      return timezoneOffsets.labelByName.get(selectedValue) || null;
-    return formatTimezoneOffsetLabel(selectedValue, new Date());
-  }, [selectedValue, timezoneOffsets.labelByName]);
-
   const triggerText =
     selectedValue == null
       ? allowClear
@@ -250,9 +243,6 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
             <span className="min-w-0 truncate text-left">{triggerText}</span>
           </span>
           <span className="ml-2 flex shrink-0 items-center gap-2">
-            {selectedValue != null && selectedOffsetLabel && (
-              <span className="text-muted-foreground text-xs">{selectedOffsetLabel}</span>
-            )}
             {isLoading ? (
               <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />
             ) : (

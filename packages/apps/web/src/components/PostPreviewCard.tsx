@@ -2,14 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import { CalendarClock, Clock, Copy, ExternalLink, Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 import { PostStatusTimeBadge } from '@/components/PostStatusTimeBadge';
 import { getPostStatusBorderColor } from '@/utils/post-status-colors';
@@ -36,6 +35,11 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { laneIcon } from '@/components/calendar/QueueSchedules/queue-schedules-utils';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import type { MouseEvent } from 'react';
+import type { PublishingQueueLaneKey } from '@/lib/api/publishing-queues-client';
 
 type DeleteTarget =
   | { kind: 'content'; contentId: string }
@@ -51,6 +55,7 @@ interface PostPreviewCardProps {
   onReschedule?: (item: CalendarItem) => void;
   primaryAsset?: AssetType | null;
   socialAccountsById?: SocialAccountsById;
+  hideDestinations?: boolean;
 }
 
 // Lightweight preview card shown inside the Month grid
@@ -60,6 +65,7 @@ export function PostPreviewCard({
   onReschedule,
   primaryAsset,
   socialAccountsById,
+  hideDestinations = false,
 }: PostPreviewCardProps) {
   const navigate = useNavigate();
   const { openSidebar } = useRightSidebarRouter();
@@ -88,7 +94,7 @@ export function PostPreviewCard({
     };
   }, [item]);
 
-  const { status, displayTime, campaignColor } = useMemo(() => {
+  const { status, displayTime } = useMemo(() => {
     const isPlaceholder = item.type === 'placeholder' || (item as any)?.isPlaceholder;
     const status = (item as any)?.status || (isPlaceholder ? 'placeholder' : 'draft');
 
@@ -105,11 +111,7 @@ export function PostPreviewCard({
       displayTime = formatInTimeZone(new Date(ts), timezone, 'h:mm a');
     }
 
-    const directColor = (item as any)?.campaignColor || null;
-    const stored = getStoredCampaignColor((item as any)?.campaignId) || null;
-    const campaignColor = directColor || stored;
-
-    return { status, displayTime, campaignColor };
+    return { status, displayTime };
   }, [item, timezone]);
 
   const [imageReady, setImageReady] = useState(false);
@@ -132,6 +134,7 @@ export function PostPreviewCard({
   const showMediaBadge = item.type !== 'placeholder';
 
   const destinationAvatars = useMemo(() => {
+    if (hideDestinations) return null;
     if (item.type === 'placeholder') return null;
     if (!socialAccountsById) return null;
 
@@ -179,48 +182,7 @@ export function PostPreviewCard({
         ) : null}
       </div>
     );
-  }, [item, socialAccountsById]);
-
-  const campaignDot = useMemo(() => {
-    if (!item.campaignName) return null;
-    const href = item.campaignId ? `/campaigns/${item.campaignId}` : undefined;
-    const style = campaignColor ? { backgroundColor: campaignColor } : undefined;
-    const label = item.campaignName;
-
-    const dot = (
-      <span
-        className="border-border h-2.5 w-2.5 shrink-0 rounded-full border"
-        style={style}
-        aria-label={label}
-      />
-    );
-
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {href ? (
-              <a
-                href={href}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                className="inline-flex items-center"
-                aria-label={label}
-              >
-                {dot}
-              </a>
-            ) : (
-              <span className="inline-flex items-center">{dot}</span>
-            )}
-          </TooltipTrigger>
-          <TooltipContent>
-            <span className="max-w-[240px] truncate">{label}</span>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }, [campaignColor, item.campaignId, item.campaignName]);
+  }, [hideDestinations, item, socialAccountsById]);
 
   useEffect(() => {
     setImageReady(false);
@@ -240,12 +202,91 @@ export function PostPreviewCard({
   const handleOpen = () => {
     // Navigate to post details or create from placeholder
     if (item.type === 'placeholder') {
-      // Open create in sidebar; CreatePost reads current location query if needed
-      openSidebar('post-create');
+      const record = item as unknown as Record<string, unknown>;
+      const params: Record<string, string | null | undefined> = {};
+
+      const scheduledAt =
+        typeof record.scheduledAt === 'string' && record.scheduledAt.trim().length > 0
+          ? record.scheduledAt.trim()
+          : null;
+      if (scheduledAt) params.scheduledAt = scheduledAt;
+
+      const campaignId =
+        typeof record.campaignId === 'string' && record.campaignId.trim().length > 0
+          ? record.campaignId.trim()
+          : null;
+      if (campaignId && campaignId !== 'none') params.campaignId = campaignId;
+
+      const targetSocialAccountId =
+        typeof record.targetSocialAccountId === 'string' && record.targetSocialAccountId.trim()
+          ? record.targetSocialAccountId.trim()
+          : null;
+      if (targetSocialAccountId) {
+        params.targetSocialAccountId = targetSocialAccountId;
+      }
+
+      const targetSocialAccountIdsRaw =
+        typeof record.targetSocialAccountIds === 'string' ? record.targetSocialAccountIds : null;
+      const targetSocialAccountIds = Array.isArray(record.targetSocialAccountIds)
+        ? (record.targetSocialAccountIds as unknown[])
+            .filter((v): v is string => typeof v === 'string')
+            .map((v) => v.trim())
+            .filter(Boolean)
+        : targetSocialAccountIdsRaw
+          ? targetSocialAccountIdsRaw
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : [];
+      if (!targetSocialAccountId && targetSocialAccountIds.length > 0) {
+        const unique = Array.from(new Set(targetSocialAccountIds));
+        if (unique.length === 1) params.targetSocialAccountId = unique[0];
+        else params.targetSocialAccountIds = unique.join(',');
+      }
+
+      const laneKey = typeof record.laneKey === 'string' ? record.laneKey : null;
+      if (laneKey === 'post' || laneKey === 'reel' || laneKey === 'story') {
+        params.contentType = laneKey;
+      }
+
+      openSidebar('post-create', { params });
       return;
     }
     openSidebar('post', { id: (item as any).id });
   };
+
+  const isQueueSlotPlaceholder = useMemo(() => {
+    if (item.type !== 'placeholder') return false;
+    const record = item as unknown as Record<string, unknown>;
+    return record.message === 'Queue slot';
+  }, [item]);
+
+  const queueSlotMeta = useMemo(() => {
+    if (!isQueueSlotPlaceholder) return null;
+    const record = item as unknown as Record<string, unknown>;
+    const scheduledAt =
+      typeof record.scheduledAt === 'string' && record.scheduledAt.trim().length > 0
+        ? record.scheduledAt.trim()
+        : null;
+    const laneKey = typeof record.laneKey === 'string' ? record.laneKey : null;
+    const normalizedLaneKey: PublishingQueueLaneKey =
+      laneKey === 'post' || laneKey === 'reel' || laneKey === 'story' || laneKey === 'any'
+        ? (laneKey as PublishingQueueLaneKey)
+        : 'post';
+    const timeLabel = scheduledAt
+      ? formatInTimeZone(new Date(scheduledAt), timezone, 'h:mm a')
+      : '';
+    const isPast = scheduledAt
+      ? toZonedTime(new Date(scheduledAt), timezone).getTime() <
+        toZonedTime(new Date(), timezone).getTime()
+      : false;
+    return {
+      scheduledAt,
+      laneKey: normalizedLaneKey,
+      timeLabel,
+      isPast,
+    };
+  }, [isQueueSlotPlaceholder, item, timezone]);
 
   // Status-tinted border to match calendar cards
   const borderColor = getPostStatusBorderColor(status);
@@ -303,6 +344,59 @@ export function PostPreviewCard({
     navigate(`/posts/create?${params.toString()}`);
   };
 
+  if (queueSlotMeta) {
+    const handleCreate = () => {
+      if (queueSlotMeta.isPast) return;
+      handleOpen();
+    };
+
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleCreate}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleCreate();
+          }
+        }}
+        className={cn(
+          'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[calc(var(--calendar-card-h)-8px)] w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+          queueSlotMeta.isPast && 'opacity-70'
+        )}
+      >
+        {/* Default content (hidden on hover) */}
+        <div className="flex w-full items-center justify-between gap-3 transition-opacity duration-150 ease-out group-hover:pointer-events-none group-hover:opacity-0">
+          <div className="text-foreground w-16 shrink-0 text-sm font-medium">
+            {queueSlotMeta.timeLabel}
+          </div>
+          <div className="flex min-w-0 items-center justify-end gap-2">
+            <div className="bg-muted border-border text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border">
+              {laneIcon(queueSlotMeta.laneKey)}
+            </div>
+          </div>
+        </div>
+
+        {/* Hover state: center Create button, hide everything else */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 ease-out group-hover:pointer-events-auto group-hover:opacity-100">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={queueSlotMeta.isPast}
+            onClick={(e: MouseEvent<HTMLButtonElement>) => {
+              e.stopPropagation();
+              handleCreate();
+            }}
+          >
+            Create
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -321,11 +415,10 @@ export function PostPreviewCard({
             className="group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-3 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
             style={{ borderColor }}
           >
-            {showMediaBadge ? (
-              <MediaTypeBadge
-                type={mediaBadgeType}
-                className="pointer-events-none absolute top-2 right-2 z-10"
-              />
+            {destinationAvatars ? (
+              <div className="pointer-events-none absolute top-2 right-2 z-10 origin-top-right scale-90">
+                {destinationAvatars}
+              </div>
             ) : null}
             <div className="bg-muted relative w-14 shrink-0 self-stretch overflow-hidden rounded-md">
               {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
@@ -340,6 +433,11 @@ export function PostPreviewCard({
                 loading="lazy"
                 decoding="async"
               />
+              {showMediaBadge ? (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <MediaTypeBadge type={mediaBadgeType} />
+                </div>
+              ) : null}
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
@@ -367,13 +465,6 @@ export function PostPreviewCard({
               <div className="text-foreground mt-1 line-clamp-1 min-h-[1.4em] text-[12px] leading-snug">
                 {(item as any)?.caption || '\u00A0'}
               </div>
-
-              <div className="mt-auto flex items-center justify-between pt-1">
-                <div className="flex min-w-0 items-center gap-2">{campaignDot}</div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <div className="origin-right scale-90">{destinationAvatars}</div>
-                </div>
-              </div>
             </div>
           </div>
         ) : (
@@ -391,11 +482,10 @@ export function PostPreviewCard({
             className="group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
             style={{ borderColor }}
           >
-            {showMediaBadge ? (
-              <MediaTypeBadge
-                type={mediaBadgeType}
-                className="pointer-events-none absolute top-2 right-2 z-10"
-              />
+            {destinationAvatars ? (
+              <div className="pointer-events-none absolute top-2 right-2 z-10 origin-top-right scale-90">
+                {destinationAvatars}
+              </div>
             ) : null}
             {/* Top row: time/status */}
             <div className="flex items-center justify-between gap-2">
@@ -419,7 +509,6 @@ export function PostPreviewCard({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div className="min-w-0 pr-7" />
             </div>
 
             {/* Second row: image + caption */}
@@ -437,17 +526,15 @@ export function PostPreviewCard({
                   loading="lazy"
                   decoding="async"
                 />
+                {showMediaBadge ? (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <MediaTypeBadge type={mediaBadgeType} />
+                  </div>
+                ) : null}
               </div>
 
               <div className="text-foreground line-clamp-2 min-w-0 flex-1">
                 {(item as any)?.caption || ''}
-              </div>
-            </div>
-
-            <div className="mt-auto flex items-center justify-between pt-1">
-              <div className="flex min-w-0 items-center gap-2">{campaignDot}</div>
-              <div className="flex shrink-0 items-center gap-2">
-                <div className="origin-right scale-90">{destinationAvatars}</div>
               </div>
             </div>
           </div>
