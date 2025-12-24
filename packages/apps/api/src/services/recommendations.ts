@@ -54,7 +54,8 @@ export class RecommendationEngine {
    */
   async generateRecommendations(
     brandId: string,
-    days: number = 90
+    days: number = 90,
+    options?: { socialAccountId?: string }
   ): Promise<RecommendationsReport> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -64,6 +65,7 @@ export class RecommendationEngine {
       where: {
         content: { brandId },
         publishedAt: { gte: startDate },
+        ...(options?.socialAccountId ? { socialAccountId: options.socialAccountId } : {}),
       },
       include: {
         content: true,

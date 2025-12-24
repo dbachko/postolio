@@ -40,11 +40,19 @@ export interface InsightsReport {
   };
 }
 
+export interface GenerateInsightsOptions {
+  socialAccountId?: string;
+}
+
 export class AIInsightsService {
   /**
    * Generate AI-powered insights for a brand
    */
-  async generateInsights(brandId: string, days: number = 30): Promise<InsightsReport> {
+  async generateInsights(
+    brandId: string,
+    days: number = 30,
+    options?: GenerateInsightsOptions
+  ): Promise<InsightsReport> {
     const insights: AIInsight[] = [];
 
     // Fetch analytics data
@@ -55,6 +63,7 @@ export class AIInsightsService {
       where: {
         content: { brandId },
         publishedAt: { gte: startDate },
+        ...(options?.socialAccountId ? { socialAccountId: options.socialAccountId } : {}),
       },
       include: {
         metricsLatest: true,

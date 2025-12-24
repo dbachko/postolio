@@ -69,7 +69,8 @@ export class ForecastingService {
   async generateForecast(
     brandId: string,
     forecastDays: number = 30,
-    historicalDays: number = 90
+    historicalDays: number = 90,
+    options?: { socialAccountId?: string }
   ): Promise<ForecastReport> {
     // Fetch historical data
     const startDate = new Date();
@@ -79,6 +80,7 @@ export class ForecastingService {
       where: {
         content: { brandId },
         publishedAt: { gte: startDate },
+        ...(options?.socialAccountId ? { socialAccountId: options.socialAccountId } : {}),
       },
       include: {
         metricsLatest: true,

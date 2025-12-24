@@ -22,22 +22,15 @@ import {
 import { cn } from '@/lib/utils';
 import { getTimezoneAbbr, toUTCFromInput } from '@/lib/timezone';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
-import {
-  FacebookIcon,
-  InstagramIcon,
-  XBrandIcon,
-  YouTubeIcon,
-} from '@/components/icons/BrandIcons';
+import { getPlatformIcon } from '@/lib/platform-icons';
 import {
   AlertTriangle,
   ArrowLeft,
-  Briefcase,
   CalendarClock,
   Check,
   ChevronDown,
   Clock,
   ListPlus,
-  Music,
   X,
   Zap,
 } from 'lucide-react';
@@ -106,25 +99,6 @@ function parsePlatformPrefixedMessage(message: string): {
   const platform = match[1]?.toLowerCase() as Platform;
   const next = trimmed.slice(match[0].length).trim();
   return { platform, message: next || trimmed };
-}
-
-function getPlatformIcon(platform: Platform, className: string): ReactNode {
-  switch (platform) {
-    case 'instagram':
-      return <InstagramIcon className={className} aria-hidden="true" />;
-    case 'facebook':
-      return <FacebookIcon className={className} aria-hidden="true" />;
-    case 'linkedin':
-      return <Briefcase className={className} aria-hidden="true" />;
-    case 'x':
-      return <XBrandIcon className={className} aria-hidden="true" />;
-    case 'youtube':
-      return <YouTubeIcon className={className} aria-hidden="true" />;
-    case 'tiktok':
-      return <Music className={className} aria-hidden="true" />;
-    default:
-      return null;
-  }
 }
 
 function BlockerTooltipMessage({ message }: { message: string }) {

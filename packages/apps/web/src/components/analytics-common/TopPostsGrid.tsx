@@ -9,14 +9,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Eye, Heart, MessageCircle, Bookmark, Briefcase, Music } from 'lucide-react';
-import {
-  FacebookIcon,
-  InstagramIcon,
-  XBrandIcon,
-  YouTubeIcon,
-} from '@/components/icons/BrandIcons';
+import { Eye, Heart, MessageCircle, Bookmark } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { getPlatformIcon } from '@/lib/platform-icons';
 
 interface PostMetrics {
   impressions: number;
@@ -96,26 +91,6 @@ export function TopPostsGrid({ posts, loading, onPostClick }: TopPostsGridProps)
     const bValue = b.metrics[sortBy] || 0;
     return bValue - aValue;
   });
-
-  const getPlatformIcon = (platform: string) => {
-    switch (platform.toLowerCase()) {
-      case 'instagram':
-        return <InstagramIcon className="h-4 w-4" aria-hidden="true" />;
-      case 'facebook':
-        return <FacebookIcon className="h-4 w-4" aria-hidden="true" />;
-      case 'linkedin':
-        return <Briefcase className="h-4 w-4" />;
-      case 'x':
-      case 'twitter':
-        return <XBrandIcon className="h-4 w-4" aria-hidden="true" />;
-      case 'youtube':
-        return <YouTubeIcon className="h-4 w-4" aria-hidden="true" />;
-      case 'tiktok':
-        return <Music className="h-4 w-4" />;
-      default:
-        return <Eye className="h-4 w-4" />;
-    }
-  };
 
   return (
     <Card>

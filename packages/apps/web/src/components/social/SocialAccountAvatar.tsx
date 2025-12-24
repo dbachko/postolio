@@ -1,13 +1,7 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { Briefcase, Music } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { ProfileAvatar, type ProfileAvatarProps } from '@/components/ui/profile-avatar';
-import {
-  FacebookIcon,
-  InstagramIcon,
-  XBrandIcon,
-  YouTubeIcon,
-} from '@/components/icons/BrandIcons';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
+import { getPlatformIcon } from '@/lib/platform-icons';
 import { cn } from '@/lib/utils';
 
 const badgeSizeMap: Record<NonNullable<ProfileAvatarProps['size']>, string> = {
@@ -33,25 +27,6 @@ const iconSizeMap: Record<NonNullable<ProfileAvatarProps['size']>, string> = {
   lg: 'h-3.5 w-3.5',
   xl: 'h-4 w-4',
 };
-
-function getPlatformIcon(platform: Platform, className: string): ReactNode {
-  switch (platform) {
-    case 'instagram':
-      return <InstagramIcon className={className} aria-hidden="true" />;
-    case 'facebook':
-      return <FacebookIcon className={className} aria-hidden="true" />;
-    case 'linkedin':
-      return <Briefcase className={className} aria-hidden="true" />;
-    case 'x':
-      return <XBrandIcon className={className} aria-hidden="true" />;
-    case 'youtube':
-      return <YouTubeIcon className={className} aria-hidden="true" />;
-    case 'tiktok':
-      return <Music className={className} aria-hidden="true" />;
-    default:
-      return null;
-  }
-}
 
 function getFallbackInitial(name: string): string {
   const trimmed = (name || '').trim();
