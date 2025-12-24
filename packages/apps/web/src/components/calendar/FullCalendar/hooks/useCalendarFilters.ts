@@ -7,8 +7,6 @@ export function useCalendarFilters(): CalendarFilters {
     useShallow((state) => ({
       campaigns: state.campaigns,
       statuses: state.statuses,
-      contentTypes: state.contentTypes,
-      dateRange: state.dateRange,
       searchQuery: state.searchQuery,
     }))
   );

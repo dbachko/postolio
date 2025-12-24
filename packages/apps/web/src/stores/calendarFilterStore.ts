@@ -2,28 +2,17 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
-export type ContentType = 'post' | 'placeholder';
-
-interface DateRange {
-  start: Date | null;
-  end: Date | null;
-}
 
 export interface CalendarFilterState {
   // Filter values
   campaigns: string[];
   statuses: ContentStatus[];
-  contentTypes: ContentType[];
-  dateRange: DateRange;
   searchQuery: string;
 
   // Actions
   setCampaigns: (campaigns: string[]) => void;
   setStatuses: (statuses: ContentStatus[]) => void;
   toggleStatus: (status: ContentStatus) => void;
-  setContentTypes: (types: ContentType[]) => void;
-  toggleContentType: (type: ContentType) => void;
-  setDateRange: (start: Date | null, end: Date | null) => void;
   setSearchQuery: (query: string) => void;
   clearAll: () => void;
 
@@ -35,8 +24,6 @@ export interface CalendarFilterState {
 const initialState = {
   campaigns: [],
   statuses: [],
-  contentTypes: ['post', 'placeholder'] as ContentType[],
-  dateRange: { start: null, end: null },
   searchQuery: '',
 };
 
@@ -76,39 +63,6 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
           return { statuses: next };
         }),
 
-      setContentTypes: (types) => {
-        const prev = get().contentTypes;
-        if (haveSameMembers(prev, types)) return;
-        try {
-          if (isDebugFiltersEnabled())
-            console.debug('[filters] setContentTypes', { prev, next: types });
-        } catch {}
-        set({ contentTypes: types });
-      },
-
-      toggleContentType: (type) =>
-        set((state) => {
-          const next = state.contentTypes.includes(type)
-            ? state.contentTypes.filter((t) => t !== type)
-            : [...state.contentTypes, type];
-          try {
-            if (isDebugFiltersEnabled())
-              console.debug('[filters] toggleContentType', {
-                type,
-                prev: state.contentTypes,
-                next,
-              });
-          } catch {}
-          return { contentTypes: next };
-        }),
-
-      setDateRange: (start, end) => {
-        try {
-          if (isDebugFiltersEnabled()) console.debug('[filters] setDateRange', { start, end });
-        } catch {}
-        set({ dateRange: { start, end } });
-      },
-
       setSearchQuery: (query) => {
         try {
           if (isDebugFiltersEnabled()) console.debug('[filters] setSearchQuery', { query });
@@ -126,12 +80,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
       hasActiveFilters: () => {
         const state = get();
         return (
-          state.campaigns.length > 0 ||
-          state.statuses.length > 0 ||
-          state.contentTypes.length !== 2 || // Not showing all types
-          state.dateRange.start !== null ||
-          state.dateRange.end !== null ||
-          state.searchQuery.length > 0
+          state.campaigns.length > 0 || state.statuses.length > 0 || state.searchQuery.length > 0
         );
       },
 
@@ -140,8 +89,6 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
         let count = 0;
         if (state.campaigns.length > 0) count++;
         if (state.statuses.length > 0) count++;
-        if (state.contentTypes.length !== 2) count++;
-        if (state.dateRange.start || state.dateRange.end) count++;
         if (state.searchQuery.length > 0) count++;
         return count;
       },
@@ -151,23 +98,15 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
       partialize: (state) => ({
         campaigns: state.campaigns,
         statuses: state.statuses,
-        contentTypes: state.contentTypes,
         searchQuery: state.searchQuery,
-        dateRange: {
-          start: state.dateRange.start?.toISOString() || null,
-          end: state.dateRange.end?.toISOString() || null,
-        },
       }),
       merge: (persistedState: unknown, currentState) => {
         const safe = (persistedState as Partial<CalendarFilterState>) || {};
-        const dateRangeRaw: any = (safe as any).dateRange || {};
         return {
           ...currentState,
-          ...safe,
-          dateRange: {
-            start: dateRangeRaw.start ? new Date(dateRangeRaw.start) : null,
-            end: dateRangeRaw.end ? new Date(dateRangeRaw.end) : null,
-          },
+          campaigns: Array.isArray(safe.campaigns) ? safe.campaigns : currentState.campaigns,
+          statuses: Array.isArray(safe.statuses) ? safe.statuses : currentState.statuses,
+          searchQuery: typeof safe.searchQuery === 'string' ? safe.searchQuery : '',
         };
       },
     }

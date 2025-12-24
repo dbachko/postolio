@@ -8,14 +8,12 @@ export function useFilteredEvents(
   filters: CalendarFilters,
   timezone: string
 ): CalendarEvent[] {
-  const { campaigns, statuses, contentTypes, dateRange, searchQuery } = filters;
+  const { campaigns, statuses, searchQuery } = filters;
 
   return useMemo(() => {
     const filterSnapshot: CalendarFilters = {
       campaigns,
       statuses,
-      contentTypes,
-      dateRange,
       searchQuery,
     };
 
@@ -59,7 +57,7 @@ export function useFilteredEvents(
     }
 
     return events;
-  }, [items, campaigns, statuses, contentTypes, dateRange, searchQuery, timezone]);
+  }, [items, campaigns, statuses, searchQuery, timezone]);
 }
 
 function buildTitle(item: CalendarDataItem, record: Record<string, unknown>): string {

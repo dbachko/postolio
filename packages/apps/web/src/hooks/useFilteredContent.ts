@@ -21,26 +21,19 @@ export function useFilteredContent(items: ContentItem[]) {
   const selectFilters = useShallow((s: CalendarFilterState) => ({
     campaigns: s.campaigns,
     statuses: s.statuses,
-    contentTypes: s.contentTypes,
-    dateRange: s.dateRange,
     searchQuery: s.searchQuery,
   }));
-  const { campaigns, statuses, contentTypes, dateRange, searchQuery } =
-    useCalendarFilterStore(selectFilters);
+  const { campaigns, statuses, searchQuery } = useCalendarFilterStore(selectFilters);
 
   const filteredItems = useMemo(() => {
     let filtered = [...items];
 
     // Filter by campaigns
     if (campaigns.length > 0) {
-      // Special case: 'none' means show only posts without campaigns
-      if (campaigns.includes('none')) {
-        filtered = filtered.filter((item) => !item.campaignId);
-      } else {
-        filtered = filtered.filter(
-          (item) => item.campaignId && campaigns.includes(item.campaignId)
-        );
-      }
+      filtered = filtered.filter((item) => {
+        if (campaigns.includes('none') && !item.campaignId) return true;
+        return Boolean(item.campaignId && campaigns.includes(item.campaignId));
+      });
     }
 
     // Filter by status
@@ -52,30 +45,6 @@ export function useFilteredContent(items: ContentItem[]) {
             item.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
           )
       );
-    }
-
-    // Filter by content type
-    if (contentTypes.length > 0 && contentTypes.length < 2) {
-      filtered = filtered.filter((item) => {
-        const itemType = item.type === 'placeholder' ? 'placeholder' : 'post';
-        return contentTypes.includes(itemType as 'post' | 'placeholder');
-      });
-    }
-
-    // Filter by date range
-    if (dateRange.start || dateRange.end) {
-      filtered = filtered.filter((item) => {
-        if (!item.scheduledAt) return false;
-        const itemDate = new Date(item.scheduledAt);
-
-        if (dateRange.start && itemDate < dateRange.start) {
-          return false;
-        }
-        if (dateRange.end && itemDate > dateRange.end) {
-          return false;
-        }
-        return true;
-      });
     }
 
     // Filter by search query
@@ -91,18 +60,12 @@ export function useFilteredContent(items: ContentItem[]) {
     }
 
     return filtered;
-  }, [items, campaigns, statuses, contentTypes, dateRange, searchQuery]);
+  }, [items, campaigns, statuses, searchQuery]);
 
   return {
     filteredItems,
     totalItems: items.length,
     filteredCount: filteredItems.length,
-    isFiltered:
-      campaigns.length > 0 ||
-      statuses.length > 0 ||
-      contentTypes.length !== 2 ||
-      !!dateRange.start ||
-      !!dateRange.end ||
-      !!searchQuery,
+    isFiltered: campaigns.length > 0 || statuses.length > 0 || !!searchQuery,
   };
 }

@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { encodeFiltersToURL, decodeFiltersFromURL, areFiltersEqual } from '../utils/filterUrlUtils';
-import { formatLocalDate } from '../lib/timezone';
 
 const haveSameMembers = <T extends string>(a: readonly T[], b: readonly T[]): boolean => {
   if (a.length !== b.length) return false;
@@ -21,8 +20,6 @@ export function useURLFilterSync() {
   const [searchParams] = useSearchParams();
   const campaigns = useCalendarFilterStore((state) => state.campaigns);
   const statuses = useCalendarFilterStore((state) => state.statuses);
-  const contentTypes = useCalendarFilterStore((state) => state.contentTypes);
-  const dateRange = useCalendarFilterStore((state) => state.dateRange);
   const searchQuery = useCalendarFilterStore((state) => state.searchQuery);
 
   // Track if we're updating from URL to prevent infinite loops
@@ -41,8 +38,6 @@ export function useURLFilterSync() {
     const currentState = {
       campaigns: store.campaigns,
       statuses: store.statuses,
-      contentTypes: store.contentTypes,
-      dateRange: store.dateRange,
       searchQuery: store.searchQuery,
     };
 
@@ -55,17 +50,6 @@ export function useURLFilterSync() {
 
       if (!haveSameMembers(urlFilters.statuses, currentState.statuses)) {
         store.setStatuses(urlFilters.statuses);
-      }
-
-      if (!haveSameMembers(urlFilters.contentTypes, currentState.contentTypes)) {
-        store.setContentTypes(urlFilters.contentTypes);
-      }
-
-      if (
-        urlFilters.dateRange.start?.getTime() !== currentState.dateRange.start?.getTime() ||
-        urlFilters.dateRange.end?.getTime() !== currentState.dateRange.end?.getTime()
-      ) {
-        store.setDateRange(urlFilters.dateRange.start, urlFilters.dateRange.end);
       }
 
       if (urlFilters.searchQuery !== currentState.searchQuery) {
@@ -91,8 +75,6 @@ export function useURLFilterSync() {
     const currentState = {
       campaigns,
       statuses,
-      contentTypes,
-      dateRange,
       searchQuery,
     };
 
@@ -105,7 +87,7 @@ export function useURLFilterSync() {
     if (newSearch !== currentSearch) {
       navigate(`?${newSearch}`, { replace: true });
     }
-  }, [campaigns, statuses, contentTypes, dateRange, searchQuery, navigate]);
+  }, [campaigns, statuses, searchQuery, navigate]);
 }
 
 export function useNavigateWithFilters() {
@@ -115,8 +97,6 @@ export function useNavigateWithFilters() {
     filters: Partial<{
       campaigns: string[];
       statuses: string[];
-      contentTypes: string[];
-      dateRange: { start: Date | null; end: Date | null };
       searchQuery: string;
     }>
   ) => {
@@ -127,15 +107,6 @@ export function useNavigateWithFilters() {
     }
     if (filters.statuses?.length) {
       params.set('statuses', filters.statuses.join(','));
-    }
-    if (filters.contentTypes?.length) {
-      params.set('types', filters.contentTypes.join(','));
-    }
-    if (filters.dateRange?.start) {
-      params.set('dateStart', formatLocalDate(filters.dateRange.start));
-    }
-    if (filters.dateRange?.end) {
-      params.set('dateEnd', formatLocalDate(filters.dateRange.end));
     }
     if (filters.searchQuery) {
       params.set('search', filters.searchQuery);

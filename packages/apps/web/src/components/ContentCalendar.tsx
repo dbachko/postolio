@@ -4,16 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addMonths, subMonths } from 'date-fns';
 import { FullCalendar } from './calendar/FullCalendar';
 import { ErrorBoundary } from './ErrorBoundary';
-import { CalendarFilters } from './calendar/CalendarFilters/index';
+import { ContentFiltersBar } from './calendar/CalendarFilters/ContentFiltersBar';
 import { QueueSchedulesView } from './calendar/QueueSchedules/QueueSchedulesView';
-import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
-import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { Placeholder } from '../types/calendar';
-import { CalendarDays, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { AsyncTimezoneCombobox } from '@/components/timezone/AsyncTimezoneCombobox';
 import {
@@ -41,7 +39,6 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const { timezone: userTz, getBrandTimezone } = useTimezone();
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
-  const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Resolve brand posting timezone (fallback to user timezone)
@@ -143,45 +140,6 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
 
   // Schedule-ahead capacity banner is now shown globally in AppLayout
 
-  // Apply filters to content
-  const selectFilters = useShallow((s: ReturnType<typeof useCalendarFilterStore.getState>) => ({
-    campaigns: s.campaigns,
-    statuses: s.statuses,
-    contentTypes: s.contentTypes,
-    dateRange: s.dateRange,
-    searchQuery: s.searchQuery,
-  }));
-  const { campaigns, statuses, contentTypes, dateRange, searchQuery } =
-    useCalendarFilterStore(selectFilters);
-  const clearAll = useCalendarFilterStore((s) => s.clearAll);
-  const hasAnyActiveFilters = useMemo(
-    () =>
-      campaigns.length > 0 ||
-      statuses.length > 0 ||
-      contentTypes.length !== 2 ||
-      !!dateRange.start ||
-      !!dateRange.end ||
-      !!searchQuery,
-    [campaigns, statuses, contentTypes, dateRange, searchQuery]
-  );
-  const activeFilterCount = useMemo(() => {
-    return (
-      (campaigns.length > 0 ? 1 : 0) +
-      (statuses.length > 0 ? 1 : 0) +
-      (contentTypes.length !== 2 ? 1 : 0) +
-      (dateRange.start || dateRange.end ? 1 : 0) +
-      (searchQuery ? 1 : 0)
-    );
-  }, [
-    campaigns.length,
-    contentTypes.length,
-    dateRange.end,
-    dateRange.start,
-    searchQuery,
-    statuses.length,
-  ]);
-  const isFiltersActive = showFilters || hasAnyActiveFilters;
-
   // Navigation handlers (step depends on current view)
   const handlePrevious = () => {
     setCurrentDate((prev) => {
@@ -282,42 +240,9 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
               <SelectItem value="queue">Queues</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            variant={isFiltersActive ? 'default' : 'outline'}
-            size="icon"
-            aria-label={isFiltersActive ? 'Hide filters' : 'Show filters'}
-            aria-pressed={isFiltersActive}
-            onClick={() => setShowFilters((s) => !s)}
-            className="relative h-10 w-10"
-          >
-            <Filter className="h-4 w-4" />
-            {hasAnyActiveFilters && (
-              <span
-                className={`absolute -top-1 -right-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
-                  isFiltersActive
-                    ? 'bg-background text-foreground ring-ring ring-1'
-                    : 'bg-foreground text-background'
-                }`}
-              >
-                {activeFilterCount}
-              </span>
-            )}
-          </Button>
-          {hasAnyActiveFilters && (
-            <Button
-              variant="ghost"
-              onClick={() => clearAll()}
-              aria-label="Clear all filters"
-              className="text-muted-foreground hover:text-foreground h-10"
-            >
-              Clear
-            </Button>
-          )}
+          <ContentFiltersBar brandId={brandId} />
         </div>
       </div>
-
-      {/* Filters (hidden by default, compact) */}
-      {showFilters && <CalendarFilters brandId={brandId} compact />}
 
       {/* Filter results summary removed for cleaner filtered state */}
 
