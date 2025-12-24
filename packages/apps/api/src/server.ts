@@ -54,6 +54,7 @@ import onboardingRoutes from './routes/onboarding.js';
 import instagramWebhookRoutes from './routes/instagram-webhook.js';
 import dmAutomationRoutes from './routes/dm-automation.js';
 import savedRepliesRoutes from './routes/saved-replies.js';
+import snippetsRoutes from './routes/snippets.js';
 import imageProviderRoutes from './routes/image-providers.js';
 import publishingQueuesRoutes from './routes/publishing-queues.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
@@ -315,6 +316,9 @@ export function buildFastify(): FastifyInstance {
 
   // Saved Replies API
   app.register(savedRepliesRoutes, { prefix: '/api' });
+
+  // Snippets API
+  app.register(snippetsRoutes, { prefix: '/api' });
 
   // Publishing queues (slot-based scheduling)
   app.register(publishingQueuesRoutes, { prefix: '/api' });

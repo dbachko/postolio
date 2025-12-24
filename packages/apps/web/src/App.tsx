@@ -45,6 +45,7 @@ const PostPage = lazy(() => import('./pages/Post'));
 const InboxComments = lazy(() => import('./pages/InboxComments'));
 const InboxDMs = lazy(() => import('./pages/InboxDMs'));
 const SavedReplies = lazy(() => import('./pages/SavedReplies'));
+const Snippets = lazy(() => import('./pages/Snippets'));
 const Limits = lazy(() => import('./pages/Limits'));
 const Drafts = lazy(() => import('./pages/Drafts'));
 
@@ -176,6 +177,23 @@ const router = createBrowserRouter([
             <ErrorBoundary>
               <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
                 <SavedReplies />
+              </Suspense>
+            </ErrorBoundary>
+          </Layout>
+        </OnboardingGuard>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/snippets',
+    element: (
+      <ProtectedRoute>
+        <OnboardingGuard>
+          <Layout>
+            <ErrorBoundary>
+              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+                <Snippets />
               </Suspense>
             </ErrorBoundary>
           </Layout>

@@ -57,6 +57,7 @@ model User {
   notificationState       UserNotificationState?
   // Inbox & Replies
   savedReplies            SavedReply[]
+  snippets                Snippet[]
 
   @@index([email])
   @@index([accountLockedUntil])
@@ -84,6 +85,7 @@ model Brand {
   socialAccounts          SocialAccount[]
   // Inbox & Replies
   savedReplies            SavedReply[]
+  snippets                Snippet[]
   // DM Automation
   dmAutomationRules       DMAutomationRule[]
   dmConversations         DMConversation[]
@@ -495,6 +497,40 @@ model SavedReply {
   @@index([brandId])
   @@index([userId])
   @@map("saved_replies")
+}
+
+/// Reusable text snippets for social media captions
+model Snippet {
+  id          String   @id @default(cuid())
+  brandId     String
+  userId      String   // Creator (for audit trail)
+
+  // Core content
+  title       String   // User-friendly name, e.g., "Product Launch CTA"
+  content     String   @db.Text // The snippet text (max 2000 chars enforced in app)
+
+  // Organization
+  tags        String[] @default([]) // e.g., ["cta", "promo", "product"]
+  category    String?  // Optional grouping: "CTA", "Hashtags", "Openers", etc.
+
+  // Usage tracking
+  usageCount  Int      @default(0)
+  lastUsedAt  DateTime?
+
+  // Metadata
+  isFavorite  Boolean  @default(false)
+  isArchived  Boolean  @default(false) // Soft delete
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, isArchived]) // Primary list query
+  @@index([brandId, tags]) // Tag filtering
+  @@index([brandId, category]) // Category filtering
+  @@index([userId]) // User's snippets across brands
+  @@map("snippets")
 }
 
 // Account-level metrics (for brand/platform overviews and charts)

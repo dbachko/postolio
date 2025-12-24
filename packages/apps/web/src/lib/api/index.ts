@@ -8,6 +8,7 @@ import { AnalyticsClient } from './analytics-client';
 import { OnboardingClient } from './onboarding-client';
 import { DMAutomationClient } from './dm-automation-client';
 import { SavedRepliesClient } from './saved-replies-client';
+import { SnippetsClient } from './snippets-client';
 import { PublishingQueuesClient } from './publishing-queues-client';
 
 const http = createHttp();
@@ -23,6 +24,7 @@ export const onboarding = new OnboardingClient(http);
 export const analytics = new AnalyticsClient(http);
 export const dmAutomation = new DMAutomationClient(http);
 export const savedReplies = new SavedRepliesClient(http);
+export const snippets = new SnippetsClient(http);
 export const publishingQueues = new PublishingQueuesClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
@@ -59,4 +61,10 @@ export type {
   SavedReply,
   CreateSavedReplyInput,
   UpdateSavedReplyInput,
+  Snippet,
+  CreateSnippetInput,
+  UpdateSnippetInput,
+  SnippetsListResponse,
 } from './types';
+
+export type { SnippetQueryParams } from './snippets-client';

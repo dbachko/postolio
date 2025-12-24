@@ -571,3 +571,43 @@ export interface UpdateSavedReplyInput {
   body?: string;
   isDefault?: boolean;
 }
+
+export interface Snippet {
+  id: string;
+  brandId: string;
+  userId: string;
+  title: string;
+  content: string;
+  tags: string[];
+  category: string | null;
+  usageCount: number;
+  lastUsedAt: Date | null;
+  isFavorite: boolean;
+  isArchived: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateSnippetInput {
+  title: string;
+  content: string;
+  tags?: string[];
+  category?: string;
+  isFavorite?: boolean;
+}
+
+export interface UpdateSnippetInput {
+  title?: string;
+  content?: string;
+  tags?: string[];
+  category?: string;
+  isFavorite?: boolean;
+  isArchived?: boolean;
+}
+
+export interface SnippetsListResponse {
+  snippets: Snippet[];
+  total: number;
+  limit: number;
+  offset: number;
+}

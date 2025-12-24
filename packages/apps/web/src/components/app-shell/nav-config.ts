@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ClipboardList,
   FileEdit,
   FileText,
   Images,
@@ -41,6 +42,13 @@ export const mainNavItems: NavigationItem[] = [
     path: '/assets',
     icon: Images,
     description: 'Media library',
+    matchType: 'exact',
+  },
+  {
+    label: 'Snippets',
+    path: '/snippets',
+    icon: ClipboardList,
+    description: 'Reusable caption snippets',
     matchType: 'exact',
   },
   {

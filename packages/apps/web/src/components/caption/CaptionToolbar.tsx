@@ -1,6 +1,7 @@
 import { Separator } from '@/components/ui/separator';
 import { EmojiPickerButton } from './EmojiPickerButton';
 import { HashtagSuggestionsButton } from './HashtagSuggestionsButton';
+import { SnippetPickerButton } from './SnippetPickerButton';
 
 interface CaptionToolbarProps {
   brandId: string | undefined;
@@ -25,6 +26,12 @@ export function CaptionToolbar({
         <HashtagSuggestionsButton
           brandId={brandId}
           onHashtagSelect={(hashtag) => onInsert(`#${hashtag} `)}
+          disabled={disabled}
+        />
+        <Separator orientation="vertical" className="h-5" />
+        <SnippetPickerButton
+          brandId={brandId}
+          onSnippetSelect={(snippet) => onInsert(snippet.content)}
           disabled={disabled}
         />
       </div>
