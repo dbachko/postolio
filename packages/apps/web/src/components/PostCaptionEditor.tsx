@@ -17,6 +17,7 @@ interface PostCaptionEditorProps {
   id?: string;
   required?: boolean;
   helperText?: ReactNode;
+  hideLabel?: boolean;
 }
 
 export function PostCaptionEditor({
@@ -32,6 +33,7 @@ export function PostCaptionEditor({
   id = 'caption',
   required = true,
   helperText,
+  hideLabel = false,
 }: PostCaptionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -60,11 +62,13 @@ export function PostCaptionEditor({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id} className="flex items-center gap-2">
-        {showIcon && <Type className="h-4 w-4" />}
-        {label}
-        {required && <span className="text-destructive">*</span>}
-      </Label>
+      {!hideLabel ? (
+        <Label htmlFor={id} className="flex items-center gap-2">
+          {showIcon && <Type className="h-4 w-4" />}
+          {label}
+          {required && <span className="text-destructive">*</span>}
+        </Label>
+      ) : null}
       <div className="border-border overflow-hidden rounded-md border">
         <Textarea
           ref={textareaRef}

@@ -855,7 +855,7 @@ export function PostEditor({
       shareToFeed: normalizedContentType === 'reel' ? (post.shareToFeed ?? true) : true,
       firstComment: (post as any).firstComment || '',
     });
-    // Automatically expand the First Comment section when a saved firstComment exists
+    // Automatically enable First Comment when a saved firstComment exists
     setFirstCommentOpen(Boolean((post as any).firstComment));
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
     const candidate =
@@ -1315,7 +1315,8 @@ export function PostEditor({
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
         shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : undefined,
-        firstComment: formData.firstComment?.trim(),
+        firstComment:
+          isStory || !firstCommentOpen ? undefined : (formData.firstComment || '').trim(),
         scheduledAt: scheduledUtc ? scheduledUtc.toISOString() : undefined,
         targetSocialAccountIds: selectedPlatformAccountIds,
       });
@@ -1513,7 +1514,7 @@ export function PostEditor({
         ? (post.shareToFeed ?? true)
         : true;
 
-    const formFirstComment = (formData.firstComment || '').trim();
+    const formFirstComment = firstCommentOpen ? (formData.firstComment || '').trim() : '';
     const postFirstComment = ((post as any).firstComment || '').trim();
 
     const postTargetSocialAccountId =
@@ -1539,6 +1540,7 @@ export function PostEditor({
     formData,
     id,
     isMultiDestinationGroup,
+    firstCommentOpen,
     post,
     selectedCampaign,
     selectedTargetSocialAccountId,
@@ -1578,7 +1580,9 @@ export function PostEditor({
     const formAssetIds = (templateFormData.carouselAssets || []).map((asset) => asset.id);
     const originalAssetIds = templateAssetIds;
 
-    const formFirstComment = (templateFormData.firstComment || '').trim();
+    const formFirstComment = templateFirstCommentOpen
+      ? (templateFormData.firstComment || '').trim()
+      : '';
     const originalFirstComment = (contentGroupTemplate.firstComment || '').trim();
 
     const formShareToFeed = templateFormData.shareToFeed ?? true;
@@ -1593,7 +1597,13 @@ export function PostEditor({
       JSON.stringify(formAssetIds) !== JSON.stringify(originalAssetIds);
 
     setTemplateHasChanges(changed);
-  }, [contentGroupTemplate, isMultiDestinationGroup, templateAssetIds, templateFormData]);
+  }, [
+    contentGroupTemplate,
+    isMultiDestinationGroup,
+    templateAssetIds,
+    templateFirstCommentOpen,
+    templateFormData,
+  ]);
 
   const mediaChanged = useMemo(() => {
     if (!post) return false;
@@ -1684,7 +1694,12 @@ export function PostEditor({
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
       campaignId: selectedCampaign || null,
-      firstComment: formData.firstComment?.trim(),
+      firstComment:
+        formData.contentType === 'story'
+          ? ''
+          : firstCommentOpen
+            ? (formData.firstComment || '').trim()
+            : '',
     };
 
     if (!isMultiDestinationGroup && scheduledAtPayload !== undefined) {
@@ -1763,7 +1778,7 @@ export function PostEditor({
     const isStory = templateFormData.contentType === 'story';
     const caption = isStory ? '' : (templateFormData.caption || '').trim();
     const firstComment =
-      isStory || !templateFormData.firstComment?.trim()
+      isStory || !templateFirstCommentOpen || !templateFormData.firstComment?.trim()
         ? null
         : templateFormData.firstComment.trim();
     const shareToFeed =
@@ -1782,7 +1797,7 @@ export function PostEditor({
       firstComment,
       assetIds,
     };
-  }, [templateFormData]);
+  }, [templateFirstCommentOpen, templateFormData]);
 
   const handleSaveTemplate = useCallback(async (): Promise<boolean> => {
     if (!contentGroupId) return false;
@@ -2171,7 +2186,7 @@ export function PostEditor({
 
   const hasDraftInputs =
     Boolean((formData.caption || '').trim()) ||
-    Boolean((formData.firstComment || '').trim()) ||
+    (firstCommentOpen && Boolean((formData.firstComment || '').trim())) ||
     (formData.carouselAssets?.length ?? 0) > 0 ||
     Boolean(selectedCampaign);
   const saveDraftDisabled = !hasDraftInputs;
@@ -2305,7 +2320,8 @@ export function PostEditor({
       caption: formData.contentType === 'story' ? '' : formData.caption,
       contentType: formData.contentType,
       shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : null,
-      firstComment: formData.firstComment,
+      firstComment:
+        formData.contentType === 'story' || !firstCommentOpen ? '' : formData.firstComment || '',
       media: formPreviewMedia,
     }),
     [
@@ -2313,6 +2329,7 @@ export function PostEditor({
       formData.contentType,
       formData.firstComment,
       formData.shareToFeed,
+      firstCommentOpen,
       formPreviewMedia,
     ]
   );
@@ -2326,7 +2343,10 @@ export function PostEditor({
       caption: templateFormData.contentType === 'story' ? '' : templateFormData.caption,
       contentType: templateFormData.contentType,
       shareToFeed: templateFormData.contentType === 'reel' ? templateFormData.shareToFeed : null,
-      firstComment: templateFormData.firstComment,
+      firstComment:
+        templateFormData.contentType === 'story' || !templateFirstCommentOpen
+          ? ''
+          : templateFormData.firstComment || '',
       media: templatePreviewMedia,
     }),
     [
@@ -2334,6 +2354,7 @@ export function PostEditor({
       templateFormData.contentType,
       templateFormData.firstComment,
       templateFormData.shareToFeed,
+      templateFirstCommentOpen,
       templatePreviewMedia,
     ]
   );

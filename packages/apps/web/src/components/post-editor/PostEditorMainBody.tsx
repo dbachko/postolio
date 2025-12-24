@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -12,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { CheckSwitch } from '@/components/ui/check-switch';
 import { AppEmptyState } from '@/components/AppEmptyState';
 import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
@@ -24,14 +23,13 @@ import {
 import { VideoUploader } from '@/components/VideoUploader';
 import type { PostDetailData } from '@/hooks/usePostDetail';
 import type { Brand, Campaign } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import type { InstagramContentType } from '@postolio/content-validation';
 import {
-  ChevronDown,
   Film,
   Image as ImageIcon,
   Layers,
   Megaphone,
+  MessageSquareText,
   Upload,
   Zap,
 } from 'lucide-react';
@@ -334,7 +332,7 @@ export function PostEditorMainBody({
                     When enabled, this reel appears in both your feed grid and the Reels tab.
                   </p>
                 </div>
-                <Switch
+                <CheckSwitch
                   id="share-to-feed-toggle"
                   checked={formData.shareToFeed}
                   onCheckedChange={(checked) =>
@@ -373,39 +371,38 @@ export function PostEditorMainBody({
               showIcon={true}
             />
 
-            <Collapsible
-              open={firstCommentOpen}
-              onOpenChange={setFirstCommentOpen}
-              className="space-y-2"
-            >
-              <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 transition-transform duration-200',
-                    firstCommentOpen && 'rotate-180'
-                  )}
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-2">
+                    <MessageSquareText className="h-4 w-4" />
+                    First comment
+                  </Label>
+                  <p className="text-muted-foreground text-xs">
+                    Publish a first comment with your post.
+                  </p>
+                </div>
+                <CheckSwitch
+                  id="first-comment-toggle"
+                  checked={firstCommentOpen}
+                  onCheckedChange={setFirstCommentOpen}
                 />
-                Add First Comment (Optional)
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-2 pt-2">
+              </div>
+              {firstCommentOpen ? (
                 <PostCaptionEditor
                   id="firstComment"
-                  label="First Comment"
-                  required={false}
+                  hideLabel={true}
                   value={formData.firstComment || ''}
                   onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
                   brandId={selectedBrand.id}
-                  placeholder="Add hashtags, links, or CTAs..."
+                  placeholder="Write a caption with text, links..."
                   minHeight="min-h-24"
                   maxLength={2200}
                   disabled={false}
                   showIcon={false}
-                  helperText={
-                    <span className="italic">Posts automatically when your content goes live</span>
-                  }
                 />
-              </CollapsibleContent>
-            </Collapsible>
+              ) : null}
+            </div>
           </>
         ) : null}
 
@@ -516,39 +513,39 @@ export function PostEditorMainBody({
             showIcon={true}
           />
 
-          <Collapsible
-            open={firstCommentOpen}
-            onOpenChange={setFirstCommentOpen}
-            className="space-y-2"
-          >
-            <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
-              <ChevronDown
-                className={cn(
-                  'h-4 w-4 transition-transform duration-200',
-                  firstCommentOpen && 'rotate-180'
-                )}
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <Label className="flex items-center gap-2">
+                  <MessageSquareText className="h-4 w-4" />
+                  First comment
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  Publish a first comment with your post.
+                </p>
+              </div>
+              <CheckSwitch
+                id="first-comment-toggle-edit"
+                checked={firstCommentOpen}
+                onCheckedChange={setFirstCommentOpen}
+                disabled={disabled}
               />
-              Add First Comment (Optional)
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-2 pt-2">
+            </div>
+            {firstCommentOpen ? (
               <PostCaptionEditor
                 id="firstComment-edit"
-                label="First Comment"
-                required={false}
+                hideLabel={true}
                 value={formData.firstComment || ''}
                 onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
                 brandId={post.brand?.id}
-                placeholder="Add hashtags, links, or CTAs..."
+                placeholder="Write a caption with text, links..."
                 minHeight="min-h-24"
                 maxLength={2200}
                 disabled={disabled}
                 showIcon={false}
-                helperText={
-                  <span className="italic">Posts automatically when your content goes live</span>
-                }
               />
-            </CollapsibleContent>
-          </Collapsible>
+            ) : null}
+          </div>
         </>
       ) : null}
 

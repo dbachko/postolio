@@ -1,18 +1,16 @@
 import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { ChevronDown, Film, Image as ImageIcon, Upload, Zap } from 'lucide-react';
+import { Film, Image as ImageIcon, MessageSquareText, Upload, Zap } from 'lucide-react';
 import type { InstagramContentType } from '@postolio/content-validation';
 
 import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { VideoUploader } from '@/components/VideoUploader';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { CheckSwitch } from '@/components/ui/check-switch';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Switch } from '@/components/ui/switch';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
-import { cn } from '@/lib/utils';
 
 export interface ContentGroupTemplateFormState {
   caption: string;
@@ -195,7 +193,7 @@ export function ContentGroupTemplateEditor({
                   When enabled, this reel appears in both your feed grid and the Reels tab.
                 </p>
               </div>
-              <Switch
+              <CheckSwitch
                 id="template-share-to-feed-toggle"
                 checked={value.shareToFeed}
                 onCheckedChange={(checked) => onChange((s) => ({ ...s, shareToFeed: checked }))}
@@ -227,39 +225,38 @@ export function ContentGroupTemplateEditor({
             showIcon={true}
           />
 
-          <Collapsible
-            open={firstCommentOpen}
-            onOpenChange={onFirstCommentOpenChange}
-            className="space-y-2"
-          >
-            <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors">
-              <ChevronDown
-                className={cn(
-                  'h-4 w-4 transition-transform duration-200',
-                  firstCommentOpen && 'rotate-180'
-                )}
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <Label className="flex items-center gap-2">
+                  <MessageSquareText className="h-4 w-4" />
+                  First comment
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  Publish a first comment with your post.
+                </p>
+              </div>
+              <CheckSwitch
+                id="template-first-comment-toggle"
+                checked={firstCommentOpen}
+                onCheckedChange={onFirstCommentOpenChange}
               />
-              Add First Comment (Optional)
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-2 pt-2">
+            </div>
+            {firstCommentOpen ? (
               <PostCaptionEditor
                 id="template-firstComment"
-                label="First Comment"
-                required={false}
+                hideLabel={true}
                 value={value.firstComment || ''}
                 onChange={(firstComment) => onChange((s) => ({ ...s, firstComment }))}
                 brandId={brandId}
-                placeholder="Add hashtags, links, or CTAs..."
+                placeholder="Write a caption with text, links..."
                 minHeight="min-h-24"
                 maxLength={2200}
                 disabled={false}
                 showIcon={false}
-                helperText={
-                  <span className="italic">Posts automatically when your content goes live</span>
-                }
               />
-            </CollapsibleContent>
-          </Collapsible>
+            ) : null}
+          </div>
         </>
       ) : null}
     </div>
