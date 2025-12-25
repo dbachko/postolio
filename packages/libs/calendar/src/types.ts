@@ -1,7 +1,7 @@
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
 import type { Localizer } from './localizers';
 
-export type CalendarView = 'month' | 'week' | 'three-day' | 'agenda';
+export type CalendarView = 'month' | 'week' | 'agenda';
 
 export type CalendarEventBase = {
   id: string | number;
@@ -18,6 +18,11 @@ export interface CalendarMessages {
 
 export interface CalendarComponents<E extends CalendarEventBase = CalendarEventBase> {
   event?: ComponentType<{ event: E }>;
+  createCta?: ComponentType<{
+    date: Date;
+    onClick?: (d: Date) => void;
+    disabled?: boolean;
+  }>;
 }
 
 export interface CalendarProps<E extends CalendarEventBase = CalendarEventBase> {

@@ -4,7 +4,7 @@ Reusable calendar wrapper for React that powers the Postolio scheduling views.
 
 Features:
 
-- Views: month, week, three-day, agenda
+- Views: month, week, agenda
 - Pluggable localizer (default: Luxon)
 - Drag-and-drop (react-dnd) with optional internal provider
 - CSS-variable theme (no hard-coded colors)
@@ -32,7 +32,7 @@ const localizer = luxon.create();
 
 Notes
 
-- The time-grid views (week/three-day) are list-style columns without an hour gutter. The CSS uses Grid with responsive min track widths and a sticky header on small screens.
+- The time-grid view (week) is a list-style column layout without an hour gutter. The CSS uses Grid with responsive min track widths and a sticky header on small screens.
 - Month view is built with CSS Grid as well; no table markup.
 
 Mobile drag-and-drop (optional)

@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Briefcase, Music } from 'lucide-react';
+import { Briefcase } from 'lucide-react';
 import {
   FacebookIcon,
   InstagramIcon,
+  TikTokIcon,
   XBrandIcon,
   YouTubeIcon,
 } from '@/components/icons/BrandIcons';
@@ -45,7 +46,7 @@ export function getPlatformIcon(
     case 'youtube':
       return <YouTubeIcon className={className} aria-hidden="true" />;
     case 'tiktok':
-      return <Music className={className} aria-hidden="true" />;
+      return <TikTokIcon className={className} aria-hidden="true" />;
     default:
       return null;
   }

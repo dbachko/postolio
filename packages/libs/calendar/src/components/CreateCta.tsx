@@ -21,8 +21,7 @@ export function CreateCta({
         onClick?.(date);
       }}
     >
-      <span className="pc-create-cta-plus">+</span>
-      <span className="pc-create-cta-text">Create Post</span>
+      <span aria-hidden="true">+</span>
     </button>
   );
 }

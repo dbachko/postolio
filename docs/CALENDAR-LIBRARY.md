@@ -4,7 +4,7 @@ Overview
 
 - New reusable calendar lib lives at `packages/libs/calendar` as `@postolio/calendar`.
 - Wraps React Big Calendar with:
-  - Views: month, week, day, three-day (mapped to day length=3), agenda
+  - Views: month, week, agenda
   - Pluggable localizer (default Luxon)
   - Drag-and-drop via react-dnd (internal DnD provider by default)
   - CSS-variable theme (no hard-coded palette), importable as `@postolio/calendar/styles.css`
@@ -39,7 +39,6 @@ Theming
 
 Notes
 
-- Three-day view is exposed via API view="three-day" and rendered as RBC day view with length=3.
 - Toolbar is off; consumers control navigation/view via their own UI.
 
 Mobile drag-and-drop
@@ -51,7 +50,7 @@ import { TouchBackend } from 'react-dnd-touch-backend';
 
 <Calendar
   date={new Date()}
-  view="three-day"
+  view="week"
   events={events}
   dragAndDrop
   dndBackend={TouchBackend}

@@ -13,6 +13,11 @@ type Props<E extends CalendarEventBase> = {
   localizer: Localizer;
   weekStartsOn?: 0 | 1;
   eventComponent?: React.ComponentType<{ event: E }>;
+  createCtaComponent?: React.ComponentType<{
+    date: Date;
+    onClick?: (d: Date) => void;
+    disabled?: boolean;
+  }>;
   onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   onMoreClick?: (date: Date) => void;
@@ -33,6 +38,7 @@ export function MonthView<E extends CalendarEventBase>({
   localizer,
   weekStartsOn,
   eventComponent: EventComp,
+  createCtaComponent,
   onEventDrop,
   onBackgroundClick,
   onMoreClick,
@@ -83,6 +89,7 @@ export function MonthView<E extends CalendarEventBase>({
                 events={events.filter((e) => sameDay(e.start, day))}
                 localizer={localizer}
                 EventComp={EventComp}
+                CreateCtaComp={createCtaComponent}
                 onEventDrop={onEventDrop}
                 onBackgroundClick={onBackgroundClick}
                 onMoreClick={onMoreClick}
@@ -102,6 +109,7 @@ function MonthCell<E extends CalendarEventBase>({
   events,
   localizer,
   EventComp,
+  CreateCtaComp,
   onEventDrop,
   onBackgroundClick,
   onMoreClick,
@@ -112,6 +120,11 @@ function MonthCell<E extends CalendarEventBase>({
   events: E[];
   localizer: Localizer;
   EventComp?: React.ComponentType<{ event: E }>;
+  CreateCtaComp?: React.ComponentType<{
+    date: Date;
+    onClick?: (d: Date) => void;
+    disabled?: boolean;
+  }>;
   onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   onMoreClick?: (date: Date) => void;
@@ -210,7 +223,12 @@ function MonthCell<E extends CalendarEventBase>({
           </button>
         )}
       </div>
-      {!isPastDay && <CreateCta date={day} onClick={onBackgroundClick} />}
+      {!isPastDay &&
+        (CreateCtaComp ? (
+          <CreateCtaComp date={day} onClick={onBackgroundClick} />
+        ) : (
+          <CreateCta date={day} onClick={onBackgroundClick} />
+        ))}
     </div>
   );
 }

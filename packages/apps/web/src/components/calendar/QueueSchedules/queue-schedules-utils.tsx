@@ -1,6 +1,6 @@
 import { addDays, startOfDay } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
-import { Asterisk, Film, Image as ImageIcon, Layers } from 'lucide-react';
+import { Asterisk, CircleFadingPlus, Film, Image as ImageIcon } from 'lucide-react';
 
 import { convertLocalToUTC } from '@/lib/timezone';
 import type { PublishingQueueLaneKey } from '@/lib/api/publishing-queues-client';
@@ -20,7 +20,7 @@ export function getLanePillLabel(laneKey: PublishingQueueLaneKey): string {
 export function laneIcon(laneKey: PublishingQueueLaneKey, className = 'h-3.5 w-3.5') {
   if (laneKey === 'any') return <Asterisk className={className} />;
   if (laneKey === 'reel') return <Film className={className} />;
-  if (laneKey === 'story') return <Layers className={className} />;
+  if (laneKey === 'story') return <CircleFadingPlus className={className} />;
   return <ImageIcon className={className} />;
 }
 

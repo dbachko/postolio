@@ -1,6 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Film, Image as ImageIcon, MessageSquareText, Upload, Zap } from 'lucide-react';
+import {
+  CircleFadingPlus,
+  Film,
+  Image as ImageIcon,
+  MessageSquareText,
+  Upload,
+} from 'lucide-react';
 import type { InstagramContentType } from '@postolio/content-validation';
 
 import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
@@ -138,7 +144,7 @@ export function ContentGroupTemplateEditor({
               htmlFor="template-type-story"
               className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-3 text-xs transition-all peer-disabled:pointer-events-none peer-disabled:opacity-50 sm:text-sm"
             >
-              <Zap className="h-3.5 w-3.5" />
+              <CircleFadingPlus className="h-3.5 w-3.5" />
               <span>Story</span>
             </Label>
           </div>

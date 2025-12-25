@@ -1,4 +1,4 @@
-import { Asterisk, Film, Image as ImageIcon, Layers } from 'lucide-react';
+import { Asterisk, CircleFadingPlus, Film, Image as ImageIcon } from 'lucide-react';
 
 import { getLocalSetting, setLocalSetting } from '@/lib/settings/localSettings';
 
@@ -62,7 +62,7 @@ export function laneLabel(laneKey: PublishingQueueLaneKey): string {
 export function laneIcon(laneKey: PublishingQueueLaneKey, className = 'h-4 w-4') {
   if (laneKey === 'any') return <Asterisk className={className} />;
   if (laneKey === 'reel') return <Film className={className} />;
-  if (laneKey === 'story') return <Layers className={className} />;
+  if (laneKey === 'story') return <CircleFadingPlus className={className} />;
   return <ImageIcon className={className} />;
 }
 

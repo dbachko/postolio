@@ -3,10 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Filter, Search, X } from 'lucide-react';
 import { campaign as campaignApi, type Campaign } from '@/lib/api';
 import { useCalendarFilterStore, type ContentStatus } from '@/stores/calendarFilterStore';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { STATUS_OPTIONS } from './utils';
 
 interface ContentFiltersBarProps {
@@ -21,6 +21,8 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
   const setCampaigns = useCalendarFilterStore((s) => s.setCampaigns);
   const setStatuses = useCalendarFilterStore((s) => s.setStatuses);
   const setSearchQuery = useCalendarFilterStore((s) => s.setSearchQuery);
+  const clearAll = useCalendarFilterStore((s) => s.clearAll);
+  const toggleStatus = useCalendarFilterStore((s) => s.toggleStatus);
 
   const { data: campaignsData } = useQuery({
     queryKey: ['campaigns', brandId],
@@ -37,20 +39,34 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
     ];
   }, [allCampaigns]);
 
-  const statusOptions = useMemo(
-    () => STATUS_OPTIONS.map((option) => ({ label: option.label, value: option.value })),
-    []
-  );
-
   const hasAnyActiveFilters = campaigns.length > 0 || statuses.length > 0 || !!searchQuery;
   const activeFilterCount =
     (campaigns.length > 0 ? 1 : 0) + (statuses.length > 0 ? 1 : 0) + (searchQuery ? 1 : 0);
   const isFiltersActive = isOpen || hasAnyActiveFilters;
 
-  const handleResetPanelFilters = () => {
-    setCampaigns([]);
-    setStatuses([]);
-    setSearchQuery('');
+  const toggleCampaign = (campaignId: string) => {
+    const cleanId = campaignId.trim();
+    if (!cleanId) return;
+    const next = campaigns.includes(cleanId)
+      ? campaigns.filter((c) => c !== cleanId)
+      : [...campaigns, cleanId];
+    setCampaigns(next);
+  };
+
+  const statusColorClass: Record<ContentStatus, string> = {
+    draft: 'bg-warning',
+    scheduled: 'bg-info',
+    published: 'bg-success',
+    failed: 'bg-destructive',
+    skipped: 'bg-muted-foreground',
+  };
+
+  const campaignColorById = (id: string): string => {
+    if (id === 'none') return 'hsl(var(--muted-foreground))';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    const hue = hash % 360;
+    return `hsl(${hue} 68% 48%)`;
   };
 
   return (
@@ -81,81 +97,165 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} aria-hidden="true" />
 
-          <div className="bg-background absolute top-12 right-0 z-50 w-[min(24rem,calc(100vw-2rem))] rounded-lg border p-4 shadow-lg">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold">Filter Content</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-                className="h-6 w-6 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+          <div className="bg-card absolute top-12 right-0 z-50 w-[min(40rem,calc(100vw-2rem))] rounded-lg border p-4 shadow-lg">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold">Calendar Filters</h3>
+                <p className="text-muted-foreground text-sm">
+                  Filter by status, campaign, or search.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearAll}
+                  disabled={!hasAnyActiveFilters}
+                >
+                  Reset Filters
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsOpen(false)}
+                  className="h-8 w-8"
+                  aria-label="Close filters"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="relative">
-                <Label className="sr-only">Search</Label>
-                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search captions, hashtags, or campaigns"
-                  className="pr-10 pl-9"
-                />
-                {searchQuery && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="bg-background rounded-lg border p-4 lg:col-span-2">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold">Search</div>
                   <Button
+                    type="button"
                     variant="ghost"
-                    size="icon"
+                    size="sm"
+                    className="text-primary hover:text-primary h-auto px-0 py-0 text-sm font-medium hover:bg-transparent"
+                    disabled={!searchQuery}
                     onClick={() => setSearchQuery('')}
-                    className="absolute top-1/2 right-2 h-7 w-7 -translate-y-1/2 p-0"
-                    aria-label="Clear search"
                   >
-                    <X className="text-muted-foreground hover:text-foreground h-4 w-4" />
+                    Clear
                   </Button>
-                )}
+                </div>
+
+                <div className="relative">
+                  <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search captions, hashtags, or campaigns"
+                    className="h-9 pr-10 pl-9"
+                  />
+                  {searchQuery && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute top-1/2 right-2 h-7 w-7 -translate-y-1/2 p-0 hover:bg-transparent"
+                      aria-label="Clear search"
+                    >
+                      <X className="text-muted-foreground h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <Label className="mb-2 block text-sm font-medium">Campaigns</Label>
-                <MultiSelect
-                  options={campaignOptions}
-                  value={campaigns}
-                  onChange={setCampaigns}
-                  placeholder="All campaigns"
-                />
+              <div className="bg-background rounded-lg border p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold">Post status</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary hover:text-primary h-auto px-0 py-0 text-sm font-medium hover:bg-transparent"
+                    disabled={statuses.length === 0}
+                    onClick={() => setStatuses([])}
+                  >
+                    Unselect all
+                  </Button>
+                </div>
+
+                <div className="space-y-1">
+                  {STATUS_OPTIONS.map((option) => {
+                    const checked = statuses.includes(option.value);
+                    const id = `calendar-filter-status-${option.value}`;
+                    return (
+                      <label
+                        key={option.value}
+                        htmlFor={id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1"
+                      >
+                        <Checkbox
+                          id={id}
+                          checked={checked}
+                          onCheckedChange={() => toggleStatus(option.value)}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span
+                          className={cn(
+                            'h-4 w-1 rounded-full',
+                            statusColorClass[option.value],
+                            checked ? 'opacity-100' : 'opacity-30'
+                          )}
+                          aria-hidden="true"
+                        />
+                        <span className="text-sm">{option.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div>
-                <Label className="mb-2 block text-sm font-medium">Status</Label>
-                <MultiSelect
-                  options={statusOptions}
-                  value={statuses}
-                  onChange={(value) => setStatuses(value as ContentStatus[])}
-                  placeholder="All statuses"
-                />
-              </div>
-            </div>
+              <div className="bg-background rounded-lg border p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold">Campaigns</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary hover:text-primary h-auto px-0 py-0 text-sm font-medium hover:bg-transparent"
+                    disabled={campaigns.length === 0}
+                    onClick={() => setCampaigns([])}
+                  >
+                    Unselect all
+                  </Button>
+                </div>
 
-            <div className="mt-6 flex gap-2 border-t pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResetPanelFilters}
-                className="flex-1"
-                disabled={!hasAnyActiveFilters}
-              >
-                Reset Filters
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-                className="flex-1"
-              >
-                Apply
-              </Button>
+                <div className="max-h-[17rem] space-y-1 overflow-auto pr-1">
+                  {campaignOptions.map((option) => {
+                    const checked = campaigns.includes(option.value);
+                    const id = `calendar-filter-campaign-${option.value}`;
+                    return (
+                      <label
+                        key={option.value}
+                        htmlFor={id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1"
+                      >
+                        <Checkbox
+                          id={id}
+                          checked={checked}
+                          onCheckedChange={() => toggleCampaign(option.value)}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span
+                          className={cn(
+                            'h-4 w-1 rounded-full',
+                            checked ? 'opacity-100' : 'opacity-30'
+                          )}
+                          style={{ backgroundColor: campaignColorById(option.value) }}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 truncate text-sm">{option.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </>

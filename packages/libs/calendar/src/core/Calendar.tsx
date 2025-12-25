@@ -41,20 +41,21 @@ export function Calendar<E extends { id: string | number; start: Date; end?: Dat
           localizer={loc}
           weekStartsOn={weekStartsOn}
           eventComponent={components?.event}
+          createCtaComponent={components?.createCta}
           onEventDrop={onEventDrop}
           dragAndDrop={dragAndDrop}
           onBackgroundClick={onBackgroundClick}
           onMoreClick={onMoreClick}
         />
       )}
-      {(view === 'week' || view === 'three-day') && (
+      {view === 'week' && (
         <TimeGridView<E>
           date={date}
-          days={view === 'three-day' ? 3 : 7}
           events={events}
           localizer={loc}
           weekStartsOn={weekStartsOn}
           eventComponent={components?.event}
+          createCtaComponent={components?.createCta}
           onEventDrop={onEventDrop}
           dragAndDrop={dragAndDrop}
           onBackgroundClick={onBackgroundClick}
@@ -66,6 +67,7 @@ export function Calendar<E extends { id: string | number; start: Date; end?: Dat
           events={events}
           localizer={loc}
           eventComponent={components?.event}
+          createCtaComponent={components?.createCta}
         />
       )}
     </div>

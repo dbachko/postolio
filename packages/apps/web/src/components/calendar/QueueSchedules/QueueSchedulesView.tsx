@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
-import { Link } from 'react-router-dom';
+import { toZonedTime } from 'date-fns-tz';
 
-import {
-  brand as brandApi,
-  publishingQueues as publishingQueuesApi,
-  type Content,
-} from '@/lib/api';
+import { publishingQueues as publishingQueuesApi, type Content } from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
-import { getPlatformConfig, type Platform } from '@/lib/platform-config';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -23,9 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
 
-import { Film, Image as ImageIcon, Layers, LayoutGrid } from 'lucide-react';
+import { CircleFadingPlus, Film, Image as ImageIcon, LayoutGrid } from 'lucide-react';
 
 import type {
   PublishingQueueItem,
@@ -42,73 +34,17 @@ import {
 import { QueueScheduleLane } from '@/components/calendar/QueueSchedules/QueueScheduleLane';
 
 export function QueueSchedulesView({
-  brandId,
   brandTimezone,
   date,
   calendarContent,
   selectedSocialAccountIds,
 }: {
-  brandId: string;
   brandTimezone: string;
   date: Date;
   calendarContent: Content[];
   selectedSocialAccountIds: string[] | null;
 }) {
   const { openSidebar } = useRightSidebarRouter();
-
-  const accountsQuery = useQuery({
-    queryKey: ['brand-social-accounts', brandId],
-    queryFn: () => brandApi.getConnectedAccounts(brandId),
-    enabled: Boolean(brandId),
-    staleTime: CACHE_TIMES.LONG,
-    gcTime: GC_TIMES.LONG,
-    refetchOnWindowFocus: false,
-  });
-
-  const socialAccounts = useMemo(() => {
-    const list = (accountsQuery.data as any)?.socialAccounts;
-    const accounts = Array.isArray(list) ? (list as any[]) : [];
-    return accounts
-      .slice()
-      .sort((a, b) => {
-        const aOrder = typeof a?.sortOrder === 'number' ? a.sortOrder : 0;
-        const bOrder = typeof b?.sortOrder === 'number' ? b.sortOrder : 0;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return String(a?.id || '').localeCompare(String(b?.id || ''));
-      })
-      .map((account) => {
-        const id = typeof account?.id === 'string' ? account.id : '';
-        const platform =
-          typeof account?.platform === 'string' ? (account.platform as Platform) : null;
-        const username = typeof account?.username === 'string' ? account.username : null;
-        const displayName = typeof account?.displayName === 'string' ? account.displayName : null;
-        const label = username ? `@${username}` : displayName || platform || 'Social account';
-        const avatarName = username || displayName || platform || 'Account';
-        const avatarUrl =
-          typeof account?.profilePictureUrl === 'string' ? account.profilePictureUrl : null;
-        const disconnected = account?.disconnected === true;
-        const schedulingSupported = platform
-          ? (() => {
-              try {
-                return getPlatformConfig(platform).features.scheduling;
-              } catch {
-                return false;
-              }
-            })()
-          : false;
-
-        return {
-          id,
-          platform,
-          label,
-          avatarName,
-          avatarUrl,
-          disconnected,
-          schedulingSupported,
-        };
-      })
-      .filter((a) => Boolean(a.id && a.platform));
-  }, [accountsQuery.data]);
 
   const [selectedLane, setSelectedLane] = useState<'all' | Exclude<PublishingQueueLaneKey, 'any'>>(
     'all'
@@ -244,26 +180,14 @@ export function QueueSchedulesView({
     [queueItems]
   );
 
-  const selectedAccountMeta = useMemo(() => {
-    if (!effectiveSocialAccountId) return null;
-    return socialAccounts.find((a) => a.id === effectiveSocialAccountId) || null;
-  }, [effectiveSocialAccountId, socialAccounts]);
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="text-sm font-semibold">Queues</div>
-          <span className="text-muted-foreground text-xs">
-            {formatInTimeZone(date, brandTimezone, 'MMM d, yyyy')}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+      <Card className="bg-card">
+        <div className="border-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
           <Select
             value={selectedQueueId ?? ''}
             onValueChange={(v) => setSelectedQueueId(v)}
-            disabled={queuesQuery.isLoading || !queueId}
+            disabled={queuesQuery.isLoading || !effectiveSocialAccountId || !queueId}
           >
             <SelectTrigger className="w-full sm:w-[220px]">
               <SelectValue placeholder="Select a queue" />
@@ -290,70 +214,6 @@ export function QueueSchedulesView({
             </SelectContent>
           </Select>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              openSidebar('post-create', {
-                params: {
-                  targetSocialAccountId: effectiveSocialAccountId,
-                  contentType: selectedLane === 'all' ? undefined : selectedLane,
-                },
-              });
-            }}
-            disabled={!effectiveSocialAccountId || !selectedAccountMeta?.schedulingSupported}
-          >
-            Create
-          </Button>
-        </div>
-      </div>
-
-      <Card className="bg-card">
-        <div className="border-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Social account
-            </div>
-            <div className="flex items-center gap-1.5">
-              {socialAccounts.length === 0 ? (
-                <div className="text-muted-foreground text-sm">
-                  No connected accounts. Go to{' '}
-                  <Button
-                    variant="link"
-                    asChild
-                    className="h-auto p-0 text-sm font-medium underline underline-offset-4"
-                  >
-                    <Link to="/social-accounts/connections">Social Accounts</Link>
-                  </Button>
-                  .
-                </div>
-              ) : !effectiveSocialAccountId && Array.isArray(selectedSocialAccountIds) ? (
-                <div className="text-muted-foreground text-sm">
-                  Select exactly one destination in the header to manage queue scheduling.
-                </div>
-              ) : !effectiveSocialAccountId ? (
-                <div className="text-muted-foreground text-sm">
-                  Select a destination in the header to manage queue scheduling.
-                </div>
-              ) : !selectedAccountMeta ? (
-                <div className="text-muted-foreground text-sm">Loading social account…</div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <SocialAccountAvatar
-                    platform={selectedAccountMeta.platform!}
-                    name={selectedAccountMeta.avatarName}
-                    src={selectedAccountMeta.avatarUrl}
-                    size="sm"
-                    selected
-                    muted={false}
-                    disabled={selectedAccountMeta.disconnected}
-                  />
-                  <span className="text-sm font-medium">{selectedAccountMeta.label}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
           <Tabs
             value={selectedLane}
             onValueChange={(v) => {
@@ -379,7 +239,7 @@ export function QueueSchedulesView({
                 <span className="hidden sm:inline">Reels</span>
               </TabsTrigger>
               <TabsTrigger value="story" className="gap-1">
-                <Layers className="h-4 w-4" />
+                <CircleFadingPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">Stories</span>
               </TabsTrigger>
             </TabsList>

@@ -151,7 +151,7 @@ function PostCard({
         <video
           src={preview.url}
           poster={preview.posterUrl || undefined}
-          className="h-full w-full object-cover"
+          className="pointer-events-none h-full w-full object-cover"
           muted
           playsInline
           preload="metadata"
@@ -170,7 +170,7 @@ function PostCard({
       <img
         src={preview.url}
         alt={previewAlt}
-        className="h-full w-full object-cover"
+        className="pointer-events-none h-full w-full object-cover"
         loading="lazy"
       />
     );

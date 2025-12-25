@@ -6,6 +6,7 @@ import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 import {
   brand as brandApi,
   content as contentApi,
@@ -29,11 +30,12 @@ import type { Platform } from '@/lib/platform-config';
 import type { SocialAccountsById } from '@/types/social-accounts';
 import { getDefaultQueueId } from '@/components/publishing-queues/queue-utils';
 import type { PublishingQueueSlotInstance } from '@/lib/api/publishing-queues-client';
+import { Button } from '@/components/ui/button';
 
 export interface FullCalendarProps {
   brandId: string;
   brandTimezone: string;
-  view: 'month' | 'week' | 'three-day';
+  view: 'month' | 'week';
   date: Date;
   content?: Content[];
   placeholders?: PlaceholderItem[];
@@ -71,13 +73,8 @@ function getQueueSlotRange(opts: {
     };
   }
 
-  const localStart = startOfDay(zoned);
-  const localEnd = addDays(localStart, 3);
-  return {
-    afterUtcIso: convertLocalToUTC(localStart, timezone).toISOString(),
-    endUtcMs: convertLocalToUTC(localEnd, timezone).getTime(),
-    limit: 150,
-  };
+  const exhaustive: never = view;
+  throw new Error(`Unhandled calendar view: ${exhaustive}`);
 }
 
 function FullCalendarImpl({
@@ -296,6 +293,38 @@ function FullCalendarImpl({
     [calendarView, openSidebar, targetSocialAccountIds, tzRef]
   );
 
+  const CalendarCreateCta = useCallback(
+    ({
+      date,
+      onClick,
+      disabled,
+    }: {
+      date: Date;
+      onClick?: (d: Date) => void;
+      disabled?: boolean;
+    }) => {
+      return (
+        <div className="pc-create-cta">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-xxs"
+            aria-label="Create post"
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (disabled) return;
+              onClick?.(date);
+            }}
+          >
+            <Plus className="h-3 w-3" aria-hidden="true" />
+          </Button>
+        </div>
+      );
+    },
+    []
+  );
+
   return (
     <>
       <PostolioCalendar
@@ -320,6 +349,7 @@ function FullCalendarImpl({
               hideDestinations={Boolean(effectiveSingleDestinationId)}
             />
           ),
+          createCta: CalendarCreateCta,
         }}
         onBackgroundClick={handleBackgroundClick}
       />

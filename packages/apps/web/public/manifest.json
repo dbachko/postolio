@@ -1,7 +1,7 @@
 {
-  "name": "Postolio - AI Instagram Management",
+  "name": "Postolio - AI Social Media Management",
   "short_name": "Postolio",
-  "description": "AI-Powered Instagram Content Management Platform. Automate your Instagram growth with AI-generated content, smart scheduling, and advanced analytics.",
+  "description": "AI-powered social media management platform. Plan, create, and schedule content with AI workflows, smart scheduling, and analytics.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#232323",
@@ -71,7 +71,7 @@
     {
       "name": "Analytics",
       "short_name": "Analytics",
-      "description": "View your Instagram analytics",
+      "description": "View your analytics",
       "url": "/analytics",
       "icons": [
         {

@@ -105,21 +105,36 @@ body {
   outline-offset: -1px;
 }
 .pc-day-header {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: center;
   align-items: center;
+  pointer-events: none;
 }
 .pc-day-label {
   font-weight: 500;
   font-size: 12px;
   color: var(--muted-foreground);
 }
+.pc-day--today .pc-day-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
 .pc-today-pill {
   position: absolute;
   top: 4px;
   left: 6px;
   width: 22px;
-  height: 18px;
+  height: 22px;
   padding: 0 8px;
   border-radius: 9999px;
   background: var(--muted);
@@ -127,7 +142,7 @@ body {
   border: 1px solid var(--border);
   font-weight: 500;
   font-size: 11px;
-  line-height: 18px;
+  line-height: 22px;
   pointer-events: none;
   box-shadow: none;
 }
@@ -135,7 +150,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 2px 0 6px;
+  padding: 30px 0 6px;
   min-width: 0;
   overflow: hidden;
 }
@@ -179,76 +194,27 @@ body {
 }
 .pc-create-cta {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0;
-  border-radius: 9999px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  overflow: hidden;
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1;
-  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 20%, transparent);
+  right: 4px;
+  top: 4px;
   opacity: 0;
-  transform: translateY(2px);
-  transition:
-    opacity 0.14s ease,
-    transform 0.14s ease,
-    width 0.18s ease,
-    padding 0.18s ease,
-    gap 0.12s ease;
   pointer-events: none;
-  will-change: width, padding;
-}
-.pc-create-cta:hover,
-.pc-create-cta:focus-visible {
-  width: auto;
-  padding: 0 10px;
-  gap: 6px;
-}
-.pc-create-cta-plus {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  background: none;
-  border-radius: 0;
-  color: var(--primary-foreground);
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 16px;
-  text-align: center;
-  flex-shrink: 0;
-}
-.pc-create-cta-text {
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  transform: translateX(-4px);
-  transition:
-    max-width 0.18s ease,
-    opacity 0.14s ease,
-    transform 0.14s ease;
-}
-.pc-create-cta:hover .pc-create-cta-text,
-.pc-create-cta:focus-visible .pc-create-cta-text {
-  max-width: 120px;
-  opacity: 1;
-  transform: translateX(0);
+  z-index: 2;
 }
 .pc-day:not(.pc-day--past):hover .pc-create-cta {
   opacity: 1;
-  transform: translateY(0);
   pointer-events: auto;
+}
+.pc-daycol:not(.pc-daycol--past):hover .pc-create-cta {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pc-agenda-group:hover .pc-create-cta {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pc-agenda-group .pc-create-cta {
+  top: auto;
+  bottom: 6px;
 }
 .pc-timegrid {
   display: grid;
@@ -299,7 +265,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px;
+  padding: 30px 6px 6px;
 }
 .pc-daycol--past {
   background: color-mix(in oklch, var(--muted) 16%, transparent);

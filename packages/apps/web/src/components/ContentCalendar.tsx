@@ -16,17 +16,11 @@ import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { AsyncTimezoneCombobox } from '@/components/timezone/AsyncTimezoneCombobox';
 import { ContentViewSelector } from '@/components/content/ContentViewSelector';
 import { useContentViewStore } from '@/stores/contentViewStore';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // type guard no longer needed for the month grid only
 
-type ViewMode = 'month' | 'week' | 'three-day' | 'queue';
+type ViewMode = 'month' | 'week' | 'queue';
 
 interface ContentCalendarProps {
   brandId: string;
@@ -63,12 +57,12 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
   // Read view + date from URL once
   useEffect(() => {
     const v = searchParams.get('view');
-    if (v === 'month' || v === 'week' || v === 'three-day' || v === 'queue') {
+    if (v === 'month' || v === 'week' || v === 'queue') {
       setViewMode(v as ViewMode);
     } else {
-      // Default to a mobile-friendly 3-day view on small screens
+      // Default to a mobile-friendly week view on small screens
       if (typeof window !== 'undefined' && window.innerWidth < 640) {
-        setViewMode('three-day');
+        setViewMode('week');
       }
     }
     const dateParam = searchParams.get('date');
@@ -76,8 +70,8 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
       const isYm = /\d{4}-\d{2}$/.test(dateParam);
       const d = isYm ? new Date(`${dateParam}-01T00:00:00`) : new Date(dateParam);
       if (!isNaN(d.getTime())) {
-        // For week/3-day views, if the URL only carries year-month, prefer today's date
-        if ((v === 'week' || v === 'three-day' || v === 'queue') && isYm) {
+        // For week/queue views, if the URL only carries year-month, prefer today's date
+        if ((v === 'week' || v === 'queue') && isYm) {
           setCurrentDate(new Date());
         } else {
           setCurrentDate(d);
@@ -161,8 +155,6 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
       if (viewMode === 'month') next = subMonths(prev, 1);
       else if (viewMode === 'week' || viewMode === 'queue')
         next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
-      else if (viewMode === 'three-day')
-        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 3);
       setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });
@@ -174,8 +166,6 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
       if (viewMode === 'month') next = addMonths(prev, 1);
       else if (viewMode === 'week' || viewMode === 'queue')
         next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
-      else if (viewMode === 'three-day')
-        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 3);
       setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });
@@ -238,7 +228,7 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
             leadingIcon={<Globe2 className="text-muted-foreground h-4 w-4" aria-hidden="true" />}
             buttonClassName="w-auto"
           />
-          <Select
+          <Tabs
             value={viewMode}
             onValueChange={(v) => {
               const next = v as ViewMode;
@@ -246,16 +236,12 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
               setParam('view', next);
             }}
           >
-            <SelectTrigger className="w-auto justify-start gap-2">
-              <SelectValue placeholder="View" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">Month</SelectItem>
-              <SelectItem value="week">Week</SelectItem>
-              <SelectItem value="three-day">3 Days</SelectItem>
-              <SelectItem value="queue">Queues</SelectItem>
-            </SelectContent>
-          </Select>
+            <TabsList className="w-auto">
+              <TabsTrigger value="month">Month</TabsTrigger>
+              <TabsTrigger value="week">Week</TabsTrigger>
+              <TabsTrigger value="queue">Queue</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <ContentFiltersBar brandId={brandId} />
         </div>
       </div>
@@ -267,7 +253,6 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
         <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
       ) : viewMode === 'queue' ? (
         <QueueSchedulesView
-          brandId={brandId}
           brandTimezone={brandTimezone}
           date={currentDate}
           calendarContent={scopedContent}

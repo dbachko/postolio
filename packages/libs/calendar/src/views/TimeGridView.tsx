@@ -8,11 +8,15 @@ const ITEM_TYPE = 'PC_CAL_EVENT';
 
 type Props<E extends CalendarEventBase> = {
   date: Date;
-  days: number; // 1, 3, 7
   events: E[];
   localizer: Localizer;
   weekStartsOn?: 0 | 1;
   eventComponent?: React.ComponentType<{ event: E }>;
+  createCtaComponent?: React.ComponentType<{
+    date: Date;
+    onClick?: (d: Date) => void;
+    disabled?: boolean;
+  }>;
   onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop?: boolean;
@@ -20,18 +24,17 @@ type Props<E extends CalendarEventBase> = {
 
 export function TimeGridView<E extends CalendarEventBase>({
   date,
-  days,
   events,
   localizer,
   weekStartsOn,
   eventComponent: EventComp,
+  createCtaComponent,
   onEventDrop,
   onBackgroundClick,
   dragAndDrop = true,
 }: Props<E>) {
-  const startOfThisWeek = localizer.startOfWeek(date, weekStartsOn);
-  const start = days === 7 ? startOfThisWeek : new Date(date);
-  const dayDates = Array.from({ length: days }, (_, i) => localizer.addDays(start, i));
+  const start = localizer.startOfWeek(date, weekStartsOn);
+  const dayDates = Array.from({ length: 7 }, (_, i) => localizer.addDays(start, i));
   const todayKey = localizer.format(new Date(), 'yyyy-LL-dd');
 
   function isSameDay(a: Date, b: Date) {
@@ -43,7 +46,7 @@ export function TimeGridView<E extends CalendarEventBase>({
   }
 
   return (
-    <div className="pc-timegrid" style={{ ['--pc-days' as any]: String(days) }}>
+    <div className="pc-timegrid" style={{ ['--pc-days' as any]: '7' }}>
       <div className="pc-timegrid-head">
         {dayDates.map((d, i) => (
           <div
@@ -70,6 +73,7 @@ export function TimeGridView<E extends CalendarEventBase>({
             localizer={localizer}
             todayKey={todayKey}
             EventComp={EventComp}
+            CreateCtaComp={createCtaComponent}
             onEventDrop={onEventDrop}
             onBackgroundClick={onBackgroundClick}
             dragAndDrop={dragAndDrop}
@@ -86,6 +90,7 @@ function DayColumn<E extends CalendarEventBase>({
   localizer,
   todayKey,
   EventComp,
+  CreateCtaComp,
   onEventDrop,
   onBackgroundClick,
   dragAndDrop,
@@ -95,6 +100,11 @@ function DayColumn<E extends CalendarEventBase>({
   localizer: Localizer;
   todayKey: string;
   EventComp?: React.ComponentType<{ event: E }>;
+  CreateCtaComp?: React.ComponentType<{
+    date: Date;
+    onClick?: (d: Date) => void;
+    disabled?: boolean;
+  }>;
   onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop: boolean;
@@ -162,7 +172,12 @@ function DayColumn<E extends CalendarEventBase>({
           <EventListItem<E> key={e.id} event={e} EventComp={EventComp} />
         ))}
       </div>
-      {!isPastDay && <CreateCta date={date} onClick={onBackgroundClick} />}
+      {!isPastDay &&
+        (CreateCtaComp ? (
+          <CreateCtaComp date={date} onClick={onBackgroundClick} />
+        ) : (
+          <CreateCta date={date} onClick={onBackgroundClick} />
+        ))}
     </div>
   );
 }

@@ -8,6 +8,11 @@ type Props<E extends CalendarEventBase> = {
   events: E[];
   localizer: Localizer;
   eventComponent?: React.ComponentType<{ event: E }>;
+  createCtaComponent?: React.ComponentType<{
+    date: Date;
+    onClick?: (d: Date) => void;
+    disabled?: boolean;
+  }>;
 };
 
 const DAY_KEY = (d: Date) =>
@@ -29,6 +34,7 @@ export function AgendaView<E extends CalendarEventBase>({
   events,
   localizer,
   eventComponent: EventComp,
+  createCtaComponent: CreateCtaComp,
 }: Props<E>) {
   const todayKey = DAY_KEY(new Date());
 
@@ -105,7 +111,7 @@ export function AgendaView<E extends CalendarEventBase>({
             ) : (
               <div className="pc-agenda-empty">No content</div>
             )}
-            <CreateCta date={g.date} />
+            {CreateCtaComp ? <CreateCtaComp date={g.date} /> : <CreateCta date={g.date} />}
           </div>
         );
       })}
