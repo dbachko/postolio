@@ -109,13 +109,15 @@ export function QueueScheduleLane({
                     const primaryAssetId =
                       contentForThumb?.primaryAssetId ||
                       contentForThumb?.mediaAssets?.[0]?.assetId ||
+                      estimatedItem?.content?.primaryAssetId ||
+                      estimatedItem?.content?.mediaAssets?.[0]?.assetId ||
                       null;
                     const primaryAsset = primaryAssetId
                       ? (assetsById?.[primaryAssetId] ?? null)
                       : null;
                     const previewUrl =
                       primaryAsset?.fileType === 'video'
-                        ? primaryAsset.thumbnailUrl || primaryAsset.url || null
+                        ? primaryAsset.thumbnailUrl || null
                         : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
 
                     return (
@@ -159,7 +161,7 @@ export function QueueScheduleLane({
                                 </div>
                               ) : estimatedItem ? (
                                 <div className="text-foreground truncate text-sm font-medium">
-                                  Queued (estimated)
+                                  Queued
                                 </div>
                               ) : (
                                 <div className="text-muted-foreground truncate text-sm font-medium">
@@ -231,6 +233,8 @@ export function QueueScheduleLane({
                     const primaryAssetId =
                       contentForThumb?.primaryAssetId ||
                       contentForThumb?.mediaAssets?.[0]?.assetId ||
+                      item.content?.primaryAssetId ||
+                      item.content?.mediaAssets?.[0]?.assetId ||
                       null;
                     const primaryAsset = primaryAssetId
                       ? (assetsById?.[primaryAssetId] ?? null)

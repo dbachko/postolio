@@ -81,6 +81,13 @@ export function useCalendarItems(
         return new Date(Math.min(...times)).toISOString();
       })();
 
+      const publishingQueueItemId = (() => {
+        const candidate = items
+          .map((c) => (c as any)?.publishingQueueItemId)
+          .find((value) => isNonEmptyString(value));
+        return candidate ? String(candidate).trim() : null;
+      })();
+
       const postedAt = (() => {
         const times = items
           .map((c) => getIsoMillis(c.postedAt))
@@ -116,6 +123,7 @@ export function useCalendarItems(
         destinationSocialAccountIds,
         destinationContentIds: items.map((c) => c.id),
         isMultiDestination: true,
+        publishingQueueItemId,
         type: 'content',
       });
     }

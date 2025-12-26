@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 
 interface ChooseFromAssetsButtonProps {
   onClick: () => void;
+  disabled?: boolean;
   className?: string;
   /** Default is full-width. Set to false for auto width (e.g., inline in sidebars). */
   fullWidth?: boolean;
@@ -13,6 +14,7 @@ interface ChooseFromAssetsButtonProps {
 
 export function ChooseFromAssetsButton({
   onClick,
+  disabled = false,
   className,
   fullWidth = true,
   size = 'default',
@@ -25,6 +27,7 @@ export function ChooseFromAssetsButton({
       type="button"
       variant="outline"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         'border-border bg-muted hover:bg-accent flex items-center justify-center rounded-lg border font-medium transition-colors',
         sizeClasses,

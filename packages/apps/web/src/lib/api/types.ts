@@ -47,6 +47,7 @@ export interface Content {
   campaignColor?: string | null;
   permalink?: string | null;
   schedulingError?: string | null;
+  publishingQueueItemId?: string | null;
 }
 
 export interface AuthResponse {

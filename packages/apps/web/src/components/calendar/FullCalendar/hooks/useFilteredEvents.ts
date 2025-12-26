@@ -56,6 +56,18 @@ export function useFilteredEvents(
       events.push(event);
     }
 
+    events.sort((a, b) => {
+      const ta = a.start?.getTime?.() ?? 0;
+      const tb = b.start?.getTime?.() ?? 0;
+      if (ta !== tb) return ta - tb;
+
+      const aPlaceholder = Boolean((a as any)?.resource?.placeholder);
+      const bPlaceholder = Boolean((b as any)?.resource?.placeholder);
+      if (aPlaceholder !== bPlaceholder) return aPlaceholder ? 1 : -1;
+
+      return String(a.title ?? '').localeCompare(String(b.title ?? ''));
+    });
+
     return events;
   }, [items, campaigns, statuses, searchQuery, timezone]);
 }

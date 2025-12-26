@@ -8,6 +8,7 @@ export interface PlaceholderItem {
   scheduledAt: string;
   message?: string;
   campaignColor?: string | null;
+  queueAtCapacity?: boolean;
 }
 
 export type CalendarDataItem = CalendarContentItem | (PlaceholderItem & { type: 'placeholder' });

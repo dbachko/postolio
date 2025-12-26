@@ -13,6 +13,16 @@ export type PublishingQueueSummary = {
   updatedAt: string;
 };
 
+export type PublishingQueueListResponse = {
+  success: boolean;
+  data: {
+    socialAccountId: string;
+    queues: PublishingQueueSummary[];
+    queueDepthCurrent?: number;
+    queueDepthMax?: number | null;
+  };
+};
+
 export type PublishingQueueSlot = {
   id: string;
   dayOfWeek: number;
@@ -48,6 +58,9 @@ export type PublishingQueueItem = {
     status: string;
     contentType: string;
     scheduledAt: string | null;
+    primaryAssetId?: string | null;
+    mediaAssets?: Array<{ assetId: string; displayOrder: number }> | null;
+    mediaAssetCount?: number | null;
   } | null;
 };
 
@@ -62,10 +75,7 @@ export class PublishingQueuesClient {
   listQueuesForSocialAccount(socialAccountId: string) {
     return this.request(
       `/api/social-accounts/${encodeURIComponent(socialAccountId)}/queues`
-    ) as Promise<{
-      success: boolean;
-      data: { socialAccountId: string; queues: PublishingQueueSummary[] };
-    }>;
+    ) as Promise<PublishingQueueListResponse>;
   }
 
   createQueue(socialAccountId: string, name: string) {
@@ -120,6 +130,13 @@ export class PublishingQueuesClient {
       method: 'POST',
       body: JSON.stringify({ contentId }),
     }) as Promise<{ success: boolean; data?: any; error?: string; maxAllowed?: number }>;
+  }
+
+  removeQueueItem(queueId: string, itemId: string) {
+    return this.request(
+      `/api/queues/${encodeURIComponent(queueId)}/items/${encodeURIComponent(itemId)}`,
+      { method: 'DELETE' }
+    ) as Promise<{ success: boolean; data?: any; error?: string }>;
   }
 
   listSlotInstances(params: {

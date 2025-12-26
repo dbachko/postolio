@@ -46,6 +46,7 @@ export interface CalendarProps<E extends CalendarEventBase = CalendarEventBase> 
     start: Date;
     end?: Date;
     allDay?: boolean;
+    targetEvent?: E | null;
   }) => void | Promise<void>;
 
   // Interactions

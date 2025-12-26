@@ -167,10 +167,19 @@ export function QueueSchedulesView({
   }, [calendarContent]);
 
   const primaryAssetIds = useMemo(() => {
-    return calendarContent.map(
-      (item) => item.primaryAssetId || item.mediaAssets?.[0]?.assetId || null
-    );
-  }, [calendarContent]);
+    const ids: Array<string | null> = [];
+
+    for (const item of calendarContent) {
+      ids.push(item.primaryAssetId || item.mediaAssets?.[0]?.assetId || null);
+    }
+
+    for (const qi of queueItems) {
+      const primary = qi.content?.primaryAssetId || qi.content?.mediaAssets?.[0]?.assetId || null;
+      ids.push(primary);
+    }
+
+    return ids;
+  }, [calendarContent, queueItems]);
   const { data: assetsById } = useAssetsByIds(primaryAssetIds);
 
   const nowLocal = useMemo(() => toZonedTime(new Date(), brandTimezone), [brandTimezone]);

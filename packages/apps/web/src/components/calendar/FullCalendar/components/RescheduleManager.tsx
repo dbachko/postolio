@@ -60,6 +60,10 @@ export function RescheduleManager({
         queryClient.invalidateQueries({ queryKey: ['calendar', brandId] }).catch((err) => {
           console.error(err);
         });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
       }
     },
     [brandId, onStateChange, queryClient, state.item]

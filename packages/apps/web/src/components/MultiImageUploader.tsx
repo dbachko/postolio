@@ -598,14 +598,14 @@ export function MultiImageUploader({
               src={media.url}
               index={index}
               alt={`Upload ${index + 1}`}
-              draggable={!media.uploading}
-              onDragStart={(event) => handleDragStart(event, index)}
-              onDragOver={(event) => handleDragOver(event, index)}
-              onDragEnd={handleDragEnd}
-              onRemove={!media.uploading ? () => handleRemove(index) : undefined}
+              draggable={enableUpload && !media.uploading}
+              onDragStart={enableUpload ? (event) => handleDragStart(event, index) : undefined}
+              onDragOver={enableUpload ? (event) => handleDragOver(event, index) : undefined}
+              onDragEnd={enableUpload ? handleDragEnd : undefined}
+              onRemove={enableUpload && !media.uploading ? () => handleRemove(index) : undefined}
               isUploading={media.uploading}
               progressPercent={media.progressPercent}
-              showDragHandle={media.type === 'image'}
+              showDragHandle={enableUpload && media.type === 'image'}
               className={cn(draggedIndex === index && 'opacity-50')}
             />
           ))}

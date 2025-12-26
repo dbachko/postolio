@@ -44,7 +44,6 @@ import { RightHelpDrawer } from './help/RightHelpDrawer';
 import { RightSidebarRoot } from '@/right-sidebar/RightSidebarRoot';
 import '@/right-sidebar/register';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { useContentViewStore } from '@/stores/contentViewStore';
 import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
 import { PageMetaProvider, usePageMeta } from '@/contexts/PageMetaContext';
@@ -88,10 +87,6 @@ function AppLayoutInner({ children }: LayoutProps) {
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { openSidebar } = useRightSidebarRouter();
-  const isContentRoute = location.pathname === '/content';
-  const selectedContentDestinationIds = useContentViewStore((s) =>
-    selectedBrand?.id ? s.selectedSocialAccountIdsByBrandId[selectedBrand.id] : null
-  );
 
   // Prefetch frequently-used brand data once per brand selection.
   useEffect(() => {
@@ -296,20 +291,6 @@ function AppLayoutInner({ children }: LayoutProps) {
                   size="sm"
                   className="h-9 gap-2 pr-2 pl-3"
                   onClick={() => {
-                    if (
-                      isContentRoute &&
-                      Array.isArray(selectedContentDestinationIds) &&
-                      selectedContentDestinationIds.length > 0
-                    ) {
-                      const ids = selectedContentDestinationIds;
-                      openSidebar('post-create', {
-                        params:
-                          ids.length === 1
-                            ? { targetSocialAccountId: ids[0] }
-                            : { targetSocialAccountIds: ids.join(',') },
-                      });
-                      return;
-                    }
                     openSidebar('post-create');
                   }}
                   aria-label="Create new post"

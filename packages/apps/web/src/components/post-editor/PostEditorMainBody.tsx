@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CheckSwitch } from '@/components/ui/check-switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AppEmptyState } from '@/components/AppEmptyState';
 import { ChooseFromAssetsButton } from '@/components/ChooseFromAssetsButton';
 import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
@@ -35,6 +36,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
+import { cn } from '@/lib/utils';
 
 export interface PostEditorFormState {
   caption: string;
@@ -50,7 +52,6 @@ interface PostEditorMainBodyProps {
   allowMixedMedia: boolean;
   disabled: boolean;
   isLoading: boolean;
-  isVideoMedia: boolean;
   post?: PostDetailData;
   selectedBrand: Brand | null;
   formData: PostEditorFormState;
@@ -74,7 +75,6 @@ export function PostEditorMainBody({
   allowMixedMedia,
   disabled,
   isLoading,
-  isVideoMedia,
   post,
   selectedBrand,
   formData,
@@ -90,10 +90,24 @@ export function PostEditorMainBody({
   platformOptions,
   selectedPlatformAccountIds,
   onSelectedPlatformAccountIdsChange,
-  showDestinationsPicker = true,
+  showDestinationsPicker,
 }: PostEditorMainBodyProps) {
+  const resolvedShowDestinationsPicker = showDestinationsPicker ?? mode === 'create';
   const destinationCount = selectedPlatformAccountIds?.length ?? 0;
   const isMultiDestinationSelection = destinationCount > 1;
+
+  const mediaSummary = useMemo(() => {
+    const assets = formData.carouselAssets || [];
+    const images = assets.filter((asset) => asset.type === 'image').length;
+    const videos = assets.filter((asset) => asset.type === 'video').length;
+    return {
+      total: assets.length,
+      images,
+      videos,
+      hasImages: images > 0,
+      hasVideos: videos > 0,
+    };
+  }, [formData.carouselAssets]);
 
   const selectedPlatforms = useMemo(() => {
     if (!platformOptions || !selectedPlatformAccountIds) return [];
@@ -115,6 +129,71 @@ export function PostEditorMainBody({
     const story = selectedPlatforms.every((p) => getPlatformConfig(p).features.stories);
     return { post, reel, story };
   }, [selectedPlatforms]);
+
+  const contentTypeDisabledReasons = useMemo(() => {
+    const reasons: Record<InstagramContentType, string | null> = {
+      post: allowedContentTypes.post
+        ? null
+        : 'Posts are not available for the selected destinations.',
+      reel: null,
+      story: null,
+    };
+
+    if (!allowedContentTypes.reel) {
+      reasons.reel = 'Reels are not available for the selected destinations.';
+    } else if (mediaSummary.total > 0) {
+      if (!mediaSummary.hasVideos) {
+        reasons.reel = 'Reels require a video. Remove images and upload a video.';
+      } else if (mediaSummary.hasImages) {
+        reasons.reel = 'Reels can only include a single video. Remove images first.';
+      } else if (mediaSummary.videos > 1) {
+        reasons.reel = 'Reels can only include one video. Remove extra videos.';
+      }
+    }
+
+    if (!allowedContentTypes.story) {
+      reasons.story = 'Stories are not available for the selected destinations.';
+    } else if (mediaSummary.total > 1) {
+      reasons.story = 'Stories support only one media item. Remove extra media.';
+    }
+
+    return reasons;
+  }, [allowedContentTypes.post, allowedContentTypes.reel, allowedContentTypes.story, mediaSummary]);
+
+  const renderContentTypeLabel = (opts: {
+    id: string;
+    label: string;
+    icon: ReactNode;
+    disabledReason: string | null;
+  }) => {
+    const isDisabled = Boolean(opts.disabledReason);
+    const base = (
+      <Label
+        htmlFor={opts.id}
+        aria-disabled={isDisabled}
+        className={cn(
+          'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-all sm:text-sm',
+          isDisabled
+            ? 'cursor-not-allowed opacity-50'
+            : 'hover:bg-accent hover:text-accent-foreground cursor-pointer'
+        )}
+      >
+        {opts.icon}
+        <span>{opts.label}</span>
+      </Label>
+    );
+
+    if (!opts.disabledReason) return base;
+
+    return (
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>{base}</TooltipTrigger>
+        <TooltipContent>
+          <p className="text-sm">{opts.disabledReason}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
 
   const campaignSelectItems = useMemo(() => {
     if (isLoadingCampaigns) {
@@ -144,28 +223,22 @@ export function PostEditorMainBody({
   useEffect(() => {
     if (selectedPlatforms.length === 0) return;
     const current = formData.contentType;
-    let allowed = allowedContentTypes.story;
-    if (current === 'post') allowed = allowedContentTypes.post;
-    else if (current === 'reel') allowed = allowedContentTypes.reel;
+    const currentDisabledReason = contentTypeDisabledReasons[current];
+    if (!currentDisabledReason) return;
 
-    if (allowed) return;
-    if (!allowedContentTypes.post) return;
-    setFormData((s) => ({ ...s, contentType: 'post' }));
-  }, [allowedContentTypes, formData.contentType, selectedPlatforms.length, setFormData]);
+    const firstEnabled: InstagramContentType | null = !contentTypeDisabledReasons.post
+      ? 'post'
+      : !contentTypeDisabledReasons.reel
+        ? 'reel'
+        : !contentTypeDisabledReasons.story
+          ? 'story'
+          : null;
+    if (!firstEnabled) return;
+    if (firstEnabled === current) return;
+    setFormData((s) => ({ ...s, contentType: firstEnabled }));
+  }, [contentTypeDisabledReasons, formData.contentType, selectedPlatforms.length, setFormData]);
 
-  if (mode === 'create') {
-    if (!selectedBrand) {
-      return (
-        <AppEmptyState
-          variant="minimal"
-          title="Select a brand to create this post"
-          description="Post drafts, scheduling rules, and insights are tied to the brand you choose."
-          actions={[{ label: 'Choose Brand', to: '/brands' }]}
-          className="min-h-[280px]"
-        />
-      );
-    }
-
+  const renderComposerBody = (opts: { brandId: string }) => {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -173,75 +246,74 @@ export function PostEditorMainBody({
             <Label className="text-sm">
               Content Type <span className="text-destructive">*</span>
             </Label>
-            <RadioGroup
-              value={formData.contentType}
-              onValueChange={(value) =>
-                setFormData((s) => {
-                  const nextType = value as InstagramContentType;
-                  if (nextType !== 'reel') {
-                    return { ...s, contentType: nextType };
-                  }
+            <TooltipProvider>
+              <RadioGroup
+                value={formData.contentType}
+                onValueChange={(value) =>
+                  setFormData((s) => {
+                    const nextType = value as InstagramContentType;
+                    if (nextType !== 'reel') {
+                      return { ...s, contentType: nextType };
+                    }
 
-                  const firstVideo = s.carouselAssets.find((asset) => asset.type === 'video');
-                  return {
-                    ...s,
-                    contentType: nextType,
-                    carouselAssets: firstVideo ? [firstVideo] : [],
-                  };
-                })
-              }
-              className="flex gap-2"
-              disabled={selectedPlatforms.length === 0}
-            >
-              <div className="flex-1">
-                <RadioGroupItem
-                  value="post"
-                  id="type-post"
-                  className="peer sr-only"
-                  disabled={!allowedContentTypes.post}
-                />
-                <Label
-                  htmlFor="type-post"
-                  className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-3 text-xs transition-all peer-disabled:pointer-events-none peer-disabled:opacity-50 sm:text-sm"
-                >
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  <span>Post</span>
-                </Label>
-              </div>
-              <div className="flex-1">
-                <RadioGroupItem
-                  value="reel"
-                  id="type-reel"
-                  className="peer sr-only"
-                  disabled={!allowedContentTypes.reel}
-                />
-                <Label
-                  htmlFor="type-reel"
-                  className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-3 text-xs transition-all peer-disabled:pointer-events-none peer-disabled:opacity-50 sm:text-sm"
-                >
-                  <Film className="h-3.5 w-3.5" />
-                  <span>Reel</span>
-                </Label>
-              </div>
-              <div className="flex-1">
-                <RadioGroupItem
-                  value="story"
-                  id="type-story"
-                  className="peer sr-only"
-                  disabled={!allowedContentTypes.story}
-                />
-                <Label
-                  htmlFor="type-story"
-                  className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-3 text-xs transition-all peer-disabled:pointer-events-none peer-disabled:opacity-50 sm:text-sm"
-                >
-                  <CircleFadingPlus className="h-3.5 w-3.5" />
-                  <span>Story</span>
-                </Label>
-              </div>
-            </RadioGroup>
+                    const firstVideo = s.carouselAssets.find((asset) => asset.type === 'video');
+                    return {
+                      ...s,
+                      contentType: nextType,
+                      carouselAssets: firstVideo ? [firstVideo] : [],
+                    };
+                  })
+                }
+                className="flex gap-2"
+                disabled={disabled || selectedPlatforms.length === 0}
+              >
+                <div className="flex-1">
+                  <RadioGroupItem
+                    value="post"
+                    id={mode === 'create' ? 'type-post' : 'edit-type-post'}
+                    className="peer sr-only"
+                    disabled={Boolean(contentTypeDisabledReasons.post)}
+                  />
+                  {renderContentTypeLabel({
+                    id: mode === 'create' ? 'type-post' : 'edit-type-post',
+                    label: 'Post',
+                    icon: <ImageIcon className="h-3.5 w-3.5" />,
+                    disabledReason: contentTypeDisabledReasons.post,
+                  })}
+                </div>
+                <div className="flex-1">
+                  <RadioGroupItem
+                    value="reel"
+                    id={mode === 'create' ? 'type-reel' : 'edit-type-reel'}
+                    className="peer sr-only"
+                    disabled={Boolean(contentTypeDisabledReasons.reel)}
+                  />
+                  {renderContentTypeLabel({
+                    id: mode === 'create' ? 'type-reel' : 'edit-type-reel',
+                    label: 'Reel',
+                    icon: <Film className="h-3.5 w-3.5" />,
+                    disabledReason: contentTypeDisabledReasons.reel,
+                  })}
+                </div>
+                <div className="flex-1">
+                  <RadioGroupItem
+                    value="story"
+                    id={mode === 'create' ? 'type-story' : 'edit-type-story'}
+                    className="peer sr-only"
+                    disabled={Boolean(contentTypeDisabledReasons.story)}
+                  />
+                  {renderContentTypeLabel({
+                    id: mode === 'create' ? 'type-story' : 'edit-type-story',
+                    label: 'Story',
+                    icon: <CircleFadingPlus className="h-3.5 w-3.5" />,
+                    disabledReason: contentTypeDisabledReasons.story,
+                  })}
+                </div>
+              </RadioGroup>
+            </TooltipProvider>
           </div>
 
-          {showDestinationsPicker ? (
+          {resolvedShowDestinationsPicker ? (
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-sm">
                 Destinations <span className="text-destructive">*</span>
@@ -266,6 +338,7 @@ export function PostEditorMainBody({
                   options={platformOptions}
                   value={selectedPlatformAccountIds}
                   onChange={onSelectedPlatformAccountIdsChange}
+                  disabled={disabled}
                   size="md"
                   required
                   selectedLayout="wrap"
@@ -292,40 +365,58 @@ export function PostEditorMainBody({
 
           {formData.contentType === 'reel' ? (
             <div className="space-y-3">
-              <VideoUploader
-                value={formData.carouselAssets.find((asset) => asset.type === 'video')?.url || ''}
-                onChange={(url, meta) => {
-                  const assetId = meta?.assetId;
-                  if (url && !assetId) {
-                    toast.error('Video upload missing asset ID. Please try again.');
-                    return;
-                  }
-                  setFormData((s) => ({
-                    ...s,
-                    carouselAssets: url && assetId ? [{ id: assetId, url, type: 'video' }] : [],
-                  }));
-                }}
-                brandId={selectedBrand.id}
-                maxSizeInMB={300}
-                acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
-                minDurationSeconds={3}
-                maxDurationSeconds={90}
-                minWidth={540}
-                minHeight={960}
-                maxWidth={1920}
-                maxHeight={1920}
-                allowedAspectRatios={[
-                  { label: '9:16', width: 9, height: 16 },
-                  { label: '4:5', width: 4, height: 5 },
-                  { label: '1:1', width: 1, height: 1 },
-                ]}
-                headline="Drop reel video here, or click to browse"
-                subtext="Reels: MP4/MOV/MPEG · 3–90s · max 300MB"
-              />
-              <ChooseFromAssetsButton onClick={onOpenAssetPicker} />
+              {disabled ? (
+                <MultiImageUploader
+                  value={formData.carouselAssets}
+                  onChange={() => {}}
+                  brandId={opts.brandId}
+                  enableUpload={false}
+                />
+              ) : (
+                <>
+                  <VideoUploader
+                    value={
+                      formData.carouselAssets.find((asset) => asset.type === 'video')?.url || ''
+                    }
+                    onChange={(url, meta) => {
+                      const assetId = meta?.assetId;
+                      if (url && !assetId) {
+                        toast.error('Video upload missing asset ID. Please try again.');
+                        return;
+                      }
+                      setFormData((s) => ({
+                        ...s,
+                        carouselAssets: url && assetId ? [{ id: assetId, url, type: 'video' }] : [],
+                      }));
+                    }}
+                    brandId={opts.brandId}
+                    maxSizeInMB={300}
+                    acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                    minDurationSeconds={3}
+                    maxDurationSeconds={90}
+                    minWidth={540}
+                    minHeight={960}
+                    maxWidth={1920}
+                    maxHeight={1920}
+                    allowedAspectRatios={[
+                      { label: '9:16', width: 9, height: 16 },
+                      { label: '4:5', width: 4, height: 5 },
+                      { label: '1:1', width: 1, height: 1 },
+                    ]}
+                    headline="Drop reel video here, or click to browse"
+                    subtext="Reels: MP4/MOV/MPEG · 3–90s · max 300MB"
+                  />
+                  <ChooseFromAssetsButton onClick={onOpenAssetPicker} />
+                </>
+              )}
               <div className="border-border bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
                 <div className="space-y-0.5">
-                  <Label htmlFor="share-to-feed-toggle" className="text-xs font-medium">
+                  <Label
+                    htmlFor={
+                      mode === 'create' ? 'share-to-feed-toggle' : 'share-to-feed-toggle-edit'
+                    }
+                    className="text-xs font-medium"
+                  >
                     Share to Feed
                   </Label>
                   <p className="text-muted-foreground text-xs">
@@ -333,11 +424,12 @@ export function PostEditorMainBody({
                   </p>
                 </div>
                 <CheckSwitch
-                  id="share-to-feed-toggle"
+                  id={mode === 'create' ? 'share-to-feed-toggle' : 'share-to-feed-toggle-edit'}
                   checked={formData.shareToFeed}
                   onCheckedChange={(checked) =>
                     setFormData((s) => ({ ...s, shareToFeed: checked }))
                   }
+                  disabled={disabled}
                 />
               </div>
             </div>
@@ -350,13 +442,14 @@ export function PostEditorMainBody({
                   carouselAssets: assets,
                 }))
               }
-              brandId={selectedBrand.id}
+              brandId={opts.brandId}
               maxImages={10}
               maxSizeInMB={10}
               maxVideoSizeInMB={300}
               acceptedVideoFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
               allowMixedMedia={allowMixedMedia}
-              onChooseFromAssets={onOpenAssetPicker}
+              enableUpload={!disabled}
+              onChooseFromAssets={disabled ? undefined : onOpenAssetPicker}
             />
           )}
         </div>
@@ -366,8 +459,8 @@ export function PostEditorMainBody({
             <PostCaptionEditor
               value={formData.caption}
               onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
-              brandId={selectedBrand.id}
-              disabled={false}
+              brandId={mode === 'create' ? selectedBrand?.id : post?.brand?.id}
+              disabled={disabled}
               showIcon={true}
             />
 
@@ -383,22 +476,23 @@ export function PostEditorMainBody({
                   </p>
                 </div>
                 <CheckSwitch
-                  id="first-comment-toggle"
+                  id={mode === 'create' ? 'first-comment-toggle' : 'first-comment-toggle-edit'}
                   checked={firstCommentOpen}
                   onCheckedChange={setFirstCommentOpen}
+                  disabled={disabled}
                 />
               </div>
               {firstCommentOpen ? (
                 <PostCaptionEditor
-                  id="firstComment"
+                  id={mode === 'create' ? 'firstComment' : 'firstComment-edit'}
                   hideLabel={true}
                   value={formData.firstComment || ''}
                   onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
-                  brandId={selectedBrand.id}
+                  brandId={mode === 'create' ? selectedBrand?.id : post?.brand?.id}
                   placeholder="Write a caption with text, links..."
                   minHeight="min-h-24"
                   maxLength={2200}
-                  disabled={false}
+                  disabled={disabled}
                   showIcon={false}
                 />
               ) : null}
@@ -414,7 +508,7 @@ export function PostEditorMainBody({
           <Select
             value={selectedCampaign || undefined}
             onValueChange={(v) => setSelectedCampaign(v)}
-            disabled={false}
+            disabled={disabled}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select a campaign (optional)" />
@@ -430,6 +524,21 @@ export function PostEditorMainBody({
         </div>
       </div>
     );
+  };
+
+  if (mode === 'create') {
+    if (!selectedBrand) {
+      return (
+        <AppEmptyState
+          variant="minimal"
+          title="Select a brand to create this post"
+          description="Post drafts, scheduling rules, and insights are tied to the brand you choose."
+          actions={[{ label: 'Choose Brand', to: '/brands' }]}
+          className="min-h-[280px]"
+        />
+      );
+    }
+    return renderComposerBody({ brandId: selectedBrand.id });
   }
 
   // Edit mode
@@ -441,6 +550,15 @@ export function PostEditorMainBody({
     );
   }
 
+  const brandId = post.brand?.id || selectedBrand?.id || null;
+  if (!brandId) {
+    return (
+      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+        Missing brand
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {post.status === 'failed' && post.schedulingError ? (
@@ -448,129 +566,7 @@ export function PostEditorMainBody({
           <AlertDescription>{post.schedulingError}</AlertDescription>
         </Alert>
       ) : null}
-
-      <div className="space-y-2">
-        <Label>{isVideoMedia ? 'Video' : 'Post Media'}</Label>
-        {(() => {
-          if (isVideoMedia) {
-            const videoUrl =
-              formData.carouselAssets.find((asset) => asset.type === 'video')?.url || '';
-            if (!videoUrl) {
-              return <div className="text-muted-foreground text-sm">No video</div>;
-            }
-            return (
-              <div className="bg-muted flex items-center justify-center overflow-hidden rounded-lg">
-                <video src={videoUrl} className="h-[250px] w-full object-contain" controls />
-              </div>
-            );
-          }
-
-          return (
-            <div className="space-y-2">
-              {post.brand?.id ? (
-                <MultiImageUploader
-                  value={formData.carouselAssets}
-                  onChange={(assets) =>
-                    setFormData((s) => ({
-                      ...s,
-                      carouselAssets: assets,
-                    }))
-                  }
-                  brandId={post.brand.id}
-                  maxImages={10}
-                  maxSizeInMB={10}
-                  enableUpload={false}
-                  allowMixedMedia={allowMixedMedia}
-                />
-              ) : null}
-              {!formData.carouselAssets.length ? (
-                <div className="text-muted-foreground text-sm">No image</div>
-              ) : null}
-            </div>
-          );
-        })()}
-
-        {!disabled ? (
-          <div className="flex flex-col gap-2">
-            {post.brand?.id ? (
-              <ChooseFromAssetsButton
-                onClick={onOpenAssetPicker}
-                size="compact"
-                fullWidth={false}
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      {formData.contentType !== 'story' ? (
-        <>
-          <PostCaptionEditor
-            value={formData.caption}
-            onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
-            brandId={post.brand?.id}
-            disabled={disabled}
-            showIcon={true}
-          />
-
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <Label className="flex items-center gap-2">
-                  <MessageSquareText className="h-4 w-4" />
-                  First comment
-                </Label>
-                <p className="text-muted-foreground text-xs">
-                  Publish a first comment with your post.
-                </p>
-              </div>
-              <CheckSwitch
-                id="first-comment-toggle-edit"
-                checked={firstCommentOpen}
-                onCheckedChange={setFirstCommentOpen}
-                disabled={disabled}
-              />
-            </div>
-            {firstCommentOpen ? (
-              <PostCaptionEditor
-                id="firstComment-edit"
-                hideLabel={true}
-                value={formData.firstComment || ''}
-                onChange={(v) => setFormData((s) => ({ ...s, firstComment: v }))}
-                brandId={post.brand?.id}
-                placeholder="Write a caption with text, links..."
-                minHeight="min-h-24"
-                maxLength={2200}
-                disabled={disabled}
-                showIcon={false}
-              />
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      <div className="space-y-2">
-        <Label className="flex items-center gap-2">
-          <Megaphone className="h-4 w-4" />
-          Campaign
-        </Label>
-        <Select
-          value={selectedCampaign || undefined}
-          onValueChange={(v) => setSelectedCampaign(v)}
-          disabled={disabled}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a campaign" />
-          </SelectTrigger>
-          <SelectContent>{campaignSelectItems}</SelectContent>
-        </Select>
-        {selectedCampaignPaused ? (
-          <p className="text-muted-foreground text-xs">
-            This campaign is paused. You can still save this post as a draft, but you can&apos;t
-            schedule it until the campaign is resumed.
-          </p>
-        ) : null}
-      </div>
+      {renderComposerBody({ brandId })}
     </div>
   );
 }

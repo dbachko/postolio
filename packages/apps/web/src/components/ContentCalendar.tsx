@@ -33,6 +33,9 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const monthKey = useMemo(() => format(currentDate, 'yyyy-MM'), [currentDate]);
+  const prevMonthKey = useMemo(() => format(subMonths(currentDate, 1), 'yyyy-MM'), [currentDate]);
+  const nextMonthKey = useMemo(() => format(addMonths(currentDate, 1), 'yyyy-MM'), [currentDate]);
   const { timezone: userTz, getBrandTimezone } = useTimezone();
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -91,8 +94,8 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
 
   // Fetch calendar data with placeholders - with prefetching
   const calendarQuery = useQuery({
-    queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')],
-    queryFn: () => contentApi.getCalendarContent(brandId, format(currentDate, 'yyyy-MM')),
+    queryKey: ['calendar', brandId, monthKey],
+    queryFn: () => contentApi.getCalendarContent(brandId, monthKey),
     staleTime: CACHE_TIMES.MEDIUM,
     gcTime: GC_TIMES.STANDARD,
   });
@@ -100,51 +103,81 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
   // Prefetch adjacent months for smooth navigation
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const prevMonth = format(subMonths(currentDate, 1), 'yyyy-MM');
-    const nextMonth = format(addMonths(currentDate, 1), 'yyyy-MM');
+  const prevCalendarQuery = useQuery({
+    queryKey: ['calendar', brandId, prevMonthKey],
+    queryFn: () => contentApi.getCalendarContent(brandId, prevMonthKey),
+    enabled: Boolean(brandId),
+    staleTime: CACHE_TIMES.MEDIUM,
+    gcTime: GC_TIMES.STANDARD,
+  });
 
+  const nextCalendarQuery = useQuery({
+    queryKey: ['calendar', brandId, nextMonthKey],
+    queryFn: () => contentApi.getCalendarContent(brandId, nextMonthKey),
+    enabled: Boolean(brandId),
+    staleTime: CACHE_TIMES.MEDIUM,
+    gcTime: GC_TIMES.STANDARD,
+  });
+
+  useEffect(() => {
     // Prefetch previous month
     queryClient.prefetchQuery({
-      queryKey: ['calendar', brandId, prevMonth],
-      queryFn: () => contentApi.getCalendarContent(brandId, prevMonth),
+      queryKey: ['calendar', brandId, prevMonthKey],
+      queryFn: () => contentApi.getCalendarContent(brandId, prevMonthKey),
       staleTime: CACHE_TIMES.MEDIUM,
     });
 
     // Prefetch next month
     queryClient.prefetchQuery({
-      queryKey: ['calendar', brandId, nextMonth],
-      queryFn: () => contentApi.getCalendarContent(brandId, nextMonth),
+      queryKey: ['calendar', brandId, nextMonthKey],
+      queryFn: () => contentApi.getCalendarContent(brandId, nextMonthKey),
       staleTime: CACHE_TIMES.MEDIUM,
     });
-  }, [currentDate, brandId, queryClient]);
+  }, [brandId, nextMonthKey, prevMonthKey, queryClient]);
 
-  const content = useMemo(() => {
-    const raw = (calendarQuery.data?.data?.content || []) as Content[];
+  const mergedContent = useMemo(() => {
+    const collected: Content[] = [];
+    const sources = [prevCalendarQuery.data, calendarQuery.data, nextCalendarQuery.data];
+    for (const source of sources) {
+      const list = (source as any)?.data?.content;
+      if (Array.isArray(list)) collected.push(...(list as Content[]));
+    }
     const seen = new Set<string>();
-    return raw.filter((item) => {
+    return collected.filter((item) => {
       if (!item || typeof item.id !== 'string') return false;
       if (seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
     });
-  }, [calendarQuery.data?.data?.content]);
-  const placeholders: Placeholder[] = useMemo(
-    () => (calendarQuery.data?.data?.placeholders || []) as Placeholder[],
-    [calendarQuery.data?.data?.placeholders]
-  );
+  }, [calendarQuery.data, nextCalendarQuery.data, prevCalendarQuery.data]);
+
+  const placeholders: Placeholder[] = useMemo(() => {
+    const collected: Placeholder[] = [];
+    const sources = [prevCalendarQuery.data, calendarQuery.data, nextCalendarQuery.data];
+    for (const source of sources) {
+      const list = (source as any)?.data?.placeholders;
+      if (Array.isArray(list)) collected.push(...(list as Placeholder[]));
+    }
+    const seen = new Set<string>();
+    return collected.filter((p) => {
+      if (!p || typeof p.id !== 'string') return false;
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [calendarQuery.data, nextCalendarQuery.data, prevCalendarQuery.data]);
 
   const selectedSocialAccountIds = useContentViewStore(
     (s) => s.selectedSocialAccountIdsByBrandId[brandId]
   );
   const scopedContent = useMemo(() => {
     if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length === 0)
-      return content;
+      return mergedContent;
     const allowed = new Set(selectedSocialAccountIds);
-    return content.filter(
+    return mergedContent.filter(
       (item) => item.targetSocialAccountId && allowed.has(item.targetSocialAccountId)
     );
-  }, [content, selectedSocialAccountIds]);
+  }, [mergedContent, selectedSocialAccountIds]);
 
   // Schedule-ahead capacity banner is now shown globally in AppLayout
 

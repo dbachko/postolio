@@ -35,7 +35,6 @@ export function useSchedulingWebSocket({
   const isRefreshingRef = useRef(false); // Prevent duplicate refresh attempts
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [retryIn, setRetryIn] = useState<number>(0);
 
   // WebSocket now uses cookie-based authentication (auth_token cookie sent automatically with handshake)
@@ -94,7 +93,6 @@ export function useSchedulingWebSocket({
 
   // Handle status update and invalidate queries (extracted)
   const handleStatusUpdate = useWsCacheInvalidation(queryClient, queryKeys, (e) => {
-    setLastUpdate(new Date());
     onStatusUpdate?.(e as any);
   }) as (event: StatusUpdateEvent) => void;
 
@@ -614,7 +612,8 @@ export function useSchedulingWebSocket({
 
   return {
     connectionStatus,
-    lastUpdate,
+    // Avoid app-wide rerenders on every WS message; expose the value if we later need it.
+    lastUpdate: null,
     reconnect,
     disconnect,
     queueAction,

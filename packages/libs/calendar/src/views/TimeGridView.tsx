@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import type { Localizer } from '../localizers';
 import type { CalendarEventBase } from '../types';
 import { useDrop, useDrag } from 'react-dnd';
@@ -17,10 +17,71 @@ type Props<E extends CalendarEventBase> = {
     onClick?: (d: Date) => void;
     disabled?: boolean;
   }>;
-  onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
+  onEventDrop?: (args: {
+    event: E;
+    start: Date;
+    end?: Date;
+    targetEvent?: E | null;
+  }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop?: boolean;
 };
+
+function canDragCalendarEvent(event: any): boolean {
+  const res = event?.resource ?? {};
+  if (res?.placeholder) return false;
+  if (res?.status === 'published') return false;
+  if (
+    typeof res?.item?.optimisticAction === 'string' &&
+    res.item.optimisticAction.trim().length > 0
+  )
+    return false;
+
+  const publishingQueueItemId =
+    typeof res?.item?.publishingQueueItemId === 'string'
+      ? res.item.publishingQueueItemId.trim()
+      : '';
+
+  const scheduledAt =
+    typeof res?.scheduledAt === 'string'
+      ? res.scheduledAt.trim()
+      : typeof res?.item?.scheduledAt === 'string'
+        ? res.item.scheduledAt.trim()
+        : '';
+
+  // Allow dragging both queue-managed items (estimated schedules) and pinned schedules.
+  return publishingQueueItemId.length > 0 || scheduledAt.length > 0;
+}
+
+function normalizeLaneKey(value: unknown): 'post' | 'reel' | 'story' | 'any' | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed === 'post' || trimmed === 'reel' || trimmed === 'story' || trimmed === 'any')
+    return trimmed;
+  return null;
+}
+
+function getDraggedLaneKey(dragged: any): 'post' | 'reel' | 'story' {
+  const ct =
+    typeof dragged?.resource?.item?.contentType === 'string'
+      ? dragged.resource.item.contentType
+      : typeof dragged?.resource?.contentType === 'string'
+        ? dragged.resource.contentType
+        : null;
+  const normalized = typeof ct === 'string' ? ct.trim() : '';
+  if (normalized === 'reel') return 'reel';
+  if (normalized === 'story') return 'story';
+  return 'post';
+}
+
+function getDraggedPublishingQueueItemId(dragged: any): string {
+  const res = dragged?.resource ?? {};
+  const id =
+    typeof res?.item?.publishingQueueItemId === 'string'
+      ? res.item.publishingQueueItemId.trim()
+      : '';
+  return id;
+}
 
 export function TimeGridView<E extends CalendarEventBase>({
   date,
@@ -105,71 +166,36 @@ function DayColumn<E extends CalendarEventBase>({
     onClick?: (d: Date) => void;
     disabled?: boolean;
   }>;
-  onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
+  onEventDrop?: (args: {
+    event: E;
+    start: Date;
+    end?: Date;
+    targetEvent?: E | null;
+  }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
   const dayKey = localizer.format(date, 'yyyy-LL-dd');
   const isToday = dayKey === todayKey;
   const isPastDay = dayKey < todayKey;
-  function withinNext30Days(d: Date) {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const end = new Date(start);
-    end.setDate(end.getDate() + 30);
-    const startKey = localizer.format(start, 'yyyy-LL-dd');
-    const endKey = localizer.format(end, 'yyyy-LL-dd');
-    const dKey = localizer.format(d, 'yyyy-LL-dd');
-    return dKey >= startKey && dKey <= endKey;
-  }
-
-  const [{ isOver, canDrop }, drop] = useDrop(
-    () => ({
-      accept: ITEM_TYPE,
-      canDrop: (item: any) => {
-        const evt = item?.event;
-        if (isPastDay) return false;
-        if (!withinNext30Days(date)) return false;
-        const status = evt?.resource?.status;
-        const isPlaceholder = !!evt?.resource?.placeholder;
-        if (status === 'published') return false;
-        if (isPlaceholder) return false;
-        return true;
-      },
-      drop(item: any) {
-        if (!onEventDrop || !ref.current || isPastDay) return;
-        const evt: E = item.event;
-        // Preserve original time-of-day; only change the day
-        const h = (evt.start || new Date()).getHours();
-        const m = (evt.start || new Date()).getMinutes();
-        const start = new Date(date);
-        start.setHours(h, m, 0, 0);
-        const end = evt.end
-          ? new Date(start.getTime() + (evt.end.getTime() - evt.start.getTime()))
-          : undefined;
-        onEventDrop({ event: evt, start, end });
-      },
-      collect: (monitor) => ({
-        isOver: monitor.isOver({ shallow: true }),
-        canDrop: monitor.canDrop(),
-      }),
-    }),
-    [onEventDrop, date]
-  );
-  if (dragAndDrop) drop(ref);
 
   const sorted = useMemo(() => events.slice().sort((a, b) => +a.start - +b.start), [events]);
 
   return (
     <div
-      className={`pc-daycol ${isPastDay ? 'pc-daycol--past' : ''} ${isToday ? 'pc-daycol--today' : ''} ${isOver && canDrop ? 'pc-daycol--drop' : ''}`}
-      ref={ref}
+      className={`pc-daycol ${isPastDay ? 'pc-daycol--past' : ''} ${isToday ? 'pc-daycol--today' : ''}`}
       onClick={() => onBackgroundClick?.(date)}
     >
       <div className="pc-daycol-inner">
         {sorted.map((e) => (
-          <EventListItem<E> key={e.id} event={e} EventComp={EventComp} />
+          <EventListItem<E>
+            key={e.id}
+            event={e}
+            localizer={localizer}
+            dragAndDrop={dragAndDrop}
+            onEventDrop={onEventDrop}
+            EventComp={EventComp}
+          />
         ))}
       </div>
       {!isPastDay &&
@@ -184,24 +210,110 @@ function DayColumn<E extends CalendarEventBase>({
 
 function EventListItem<E extends CalendarEventBase>({
   event,
+  localizer,
+  dragAndDrop,
+  onEventDrop,
   EventComp,
 }: {
   event: E;
+  localizer: Localizer;
+  dragAndDrop: boolean;
+  onEventDrop?: (args: {
+    event: E;
+    start: Date;
+    end?: Date;
+    targetEvent?: E | null;
+  }) => void | Promise<void>;
   EventComp?: React.ComponentType<{ event: E }>;
 }) {
   const res: any = (event as any)?.resource || {};
-  const canDrag = !(res?.status === 'published' || !!res?.placeholder);
+  const isPlaceholder = Boolean(res?.placeholder);
+  const canDrag = canDragCalendarEvent(event);
+
+  const [{ isOver, canDrop, isDragging }, drop] = useDrop(
+    () => ({
+      accept: ITEM_TYPE,
+      canDrop: (item: any) => {
+        if (!isPlaceholder) return false;
+        if (!onEventDrop) return false;
+
+        const isQueueSlot = (() => {
+          const msg = event?.resource?.item?.message;
+          if (typeof msg === 'string' && msg === 'Queue slot') return true;
+          const id = event?.resource?.item?.id ?? event?.id;
+          return typeof id === 'string' && id.startsWith('queue-slot:');
+        })();
+        if (!isQueueSlot) return false;
+
+        // Capacity is only relevant for enqueueing actions; dropping onto a slot always schedules.
+
+        const targetKey = localizer.format(event.start, 'yyyy-LL-dd');
+        const todayKey = localizer.format(new Date(), 'yyyy-LL-dd');
+        if (targetKey < todayKey) return false;
+
+        const withinNext30Days = (() => {
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const end = new Date(start);
+          end.setDate(end.getDate() + 30);
+          const startKey = localizer.format(start, 'yyyy-LL-dd');
+          const endKey = localizer.format(end, 'yyyy-LL-dd');
+          return targetKey >= startKey && targetKey <= endKey;
+        })();
+        if (!withinNext30Days) return false;
+
+        const dragged = item?.event;
+        if (!canDragCalendarEvent(dragged)) return false;
+
+        const targetLane = normalizeLaneKey(
+          event?.resource?.item?.laneKey ?? event?.resource?.laneKey
+        );
+        if (!targetLane) return true;
+        if (targetLane === 'any') return true;
+        return getDraggedLaneKey(dragged) === targetLane;
+      },
+      drop(item: any) {
+        if (!isPlaceholder || !onEventDrop) return;
+        const evt: E = item.event;
+        const start = new Date(event.start);
+        const end = evt.end
+          ? new Date(start.getTime() + (evt.end.getTime() - evt.start.getTime()))
+          : undefined;
+        onEventDrop({ event: evt, start, end, targetEvent: event });
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver({ shallow: true }),
+        canDrop: monitor.canDrop(),
+        isDragging: monitor.getItemType() === ITEM_TYPE,
+      }),
+    }),
+    [event, isPlaceholder, localizer, onEventDrop]
+  );
+
   const [, drag] = useDrag(
     () => ({ type: ITEM_TYPE, item: { event }, canDrag: () => canDrag }),
     [event, canDrag]
   );
-  const refCb = canDrag ? drag : undefined;
+
+  const refCb = (() => {
+    if (!dragAndDrop) return undefined;
+    if (isPlaceholder) return drop;
+    if (canDrag) return drag;
+    return undefined;
+  })();
+
   return (
     <div
       ref={refCb as any}
-      className="pc-event-row"
+      className={`pc-event-row ${isPlaceholder && canDrop ? 'pc-event-row--drop-available' : ''} ${isPlaceholder && isDragging && !canDrop ? 'pc-event-row--drop-unavailable' : ''} ${isPlaceholder && isOver && canDrop ? 'pc-event-row--drop' : ''} ${isPlaceholder && isOver && !canDrop ? 'pc-event-row--drop-disabled' : ''}`}
       aria-disabled={canDrag ? undefined : true}
-      title={canDrag ? undefined : 'Cannot reschedule published or AI placeholder posts'}
+      title={
+        isPlaceholder
+          ? undefined
+          : canDrag
+            ? undefined
+            : 'Drag-and-drop is only available for scheduled posts.'
+      }
     >
       {EventComp ? (
         <EventComp event={event} />

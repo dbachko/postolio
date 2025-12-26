@@ -44,7 +44,7 @@ export function EventRenderer({
   const primaryAsset = primaryAssetId ? (assetsById?.[primaryAssetId] ?? null) : null;
 
   return (
-    <div onClick={handleClick}>
+    <div onClick={handleClick} className="m-1">
       <PostPreviewCard
         item={cardItem}
         timezone={timezone}

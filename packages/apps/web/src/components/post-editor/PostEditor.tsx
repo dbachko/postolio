@@ -39,12 +39,23 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { usePostDetail, type PostDetailData } from '@/hooks/usePostDetail';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   PostEditorMainBody,
   type PostEditorFormState,
 } from '@/components/post-editor/PostEditorMainBody';
 import { QueueSlotPickerDialog } from '@/components/post-editor/QueueSlotPickerDialog';
 import { WriteItBar } from '@/components/post-editor/WriteItBar';
-import { Check, Eye, EyeOff, LayoutTemplate, Plus, X } from 'lucide-react';
+import { Check, Eye, EyeOff, LayoutTemplate, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
 import { cn } from '@/lib/utils';
@@ -423,7 +434,7 @@ export function PostEditor({
   useEffect(() => {
     let mounted = true;
     const resolveBrandTimezone = async () => {
-      const brandId = post?.brand?.id;
+      const brandId = post?.brand?.id ?? selectedBrand?.id;
       if (!brandId) return;
       try {
         const tz = await getBrandTimezone(brandId);
@@ -436,11 +447,12 @@ export function PostEditor({
     return () => {
       mounted = false;
     };
-  }, [post?.brand?.id, getBrandTimezone, timezone]);
+  }, [post?.brand?.id, selectedBrand?.id, getBrandTimezone, timezone]);
 
   const [formData, setFormData] = useState<PostEditorFormState>(() => createEmptyPostFormState());
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
+  const scheduledAtTouchedRef = useRef(false);
   const hasScheduleTime = Boolean(formData.scheduledAt);
   const [showAssetPicker, setShowAssetPicker] = useState(false);
   const [assetPickerTarget, setAssetPickerTarget] = useState<'destination' | 'template'>(
@@ -521,6 +533,11 @@ export function PostEditor({
     },
     [platformPickerOptions]
   );
+
+  const handleScheduledAtChange = useCallback((value: string) => {
+    scheduledAtTouchedRef.current = true;
+    setFormData((s) => ({ ...s, scheduledAt: value }));
+  }, []);
 
   const createSelectedDestinations = useMemo(() => {
     if (!isCreateWithRail) return [] as SocialAccountsPickerOption[];
@@ -1178,6 +1195,10 @@ export function PostEditor({
         queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
         queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
       }
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
       setHasChanges(false);
     },
     onError: (error: any) => {
@@ -1186,6 +1207,68 @@ export function PostEditor({
         error?.message ||
         'Failed to unschedule post. Please try again.';
       toast.error(message);
+    },
+  });
+
+  const { mutateAsync: deletePostAsync, isPending: isDeleting } = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Missing contentId');
+      return contentApi.deletePost(id);
+    },
+    onSuccess: async () => {
+      toast.success('Post deleted');
+      const brandId = post?.brand?.id ?? selectedBrand?.id ?? null;
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['calendar'] });
+        queryClient.invalidateQueries({ queryKey: ['drafts'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['post', id] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
+      onRequestClose?.();
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.error || error?.message || 'Failed to delete post.';
+      toast.error(message);
+    },
+  });
+
+  const { mutateAsync: publishNowAsync, isPending: isPublishingNow } = useMutation({
+    mutationFn: async () => {
+      if (isMultiDestinationGroup) {
+        if (!contentGroupId) throw new Error('Missing contentGroupId');
+        return contentApi.publishContentGroupNow(contentGroupId);
+      }
+      if (!id) throw new Error('Missing contentId');
+      return contentApi.publishNow(id);
+    },
+    onSuccess: () => {
+      toast.success('Publishing started', { description: 'We’re publishing it now.' });
+      const brandId = post?.brand?.id ?? selectedBrand?.id ?? null;
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['calendar'] });
+        queryClient.invalidateQueries({ queryKey: ['drafts'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      if (id) queryClient.invalidateQueries({ queryKey: ['post', id] });
+      if (contentGroupId)
+        queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
+    },
+    onError: (error: any) => {
+      toast.error(getScheduleErrorMessage(error, 'Failed to publish now. Please try again.'));
     },
   });
 
@@ -1242,6 +1325,10 @@ export function PostEditor({
       if (id) queryClient.invalidateQueries({ queryKey: ['post', id] });
       if (contentGroupId)
         queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
     },
     onError: (error: any) => {
       toast.error(getQueueErrorMessage(error));
@@ -2032,7 +2119,11 @@ export function PostEditor({
   });
 
   // Prefill from query params when creating
-  const prefillAppliedRef = useRef(false);
+  const prefillAppliedRef = useRef<{ basic: boolean; assets: boolean; platforms: boolean }>({
+    basic: false,
+    assets: false,
+    platforms: false,
+  });
   const wasCreatingRef = useRef<boolean>(isCreating);
   // When switching into creation mode (e.g., from viewing an existing post to creating
   // a new one from the calendar), reset the form so media/caption from the previous
@@ -2049,11 +2140,12 @@ export function PostEditor({
     setSelectedPlatformAccountIds([]);
     platformsInitializedRef.current = false;
     formInitializedRef.current = false;
-    prefillAppliedRef.current = false;
+    prefillAppliedRef.current = { basic: false, assets: false, platforms: false };
+    scheduledAtTouchedRef.current = false;
   }, [isCreating]);
 
   useEffect(() => {
-    if (!isCreating || prefillAppliedRef.current === true) return;
+    if (!isCreating) return;
     const normalizedTargetSocialAccountIds = (() => {
       const raw = typeof qTargetSocialAccountIds === 'string' ? qTargetSocialAccountIds.trim() : '';
       if (raw) {
@@ -2085,50 +2177,62 @@ export function PostEditor({
       return;
     }
 
-    // If we have assetIds, wait until the query finishes (success or error)
-    if (prefillAssetIds.length > 0 && isPrefillAssetsLoading) {
-      return;
+    const hasBasicPrefill =
+      Boolean(qCaption) ||
+      Boolean(qScheduledAt) ||
+      Boolean(qCampaignId) ||
+      Boolean(normalizedContentType);
+    const hasAssetPrefill = prefillAssetIds.length > 0;
+    const hasPlatformPrefill = Boolean(normalizedTargetSocialAccountIds?.length);
+
+    const prefillState = prefillAppliedRef.current;
+    const shouldApplyBasic = hasBasicPrefill && prefillState.basic === false;
+    const shouldApplyAssets = hasAssetPrefill && prefillState.assets === false;
+    const shouldApplyPlatforms = hasPlatformPrefill && prefillState.platforms === false;
+
+    // Apply basic prefill immediately (doesn't depend on platform options).
+    if (shouldApplyBasic) {
+      setFormData((prev) => {
+        return {
+          ...prev,
+          caption: qCaption ?? prev.caption,
+          scheduledAt: qScheduledAt
+            ? formatScheduledInput(qScheduledAt, brandTimezone)
+            : prev.scheduledAt,
+          contentType: normalizedContentType ?? prev.contentType,
+        };
+      });
+      if (qCampaignId) setSelectedCampaign(qCampaignId);
+      prefillAppliedRef.current = { ...prefillAppliedRef.current, basic: true };
     }
 
-    // If we need to prefill a destination, wait until platform options load.
-    if (normalizedTargetSocialAccountIds?.length && platformPickerOptions.length === 0) {
-      return;
+    // Apply asset prefill once assets resolve (success or error).
+    if (shouldApplyAssets) {
+      if (isPrefillAssetsLoading) return;
+      const normalizedAssets: AssetReference[] =
+        prefillAssets?.map((asset) => ({
+          id: asset.id,
+          url: asset.url,
+          type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
+        })) ?? [];
+      const nextAssets = normalizedAssets.slice(0, 10) as AssetReference[];
+      if (nextAssets.length > 0) {
+        setFormData((prev) => ({ ...prev, carouselAssets: nextAssets }));
+      }
+      prefillAppliedRef.current = { ...prefillAppliedRef.current, assets: true };
     }
 
-    const normalizedAssets: AssetReference[] =
-      prefillAssets?.map((asset) => ({
-        id: asset.id,
-        url: asset.url,
-        type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
-      })) ?? [];
-    const nextAssets = normalizedAssets.slice(0, 10) as AssetReference[];
-
-    setFormData((prev) => {
-      return {
-        ...prev,
-        caption: qCaption ?? prev.caption,
-        scheduledAt: qScheduledAt
-          ? formatScheduledInput(qScheduledAt, brandTimezone)
-          : prev.scheduledAt,
-        contentType: normalizedContentType ?? prev.contentType,
-        ...(nextAssets.length
-          ? {
-              carouselAssets: nextAssets,
-            }
-          : {}),
-      };
-    });
-    if (qCampaignId) setSelectedCampaign(qCampaignId);
-
-    if (normalizedTargetSocialAccountIds?.length) {
+    // Apply destination prefill once platform options load.
+    if (shouldApplyPlatforms) {
+      if (platformPickerOptions.length === 0) return;
       const allowed = new Set(platformPickerOptions.map((opt) => opt.id));
-      const next = normalizedTargetSocialAccountIds.filter((id) => allowed.has(id));
+      const next = (normalizedTargetSocialAccountIds ?? []).filter((id) => allowed.has(id));
       if (next.length > 0) {
         setSelectedPlatformAccountIds(next);
         platformsInitializedRef.current = true;
       }
+      prefillAppliedRef.current = { ...prefillAppliedRef.current, platforms: true };
     }
-    prefillAppliedRef.current = true;
   }, [
     isCreating,
     qCaption,
@@ -2143,6 +2247,15 @@ export function PostEditor({
     brandTimezone,
     platformPickerOptions,
   ]);
+
+  useEffect(() => {
+    if (!isCreating) return;
+    if (scheduledAtTouchedRef.current) return;
+    const raw = typeof qScheduledAt === 'string' ? qScheduledAt.trim() : '';
+    if (!raw) return;
+    const next = formatScheduledInput(raw, brandTimezone);
+    setFormData((prev) => (prev.scheduledAt === next ? prev : { ...prev, scheduledAt: next }));
+  }, [brandTimezone, isCreating, qScheduledAt]);
 
   // Fetch campaigns for the brand
   useEffect(() => {
@@ -2281,7 +2394,6 @@ export function PostEditor({
   // Allow mixed media for all non-reel content; reels must remain video-only.
   const allowMixedMedia =
     formData.contentType !== 'reel' && !selectedPlatforms.includes('facebook');
-  const isVideoMedia = finalMediaType === 'video';
   const previewLayout = layout === 'sidebar' && rightSidebarLayout?.isSmall ? 'page' : layout;
   const showPreviewAsBody = previewOpen && layout === 'sidebar';
   const showPreviewInColumn = previewOpen && previewLayout === 'sidebar' && !showPreviewAsBody;
@@ -2818,7 +2930,6 @@ export function PostEditor({
                       allowMixedMedia={allowMixedMedia}
                       disabled={disabled}
                       isLoading={isLoading}
-                      isVideoMedia={isVideoMedia}
                       post={post}
                       selectedBrand={selectedBrand}
                       formData={formData}
@@ -3026,7 +3137,6 @@ export function PostEditor({
                     allowMixedMedia={allowMixedMedia}
                     disabled={disabled}
                     isLoading={isLoading}
-                    isVideoMedia={isVideoMedia}
                     post={post}
                     selectedBrand={selectedBrand}
                     formData={formData}
@@ -3252,7 +3362,6 @@ export function PostEditor({
                     allowMixedMedia={allowMixedMedia}
                     disabled={disabled}
                     isLoading={isLoading}
-                    isVideoMedia={isVideoMedia}
                     post={post}
                     selectedBrand={selectedBrand}
                     formData={formData}
@@ -3322,7 +3431,6 @@ export function PostEditor({
                   allowMixedMedia={allowMixedMedia}
                   disabled={disabled}
                   isLoading={isLoading}
-                  isVideoMedia={isVideoMedia}
                   post={post}
                   selectedBrand={selectedBrand}
                   formData={formData}
@@ -3366,7 +3474,7 @@ export function PostEditor({
               saveDraftBlocker={saveDraftBlocker}
               publishNowDisabled={publishNowDisabled}
               publishNowBlocker={publishNowBlocker}
-              onScheduledAtChange={(value) => setFormData((s) => ({ ...s, scheduledAt: value }))}
+              onScheduledAtChange={handleScheduledAtChange}
               onSchedule={() => createPost('schedule')}
               onSaveDraft={() => createPost('draft')}
               onAddToQueue={() => createPost('queue')}
@@ -3399,6 +3507,71 @@ export function PostEditor({
           <WriteItBar
             mode="edit"
             layout={layout}
+            leadingActions={
+              layout === 'sidebar' && id && !isMultiDestinationGroup ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Delete"
+                      disabled={isDeleting}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogCancel asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Close"
+                        disabled={isDeleting || isUnscheduling}
+                        className="absolute top-4 right-4"
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </AlertDialogCancel>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure you want to delete it?</AlertDialogTitle>
+                      <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isDeleting || isUnscheduling}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={isDeleting || isUnscheduling || !post?.scheduledAt}
+                          onClick={() => {
+                            if (!id) return;
+                            if (!post?.scheduledAt) return;
+                            unschedulePost(id);
+                          }}
+                        >
+                          Move to Draft
+                        </Button>
+                      </AlertDialogAction>
+                      <AlertDialogAction asChild>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={isDeleting}
+                          onClick={() => void deletePostAsync()}
+                        >
+                          Delete
+                        </Button>
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : null
+            }
             scheduledAt={formData.scheduledAt}
             minScheduleInput={minScheduleInput}
             brandTimezone={brandTimezone}
@@ -3420,6 +3593,13 @@ export function PostEditor({
             onAddToQueue={() => void moveToQueue()}
             queueDisabled={!queueSupportedForPost}
             isQueueing={isQueueing}
+            onPublishNow={() => void publishNowAsync()}
+            publishNowDisabled={publishNowDisabled}
+            publishNowBlocker={publishNowBlocker}
+            isPublishingNow={isPublishingNow}
+            onPickSlot={() => setSlotPickerOpen(true)}
+            pickSlotDisabled={pickSlotDisabled}
+            pickSlotBlocker={pickSlotBlocker}
           />
         );
       })()}
@@ -3428,9 +3608,7 @@ export function PostEditor({
         open={slotPickerOpen}
         onOpenChange={setSlotPickerOpen}
         socialAccountId={
-          isCreating && selectedPlatformAccountIds.length === 1
-            ? selectedPlatformAccountIds[0]!
-            : null
+          selectedPlatformAccountIds.length === 1 ? selectedPlatformAccountIds[0]! : null
         }
         laneKey={
           formData.contentType === 'reel' || formData.contentType === 'story'
@@ -3439,10 +3617,7 @@ export function PostEditor({
         }
         brandTimezone={brandTimezone}
         onPick={(scheduledAtIso) =>
-          setFormData((s) => ({
-            ...s,
-            scheduledAt: formatScheduledInput(scheduledAtIso, brandTimezone),
-          }))
+          handleScheduledAtChange(formatScheduledInput(scheduledAtIso, brandTimezone))
         }
       />
 

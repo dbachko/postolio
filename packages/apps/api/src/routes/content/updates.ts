@@ -13,6 +13,7 @@ import { buildContentResponse } from '../../services/content-response-builder.js
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
 import { getAssetsClient } from '../../services/assets-media.js';
+import { getStatusBroadcaster } from '../../services/broadcast-registry.js';
 import {
   validateContentPayload,
   type ContentType as ValidationContentType,
@@ -800,6 +801,27 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Build CDN URL from S3 key and map to public response format
       const contentWithUrl = buildContentResponse(updatedContent);
+
+      // Best-effort: notify other clients to refresh calendars/content when schedule/time changes.
+      try {
+        const broadcaster = getStatusBroadcaster();
+        if (broadcaster && content.brand?.id) {
+          void broadcaster.broadcastStatusChange(
+            contentId,
+            content.brand.id,
+            content.status,
+            updatedContent.status as any,
+            {
+              kind: 'content_updated',
+              scheduledAt: updatedContent.scheduledAt
+                ? updatedContent.scheduledAt.toISOString()
+                : null,
+            }
+          );
+        }
+      } catch {
+        // ignore
+      }
 
       return {
         content: contentWithUrl,

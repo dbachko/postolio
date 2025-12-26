@@ -1,6 +1,6 @@
-import { memo, useState, useCallback, useMemo } from 'react';
-import { addDays, isBefore, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { memo, useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { addDays, format, isBefore, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
+import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
@@ -14,7 +14,7 @@ import {
   type Content,
 } from '@/lib/api';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { convertLocalToUTC } from '@/lib/timezone';
+import { convertLocalToUTC, toUTCFromInput } from '@/lib/timezone';
 import { useCalendarItems } from './hooks/useCalendarItems';
 import { useFilteredEvents } from './hooks/useFilteredEvents';
 import { useTimezoneMeta } from './hooks/useTimezoneMeta';
@@ -29,7 +29,10 @@ import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import type { Platform } from '@/lib/platform-config';
 import type { SocialAccountsById } from '@/types/social-accounts';
 import { getDefaultQueueId } from '@/components/publishing-queues/queue-utils';
-import type { PublishingQueueSlotInstance } from '@/lib/api/publishing-queues-client';
+import type {
+  PublishingQueueItem,
+  PublishingQueueSlotInstance,
+} from '@/lib/api/publishing-queues-client';
 import { Button } from '@/components/ui/button';
 
 export interface FullCalendarProps {
@@ -77,6 +80,42 @@ function getQueueSlotRange(opts: {
   throw new Error(`Unhandled calendar view: ${exhaustive}`);
 }
 
+const SLOT_CONFLICT_WINDOW_MS = 60 * 1000; // 1 minute (match API)
+
+function isTimeOccupied(params: {
+  candidateUtcMs: number;
+  occupiedUtcMsSorted: number[];
+}): boolean {
+  const { candidateUtcMs, occupiedUtcMsSorted } = params;
+  if (occupiedUtcMsSorted.length === 0) return false;
+
+  // Binary search for nearest occupied time.
+  let lo = 0;
+  let hi = occupiedUtcMsSorted.length - 1;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const t = occupiedUtcMsSorted[mid]!;
+    if (t === candidateUtcMs) return true;
+    if (t < candidateUtcMs) lo = mid + 1;
+    else hi = mid - 1;
+  }
+
+  const left = hi >= 0 ? occupiedUtcMsSorted[hi] : null;
+  const right = lo < occupiedUtcMsSorted.length ? occupiedUtcMsSorted[lo] : null;
+
+  if (left !== null && Math.abs(candidateUtcMs - left) < SLOT_CONFLICT_WINDOW_MS) return true;
+  if (right !== null && Math.abs(candidateUtcMs - right) < SLOT_CONFLICT_WINDOW_MS) return true;
+  return false;
+}
+
+type OptimisticCalendarAction = 'rescheduling' | 'queueing';
+
+type OptimisticCalendarOp = {
+  override: Content;
+  action: OptimisticCalendarAction;
+  startedAtMs: number;
+};
+
 function FullCalendarImpl({
   brandId,
   brandTimezone,
@@ -90,6 +129,10 @@ function FullCalendarImpl({
   const { openSidebar } = useRightSidebarRouter();
 
   const [reschedule, setReschedule] = useState<RescheduleState>({ open: false, item: null });
+  const [optimisticByContentId, setOptimisticByContentId] = useState<
+    Record<string, OptimisticCalendarOp>
+  >({});
+  const optimisticClearTimersRef = useRef<Record<string, number>>({});
 
   const { tzRef, weekStartsOn } = useTimezoneMeta(brandTimezone);
 
@@ -121,6 +164,19 @@ function FullCalendarImpl({
     refetchOnWindowFocus: false,
   });
 
+  const queueCapacity = useMemo(() => {
+    const raw = queuesQuery.data as any;
+    const current = raw?.data?.queueDepthCurrent;
+    const max = raw?.data?.queueDepthMax;
+    const currentNum = typeof current === 'number' && Number.isFinite(current) ? current : null;
+    const maxNum = typeof max === 'number' && Number.isFinite(max) ? max : null;
+    return {
+      current: currentNum,
+      max: maxNum,
+      atCapacity: currentNum !== null && maxNum !== null && currentNum >= maxNum,
+    };
+  }, [queuesQuery.data]);
+
   const queueId = useMemo(() => getDefaultQueueId(queuesQuery.data as any), [queuesQuery.data]);
 
   const slotInstancesQuery = useQuery({
@@ -137,6 +193,167 @@ function FullCalendarImpl({
     refetchOnWindowFocus: false,
   });
 
+  const queueItemsQuery = useQuery({
+    queryKey: ['publishing-queue-items-calendar', queueId, view],
+    queryFn: () =>
+      publishingQueuesApi.listQueueItems({
+        queueId: queueId!,
+        limit: 200,
+      }),
+    enabled: Boolean(queueId && effectiveSingleDestinationId),
+    staleTime: 0,
+    gcTime: GC_TIMES.STANDARD,
+    refetchOnWindowFocus: false,
+  });
+
+  const queueItems = useMemo(() => {
+    const raw = queueItemsQuery.data as any;
+    const lanes = raw?.data?.lanes;
+    if (!Array.isArray(lanes)) return [] as PublishingQueueItem[];
+    const collected: PublishingQueueItem[] = [];
+    for (const lane of lanes) {
+      const items = lane?.items;
+      if (Array.isArray(items)) collected.push(...(items as PublishingQueueItem[]));
+    }
+    return collected;
+  }, [queueItemsQuery.data]);
+
+  const queueItemsByEstimatedMs = useMemo(() => {
+    const map = new Map<number, PublishingQueueItem>();
+    for (const item of queueItems) {
+      if (!item.estimatedScheduledAt) continue;
+      const ms = new Date(item.estimatedScheduledAt).getTime();
+      if (!Number.isFinite(ms)) continue;
+      if (!map.has(ms)) map.set(ms, item);
+    }
+    return map;
+  }, [queueItems]);
+
+  const occupiedTimesUtcMsSorted = useMemo(() => {
+    if (!effectiveSingleDestinationId) return [] as number[];
+
+    const occupied: number[] = [];
+
+    // Optimistic drops should immediately reserve the target slot.
+    for (const op of Object.values(optimisticByContentId)) {
+      const scheduledAt = op?.override?.scheduledAt;
+      if (!scheduledAt) continue;
+      const ms = new Date(scheduledAt).getTime();
+      if (Number.isFinite(ms)) occupied.push(ms);
+    }
+
+    // Pinned / scheduled content within the month data.
+    for (const item of content) {
+      if (!item?.scheduledAt) continue;
+      const ms = new Date(item.scheduledAt).getTime();
+      if (Number.isFinite(ms)) occupied.push(ms);
+    }
+
+    // Queue-estimated schedule (computed server-side).
+    for (const ms of queueItemsByEstimatedMs.keys()) {
+      if (Number.isFinite(ms)) occupied.push(ms);
+    }
+
+    occupied.sort((a, b) => a - b);
+    return occupied;
+  }, [content, effectiveSingleDestinationId, optimisticByContentId, queueItemsByEstimatedMs]);
+
+  const queueEstimatedContent = useMemo(() => {
+    if (!effectiveSingleDestinationId) return [] as Content[];
+    if (!slotRange) return [] as Content[];
+
+    const endUtcMs = slotRange.endUtcMs;
+    const nowUtcMs = Date.now();
+    const out: Content[] = [];
+
+    for (const [ms, item] of queueItemsByEstimatedMs.entries()) {
+      if (ms < nowUtcMs || ms >= endUtcMs) continue;
+      const base = item.content;
+      const status = (() => {
+        const raw = base?.status;
+        return raw === 'draft' ||
+          raw === 'scheduled' ||
+          raw === 'published' ||
+          raw === 'failed' ||
+          raw === 'skipped'
+          ? raw
+          : 'draft';
+      })();
+
+      out.push({
+        id: item.contentId,
+        caption: base?.caption ?? '',
+        status,
+        scheduledAt: new Date(ms).toISOString(),
+        postedAt: null,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        brandId,
+        targetSocialAccountId: effectiveSingleDestinationId,
+        contentType: base?.contentType ?? null,
+        primaryAssetId: base?.primaryAssetId ?? null,
+        mediaAssets: (base as any)?.mediaAssets ?? null,
+        mediaAssetCount: (base as any)?.mediaAssetCount ?? null,
+        publishingQueueItemId: item.id,
+      });
+    }
+
+    return out;
+  }, [brandId, effectiveSingleDestinationId, queueItemsByEstimatedMs, slotRange]);
+
+  useEffect(() => {
+    const serverById = new Map<string, Content>();
+    for (const c of content) {
+      if (c?.id) serverById.set(c.id, c);
+    }
+
+    setOptimisticByContentId((prev) => {
+      const entries = Object.entries(prev);
+      if (entries.length === 0) return prev;
+
+      let removedAny = false;
+      const next: Record<string, OptimisticCalendarOp> = {};
+
+      for (const [contentId, op] of entries) {
+        if (op.action === 'rescheduling') {
+          const server = serverById.get(contentId) ?? null;
+          const target = op.override?.scheduledAt ?? null;
+          if (server?.scheduledAt && target && server.scheduledAt === target) {
+            removedAny = true;
+            continue;
+          }
+        }
+
+        if (op.action === 'queueing') {
+          const queued = queueItems.find(
+            (item) =>
+              item.contentId === contentId &&
+              typeof item.estimatedScheduledAt === 'string' &&
+              item.estimatedScheduledAt.trim().length > 0
+          );
+          if (queued) {
+            removedAny = true;
+            continue;
+          }
+        }
+
+        next[contentId] = op;
+      }
+
+      return removedAny ? next : prev;
+    });
+  }, [content, queueItems]);
+
+  useEffect(() => {
+    return () => {
+      const timers = optimisticClearTimersRef.current;
+      for (const id of Object.keys(timers)) {
+        window.clearTimeout(timers[id]);
+      }
+      optimisticClearTimersRef.current = {};
+    };
+  }, []);
+
   const queueSlotPlaceholders = useMemo(() => {
     if (!effectiveSingleDestinationId) return [] as PlaceholderItem[];
     if (!slotRange) return [] as PlaceholderItem[];
@@ -145,9 +362,17 @@ function FullCalendarImpl({
     const instances = Array.isArray(list) ? (list as PublishingQueueSlotInstance[]) : [];
     const endUtcMs = slotRange.endUtcMs;
     const nowUtcMs = Date.now();
+    const occupiedUtcMsSorted = occupiedTimesUtcMsSorted;
 
     return instances
-      .filter((i) => !i.occupied)
+      .filter((i) => {
+        const ms = new Date(i.scheduledAt).getTime();
+        if (!Number.isFinite(ms)) return false;
+        // Hide occupied slots (server-occupied OR occupied by queue estimation/content within 1 min).
+        if (i.occupied) return false;
+        if (isTimeOccupied({ candidateUtcMs: ms, occupiedUtcMsSorted })) return false;
+        return true;
+      })
       .filter((i) => {
         const ms = new Date(i.scheduledAt).getTime();
         return Number.isFinite(ms) && ms >= nowUtcMs && ms < endUtcMs;
@@ -161,24 +386,58 @@ function FullCalendarImpl({
           campaignId: null,
           campaignName: null,
           campaignColor: null,
+          queueAtCapacity: queueCapacity.atCapacity,
           // Extra fields consumed by PostPreviewCard -> open create with prefill
           targetSocialAccountId: effectiveSingleDestinationId,
           laneKey: i.laneKey,
           caption: 'Queue slot',
         } as unknown as PlaceholderItem;
       });
-  }, [effectiveSingleDestinationId, slotInstancesQuery.data, slotRange]);
+  }, [
+    effectiveSingleDestinationId,
+    occupiedTimesUtcMsSorted,
+    queueCapacity.atCapacity,
+    slotInstancesQuery.data,
+    slotRange,
+  ]);
 
   const mergedPlaceholders = useMemo(() => {
     if (!effectiveSingleDestinationId) return placeholders;
     return [...placeholders, ...queueSlotPlaceholders];
   }, [effectiveSingleDestinationId, placeholders, queueSlotPlaceholders]);
 
-  const items = useCalendarItems(content, mergedPlaceholders);
+  const optimisticOverrides = useMemo(() => {
+    return Object.values(optimisticByContentId).map((op) => ({
+      ...op.override,
+      optimisticAction: op.action,
+    }));
+  }, [optimisticByContentId]);
+
+  const mergedContent = useMemo(() => {
+    if (!effectiveSingleDestinationId) return [...optimisticOverrides, ...content];
+    return [...optimisticOverrides, ...content, ...queueEstimatedContent];
+  }, [content, effectiveSingleDestinationId, optimisticOverrides, queueEstimatedContent]);
+
+  const items = useCalendarItems(mergedContent, mergedPlaceholders);
   const filters = useCalendarFilters();
   const events = useFilteredEvents(items, filters, tzRef.current);
 
-  const primaryAssetIds = useMemo(() => content.map((item) => item.primaryAssetId), [content]);
+  const primaryAssetIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of mergedContent) {
+      const primary = item?.primaryAssetId;
+      const firstMedia = item?.mediaAssets?.[0]?.assetId;
+      const candidate = (
+        typeof primary === 'string' && primary.trim().length > 0
+          ? primary
+          : typeof firstMedia === 'string' && firstMedia.trim().length > 0
+            ? firstMedia
+            : null
+      ) as string | null;
+      if (candidate) ids.add(candidate);
+    }
+    return Array.from(ids);
+  }, [mergedContent]);
   const { data: assetsById } = useAssetsByIds(primaryAssetIds);
 
   const socialAccountsQuery = useQuery({
@@ -224,7 +483,131 @@ function FullCalendarImpl({
     : undefined;
 
   const handleEventDrop = useCallback(
-    async ({ event, start }: { event: CalendarEvent; start: Date }) => {
+    async ({
+      event,
+      start,
+      targetEvent,
+    }: {
+      event: CalendarEvent;
+      start: Date;
+      targetEvent?: CalendarEvent | null;
+    }) => {
+      const upsertCalendarCache = (nextItem: Content) => {
+        if (!nextItem?.scheduledAt) return;
+        const monthKey = formatInTimeZone(new Date(nextItem.scheduledAt), brandTimezone, 'yyyy-MM');
+        queryClient.setQueryData(['calendar', brandId, monthKey], (prev: any) => {
+          const list = prev?.data?.content;
+          if (!Array.isArray(list)) return prev;
+
+          const existingIdx = list.findIndex((c: any) => c && c.id === nextItem.id);
+          const merged = {
+            ...(existingIdx >= 0 ? (list[existingIdx] as any) : {}),
+            ...(nextItem as any),
+            publishingQueueItemId: null,
+          };
+
+          const nextList =
+            existingIdx >= 0
+              ? list.map((c: any, i: number) => (i === existingIdx ? merged : c))
+              : [...list, merged];
+
+          return {
+            ...prev,
+            data: {
+              ...prev.data,
+              content: nextList,
+            },
+          };
+        });
+      };
+
+      const removeQueueItemFromCalendarCache = (params: {
+        queueId: string;
+        viewKey: string;
+        queueItemId: string;
+        contentId: string;
+      }) => {
+        queryClient.setQueryData(
+          ['publishing-queue-items-calendar', params.queueId, params.viewKey],
+          (prev: any) => {
+            const lanes = prev?.data?.lanes;
+            if (!Array.isArray(lanes)) return prev;
+            const nextLanes = lanes.map((lane: any) => {
+              const items = lane?.items;
+              if (!Array.isArray(items)) return lane;
+              return {
+                ...lane,
+                items: items.filter(
+                  (it: any) => it?.id !== params.queueItemId && it?.contentId !== params.contentId
+                ),
+              };
+            });
+            return {
+              ...prev,
+              data: {
+                ...prev.data,
+                lanes: nextLanes,
+              },
+            };
+          }
+        );
+      };
+
+      const adjustQueueDepth = (delta: number) => {
+        if (!effectiveSingleDestinationId) return;
+        queryClient.setQueryData(
+          ['publishing-queues', effectiveSingleDestinationId],
+          (prev: any) => {
+            const current = prev?.data?.queueDepthCurrent;
+            if (typeof current !== 'number' || !Number.isFinite(current)) return prev;
+            const next = Math.max(0, current + delta);
+            return {
+              ...prev,
+              data: {
+                ...prev.data,
+                queueDepthCurrent: next,
+              },
+            };
+          }
+        );
+      };
+
+      const clearOptimistic = (contentId: string) => {
+        const timers = optimisticClearTimersRef.current;
+        if (timers[contentId]) {
+          window.clearTimeout(timers[contentId]);
+          delete timers[contentId];
+        }
+        setOptimisticByContentId((prev) => {
+          if (!(contentId in prev)) return prev;
+          const next = { ...prev };
+          delete next[contentId];
+          return next;
+        });
+      };
+
+      const setOptimistic = (params: {
+        contentId: string;
+        override: Content;
+        action: OptimisticCalendarAction;
+      }) => {
+        setOptimisticByContentId((prev) => ({
+          ...prev,
+          [params.contentId]: {
+            override: params.override,
+            action: params.action,
+            startedAtMs: Date.now(),
+          },
+        }));
+
+        const timers = optimisticClearTimersRef.current;
+        if (timers[params.contentId]) window.clearTimeout(timers[params.contentId]);
+        timers[params.contentId] = window.setTimeout(
+          () => clearOptimistic(params.contentId),
+          15_000
+        );
+      };
+
       try {
         const resource = event.resource;
         if (resource.placeholder || resource.status === 'published') {
@@ -235,13 +618,134 @@ function FullCalendarImpl({
           throw new Error('Missing start date');
         }
 
-        const utcISO = convertLocalToUTC(new Date(start), tzRef.current).toISOString();
+        const isQueueSlotTarget = (() => {
+          if (!targetEvent?.resource?.placeholder) return false;
+          const record = targetEvent.resource.item as any;
+          if (record?.message === 'Queue slot') return true;
+          return typeof record?.id === 'string' && record.id.startsWith('queue-slot:');
+        })();
+
+        if (isQueueSlotTarget) {
+          if (!queueId || !effectiveSingleDestinationId) {
+            toast.error('Select a single destination to use queue slots.');
+            return;
+          }
+
+          const targetSlotUtcIso = (() => {
+            const v =
+              typeof targetEvent?.resource?.scheduledAt === 'string'
+                ? targetEvent.resource.scheduledAt.trim()
+                : '';
+            return v.length > 0 ? v : null;
+          })();
+
+          if (!targetSlotUtcIso) {
+            toast.error('Missing target slot time.');
+            return;
+          }
+
+          const targetLaneKey = (() => {
+            const rec = targetEvent?.resource?.item as any;
+            const lk = typeof rec?.laneKey === 'string' ? rec.laneKey : null;
+            if (lk === 'post' || lk === 'reel' || lk === 'story' || lk === 'any') return lk;
+            return 'post' as const;
+          })();
+
+          const sourceLaneKey = (() => {
+            const rec = resource.item as any;
+            const ct = typeof rec?.contentType === 'string' ? String(rec.contentType).trim() : '';
+            if (ct === 'reel') return 'reel' as const;
+            if (ct === 'story') return 'story' as const;
+            return 'post' as const;
+          })();
+
+          if (targetLaneKey !== 'any' && targetLaneKey !== sourceLaneKey) {
+            return;
+          }
+
+          const record = resource.item as unknown as Record<string, unknown>;
+          const sourceQueueItemId =
+            typeof (record as any).publishingQueueItemId === 'string' &&
+            (record as any).publishingQueueItemId.trim().length > 0
+              ? String((record as any).publishingQueueItemId).trim()
+              : null;
+
+          const groupId =
+            typeof record.contentGroupId === 'string' && record.contentGroupId.trim().length > 0
+              ? record.contentGroupId.trim()
+              : null;
+          const isMultiDestination = record.isMultiDestination === true && Boolean(groupId);
+          if (isMultiDestination) {
+            toast.error('Multi-destination posts cannot be moved into a queue slot yet.');
+            return;
+          }
+
+          setOptimistic({
+            contentId: event.id,
+            override: {
+              ...(resource.item as any),
+              status: 'scheduled',
+              scheduledAt: targetSlotUtcIso,
+              publishingQueueItemId: null,
+            } as Content,
+            action: 'rescheduling',
+          });
+
+          // Schedule into the exact slot time. If it was already in the queue, remove it first.
+          // If it was pinned/scheduled, this is a normal reschedule.
+          if (sourceQueueItemId) {
+            await publishingQueuesApi.removeQueueItem(queueId, sourceQueueItemId);
+            adjustQueueDepth(-1);
+            removeQueueItemFromCalendarCache({
+              queueId,
+              viewKey: view,
+              queueItemId: sourceQueueItemId,
+              contentId: event.id,
+            });
+          }
+          await contentApi.updateContent({ contentId: event.id, scheduledAt: targetSlotUtcIso });
+          upsertCalendarCache({
+            ...(resource.item as any),
+            id: event.id,
+            brandId,
+            scheduledAt: targetSlotUtcIso,
+            status: 'scheduled',
+            publishingQueueItemId: null,
+          } as Content);
+          toast.success('Post scheduled');
+          return;
+        }
+
+        // Drops are only supported on explicit slot cards (placeholder events). Ignore any other
+        // drop results to avoid leaving items half-scheduled/half-queued.
+        const targetSlotUtcIso =
+          targetEvent?.resource?.placeholder &&
+          typeof targetEvent.resource.scheduledAt === 'string' &&
+          targetEvent.resource.scheduledAt.trim().length > 0
+            ? targetEvent.resource.scheduledAt.trim()
+            : null;
+        if (!targetSlotUtcIso) return;
+
         const record = resource.item as unknown as Record<string, unknown>;
+        const sourceQueueItemId =
+          typeof (record as any).publishingQueueItemId === 'string' &&
+          (record as any).publishingQueueItemId.trim().length > 0
+            ? String((record as any).publishingQueueItemId).trim()
+            : null;
+
+        const utcISO = targetSlotUtcIso;
         const groupId =
           typeof record.contentGroupId === 'string' && record.contentGroupId.trim().length > 0
             ? record.contentGroupId.trim()
             : null;
         const isMultiDestination = record.isMultiDestination === true && Boolean(groupId);
+
+        // If the item is currently managed by the queue, scheduling it into an explicit time slot
+        // must also remove it from the queue.
+        if (sourceQueueItemId && queueId && effectiveSingleDestinationId) {
+          await publishingQueuesApi.removeQueueItem(queueId, sourceQueueItemId);
+          adjustQueueDepth(-1);
+        }
 
         if (isMultiDestination && groupId) {
           await contentApi.scheduleContentGroup(groupId, utcISO);
@@ -251,12 +755,29 @@ function FullCalendarImpl({
         toast.success('Post rescheduled');
       } catch (error) {
         console.error(error);
+        if (event?.id) {
+          setOptimisticByContentId((prev) => {
+            if (!(event.id in prev)) return prev;
+            const next = { ...prev };
+            delete next[event.id];
+            return next;
+          });
+        }
         toast.error('Failed to reschedule');
       } finally {
         queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+        queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
+        if (effectiveSingleDestinationId) {
+          queryClient.invalidateQueries({
+            queryKey: ['publishing-queues', effectiveSingleDestinationId],
+          });
+        }
       }
     },
-    [brandId, queryClient, tzRef]
+    [brandId, brandTimezone, effectiveSingleDestinationId, queryClient, queueId, tzRef, view]
   );
 
   const handleBackgroundClick = useCallback(
@@ -271,11 +792,23 @@ function FullCalendarImpl({
           return;
         }
 
-        const local = new Date(clickedLocal);
-        if (calendarView === 'month') {
-          local.setHours(10, 0, 0, 0);
-        }
-        const utcISO = convertLocalToUTC(local, brandTz).toISOString();
+        const utcISO = (() => {
+          // When a single destination is selected (queue slots visible), clicking a day/+ should
+          // pin the schedule to that day using the current time-of-day (in the brand timezone),
+          // not "next available".
+          if (effectiveSingleDestinationId) {
+            const datePart = format(clickedLocal, 'yyyy-MM-dd');
+            const nowLocal = toZonedTime(new Date(), brandTz);
+            const timePart = format(nowLocal, 'HH:mm');
+            return toUTCFromInput(`${datePart}T${timePart}`, brandTz).toISOString();
+          }
+
+          const local = new Date(clickedLocal);
+          if (calendarView === 'month') {
+            local.setHours(10, 0, 0, 0);
+          }
+          return convertLocalToUTC(local, brandTz).toISOString();
+        })();
         openSidebar('post-create', {
           params: {
             scheduledAt: utcISO,
@@ -290,7 +823,7 @@ function FullCalendarImpl({
         console.error(error);
       }
     },
-    [calendarView, openSidebar, targetSocialAccountIds, tzRef]
+    [calendarView, effectiveSingleDestinationId, openSidebar, targetSocialAccountIds, tzRef]
   );
 
   const CalendarCreateCta = useCallback(

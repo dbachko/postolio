@@ -218,6 +218,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             include: {
               campaign: { select: { id: true, name: true, color: true } },
               publications: { select: { platform: true, permalink: true, publishedAt: true } },
+              publishingQueueItem: { select: { id: true } },
               mediaAssets: {
                 select: { assetId: true, displayOrder: true },
                 orderBy: { displayOrder: 'asc' },
@@ -235,6 +236,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
               where: whereWithoutPublications,
               include: {
                 campaign: { select: { id: true, name: true, color: true } },
+                publishingQueueItem: { select: { id: true } },
                 mediaAssets: {
                   select: { assetId: true, displayOrder: true },
                   orderBy: { displayOrder: 'asc' },
@@ -296,6 +298,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             contentType: item.contentType,
             shareToFeed: (item as any).shareToFeed ?? null,
             schedulingError: (item as any).schedulingError ?? null,
+            publishingQueueItemId: item.publishingQueueItem?.id ?? null,
             primaryAssetId,
             mediaAssets: normalizedMediaAssets,
             mediaAssetCount: (item as any)?._count?.mediaAssets ?? null,

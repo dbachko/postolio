@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
-import { CalendarClock, Clock, Copy, ExternalLink, Trash2 } from 'lucide-react';
+import { CalendarClock, Clock, Copy, ExternalLink, Loader2, Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
@@ -70,6 +70,13 @@ export function PostPreviewCard({
   const navigate = useNavigate();
   const { openSidebar } = useRightSidebarRouter();
 
+  const optimisticLabel = useMemo(() => {
+    const v = (item as any)?.optimisticAction;
+    if (v === 'queueing') return 'Queueing…';
+    if (v === 'rescheduling') return 'Rescheduling…';
+    return null;
+  }, [item]);
+
   const groupMeta = useMemo(() => {
     if (item.type === 'placeholder') return null;
     const record = item as unknown as Record<string, unknown>;
@@ -118,7 +125,7 @@ export function PostPreviewCard({
   const previewUrl = useMemo(() => {
     if (!primaryAsset) return null;
     if (primaryAsset.fileType === 'video') {
-      return primaryAsset.thumbnailUrl || primaryAsset.url || null;
+      return primaryAsset.thumbnailUrl || null;
     }
     return primaryAsset.thumbnailUrl || primaryAsset.url || null;
   }, [primaryAsset]);
@@ -304,6 +311,10 @@ export function PostPreviewCard({
       toast.success(groupMeta ? 'Posts deleted' : 'Post deleted');
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to delete post'),
   });
@@ -324,6 +335,10 @@ export function PostPreviewCard({
       );
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['publishing-queue-items'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to unschedule post'),
   });
@@ -362,7 +377,7 @@ export function PostPreviewCard({
           }
         }}
         className={cn(
-          'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[calc(var(--calendar-card-h)-8px)] w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+          'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[calc(var(--calendar-card-h)-8px)] w-full cursor-pointer items-center justify-between gap-3 rounded-lg border p-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
           queueSlotMeta.isPast && 'opacity-70'
         )}
       >
@@ -397,6 +412,13 @@ export function PostPreviewCard({
     );
   }
 
+  const optimisticIndicator = optimisticLabel ? (
+    <div className="bg-background/70 border-border text-muted-foreground pointer-events-none absolute right-2 bottom-2 flex items-center gap-1 rounded-md border px-2 py-1 text-[11px]">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      <span>{optimisticLabel}</span>
+    </div>
+  ) : null;
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -412,7 +434,10 @@ export function PostPreviewCard({
                 handleOpen();
               }
             }}
-            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-3 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
+            className={cn(
+              'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-2 rounded-lg border p-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+              optimisticLabel && 'opacity-90'
+            )}
             style={{ borderColor }}
           >
             {destinationAvatars ? (
@@ -466,6 +491,7 @@ export function PostPreviewCard({
                 {(item as any)?.caption || '\u00A0'}
               </div>
             </div>
+            {optimisticIndicator}
           </div>
         ) : (
           <div
@@ -479,7 +505,10 @@ export function PostPreviewCard({
                 handleOpen();
               }
             }}
-            className="group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-3 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2"
+            className={cn(
+              'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+              optimisticLabel && 'opacity-90'
+            )}
             style={{ borderColor }}
           >
             {destinationAvatars ? (
@@ -537,6 +566,7 @@ export function PostPreviewCard({
                 {(item as any)?.caption || ''}
               </div>
             </div>
+            {optimisticIndicator}
           </div>
         )}
       </ContextMenuTrigger>

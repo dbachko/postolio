@@ -14,6 +14,7 @@ import { publishingQueueScheduler } from '../services/publishing-queue/queue-sch
 import { validateQueueableContent } from '../services/publishing-queue/queue-content-validation.js';
 import { schedulerService } from '../services/scheduler.js';
 import { getMaxQueueDepthForTier } from '../constants/subscription.js';
+import { getStatusBroadcaster } from '../services/broadcast-registry.js';
 import {
   type ContentLaneKey,
   type SlotLaneKey,
@@ -35,6 +36,25 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       const { socialAccountId } = request.params;
 
       await assertSocialAccountAccess(userId, socialAccountId);
+
+      const tier =
+        typeof (request.user as any)?.subscriptionTier === 'string'
+          ? String((request.user as any).subscriptionTier)
+          : await (prisma as any)?.user
+              ?.findUnique?.({
+                where: { id: userId },
+                select: { subscriptionTier: true },
+              })
+              .then((u: any) => u?.subscriptionTier || 'free')
+              .catch(() => 'free');
+      const maxDepthRaw = getMaxQueueDepthForTier(tier);
+      const queueDepthMax = Number.isFinite(maxDepthRaw) ? maxDepthRaw : null;
+      const queueDepthCurrent = await prisma.publishingQueueItem.count({
+        where: {
+          queue: { socialAccountId },
+          content: { status: { notIn: ['published', 'unavailable'] } },
+        },
+      });
 
       const listSelect: Prisma.PublishingQueueSelect = {
         id: true,
@@ -88,6 +108,8 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         data: {
           socialAccountId,
+          queueDepthCurrent,
+          queueDepthMax,
           queues: queues.map((q) => ({
             id: q.id,
             name: q.name,
@@ -538,7 +560,7 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const content = await prisma.content.findFirst({
         where: { id: contentId.trim(), brandId: queue.socialAccount.brandId },
-        select: { id: true, contentType: true, targetSocialAccountId: true },
+        select: { id: true, contentType: true, targetSocialAccountId: true, status: true },
       });
       if (!content) {
         return reply.code(404).send({ success: false, error: 'content_not_found' });
@@ -630,6 +652,22 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
         queue.socialAccount.brandId
       );
 
+      // Best-effort: notify other clients so calendars/queues refresh in real time.
+      try {
+        const broadcaster = getStatusBroadcaster();
+        if (broadcaster) {
+          void broadcaster.broadcastStatusChange(
+            content.id,
+            queue.socialAccount.brandId,
+            content.status as any,
+            content.status as any,
+            { kind: 'queue_item', action: existingItem ? 'moved' : 'enqueued', queueId: queue.id }
+          );
+        }
+      } catch {
+        // ignore
+      }
+
       return reply.send({
         success: true,
         data: {
@@ -683,6 +721,10 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
                     status: true,
                     scheduledAt: true,
                     contentType: true,
+                    mediaAssets: {
+                      select: { assetId: true, displayOrder: true },
+                      orderBy: { displayOrder: 'asc' },
+                    },
                   },
                 },
               },
@@ -849,6 +891,9 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
                       status: content.status,
                       contentType: content.contentType,
                       scheduledAt: content.scheduledAt ? content.scheduledAt.toISOString() : null,
+                      primaryAssetId: content.mediaAssets?.[0]?.assetId ?? null,
+                      mediaAssetCount: content.mediaAssets?.length ?? 0,
+                      mediaAssets: Array.isArray(content.mediaAssets) ? content.mediaAssets : [],
                     }
                   : null,
                 estimatedScheduledAt: estimated ? estimated.toISOString() : null,
@@ -891,6 +936,22 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       const recompute = await publishingQueueScheduler.recomputeBrandWindow(
         queue.socialAccount.brandId
       );
+
+      // Best-effort: notify other clients so calendars/queues refresh in real time.
+      try {
+        const broadcaster = getStatusBroadcaster();
+        if (broadcaster && item.content?.id) {
+          void broadcaster.broadcastStatusChange(
+            item.content.id,
+            queue.socialAccount.brandId,
+            item.content.status as any,
+            item.content.status as any,
+            { kind: 'queue_item', action: 'removed', queueId: queue.id }
+          );
+        }
+      } catch {
+        // ignore
+      }
 
       return reply.send({ success: true, data: { recompute } });
     }

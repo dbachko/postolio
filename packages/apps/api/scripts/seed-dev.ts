@@ -1792,6 +1792,138 @@ async function main() {
     }
   }
 
+  console.log(
+    '\n==> Seeding an additional empty brand (no campaigns/posts/queue items) with a Default queue template…'
+  );
+
+  const seedEmptyBrandWithDefaultQueueTemplate = async (opts: { name: string }) => {
+    const emptyBrand = await prisma.brand.create({
+      data: {
+        name: opts.name,
+        description: 'Seeded empty brand for local development (queue template only)',
+        userId: user.id,
+        preferences: {},
+        postingTimezone: 'UTC',
+      },
+      select: { id: true, preferences: true },
+    });
+
+    const igAccountId = `IG_EMPTY_${Math.random().toString(36).slice(2, 15)}`;
+    const igPageId = `FB_EMPTY_${Math.random().toString(36).slice(2, 15)}`;
+    const igHandle = opts.name.toLowerCase().replace(/\s+/g, '_') + '_empty';
+    const tokenUpdatedAt = new Date().toISOString();
+    const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const emptyInstagramAccount = await prisma.socialAccount.create({
+      data: {
+        brandId: emptyBrand.id,
+        platform: 'instagram',
+        externalAccountId: igAccountId,
+        externalPageId: igPageId,
+        username: igHandle,
+        displayName: opts.name,
+        metadata: {
+          account_type: 'BUSINESS',
+          biography: `Empty seeded account for ${opts.name}.`,
+          profile_picture_url: `https://i.pravatar.cc/150?u=${igAccountId}`,
+          tokenExpiresAt,
+          tokenUpdatedAt,
+        },
+      },
+      select: { id: true },
+    });
+
+    const currentPreferences =
+      emptyBrand.preferences &&
+      typeof emptyBrand.preferences === 'object' &&
+      !Array.isArray(emptyBrand.preferences)
+        ? (emptyBrand.preferences as Record<string, unknown>)
+        : {};
+
+    await prisma.brand.update({
+      where: { id: emptyBrand.id },
+      data: {
+        preferences: {
+          ...currentPreferences,
+          primarySocialAccountIds: {
+            instagram: emptyInstagramAccount.id,
+          },
+          defaultPostSocialAccountIds: [emptyInstagramAccount.id],
+        },
+      },
+      select: { id: true },
+    });
+
+    const defaultQueue = await prisma.publishingQueue.create({
+      data: {
+        socialAccountId: emptyInstagramAccount.id,
+        name: 'Default',
+        paused: false,
+        isDefault: true,
+      },
+      select: { id: true },
+    });
+
+    const defaultStorySlots = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '08:30',
+      laneKey: 'story',
+      enabled: true,
+    }));
+
+    const defaultPostSlots = [1, 3, 5].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '11:00',
+      laneKey: 'post',
+      enabled: true,
+    }));
+
+    const defaultReelSlots = [2, 4, 6].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '14:00',
+      laneKey: 'reel',
+      enabled: true,
+    }));
+
+    const defaultAnySlots = [0, 2, 4].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '16:30',
+      laneKey: 'any',
+      enabled: true,
+    }));
+
+    const defaultSlots = [
+      ...defaultStorySlots,
+      ...defaultPostSlots,
+      ...defaultReelSlots,
+      ...defaultAnySlots,
+    ];
+    await prisma.publishingQueueSlot.createMany({ data: defaultSlots });
+
+    return {
+      brandId: emptyBrand.id,
+      socialAccountId: emptyInstagramAccount.id,
+      queueId: defaultQueue.id,
+      slotCount: defaultSlots.length,
+    };
+  };
+
+  const emptyBrandSeed = await seedEmptyBrandWithDefaultQueueTemplate({
+    name: 'Empty Queue Template Brand',
+  });
+
+  console.log(
+    `✅ Seeded empty brand ${emptyBrandSeed.brandId} with Default queue template (${emptyBrandSeed.slotCount} slots) on social account ${emptyBrandSeed.socialAccountId}`
+  );
+
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');
   console.log(`Email:    ${email}`);
