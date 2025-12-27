@@ -121,6 +121,9 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // Set refresh token (scoped so logout/refresh can read it)
+    // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
+    reply.clearCookie('refresh_token', { path: '/' });
+    reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
     reply.setCookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: isProductionEnv(),

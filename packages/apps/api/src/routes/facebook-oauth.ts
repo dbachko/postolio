@@ -189,6 +189,9 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Set refresh token cookie (scoped to /api/auth so logout can read it)
+      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
+      reply.clearCookie('refresh_token', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),

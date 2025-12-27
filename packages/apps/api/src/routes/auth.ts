@@ -68,6 +68,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Set refresh token in separate HTTP-only cookie (scoped to /api/auth so logout can read it)
+      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
+      reply.clearCookie('refresh_token', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
@@ -170,6 +173,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Set refresh token in separate HTTP-only cookie
+      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
+      reply.clearCookie('refresh_token', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
@@ -215,6 +221,29 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     if (!result) {
+      // Capture best-effort auth context for debugging refresh failures.
+      // Avoid logging any raw token values.
+      const authContext: Record<string, unknown> = {
+        refreshTokenCookieCount: request.headers.cookie?.includes('refresh_token=')
+          ? request.headers.cookie.split('refresh_token=').length - 1
+          : 0,
+        hasAuthTokenCookie: Boolean(request.cookies?.auth_token),
+      };
+      const authToken = request.cookies?.auth_token;
+      if (authToken) {
+        try {
+          const decoded = fastify.jwt.verify(authToken) as {
+            id: string;
+            email: string;
+            sid?: string;
+          };
+          authContext.authUserId = decoded.id;
+          authContext.authSessionId = decoded.sid;
+        } catch (err) {
+          authContext.authTokenError = err instanceof Error ? err.name : String(err);
+        }
+      }
+
       request.log.warn(
         {
           type: 'refresh_invalid_or_expired',
@@ -222,13 +251,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           userAgent: getUserAgent(request),
           referer: request.headers.referer,
           origin: request.headers.origin,
+          ...authContext,
         },
         'Refresh token rotation failed (invalid/expired/reused/session-mismatch)'
       );
       // Invalid or expired refresh token
-      // Clear refresh token on the same path it was originally set
+      // Clear refresh token on all known historical paths to avoid duplicate-name cookie confusion.
       reply.clearCookie('refresh_token', { path: '/api/auth' });
-      reply.clearCookie('auth_token', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+      reply.clearCookie('refresh_token', { path: '/' });
       return reply.code(401).send({ error: 'Invalid or expired refresh token' });
     }
 
@@ -242,6 +273,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // Set new refresh token (keep path at /api/auth so logout can invalidate it)
+    // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
+    reply.clearCookie('refresh_token', { path: '/' });
+    reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
     reply.setCookie('refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: isProductionEnv(),
@@ -346,6 +380,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
     reply.clearCookie('refresh_token', {
       path: '/api/auth/refresh',
+      httpOnly: true,
+      secure: isProductionEnv(),
+      sameSite: 'strict',
+    });
+    reply.clearCookie('refresh_token', {
+      path: '/',
       httpOnly: true,
       secure: isProductionEnv(),
       sameSite: 'strict',

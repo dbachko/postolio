@@ -180,6 +180,9 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         maxAge: 60 * 60,
       });
 
+      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
+      reply.clearCookie('refresh_token', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
