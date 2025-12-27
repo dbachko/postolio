@@ -8,6 +8,7 @@ import { ProfileAvatar } from '@/components/ui/profile-avatar';
 import { brand as brandApi } from '@/lib/api';
 import type { Brand } from '@/lib/api';
 import { type Platform, getPlatformConfig } from '@/lib/platform-config';
+import { formatSocialAccountHandle } from '@/lib/social-account-label';
 import { SocialSyncButton } from './SocialSyncButton';
 import {
   AlertDialog,
@@ -254,7 +255,7 @@ export function SocialAccountConnect({
                 <ProfileAvatar
                   src={profile.profile_picture_url || null}
                   name={profile.name || profile.username}
-                  alt={`@${profile.username}`}
+                  alt={formatSocialAccountHandle(platform, profile.username) || profile.username}
                   size="lg"
                 />
                 <div>
@@ -265,7 +266,7 @@ export function SocialAccountConnect({
                     rel="noopener noreferrer"
                     className="text-primary text-sm hover:underline"
                   >
-                    @{profile.username}
+                    {formatSocialAccountHandle(platform, profile.username) || profile.username}
                   </a>
                   <div className="mt-1 flex items-center space-x-4">
                     {profile.followers_count !== undefined && profile.followers_count !== null && (

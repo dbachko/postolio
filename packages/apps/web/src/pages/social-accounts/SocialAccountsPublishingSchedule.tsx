@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Platform } from '@/lib/platform-config';
+import { formatSocialAccountHandle } from '@/lib/social-account-label';
 
 type ConnectedAccount = {
   id: string;
@@ -44,7 +45,7 @@ function accountTitle(account: AccountOption): string {
 }
 
 function accountSubtitle(account: AccountOption): string | null {
-  if (account.username) return `@${account.username}`;
+  if (account.username) return formatSocialAccountHandle(account.platform, account.username);
   if (account.externalAccountId) return account.externalAccountId;
   return null;
 }

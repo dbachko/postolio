@@ -216,7 +216,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           content = await prisma.content.findMany({
             where: whereWithPublications,
             include: {
-              campaign: { select: { id: true, name: true, color: true } },
+              campaign: { select: { id: true, name: true, color: true, status: true } },
               publications: { select: { platform: true, permalink: true, publishedAt: true } },
               publishingQueueItem: { select: { id: true } },
               mediaAssets: {
@@ -235,7 +235,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             content = await prisma.content.findMany({
               where: whereWithoutPublications,
               include: {
-                campaign: { select: { id: true, name: true, color: true } },
+                campaign: { select: { id: true, name: true, color: true, status: true } },
                 publishingQueueItem: { select: { id: true } },
                 mediaAssets: {
                   select: { assetId: true, displayOrder: true },
@@ -305,6 +305,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             campaignId: item.campaignId,
             campaignName: item.campaign?.name,
             campaignColor: item.campaign?.color,
+            campaignStatus: item.campaign?.status ?? null,
             permalink: primaryPermalink,
             firstComment: (item as any).firstComment ?? null,
             firstCommentStatus: (item as any).firstCommentStatus ?? null,

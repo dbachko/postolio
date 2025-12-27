@@ -301,9 +301,30 @@
 /* No separate time gutter in this design */
 
 .pc-col-head {
+  position: relative;
   padding: var(--pc-weekday-pad);
   text-align: center;
   color: var(--muted-foreground);
+}
+
+.pc-week-create-cta {
+  position: absolute;
+  right: var(--pc-cta-offset);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pc-week-create-cta .pc-create-cta {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pc-week-create-cta--show {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .pc-col-label {

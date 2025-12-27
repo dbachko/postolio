@@ -286,6 +286,7 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
         <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
       ) : viewMode === 'queue' ? (
         <QueueSchedulesView
+          brandId={brandId}
           brandTimezone={brandTimezone}
           date={currentDate}
           calendarContent={scopedContent}

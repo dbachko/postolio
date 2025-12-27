@@ -4,6 +4,7 @@ import type { Brand } from '@/lib/api';
 import { brand as brandApi } from '@/lib/api';
 import { getPlatformConfig, type Platform } from '@/lib/platform-config';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
+import { formatSocialAccountHandle, formatSocialAccountLabel } from '@/lib/social-account-label';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -110,7 +111,9 @@ function SortableAccountRow({
 }) {
   const title = account.displayName || account.username || account.externalAccountId;
   const subtitle =
-    account.platform === 'instagram' && account.username ? `@${account.username}` : null;
+    account.platform === 'instagram' && account.username
+      ? formatSocialAccountHandle(account.platform, account.username)
+      : null;
   const tokenBadge = (() => {
     const status = account.tokenStatus || (account.disconnected ? 'disconnected' : 'unknown');
     const { longLabel, shortLabel } = (() => {
@@ -318,7 +321,11 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
       .map((account) => {
         const platform = account.platform as Platform;
         const platformConfig = getPlatformConfig(platform);
-        const shortLabel = account.username ? `@${account.username}` : account.displayName || '';
+        const shortLabel = formatSocialAccountLabel({
+          platform,
+          username: account.username ?? null,
+          displayName: account.displayName ?? null,
+        });
         const avatarName =
           account.displayName ||
           account.username ||
@@ -889,7 +896,9 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
                         {groupedCandidates.instagram.map((c) => {
                           const checked = selectedCandidateIds.has(c.candidateId);
                           const title = c.displayName || c.username || c.externalAccountId;
-                          const subtitle = c.username ? `@${c.username}` : null;
+                          const subtitle = c.username
+                            ? formatSocialAccountHandle('instagram', c.username)
+                            : null;
                           return (
                             <label
                               key={c.candidateId}

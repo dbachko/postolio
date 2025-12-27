@@ -463,29 +463,6 @@ export class SchedulerAdapter {
           if (futureCountExcludingThis + 1 > maxAhead) {
             const message = `Upgrade required: your plan allows up to ${maxAhead} scheduled posts ahead`;
             await emitScheduleFailure(message);
-            try {
-              // Persist a failed state so the UI can surface the limit issue
-              const existingParams = (content as any).generationParams ?? {};
-              await prisma.content.update({
-                where: { id: content.id },
-                data: {
-                  status: 'failed',
-                  scheduledAt: null,
-                  schedulingError: message,
-                  generationParams: {
-                    ...existingParams,
-                    processing: null,
-                    awsScheduleCreated: false,
-                    failedAt: new Date().toISOString(),
-                  },
-                },
-              });
-            } catch (persistErr) {
-              logger.warn('Failed to persist scheduling limit failure state', {
-                contentId: content.id,
-                error: persistErr,
-              });
-            }
             return {
               success: false,
               error: message,
@@ -1881,7 +1858,17 @@ export class SchedulerAdapter {
         logger.info('AWS schedule rescheduled successfully with updated content', { scheduleId });
       } catch (error: unknown) {
         // Handle circuit breaker errors with more specific messaging
-        const errObj = error as { code?: string; message?: string } | undefined;
+        const errObj = error as
+          | { code?: string; message?: string; details?: Record<string, unknown> }
+          | undefined;
+        const detailsMessage =
+          errObj?.details &&
+          typeof errObj.details === 'object' &&
+          (typeof errObj.details.error === 'string'
+            ? errObj.details.error
+            : typeof errObj.details.message === 'string'
+              ? errObj.details.message
+              : null);
         if (errObj?.code === 'CIRCUIT_BREAKER_OPEN' || errObj?.code === 'EOPENBREAKER') {
           logger.error(
             'Circuit breaker is open - AWS scheduler temporarily unavailable. Reschedule failed.'
@@ -1907,7 +1894,7 @@ export class SchedulerAdapter {
           logger.error('Failed to reschedule in AWS', { error });
           return {
             success: false,
-            error: `Failed to reschedule: ${errObj?.message || 'Unknown AWS scheduler error'}`,
+            error: `Failed to reschedule: ${detailsMessage || errObj?.message || 'Unknown AWS scheduler error'}`,
           };
         }
       }

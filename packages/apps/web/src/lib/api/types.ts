@@ -45,6 +45,15 @@ export interface Content {
   campaignId?: string | null;
   campaignName?: string | null;
   campaignColor?: string | null;
+  campaignStatus?:
+    | 'creating'
+    | 'preview'
+    | 'active'
+    | 'paused'
+    | 'completed'
+    | 'failed'
+    | 'processing'
+    | null;
   permalink?: string | null;
   schedulingError?: string | null;
   publishingQueueItemId?: string | null;

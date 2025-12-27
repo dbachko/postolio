@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 import {
   brand as brandApi,
+  campaign as campaignApi,
   content as contentApi,
   publishingQueues as publishingQueuesApi,
   type Content,
@@ -34,6 +35,7 @@ import type {
   PublishingQueueSlotInstance,
 } from '@/lib/api/publishing-queues-client';
 import { Button } from '@/components/ui/button';
+import { formatSocialAccountLabel } from '@/lib/social-account-label';
 
 export interface FullCalendarProps {
   brandId: string;
@@ -461,7 +463,7 @@ function FullCalendarImpl({
       if (!id || !platform) continue;
       const username = typeof account?.username === 'string' ? account.username : null;
       const displayName = typeof account?.displayName === 'string' ? account.displayName : null;
-      const label = username ? `@${username}` : displayName || platform;
+      const label = formatSocialAccountLabel({ platform, username, displayName });
       const avatarName = username || displayName || platform;
       const avatarUrl =
         typeof account?.profilePictureUrl === 'string' ? account.profilePictureUrl : null;
@@ -471,6 +473,22 @@ function FullCalendarImpl({
 
     return out;
   }, [socialAccountsQuery.data]);
+
+  const scheduleAheadLimitQuery = useQuery({
+    queryKey: ['limits', 'schedule-ahead', brandId],
+    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    enabled: Boolean(brandId),
+    staleTime: 60 * 1000,
+    gcTime: GC_TIMES.LONG,
+    refetchOnWindowFocus: false,
+  });
+  const scheduleAheadLimits = (scheduleAheadLimitQuery.data as any)?.data as
+    | { tier: string; maxAllowed: number; currentCount: number }
+    | undefined;
+  const scheduleAheadAtCapacity =
+    !!scheduleAheadLimits &&
+    Number.isFinite(scheduleAheadLimits.maxAllowed) &&
+    scheduleAheadLimits.currentCount >= scheduleAheadLimits.maxAllowed;
 
   const calendarView = CALENDAR_VIEW_MAP[view] ?? 'month';
   const isTouch = isTouchDevice();
@@ -680,6 +698,13 @@ function FullCalendarImpl({
             return;
           }
 
+          if (sourceQueueItemId && scheduleAheadAtCapacity) {
+            toast.error(
+              `Scheduling limit reached (${scheduleAheadLimits?.currentCount}/${scheduleAheadLimits?.maxAllowed}). Upgrade to add more.`
+            );
+            return;
+          }
+
           setOptimistic({
             contentId: event.id,
             override: {
@@ -691,18 +716,6 @@ function FullCalendarImpl({
             action: 'rescheduling',
           });
 
-          // Schedule into the exact slot time. If it was already in the queue, remove it first.
-          // If it was pinned/scheduled, this is a normal reschedule.
-          if (sourceQueueItemId) {
-            await publishingQueuesApi.removeQueueItem(queueId, sourceQueueItemId);
-            adjustQueueDepth(-1);
-            removeQueueItemFromCalendarCache({
-              queueId,
-              viewKey: view,
-              queueItemId: sourceQueueItemId,
-              contentId: event.id,
-            });
-          }
           await contentApi.updateContent({ contentId: event.id, scheduledAt: targetSlotUtcIso });
           upsertCalendarCache({
             ...(resource.item as any),
@@ -712,6 +725,23 @@ function FullCalendarImpl({
             status: 'scheduled',
             publishingQueueItemId: null,
           } as Content);
+
+          // Best-effort: if it was in the queue, remove after scheduling succeeds.
+          if (sourceQueueItemId) {
+            try {
+              await publishingQueuesApi.removeQueueItem(queueId, sourceQueueItemId);
+              adjustQueueDepth(-1);
+              removeQueueItemFromCalendarCache({
+                queueId,
+                viewKey: view,
+                queueItemId: sourceQueueItemId,
+                contentId: event.id,
+              });
+            } catch (queueRemoveError) {
+              console.error(queueRemoveError);
+              toast.error('Scheduled, but failed to remove from queue. Refresh to resolve.');
+            }
+          }
           toast.success('Post scheduled');
           return;
         }
@@ -743,14 +773,28 @@ function FullCalendarImpl({
         // If the item is currently managed by the queue, scheduling it into an explicit time slot
         // must also remove it from the queue.
         if (sourceQueueItemId && queueId && effectiveSingleDestinationId) {
-          await publishingQueuesApi.removeQueueItem(queueId, sourceQueueItemId);
-          adjustQueueDepth(-1);
+          if (scheduleAheadAtCapacity) {
+            toast.error(
+              `Scheduling limit reached (${scheduleAheadLimits?.currentCount}/${scheduleAheadLimits?.maxAllowed}). Upgrade to add more.`
+            );
+            return;
+          }
         }
 
         if (isMultiDestination && groupId) {
           await contentApi.scheduleContentGroup(groupId, utcISO);
         } else {
           await contentApi.updateContent({ contentId: event.id, scheduledAt: utcISO });
+        }
+
+        if (sourceQueueItemId && queueId && effectiveSingleDestinationId) {
+          try {
+            await publishingQueuesApi.removeQueueItem(queueId, sourceQueueItemId);
+            adjustQueueDepth(-1);
+          } catch (queueRemoveError) {
+            console.error(queueRemoveError);
+            toast.error('Rescheduled, but failed to remove from queue. Refresh to resolve.');
+          }
         }
         toast.success('Post rescheduled');
       } catch (error) {
@@ -763,7 +807,8 @@ function FullCalendarImpl({
             return next;
           });
         }
-        toast.error('Failed to reschedule');
+        const message = error instanceof Error ? error.message : 'Failed to reschedule';
+        toast.error(message || 'Failed to reschedule');
       } finally {
         queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
         queryClient.invalidateQueries({ queryKey: ['publishing-queue-slot-instances-calendar'] });
@@ -777,7 +822,18 @@ function FullCalendarImpl({
         }
       }
     },
-    [brandId, brandTimezone, effectiveSingleDestinationId, queryClient, queueId, tzRef, view]
+    [
+      brandId,
+      brandTimezone,
+      effectiveSingleDestinationId,
+      queryClient,
+      queueId,
+      scheduleAheadAtCapacity,
+      scheduleAheadLimits?.currentCount,
+      scheduleAheadLimits?.maxAllowed,
+      tzRef,
+      view,
+    ]
   );
 
   const handleBackgroundClick = useCallback(

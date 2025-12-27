@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Filter, Search, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Filter, Search, X } from 'lucide-react';
 import { campaign as campaignApi, type Campaign } from '@/lib/api';
 import { useCalendarFilterStore, type ContentStatus } from '@/stores/calendarFilterStore';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { STATUS_OPTIONS } from './utils';
+import { getPostStatusTextClass } from '@/utils/post-status-colors';
 
 interface ContentFiltersBarProps {
   brandId: string;
@@ -34,8 +35,12 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
 
   const campaignOptions = useMemo(() => {
     return [
-      { label: 'No campaign', value: 'none' },
-      ...allCampaigns.map((campaign) => ({ label: campaign.name, value: campaign.id })),
+      { label: 'No campaign', value: 'none', color: 'hsl(var(--muted-foreground))' as const },
+      ...allCampaigns.map((campaign) => ({
+        label: campaign.name,
+        value: campaign.id,
+        color: campaign.color ?? null,
+      })),
     ];
   }, [allCampaigns]);
 
@@ -52,13 +57,12 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
       : [...campaigns, cleanId];
     setCampaigns(next);
   };
-
-  const statusColorClass: Record<ContentStatus, string> = {
-    draft: 'bg-warning',
-    scheduled: 'bg-info',
-    published: 'bg-success',
-    failed: 'bg-destructive',
-    skipped: 'bg-muted-foreground',
+  const statusIcon: Record<ContentStatus, React.ComponentType<{ className?: string }>> = {
+    draft: Clock,
+    scheduled: Clock,
+    published: CheckCircle2,
+    failed: AlertTriangle,
+    skipped: AlertTriangle,
   };
 
   const campaignColorById = (id: string): string => {
@@ -184,6 +188,7 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
                   {STATUS_OPTIONS.map((option) => {
                     const checked = statuses.includes(option.value);
                     const id = `calendar-filter-status-${option.value}`;
+                    const Icon = statusIcon[option.value];
                     return (
                       <label
                         key={option.value}
@@ -198,12 +203,14 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
                         />
                         <span
                           className={cn(
-                            'h-4 w-1 rounded-full',
-                            statusColorClass[option.value],
-                            checked ? 'opacity-100' : 'opacity-30'
+                            'inline-flex h-4 w-4 items-center justify-center',
+                            getPostStatusTextClass(option.value),
+                            checked ? 'opacity-100' : 'opacity-40'
                           )}
                           aria-hidden="true"
-                        />
+                        >
+                          <Icon className="h-4 w-4" />
+                        </span>
                         <span className="text-sm">{option.label}</span>
                       </label>
                     );
@@ -230,6 +237,11 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
                   {campaignOptions.map((option) => {
                     const checked = campaigns.includes(option.value);
                     const id = `calendar-filter-campaign-${option.value}`;
+                    const campaignColor =
+                      typeof (option as any).color === 'string' &&
+                      (option as any).color.trim().length > 0
+                        ? String((option as any).color).trim()
+                        : campaignColorById(option.value);
                     return (
                       <label
                         key={option.value}
@@ -244,10 +256,10 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
                         />
                         <span
                           className={cn(
-                            'h-4 w-1 rounded-full',
-                            checked ? 'opacity-100' : 'opacity-30'
+                            'border-border inline-flex h-3 w-3 shrink-0 rounded-full border',
+                            checked ? 'opacity-100' : 'opacity-40'
                           )}
-                          style={{ backgroundColor: campaignColorById(option.value) }}
+                          style={{ backgroundColor: campaignColor }}
                           aria-hidden="true"
                         />
                         <span className="min-w-0 truncate text-sm">{option.label}</span>

@@ -363,6 +363,21 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const requestedScheduledAt =
         (updateData.scheduledAt as Date | null | undefined) ?? content.scheduledAt ?? null;
 
+      const isPausedCampaign = content.campaign && content.campaign.status === 'paused';
+      if (
+        schedulingSupported &&
+        isPausedCampaign &&
+        scheduledAt !== undefined &&
+        originalScheduledTime !== newScheduledTime
+      ) {
+        return reply.code(409).send({
+          success: false,
+          code: 'CAMPAIGN_PAUSED',
+          error: 'Campaign is paused. Unpause the campaign to reschedule posts.',
+          data: null,
+        });
+      }
+
       // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state
       // Skip AWS operations if content belongs to a draft campaign
       let scheduledInAwsBeforeUpdate = false;
@@ -495,21 +510,24 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             : newScheduleError || 'Failed to schedule content';
         const status = planLimitHit ? 402 : 500;
 
-        // Persist failure state so UI shows failed instead of scheduled/draft ambiguity
-        try {
-          await prisma.content.update({
-            where: { id: contentId },
-            data: {
-              status: 'failed',
-              scheduledAt: requestedScheduledAt,
-              schedulingError: message,
-            },
-          });
-        } catch (persistError) {
-          request.log.error(
-            { err: persistError, contentId },
-            'Failed to persist scheduling failure state'
-          );
+        // Do not mutate state on plan-limit failures; treat as a blocker and preserve original time.
+        if (!planLimitHit) {
+          // Persist failure state so UI shows failed instead of scheduled/draft ambiguity
+          try {
+            await prisma.content.update({
+              where: { id: contentId },
+              data: {
+                status: 'failed',
+                scheduledAt: requestedScheduledAt,
+                schedulingError: message,
+              },
+            });
+          } catch (persistError) {
+            request.log.error(
+              { err: persistError, contentId },
+              'Failed to persist scheduling failure state'
+            );
+          }
         }
 
         return reply.code(status).send({

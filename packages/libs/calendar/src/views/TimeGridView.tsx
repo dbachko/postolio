@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Localizer } from '../localizers';
 import type { CalendarEventBase } from '../types';
 import { useDrop, useDrag } from 'react-dnd';
@@ -36,6 +36,14 @@ function canDragCalendarEvent(event: any): boolean {
     res.item.optimisticAction.trim().length > 0
   )
     return false;
+
+  const campaignStatus =
+    typeof res?.item?.campaignStatus === 'string'
+      ? res.item.campaignStatus.trim()
+      : typeof res?.campaignStatus === 'string'
+        ? res.campaignStatus.trim()
+        : '';
+  if (campaignStatus === 'paused') return false;
 
   const publishingQueueItemId =
     typeof res?.item?.publishingQueueItemId === 'string'
@@ -97,6 +105,7 @@ export function TimeGridView<E extends CalendarEventBase>({
   const start = localizer.startOfWeek(date, weekStartsOn);
   const dayDates = Array.from({ length: 7 }, (_, i) => localizer.addDays(start, i));
   const todayKey = localizer.format(new Date(), 'yyyy-LL-dd');
+  const [hoveredDayIdx, setHoveredDayIdx] = useState<number | null>(null);
 
   function isSameDay(a: Date, b: Date) {
     return (
@@ -109,21 +118,41 @@ export function TimeGridView<E extends CalendarEventBase>({
   return (
     <div className="pc-timegrid" style={{ ['--pc-days' as any]: '7' }}>
       <div className="pc-timegrid-head">
-        {dayDates.map((d, i) => (
-          <div
-            key={i}
-            className={`pc-col-head ${localizer.format(d, 'yyyy-LL-dd') === todayKey ? 'pc-col-head--today' : ''}`}
-          >
-            <div className="pc-col-label">
-              <span className="pc-col-label-month">{localizer.format(d, 'LLL')}</span>{' '}
-              <span
-                className={`pc-col-label-day ${localizer.format(d, 'yyyy-LL-dd') === todayKey ? 'pc-col-label-day--today' : ''}`}
-              >
-                {localizer.format(d, 'd')}
-              </span>
+        {dayDates.map((d, i) => {
+          const dayKey = localizer.format(d, 'yyyy-LL-dd');
+          const isPastDay = dayKey < todayKey;
+          const isHovered = hoveredDayIdx === i;
+          const CreateCtaComp = createCtaComponent;
+
+          return (
+            <div
+              key={i}
+              className={`pc-col-head ${dayKey === todayKey ? 'pc-col-head--today' : ''}`}
+              onMouseEnter={() => setHoveredDayIdx(i)}
+              onMouseLeave={() => setHoveredDayIdx((prev) => (prev === i ? null : prev))}
+            >
+              <div className="pc-col-label">
+                <span className="pc-col-label-month">{localizer.format(d, 'LLL')}</span>{' '}
+                <span
+                  className={`pc-col-label-day ${dayKey === todayKey ? 'pc-col-label-day--today' : ''}`}
+                >
+                  {localizer.format(d, 'd')}
+                </span>
+              </div>
+              {!isPastDay ? (
+                <div
+                  className={`pc-week-create-cta ${isHovered ? 'pc-week-create-cta--show' : ''}`}
+                >
+                  {CreateCtaComp ? (
+                    <CreateCtaComp date={d} onClick={onBackgroundClick} disabled={false} />
+                  ) : (
+                    <CreateCta date={d} onClick={onBackgroundClick} />
+                  )}
+                </div>
+              ) : null}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="pc-timegrid-body">
         {dayDates.map((d, i) => (
@@ -134,10 +163,16 @@ export function TimeGridView<E extends CalendarEventBase>({
             localizer={localizer}
             todayKey={todayKey}
             EventComp={EventComp}
-            CreateCtaComp={createCtaComponent}
             onEventDrop={onEventDrop}
             onBackgroundClick={onBackgroundClick}
             dragAndDrop={dragAndDrop}
+            onHoverChange={(hovered) => {
+              if (hovered) {
+                setHoveredDayIdx(i);
+                return;
+              }
+              setHoveredDayIdx((prev) => (prev === i ? null : prev));
+            }}
           />
         ))}
       </div>
@@ -151,21 +186,16 @@ function DayColumn<E extends CalendarEventBase>({
   localizer,
   todayKey,
   EventComp,
-  CreateCtaComp,
   onEventDrop,
   onBackgroundClick,
   dragAndDrop,
+  onHoverChange,
 }: {
   date: Date;
   events: E[];
   localizer: Localizer;
   todayKey: string;
   EventComp?: React.ComponentType<{ event: E }>;
-  CreateCtaComp?: React.ComponentType<{
-    date: Date;
-    onClick?: (d: Date) => void;
-    disabled?: boolean;
-  }>;
   onEventDrop?: (args: {
     event: E;
     start: Date;
@@ -174,6 +204,7 @@ function DayColumn<E extends CalendarEventBase>({
   }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop: boolean;
+  onHoverChange?: (hovered: boolean) => void;
 }) {
   const dayKey = localizer.format(date, 'yyyy-LL-dd');
   const isToday = dayKey === todayKey;
@@ -185,6 +216,8 @@ function DayColumn<E extends CalendarEventBase>({
     <div
       className={`pc-daycol ${isPastDay ? 'pc-daycol--past' : ''} ${isToday ? 'pc-daycol--today' : ''}`}
       onClick={() => onBackgroundClick?.(date)}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
     >
       <div className="pc-daycol-inner">
         {sorted.map((e) => (
@@ -198,12 +231,6 @@ function DayColumn<E extends CalendarEventBase>({
           />
         ))}
       </div>
-      {!isPastDay &&
-        (CreateCtaComp ? (
-          <CreateCtaComp date={date} onClick={onBackgroundClick} />
-        ) : (
-          <CreateCta date={date} onClick={onBackgroundClick} />
-        ))}
     </div>
   );
 }
@@ -307,13 +334,6 @@ function EventListItem<E extends CalendarEventBase>({
       ref={refCb as any}
       className={`pc-event-row ${isPlaceholder && canDrop ? 'pc-event-row--drop-available' : ''} ${isPlaceholder && isDragging && !canDrop ? 'pc-event-row--drop-unavailable' : ''} ${isPlaceholder && isOver && canDrop ? 'pc-event-row--drop' : ''} ${isPlaceholder && isOver && !canDrop ? 'pc-event-row--drop-disabled' : ''}`}
       aria-disabled={canDrag ? undefined : true}
-      title={
-        isPlaceholder
-          ? undefined
-          : canDrag
-            ? undefined
-            : 'Drag-and-drop is only available for scheduled posts.'
-      }
     >
       {EventComp ? (
         <EventComp event={event} />

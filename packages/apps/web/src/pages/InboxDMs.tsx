@@ -248,7 +248,7 @@ export default function InboxDMs() {
             <CardHeader className="border-b">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>@{selectedConversation.instagramUsername}</CardTitle>
+                  <CardTitle>{selectedConversation.instagramUsername}</CardTitle>
                   {selectedConversation.rule && (
                     <p className="text-muted-foreground mt-1 text-sm">
                       Automated via: {selectedConversation.rule.name}

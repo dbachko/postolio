@@ -12,6 +12,7 @@ import { goalEmoji } from '@/utils/goal-emojis';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { formatSocialAccountLabel, formatSocialAccountHandle } from '@/lib/social-account-label';
 
 export function Step7Review() {
   const navigate = useNavigate();
@@ -43,9 +44,14 @@ export function Step7Review() {
             ? account.displayName.trim()
             : null;
 
-        const label = username ? `@${username}` : displayName || account.platform;
-        const tooltipLabel = username
-          ? `${account.platform} · @${username}`
+        const label = formatSocialAccountLabel({
+          platform: account.platform,
+          username,
+          displayName,
+        });
+        const handle = formatSocialAccountHandle(account.platform, username);
+        const tooltipLabel = handle
+          ? `${account.platform} · ${handle}`
           : displayName
             ? `${account.platform} · ${displayName}`
             : account.platform;

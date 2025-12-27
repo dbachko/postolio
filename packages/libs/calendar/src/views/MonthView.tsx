@@ -39,6 +39,14 @@ function canDragCalendarEvent(event: any): boolean {
   )
     return false;
 
+  const campaignStatus =
+    typeof res?.item?.campaignStatus === 'string'
+      ? res.item.campaignStatus.trim()
+      : typeof res?.campaignStatus === 'string'
+        ? res.campaignStatus.trim()
+        : '';
+  if (campaignStatus === 'paused') return false;
+
   const publishingQueueItemId =
     typeof res?.item?.publishingQueueItemId === 'string'
       ? res.item.publishingQueueItemId.trim()
@@ -357,13 +365,6 @@ function EventRow<E extends CalendarEventBase>({
       ref={refCb as any}
       className={`pc-event-row ${isPlaceholder && canDrop ? 'pc-event-row--drop-available' : ''} ${isPlaceholder && isDragging && !canDrop ? 'pc-event-row--drop-unavailable' : ''} ${isPlaceholder && isOver && canDrop ? 'pc-event-row--drop' : ''} ${isPlaceholder && isOver && !canDrop ? 'pc-event-row--drop-disabled' : ''}`}
       aria-disabled={canDrag ? undefined : true}
-      title={
-        isPlaceholder
-          ? undefined
-          : canDrag
-            ? undefined
-            : 'Drag-and-drop is only available for scheduled posts.'
-      }
     >
       {EventComp ? (
         <EventComp event={event} />

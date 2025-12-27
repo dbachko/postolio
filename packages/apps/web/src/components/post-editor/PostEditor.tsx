@@ -77,6 +77,7 @@ import type {
   PostPreviewItem,
   PreviewMedia,
 } from '@/components/post-preview/types';
+import { formatSocialAccountLabel } from '@/lib/social-account-label';
 import AssetPicker from '@/features/assets/components/AssetPicker';
 import { assetsApi } from '@/features/assets/api/client';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
@@ -285,7 +286,7 @@ export function PostEditor({
             : 'draft';
         const username = typeof social?.username === 'string' ? social.username : null;
         const displayName = typeof social?.displayName === 'string' ? social.displayName : null;
-        const label = username ? `@${username}` : displayName || platform;
+        const label = formatSocialAccountLabel({ platform, username, displayName });
         const avatarName = username || displayName || platform;
         const avatarUrl =
           typeof social?.profilePictureUrl === 'string' ? social.profilePictureUrl : null;
@@ -505,7 +506,11 @@ export function PostEditor({
 
     const options = accounts.map((account) => {
       const platform = account.platform as Platform;
-      const label = account.username ? `@${account.username}` : account.displayName || undefined;
+      const label = formatSocialAccountLabel({
+        platform,
+        username: account.username ?? null,
+        displayName: account.displayName ?? null,
+      });
       const avatarName = account.username || account.displayName || platform;
       return {
         id: String(account.id),
@@ -765,9 +770,11 @@ export function PostEditor({
         const platform =
           typeof social?.platform === 'string' ? (social.platform as Platform) : null;
         if (!accountId || !platform) return null;
-        const label = social.username
-          ? `@${String(social.username)}`
-          : String(social.displayName || platform);
+        const label = formatSocialAccountLabel({
+          platform,
+          username: typeof social.username === 'string' ? String(social.username) : null,
+          displayName: typeof social.displayName === 'string' ? String(social.displayName) : null,
+        });
         const avatarName = String(social.username || social.displayName || platform);
         const avatarUrl =
           typeof social.profilePictureUrl === 'string' ? social.profilePictureUrl : null;

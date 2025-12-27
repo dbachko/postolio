@@ -54,7 +54,8 @@ export function RescheduleManager({
         }
       } catch (error) {
         console.error(error);
-        toast.error('Failed to reschedule');
+        const message = error instanceof Error ? error.message : 'Failed to reschedule';
+        toast.error(message || 'Failed to reschedule');
       } finally {
         onStateChange({ open: false, item: null });
         queryClient.invalidateQueries({ queryKey: ['calendar', brandId] }).catch((err) => {

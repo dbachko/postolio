@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
-import { CalendarClock, Clock, Copy, ExternalLink, Loader2, Trash2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Clock,
+  Copy,
+  ExternalLink,
+  GripVertical,
+  Loader2,
+  Trash2,
+} from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
@@ -11,12 +19,14 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 import { PostStatusTimeBadge } from '@/components/PostStatusTimeBadge';
-import { getPostStatusBorderColor } from '@/utils/post-status-colors';
 import { getMediaBadgeType } from '@/utils/media-type';
 import { MediaTypeBadge } from '@/components/MediaTypeBadge';
 import type { AssetType } from '@/features/assets/api/client';
-import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
 import type { SocialAccountsById } from '@/types/social-accounts';
+import { CampaignDotIndicator } from '@/components/post-preview-card/campaign-dot-indicator';
+import { getPostCardCaptionMeta } from '@/components/post-preview-card/caption-meta';
+import { DestinationIndicator } from '@/components/post-preview-card/destination-indicator';
+import { getPostCardDragMeta } from '@/components/post-preview-card/drag-meta';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,11 +45,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { laneIcon } from '@/components/calendar/QueueSchedules/queue-schedules-utils';
+import {
+  getLaneCreateLabel,
+  laneIcon,
+} from '@/components/calendar/QueueSchedules/queue-schedules-utils';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { MouseEvent } from 'react';
 import type { PublishingQueueLaneKey } from '@/lib/api/publishing-queues-client';
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 
 type DeleteTarget =
   | { kind: 'content'; contentId: string }
@@ -77,6 +91,8 @@ export function PostPreviewCard({
     return null;
   }, [item]);
 
+  const dragMeta = useMemo(() => getPostCardDragMeta(item), [item]);
+
   const groupMeta = useMemo(() => {
     if (item.type === 'placeholder') return null;
     const record = item as unknown as Record<string, unknown>;
@@ -101,7 +117,7 @@ export function PostPreviewCard({
     };
   }, [item]);
 
-  const { status, displayTime } = useMemo(() => {
+  const { status, displayTime, timestamp } = useMemo(() => {
     const isPlaceholder = item.type === 'placeholder' || (item as any)?.isPlaceholder;
     const status = (item as any)?.status || (isPlaceholder ? 'placeholder' : 'draft');
 
@@ -118,8 +134,41 @@ export function PostPreviewCard({
       displayTime = formatInTimeZone(new Date(ts), timezone, 'h:mm a');
     }
 
-    return { status, displayTime };
+    return { status, displayTime, timestamp: ts as string | null };
   }, [item, timezone]);
+
+  const captionMeta = useMemo(() => getPostCardCaptionMeta(item), [item]);
+  const statusTooltip = useMemo(() => {
+    const statusLabel = (() => {
+      switch (status) {
+        case 'published':
+          return 'Published';
+        case 'scheduled':
+          return 'Scheduled';
+        case 'draft':
+          return 'Draft';
+        case 'failed':
+          return 'Failed';
+        case 'skipped':
+          return 'Skipped';
+        case 'placeholder':
+          return 'Empty slot';
+        default: {
+          const raw = String(status || '');
+          if (!raw) return 'Status';
+          return raw.charAt(0).toUpperCase() + raw.slice(1);
+        }
+      }
+    })();
+
+    if (!timestamp) return statusLabel;
+
+    try {
+      return `${statusLabel} • ${formatInTimeZone(new Date(timestamp), timezone, 'MMM d, yyyy h:mm a')}`;
+    } catch {
+      return statusLabel;
+    }
+  }, [status, timestamp, timezone]);
 
   const [imageReady, setImageReady] = useState(false);
   const previewUrl = useMemo(() => {
@@ -140,56 +189,73 @@ export function PostPreviewCard({
   });
   const showMediaBadge = item.type !== 'placeholder';
 
-  const destinationAvatars = useMemo(() => {
-    if (hideDestinations) return null;
+  const statusBadge = (
+    <PostStatusTimeBadge
+      status={status}
+      variant="inline"
+      className="relative"
+      iconClassName={cn(
+        'transition-opacity duration-150 ease-out',
+        dragMeta.show ? 'group-hover:opacity-0' : null
+      )}
+      iconOverlay={
+        dragMeta.show ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  aria-label={dragMeta.canDrag ? 'Drag to reschedule' : 'Dragging disabled'}
+                  className={cn(
+                    'text-muted-foreground hover:text-foreground pointer-events-none absolute inset-0 inline-flex items-center justify-center rounded-sm opacity-0 transition-opacity duration-150 ease-out group-hover:pointer-events-auto group-hover:opacity-100',
+                    dragMeta.canDrag
+                      ? 'cursor-grab active:cursor-grabbing'
+                      : 'cursor-not-allowed group-hover:opacity-70'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <GripVertical className="h-4 w-4" aria-hidden="true" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span>{dragMeta.tooltip}</span>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null
+      }
+    >
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {displayTime ? (
+              <span className="underline-offset-2 hover:underline">{displayTime}</span>
+            ) : (
+              <span className="italic">No time</span>
+            )}
+          </TooltipTrigger>
+          <TooltipContent>
+            <span>{statusTooltip}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </PostStatusTimeBadge>
+  );
+
+  const topRightIndicators = useMemo(() => {
     if (item.type === 'placeholder') return null;
-    if (!socialAccountsById) return null;
-
-    const record = item as unknown as Record<string, unknown>;
-    const rawIds = Array.isArray(record.destinationSocialAccountIds)
-      ? (record.destinationSocialAccountIds as unknown[])
-      : null;
-    const singleId =
-      typeof record.targetSocialAccountId === 'string' ? record.targetSocialAccountId : null;
-
-    const ids = (rawIds && rawIds.length > 0 ? rawIds : singleId ? [singleId] : [])
-      .filter((v): v is string => typeof v === 'string')
-      .map((v) => v.trim())
-      .filter((v) => v.length > 0);
-
-    const unique = Array.from(new Set(ids));
-    if (unique.length === 0) return null;
-
-    const maxVisible = 3;
-    const visible = unique.slice(0, maxVisible);
-    const extraCount = unique.length - visible.length;
-
     return (
-      <div className="flex items-center -space-x-1.5">
-        {visible.map((id) => {
-          const meta = socialAccountsById[id];
-          if (!meta) return null;
-          return (
-            <div key={id} className="shrink-0" title={meta.label}>
-              <SocialAccountAvatar
-                platform={meta.platform}
-                name={meta.avatarName}
-                src={meta.avatarUrl}
-                size="xs"
-                disabled={meta.disconnected}
-                muted={false}
-              />
-            </div>
-          );
-        })}
-        {extraCount > 0 ? (
-          <div className="bg-muted text-muted-foreground border-border flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-medium">
-            +{extraCount}
-          </div>
-        ) : null}
+      <div className="flex items-center gap-1">
+        <CampaignDotIndicator item={item} onOpenCampaign={(id) => navigate(`/campaigns/${id}`)} />
+        <DestinationIndicator
+          item={item}
+          hideDestinations={hideDestinations}
+          socialAccountsById={socialAccountsById}
+        />
       </div>
     );
-  }, [hideDestinations, item, socialAccountsById]);
+  }, [hideDestinations, item, navigate, socialAccountsById]);
 
   useEffect(() => {
     setImageReady(false);
@@ -254,6 +320,8 @@ export function PostPreviewCard({
       const laneKey = typeof record.laneKey === 'string' ? record.laneKey : null;
       if (laneKey === 'post' || laneKey === 'reel' || laneKey === 'story') {
         params.contentType = laneKey;
+      } else if (laneKey === 'any') {
+        params.contentType = 'post';
       }
 
       openSidebar('post-create', { params });
@@ -296,8 +364,6 @@ export function PostPreviewCard({
   }, [isQueueSlotPlaceholder, item, timezone]);
 
   // Status-tinted border to match calendar cards
-  const borderColor = getPostStatusBorderColor(status);
-
   // Mutations
   const queryClient = useQueryClient();
   const deleteMutation = useMutation({
@@ -366,7 +432,9 @@ export function PostPreviewCard({
     };
 
     return (
-      <div
+      <Item
+        variant="outline"
+        size="sm"
         role="button"
         tabIndex={0}
         onClick={handleCreate}
@@ -377,7 +445,8 @@ export function PostPreviewCard({
           }
         }}
         className={cn(
-          'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[calc(var(--calendar-card-h)-8px)] w-full cursor-pointer items-center justify-between gap-3 rounded-lg border p-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+          'group bg-card hover:bg-muted/50 relative h-[calc(var(--calendar-card-h)-8px)] w-full cursor-pointer justify-between shadow-sm select-none',
+          'gap-2 p-2',
           queueSlotMeta.isPast && 'opacity-70'
         )}
       >
@@ -405,10 +474,10 @@ export function PostPreviewCard({
               handleCreate();
             }}
           >
-            Create
+            {getLaneCreateLabel(queueSlotMeta.laneKey)}
           </Button>
         </div>
-      </div>
+      </Item>
     );
   }
 
@@ -423,8 +492,10 @@ export function PostPreviewCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         {isWide ? (
-          <div
+          <Item
             ref={cardRef}
+            variant="outline"
+            size="sm"
             role="button"
             tabIndex={0}
             onClick={handleOpen}
@@ -435,17 +506,17 @@ export function PostPreviewCard({
               }
             }}
             className={cn(
-              'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-2 rounded-lg border p-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+              'group bg-card hover:bg-muted/50 relative flex h-[var(--calendar-card-h)] w-full cursor-pointer items-stretch gap-2 p-2 text-left shadow-sm transition-colors select-none focus-visible:ring-2',
+              'flex-nowrap',
               optimisticLabel && 'opacity-90'
             )}
-            style={{ borderColor }}
           >
-            {destinationAvatars ? (
-              <div className="pointer-events-none absolute top-2 right-2 z-10 origin-top-right scale-90">
-                {destinationAvatars}
+            {topRightIndicators ? (
+              <div className="absolute top-2 right-2 z-10 origin-top-right scale-90">
+                {topRightIndicators}
               </div>
             ) : null}
-            <div className="bg-muted relative w-14 shrink-0 self-stretch overflow-hidden rounded-md">
+            <ItemMedia variant="image" className="bg-muted relative h-full w-14 self-stretch">
               {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
               <img
                 src={getPostImageOrPlaceholder(previewUrl)}
@@ -463,39 +534,27 @@ export function PostPreviewCard({
                   <MediaTypeBadge type={mediaBadgeType} />
                 </div>
               ) : null}
-            </div>
+            </ItemMedia>
 
-            <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PostStatusTimeBadge status={status} variant="inline">
-                        {displayTime ? (
-                          <span>{displayTime}</span>
-                        ) : (
-                          <span className="italic">No time</span>
-                        )}
-                      </PostStatusTimeBadge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <span className="capitalize">
-                        {status === 'placeholder' ? 'Future AI' : status}
-                      </span>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="font-normal">{statusBadge}</ItemTitle>
 
-              <div className="text-foreground mt-1 line-clamp-1 min-h-[1.4em] text-[12px] leading-snug">
-                {(item as any)?.caption || '\u00A0'}
-              </div>
-            </div>
+              <ItemDescription
+                className={cn(
+                  'mt-1 line-clamp-1 min-h-[1.4em] text-[12px] leading-snug',
+                  captionMeta.isFallback ? 'text-muted-foreground italic' : 'text-foreground'
+                )}
+              >
+                {captionMeta.text}
+              </ItemDescription>
+            </ItemContent>
             {optimisticIndicator}
-          </div>
+          </Item>
         ) : (
-          <div
+          <Item
             ref={cardRef}
+            variant="outline"
+            size="sm"
             role="button"
             tabIndex={0}
             onClick={handleOpen}
@@ -506,43 +565,22 @@ export function PostPreviewCard({
               }
             }}
             className={cn(
-              'group bg-card hover:bg-muted/50 focus-visible:ring-ring relative flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 rounded-lg border p-2 text-left shadow-sm transition-colors select-none focus:outline-none focus-visible:ring-2',
+              'group bg-card hover:bg-muted/50 relative flex h-[var(--calendar-card-h)] w-full cursor-pointer flex-col justify-start gap-2 p-2 text-left shadow-sm transition-colors select-none focus-visible:ring-2',
+              'flex-nowrap items-stretch',
               optimisticLabel && 'opacity-90'
             )}
-            style={{ borderColor }}
           >
-            {destinationAvatars ? (
-              <div className="pointer-events-none absolute top-2 right-2 z-10 origin-top-right scale-90">
-                {destinationAvatars}
+            {topRightIndicators ? (
+              <div className="absolute top-2 right-2 z-10 origin-top-right scale-90">
+                {topRightIndicators}
               </div>
             ) : null}
             {/* Top row: time/status */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PostStatusTimeBadge status={status} variant="inline">
-                        {displayTime ? (
-                          <span>{displayTime}</span>
-                        ) : (
-                          <span className="italic">No time</span>
-                        )}
-                      </PostStatusTimeBadge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <span className="capitalize">
-                        {status === 'placeholder' ? 'Future AI' : status}
-                      </span>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
+            <ItemTitle className="font-normal">{statusBadge}</ItemTitle>
 
             {/* Second row: image + caption */}
-            <div className="flex min-w-0 items-start gap-3 text-[12px] leading-snug">
-              <div className="bg-muted relative h-[2.75em] w-[2.75em] shrink-0 overflow-hidden rounded-md">
+            <div className="flex min-w-0 items-start gap-2 text-[12px] leading-snug">
+              <ItemMedia variant="image" className="bg-muted relative h-[3em] w-[3em] shrink-0">
                 {!imageReady && <div className="bg-muted absolute inset-0 animate-pulse" />}
                 <img
                   src={getPostImageOrPlaceholder(previewUrl)}
@@ -560,14 +598,19 @@ export function PostPreviewCard({
                     <MediaTypeBadge type={mediaBadgeType} />
                   </div>
                 ) : null}
-              </div>
+              </ItemMedia>
 
-              <div className="text-foreground line-clamp-2 min-w-0 flex-1">
-                {(item as any)?.caption || ''}
-              </div>
+              <ItemDescription
+                className={cn(
+                  'line-clamp-2 min-w-0 flex-1',
+                  captionMeta.isFallback ? 'text-muted-foreground italic' : 'text-foreground'
+                )}
+              >
+                {item.type === 'placeholder' ? '' : captionMeta.text}
+              </ItemDescription>
             </div>
             {optimisticIndicator}
-          </div>
+          </Item>
         )}
       </ContextMenuTrigger>
 

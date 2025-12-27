@@ -1,12 +1,7 @@
 import type { ReactNode } from 'react';
 import { Briefcase } from 'lucide-react';
-import {
-  FacebookIcon,
-  InstagramIcon,
-  TikTokIcon,
-  XBrandIcon,
-  YouTubeIcon,
-} from '@/components/icons/BrandIcons';
+import { FacebookIcon, TikTokIcon, XBrandIcon, YouTubeIcon } from '@/components/icons/BrandIcons';
+import { cn } from '@/lib/utils';
 
 export type Platform =
   | 'instagram'
@@ -35,7 +30,13 @@ export function getPlatformIcon(
 
   switch (platformLower) {
     case 'instagram':
-      return <InstagramIcon className={className} aria-hidden="true" />;
+      // CSS mask-based gradient fill for Instagram (see src/index.css).
+      return (
+        <span
+          className={cn('platform-icon platform-icon--instagram', className)}
+          aria-hidden="true"
+        />
+      );
     case 'facebook':
       return <FacebookIcon className={className} aria-hidden="true" />;
     case 'linkedin':

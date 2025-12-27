@@ -18,10 +18,24 @@ export interface PostStatusTimeBadgeProps extends React.HTMLAttributes<HTMLSpanE
   status: CalendarPostStatus;
   variant?: Variant;
   iconClassName?: string;
+  iconWrapperClassName?: string;
+  iconOverlay?: React.ReactNode;
 }
 
 export const PostStatusTimeBadge = React.forwardRef<HTMLSpanElement, PostStatusTimeBadgeProps>(
-  ({ status, variant = 'inline', className, iconClassName, children, ...props }, ref) => {
+  (
+    {
+      status,
+      variant = 'inline',
+      className,
+      iconClassName,
+      iconWrapperClassName,
+      iconOverlay,
+      children,
+      ...props
+    },
+    ref
+  ) => {
     const Icon = iconByStatus[String(status)] ?? Clock;
     const statusTextClass = getPostStatusTextClass(status);
 
@@ -37,7 +51,16 @@ export const PostStatusTimeBadge = React.forwardRef<HTMLSpanElement, PostStatusT
         )}
         {...props}
       >
-        <Icon className={cn('h-3.5 w-3.5', iconClassName)} />
+        <span
+          data-slot="post-status-icon"
+          className={cn(
+            'relative inline-flex shrink-0 items-center justify-center',
+            iconWrapperClassName
+          )}
+        >
+          <Icon className={cn('h-3.5 w-3.5', iconClassName)} />
+          {iconOverlay}
+        </span>
         {children}
       </span>
     );

@@ -17,6 +17,13 @@ export function getLanePillLabel(laneKey: PublishingQueueLaneKey): string {
   return 'Post';
 }
 
+export function getLaneCreateLabel(laneKey: PublishingQueueLaneKey): string {
+  if (laneKey === 'reel') return 'Create reel';
+  if (laneKey === 'story') return 'Create story';
+  if (laneKey === 'any') return 'Create content';
+  return 'Create post';
+}
+
 export function laneIcon(laneKey: PublishingQueueLaneKey, className = 'h-3.5 w-3.5') {
   if (laneKey === 'any') return <Asterisk className={className} />;
   if (laneKey === 'reel') return <Film className={className} />;

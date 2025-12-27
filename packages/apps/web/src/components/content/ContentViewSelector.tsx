@@ -21,6 +21,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
+import { formatSocialAccountLabel } from '@/lib/social-account-label';
 
 const PLATFORM_SET: ReadonlySet<string> = new Set([
   'instagram',
@@ -54,7 +55,7 @@ function toSocialAccountOptions(raw: unknown): SocialAccountOption[] {
 
       const username = typeof account?.username === 'string' ? account.username : null;
       const displayName = typeof account?.displayName === 'string' ? account.displayName : null;
-      const label = username ? `@${username}` : displayName || platform;
+      const label = formatSocialAccountLabel({ platform, username, displayName });
       const avatarName = username || displayName || platform;
       const avatarUrl =
         typeof account?.profilePictureUrl === 'string' ? account.profilePictureUrl : null;

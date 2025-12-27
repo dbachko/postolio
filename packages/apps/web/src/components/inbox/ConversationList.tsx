@@ -87,7 +87,7 @@ function ConversationItem({
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-foreground truncate font-medium">
-              @{conversation.instagramUsername}
+              {conversation.instagramUsername}
             </span>
             {isAutomated && (
               <Badge variant="secondary" className="shrink-0 text-xs">
