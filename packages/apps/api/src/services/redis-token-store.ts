@@ -11,6 +11,10 @@ interface TokenMetadata {
   lastUsedAt?: Date;
   ipAddress?: string;
   userAgent?: string;
+  // Optional lifecycle fields used to safely handle concurrent refresh rotations
+  retiredAt?: string;
+  supersededBy?: string;
+  supersededAt?: string;
 }
 
 /**
@@ -111,6 +115,38 @@ export class RedisTokenStore {
     pipeline.srem(userSetKey, token);
     pipeline.srem(familySetKey, token);
 
+    await pipeline.exec();
+  }
+
+  /**
+   * Retire a token for a short grace window (keeps the token key briefly but removes it from sets).
+   * This avoids false-positive "token reuse" detection when multiple refresh requests race.
+   */
+  async retireToken(
+    token: string,
+    ttlSeconds: number,
+    overrides?: Partial<TokenMetadata>
+  ): Promise<void> {
+    const tokenKey = `${RedisTokenStore.TOKEN_PREFIX}${token}`;
+
+    const tokenData = await this.getToken(token);
+    if (!tokenData) return;
+
+    const userSetKey = `${RedisTokenStore.USER_TOKENS_SET}${tokenData.userId}`;
+    const familySetKey = `${RedisTokenStore.FAMILY_TOKENS_SET}${tokenData.family}`;
+
+    const now = new Date().toISOString();
+    const retiredData: TokenMetadata = {
+      ...tokenData,
+      ...overrides,
+      retiredAt: overrides?.retiredAt || now,
+    };
+
+    const pipeline = this.redis.pipeline();
+    pipeline.setex(tokenKey, ttlSeconds, JSON.stringify(retiredData));
+    pipeline.srem(RedisTokenStore.ALL_TOKENS_SET, token);
+    pipeline.srem(userSetKey, token);
+    pipeline.srem(familySetKey, token);
     await pipeline.exec();
   }
 

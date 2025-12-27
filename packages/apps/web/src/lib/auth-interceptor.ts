@@ -14,6 +14,8 @@ export class AuthInterceptor {
   private static lastRefreshTime = 0;
   private static readonly SHARED_REFRESH_KEY = 'postolio:lastRefreshTime';
   private static readonly SHARED_REFRESH_GRACE_MS = 15_000; // Avoid double rotation when another tab just refreshed
+  private static readonly LS_REFRESH_LOCK_KEY = 'postolio:authRefreshLock';
+  private static readonly LS_REFRESH_LOCK_TTL_MS = 10_000;
   private static readonly REFRESH_INTERVAL = 12 * 60 * 1000; // 12 minutes
   private static refreshTimer: ReturnType<typeof setInterval> | null = null;
   private static autoRefreshEnabled = false;
@@ -134,7 +136,58 @@ export class AuthInterceptor {
     if (lockManager?.request) {
       return lockManager.request('auth-refresh', async () => fn());
     }
-    return fn();
+    return this.withLocalStorageLock(fn);
+  }
+
+  private static parseLock(raw: string | null): { id: string; expiresAt: number } | null {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { id?: unknown; expiresAt?: unknown };
+      if (typeof parsed?.id !== 'string' || typeof parsed?.expiresAt !== 'number') return null;
+      return { id: parsed.id, expiresAt: parsed.expiresAt };
+    } catch {
+      return null;
+    }
+  }
+
+  private static async withLocalStorageLock<T>(fn: () => Promise<T>): Promise<T> {
+    if (typeof localStorage === 'undefined') return fn();
+
+    const now = Date.now();
+    const id = `${now}-${Math.random().toString(16).slice(2)}`;
+    const expiresAt = now + this.LS_REFRESH_LOCK_TTL_MS;
+
+    const tryAcquire = (): boolean => {
+      const existing = this.parseLock(localStorage.getItem(this.LS_REFRESH_LOCK_KEY));
+      if (existing && existing.expiresAt > Date.now()) return false;
+      try {
+        localStorage.setItem(this.LS_REFRESH_LOCK_KEY, JSON.stringify({ id, expiresAt }));
+        const confirmed = this.parseLock(localStorage.getItem(this.LS_REFRESH_LOCK_KEY));
+        return Boolean(confirmed && confirmed.id === id);
+      } catch {
+        return false;
+      }
+    };
+
+    let acquired = false;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      acquired = tryAcquire();
+      if (acquired) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    try {
+      return await fn();
+    } finally {
+      if (acquired) {
+        try {
+          const existing = this.parseLock(localStorage.getItem(this.LS_REFRESH_LOCK_KEY));
+          if (existing?.id === id) localStorage.removeItem(this.LS_REFRESH_LOCK_KEY);
+        } catch {
+          // ignore
+        }
+      }
+    }
   }
 
   /**

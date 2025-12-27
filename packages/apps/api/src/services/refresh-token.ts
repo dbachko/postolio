@@ -27,6 +27,7 @@ export class RefreshTokenService {
   // With 12-minute refreshes, 100 generations is reached in ~20 hours. Keep this high enough
   // to avoid churn in normal usage while still providing a theoretical safety cap.
   private static readonly MAX_GENERATIONS = 20_000; // Maximum rotations per family
+  private static readonly ROTATION_GRACE_MS = 15_000; // Allow for concurrent refresh requests
 
   /**
    * Generate a new refresh token
@@ -162,8 +163,95 @@ export class RefreshTokenService {
       return null;
     }
 
+    const currentGeneration = Number((family as any).currentGeneration);
+    if (!Number.isFinite(currentGeneration) || currentGeneration < 1) {
+      // Corrupt or unexpected family data - treat as security issue
+      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
+      await AuditLogger.log({
+        userId: oldTokenParsed.userId,
+        eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
+        metadata: {
+          family: oldTokenParsed.family,
+          expectedGeneration: (family as any).currentGeneration,
+          actualGeneration: oldTokenParsed.generation,
+          ipAddress,
+          userAgent,
+          reason: 'invalid_family_generation',
+        },
+        success: false,
+      });
+      return null;
+    }
+
     // Check for token reuse (generation mismatch)
-    if (oldTokenParsed.generation !== family.currentGeneration) {
+    if (oldTokenParsed.generation !== currentGeneration) {
+      // Handle common false-positive: concurrent refresh requests racing each other.
+      // If the provided token is immediately previous and the family rotated very recently,
+      // return the current token instead of invalidating the whole family.
+      const lastRotatedAtRaw = (family as any).lastRotatedAt;
+      const lastRotatedAtMs =
+        typeof lastRotatedAtRaw === 'string' || typeof lastRotatedAtRaw === 'number'
+          ? new Date(lastRotatedAtRaw as any).getTime()
+          : 0;
+      const withinGrace =
+        Number.isFinite(lastRotatedAtMs) && Date.now() - lastRotatedAtMs <= this.ROTATION_GRACE_MS;
+      const isPreviousGeneration = oldTokenParsed.generation === currentGeneration - 1;
+      const sameUserAgent =
+        !oldTokenParsed.userAgent || !userAgent ? true : oldTokenParsed.userAgent === userAgent;
+
+      if (withinGrace && isPreviousGeneration && sameUserAgent) {
+        // Best-effort: fetch the current token for this family and return it
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const familyTokens = await tokenStore.getFamilyTokens(oldTokenParsed.family);
+          const current = familyTokens.find((t) => t.generation === currentGeneration);
+          if (current) {
+            // Ensure the DB session points at the current token (idempotent safety for timing races)
+            const session =
+              (await SessionService.findSessionByToken(current.token)) ||
+              (await SessionService.findSessionByToken(oldToken));
+            if (session) {
+              await SessionService.updateLastActivity(session.id);
+              await SessionService.updateRefreshTokenHash(session.id, current.token);
+            }
+
+            const user = await prisma.user.findUnique({
+              where: { id: oldTokenParsed.userId },
+              select: { id: true, email: true },
+            });
+            if (!user) throw new Error('User not found');
+
+            const accessToken = fastify.jwt.sign({
+              id: user.id,
+              email: user.email,
+              sid: session?.id,
+            });
+
+            await AuditLogger.log({
+              userId: oldTokenParsed.userId,
+              eventType: AuditEventType.REFRESH_TOKEN_ROTATED,
+              metadata: {
+                reason: 'concurrent_refresh_grace',
+                family: oldTokenParsed.family,
+                expectedGeneration: currentGeneration,
+                actualGeneration: oldTokenParsed.generation,
+                ipAddress,
+                userAgent,
+                sessionId: session?.id,
+              },
+              success: true,
+            });
+
+            return {
+              refreshToken: current.token,
+              accessToken,
+              family: oldTokenParsed.family,
+            };
+          }
+          // Wait a moment for the other in-flight rotation to persist the new token
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
+
       // Token reuse detected - invalidate entire family
       await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
       await AuditLogger.log({
@@ -171,7 +259,7 @@ export class RefreshTokenService {
         eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
         metadata: {
           family: oldTokenParsed.family,
-          expectedGeneration: family.currentGeneration,
+          expectedGeneration: currentGeneration,
           actualGeneration: oldTokenParsed.generation,
           ipAddress,
           userAgent,
@@ -308,8 +396,12 @@ export class RefreshTokenService {
     // Update the stored refreshTokenHash to the new token's hash
     await SessionService.updateRefreshTokenHash(session.id, newToken);
 
-    // Invalidate old token *after* the session points at the new token, to avoid transient mismatch.
-    await tokenStore.deleteToken(oldToken);
+    // Retire old token briefly to tolerate concurrent refresh calls without triggering reuse invalidation.
+    // This keeps the old token addressable for a short grace window but removes it from tracking sets.
+    await tokenStore.retireToken(oldToken, Math.ceil(this.ROTATION_GRACE_MS / 1000), {
+      supersededBy: newToken,
+      supersededAt: new Date().toISOString(),
+    });
 
     // Generate new access token (include session id if available)
     const user = await prisma.user.findUnique({

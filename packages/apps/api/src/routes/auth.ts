@@ -215,6 +215,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     if (!result) {
+      request.log.warn(
+        {
+          type: 'refresh_invalid_or_expired',
+          ip: getClientIp(request),
+          userAgent: getUserAgent(request),
+          referer: request.headers.referer,
+          origin: request.headers.origin,
+        },
+        'Refresh token rotation failed (invalid/expired/reused/session-mismatch)'
+      );
       // Invalid or expired refresh token
       // Clear refresh token on the same path it was originally set
       reply.clearCookie('refresh_token', { path: '/api/auth' });
