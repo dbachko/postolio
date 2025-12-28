@@ -932,7 +932,6 @@ function FullCalendarImpl({
               event={event as CalendarEvent}
               timezone={tzRef.current}
               brandId={brandId}
-              onReschedule={(item) => setReschedule({ open: true, item })}
               assetsById={assetsById}
               socialAccountsById={socialAccountsById}
               hideDestinations={Boolean(effectiveSingleDestinationId)}
