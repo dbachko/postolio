@@ -1,5 +1,5 @@
 import type { MouseEventHandler } from 'react';
-import { PostPreviewCard } from '@/components/post-preview-card/PostPreviewCard';
+import { PostPreviewCard } from '@/components/PostPreviewCard';
 import type { CalendarItem } from '@/types/calendar';
 import type { SocialAccountsById } from '@/types/social-accounts';
 import type { CalendarEvent } from '../types';
@@ -9,6 +9,7 @@ interface EventRendererProps {
   event: CalendarEvent;
   timezone: string;
   brandId: string;
+  onReschedule: (item: CalendarItem) => void;
   assetsById?: Record<string, AssetType | null>;
   socialAccountsById?: SocialAccountsById;
   hideDestinations?: boolean;
@@ -18,6 +19,7 @@ export function EventRenderer({
   event,
   timezone,
   brandId,
+  onReschedule,
   assetsById,
   socialAccountsById,
   hideDestinations = false,
@@ -46,6 +48,7 @@ export function EventRenderer({
       <PostPreviewCard
         item={cardItem}
         timezone={timezone}
+        onReschedule={onReschedule}
         primaryAsset={primaryAsset}
         socialAccountsById={socialAccountsById}
         hideDestinations={hideDestinations}
