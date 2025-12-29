@@ -188,6 +188,15 @@ function AppLayoutInner({ children }: LayoutProps) {
         sectionChildren.find((child) => path.startsWith(child.path + '/'));
 
       if (matchedChild) {
+        // If a section includes a child route that equals the parent path (e.g., Inbox -> Incoming),
+        // keep the page title as the parent label to avoid "Inbox / Incoming" mismatches in the header.
+        if (matchedChild.path === matchedPrimary.path) {
+          return {
+            title: matchedPrimary.label,
+            description: matchedChild.description ?? matchedPrimary.description,
+          };
+        }
+
         return { title: matchedChild.label, description: matchedChild.description };
       }
 

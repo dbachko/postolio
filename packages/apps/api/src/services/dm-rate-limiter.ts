@@ -14,23 +14,23 @@ const HOUR_IN_SECONDS = 3600;
 
 export const dmRateLimiter = {
   /**
-   * Check if brand can send a DM within hourly rate limit
-   * @param brandId - Brand ID to check
+   * Check if a social account can send a DM within hourly rate limit
+   * @param socialAccountId - SocialAccount ID to check
    * @returns Rate limit status with remaining DMs count
    */
-  async checkLimit(brandId: string): Promise<{ allowed: boolean; remainingHour: number }> {
+  async checkLimit(socialAccountId: string): Promise<{ allowed: boolean; remainingHour: number }> {
     try {
       const redis = redisService.getClient();
 
       if (!redis) {
         // If Redis is unavailable, allow the request but log warning
-        logger.warn('Redis unavailable, skipping DM rate limit check', { brandId });
+        logger.warn('Redis unavailable, skipping DM rate limit check', { socialAccountId });
         return { allowed: true, remainingHour: MAX_DMS_PER_HOUR };
       }
 
       // Create hourly window key (includes current hour for auto-reset)
       const currentHour = new Date().getHours();
-      const key = `dm_rate_limit:${brandId}:${currentHour}`;
+      const key = `dm_rate_limit:${socialAccountId}:${currentHour}`;
 
       // Get current count
       const currentCount = await redis.get(key);
@@ -42,7 +42,7 @@ export const dmRateLimiter = {
 
       if (!allowed) {
         logger.warn('DM rate limit exceeded', {
-          brandId,
+          socialAccountId,
           count,
           limit: MAX_DMS_PER_HOUR,
           currentHour,
@@ -52,7 +52,7 @@ export const dmRateLimiter = {
       return { allowed, remainingHour };
     } catch (error) {
       logger.error('Error checking DM rate limit', {
-        brandId,
+        socialAccountId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       // On error, allow request to prevent blocking legitimate usage
@@ -61,21 +61,21 @@ export const dmRateLimiter = {
   },
 
   /**
-   * Increment DM count for a brand (call after successfully sending)
-   * @param brandId - Brand ID
+   * Increment DM count for a social account (call after successfully sending)
+   * @param socialAccountId - SocialAccount ID
    * @returns New count for current hour
    */
-  async incrementCount(brandId: string): Promise<number> {
+  async incrementCount(socialAccountId: string): Promise<number> {
     try {
       const redis = redisService.getClient();
 
       if (!redis) {
-        logger.warn('Redis unavailable, cannot track DM count', { brandId });
+        logger.warn('Redis unavailable, cannot track DM count', { socialAccountId });
         return 0;
       }
 
       const currentHour = new Date().getHours();
-      const key = `dm_rate_limit:${brandId}:${currentHour}`;
+      const key = `dm_rate_limit:${socialAccountId}:${currentHour}`;
 
       // Increment counter
       const newCount = await redis.incr(key);
@@ -86,7 +86,7 @@ export const dmRateLimiter = {
       }
 
       logger.debug('DM count incremented', {
-        brandId,
+        socialAccountId,
         count: newCount,
         limit: MAX_DMS_PER_HOUR,
         remaining: MAX_DMS_PER_HOUR - newCount,
@@ -95,7 +95,7 @@ export const dmRateLimiter = {
       return newCount;
     } catch (error) {
       logger.error('Error incrementing DM count', {
-        brandId,
+        socialAccountId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       return 0;
@@ -104,10 +104,10 @@ export const dmRateLimiter = {
 
   /**
    * Get total DM count for the current day (all hours)
-   * @param brandId - Brand ID
+   * @param socialAccountId - SocialAccount ID
    * @returns Total DMs sent today across all hours
    */
-  async getDailyCount(brandId: string): Promise<number> {
+  async getDailyCount(socialAccountId: string): Promise<number> {
     try {
       const redis = redisService.getClient();
 
@@ -116,7 +116,7 @@ export const dmRateLimiter = {
       }
 
       // Scan for all keys matching pattern dm_rate_limit:brandId:*
-      const keyPattern = `dm_rate_limit:${brandId}:*`;
+      const keyPattern = `dm_rate_limit:${socialAccountId}:*`;
       const keys = await redis.keys(keyPattern);
 
       if (!keys || keys.length === 0) {
@@ -133,7 +133,7 @@ export const dmRateLimiter = {
       }
 
       logger.debug('Daily DM count retrieved', {
-        brandId,
+        socialAccountId,
         dailyCount: total,
         hoursActive: keys.length,
       });
@@ -141,7 +141,7 @@ export const dmRateLimiter = {
       return total;
     } catch (error) {
       logger.error('Error getting daily DM count', {
-        brandId,
+        socialAccountId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       return 0;
@@ -150,10 +150,10 @@ export const dmRateLimiter = {
 
   /**
    * Get current hour's DM count
-   * @param brandId - Brand ID
+   * @param socialAccountId - SocialAccount ID
    * @returns DMs sent in current hour
    */
-  async getCurrentHourCount(brandId: string): Promise<number> {
+  async getCurrentHourCount(socialAccountId: string): Promise<number> {
     try {
       const redis = redisService.getClient();
 
@@ -162,13 +162,13 @@ export const dmRateLimiter = {
       }
 
       const currentHour = new Date().getHours();
-      const key = `dm_rate_limit:${brandId}:${currentHour}`;
+      const key = `dm_rate_limit:${socialAccountId}:${currentHour}`;
 
       const count = await redis.get(key);
       return count ? parseInt(count, 10) : 0;
     } catch (error) {
       logger.error('Error getting current hour DM count', {
-        brandId,
+        socialAccountId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       return 0;
@@ -176,10 +176,10 @@ export const dmRateLimiter = {
   },
 
   /**
-   * Reset rate limit for a brand (for testing or manual override)
-   * @param brandId - Brand ID
+   * Reset rate limit for a social account (for testing or manual override)
+   * @param socialAccountId - SocialAccount ID
    */
-  async resetLimit(brandId: string): Promise<void> {
+  async resetLimit(socialAccountId: string): Promise<void> {
     try {
       const redis = redisService.getClient();
 
@@ -187,19 +187,19 @@ export const dmRateLimiter = {
         return;
       }
 
-      const keyPattern = `dm_rate_limit:${brandId}:*`;
+      const keyPattern = `dm_rate_limit:${socialAccountId}:*`;
       const keys = await redis.keys(keyPattern);
 
       if (keys && keys.length > 0) {
         await redis.del(...keys);
         logger.info('DM rate limit reset', {
-          brandId,
+          socialAccountId,
           keysDeleted: keys.length,
         });
       }
     } catch (error) {
       logger.error('Error resetting DM rate limit', {
-        brandId,
+        socialAccountId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

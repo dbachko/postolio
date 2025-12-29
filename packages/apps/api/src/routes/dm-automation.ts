@@ -436,92 +436,6 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   /**
-   * GET /api/brands/:brandId/dm-automation/conversations
-   * List all DM conversations for a brand
-   */
-  fastify.get<{
-    Params: { brandId: string };
-    Querystring: { state?: 'active' | 'archived' | 'spam'; limit?: number };
-  }>(
-    '/brands/:brandId/dm-automation/conversations',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const { brandId } = request.params;
-      const { state, limit = 50 } = request.query;
-      const userId = request.user!.id;
-
-      try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
-        }
-
-        // Build where clause
-        const where: any = { brandId };
-        if (state) {
-          where.state = state;
-        }
-
-        // Fetch conversations with message counts
-        const conversations = await prisma.dMConversation.findMany({
-          where,
-          orderBy: { lastMessageAt: 'desc' },
-          take: limit,
-          include: {
-            rule: {
-              select: { id: true, name: true },
-            },
-            _count: {
-              select: { messages: true },
-            },
-          },
-        });
-
-        // Get last message for each conversation
-        const conversationsWithLastMessage = await Promise.all(
-          conversations.map(async (conv) => {
-            const lastMessage = await prisma.dMMessage.findFirst({
-              where: { conversationId: conv.id },
-              orderBy: { createdAt: 'desc' },
-            });
-
-            return {
-              ...conv,
-              messageCount: conv._count.messages,
-              lastMessage: lastMessage
-                ? {
-                    text: lastMessage.messageText,
-                    direction: lastMessage.direction,
-                    createdAt: lastMessage.createdAt,
-                  }
-                : null,
-            };
-          })
-        );
-
-        logger.info('Fetched DM conversations', {
-          brandId,
-          conversationCount: conversations.length,
-          state,
-          userId,
-        });
-
-        return reply.send({ conversations: conversationsWithLastMessage });
-      } catch (error) {
-        logger.error('Error fetching DM conversations', {
-          brandId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        return reply.code(500).send({ error: 'Failed to fetch conversations' });
-      }
-    }
-  );
-
-  /**
    * GET /api/brands/:brandId/dm-automation/conversations/:conversationId/messages
    * Get all messages in a conversation
    */
@@ -604,11 +518,15 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: 'Message text is required' });
         }
 
+        if (conversation.platform !== 'instagram') {
+          return reply.code(400).send({ error: 'Platform not supported for manual messages' });
+        }
+
         // Send message via Instagram API
         const { instagramService } = await import('../services/instagram.js');
-        const { messageId } = await instagramService.sendDirectMessage(
-          brandId,
-          conversation.instagramUserId,
+        const { messageId } = await instagramService.sendDirectMessageForSocialAccount(
+          conversation.socialAccountId,
+          conversation.participantExternalUserId,
           messageText.trim()
         );
 
@@ -616,6 +534,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
         const message = await prisma.dMMessage.create({
           data: {
             conversationId,
+            platform: conversation.platform,
             direction: 'outbound',
             messageText: messageText.trim(),
             externalMessageId: messageId,
@@ -640,14 +559,16 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
         // Broadcast WebSocket event for new manual message
         const statusBroadcaster = getStatusBroadcaster();
         if (statusBroadcaster) {
-          await statusBroadcaster.broadcastDMMessage(
+          await statusBroadcaster.broadcastDMMessage({
             conversationId,
-            message.id,
+            messageId: message.id,
             brandId,
-            'outbound',
-            messageText.trim(),
-            conversation.instagramUsername
-          );
+            socialAccountId: conversation.socialAccountId,
+            platform: conversation.platform,
+            direction: 'outbound',
+            messageText: messageText.trim(),
+            participantUsername: conversation.participantUsername,
+          });
         }
 
         return reply.code(201).send({ message });

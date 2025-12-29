@@ -57,24 +57,6 @@ export class DMAutomationClient {
   }
 
   /**
-   * List all DM conversations for a brand
-   */
-  listConversations(
-    brandId: string,
-    state?: 'active' | 'archived' | 'spam',
-    limit?: number
-  ): Promise<{ conversations: any[] }> {
-    const params = new URLSearchParams();
-    if (state) params.append('state', state);
-    if (limit) params.append('limit', limit.toString());
-
-    const query = params.toString();
-    return this.request(
-      `/api/brands/${brandId}/dm-automation/conversations${query ? `?${query}` : ''}`
-    );
-  }
-
-  /**
    * Get all messages in a conversation
    */
   getConversationMessages(brandId: string, conversationId: string): Promise<{ messages: any[] }> {

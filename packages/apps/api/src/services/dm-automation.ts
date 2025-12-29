@@ -1,6 +1,6 @@
 /**
  * DM Automation Orchestrator Service
- * Coordinates rule matching, message sending, and event logging for Instagram DM automation
+ * Coordinates rule matching, message sending, and event logging for DM automation
  */
 
 import { prisma } from '../config/database.js';
@@ -8,7 +8,7 @@ import { dmRulesEngine } from './dm-rules-engine.js';
 import { instagramService } from './instagram.js';
 import { dmRateLimiter } from './dm-rate-limiter.js';
 import { logger as baseLogger } from '@postolio/logger';
-import type { DMTriggerType, DMActionType, DMAutomationRule } from '@postolio/database';
+import type { DMTriggerType, DMActionType, DMAutomationRule, Platform } from '@postolio/database';
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import { StatusBroadcaster } from './status-broadcaster.js';
@@ -21,11 +21,13 @@ let statusBroadcaster: StatusBroadcaster | null = null;
 // Types
 export interface TriggerEvent {
   brandId: string;
+  socialAccountId: string;
+  platform: Platform;
   triggerType: DMTriggerType;
   triggerSource: 'comment' | 'dm';
   triggerText: string;
-  triggeredBy: string; // Instagram username
-  instagramUserId: string; // Instagram user ID (IGSID)
+  triggeredBy: string; // Username/handle
+  participantExternalUserId: string; // External user ID (platform-specific)
   externalCommentId?: string; // Comment ID if trigger is from comment
   postUrl?: string; // Optional post URL for template variables
 }
@@ -63,6 +65,15 @@ export const dmAutomation = {
     const eventLogger = logger.child({ brandId: event.brandId });
 
     try {
+      if (event.platform !== 'instagram') {
+        eventLogger.warn('DM automation platform not implemented', {
+          brandId: event.brandId,
+          socialAccountId: event.socialAccountId,
+          platform: event.platform,
+        });
+        return;
+      }
+
       eventLogger.info('Processing DM automation event', {
         triggerType: event.triggerType,
         triggerSource: event.triggerSource,
@@ -92,7 +103,7 @@ export const dmAutomation = {
       const eligibleRules: DMAutomationRule[] = [];
       for (const rule of matchedRules) {
         const evaluation = await dmRulesEngine.evaluateConditions(rule, {
-          userId: event.instagramUserId,
+          userId: event.participantExternalUserId,
           username: event.triggeredBy,
           postUrl: event.postUrl,
         });
@@ -166,10 +177,11 @@ export const dmAutomation = {
    */
   async sendAutomatedDM(rule: DMAutomationRule, context: TriggerEvent): Promise<void> {
     // 1. Check DM rate limit (Instagram's 350 DMs/hour limit)
-    const rateLimitCheck = await dmRateLimiter.checkLimit(context.brandId);
+    const rateLimitCheck = await dmRateLimiter.checkLimit(context.socialAccountId);
     if (!rateLimitCheck.allowed) {
       logger.warn('DM rate limit exceeded', {
         brandId: context.brandId,
+        socialAccountId: context.socialAccountId,
         ruleId: rule.id,
         remaining: rateLimitCheck.remainingHour,
       });
@@ -209,32 +221,37 @@ export const dmAutomation = {
       }
 
       const messageText = dmRulesEngine.renderTemplate(rule.messageTemplate, variables);
-      const { messageId } = await instagramService.sendDirectMessage(
-        context.brandId,
-        context.instagramUserId,
+      const { messageId } = await instagramService.sendDirectMessageForSocialAccount(
+        context.socialAccountId,
+        context.participantExternalUserId,
         messageText
       );
       messageSent = true;
 
       // Increment rate limit counter
-      await dmRateLimiter.incrementCount(context.brandId);
+      await dmRateLimiter.incrementCount(context.socialAccountId);
 
       // Create or update conversation record
       const conversation = await prisma.dMConversation.upsert({
         where: {
-          brandId_instagramUserId: {
+          brandId_socialAccountId_platform_participantExternalUserId: {
             brandId: context.brandId,
-            instagramUserId: context.instagramUserId,
+            socialAccountId: context.socialAccountId,
+            platform: context.platform,
+            participantExternalUserId: context.participantExternalUserId,
           },
         },
         create: {
           brandId: context.brandId,
+          socialAccountId: context.socialAccountId,
+          platform: context.platform,
           ruleId: rule.id,
-          instagramUserId: context.instagramUserId,
-          instagramUsername: context.triggeredBy,
+          participantExternalUserId: context.participantExternalUserId,
+          participantUsername: context.triggeredBy,
           state: 'active',
         },
         update: {
+          participantUsername: context.triggeredBy,
           lastMessageAt: new Date(),
         },
       });
@@ -244,6 +261,7 @@ export const dmAutomation = {
       const dmMessage = await prisma.dMMessage.create({
         data: {
           conversationId: conversation.id,
+          platform: context.platform,
           direction: 'outbound',
           messageText,
           externalMessageId: messageId,
@@ -261,14 +279,16 @@ export const dmAutomation = {
 
       // Broadcast WebSocket event for new outbound message
       if (statusBroadcaster) {
-        await statusBroadcaster.broadcastDMMessage(
-          conversation.id,
-          dmMessage.id,
-          context.brandId,
-          'outbound',
+        await statusBroadcaster.broadcastDMMessage({
+          conversationId: conversation.id,
+          messageId: dmMessage.id,
+          brandId: context.brandId,
+          socialAccountId: context.socialAccountId,
+          platform: context.platform,
+          direction: 'outbound',
           messageText,
-          context.triggeredBy
-        );
+          participantUsername: context.triggeredBy,
+        });
       }
     }
 
@@ -277,8 +297,8 @@ export const dmAutomation = {
       if (context.externalCommentId && rule.commentReplyTemplate) {
         const replyText = dmRulesEngine.renderTemplate(rule.commentReplyTemplate, variables);
 
-        await instagramService.replyToCommentDirect(
-          context.brandId,
+        await instagramService.replyToCommentDirectForSocialAccount(
+          context.socialAccountId,
           context.externalCommentId,
           replyText
         );
@@ -286,6 +306,7 @@ export const dmAutomation = {
 
         logger.info('Comment reply sent successfully', {
           brandId: context.brandId,
+          socialAccountId: context.socialAccountId,
           commentId: context.externalCommentId,
         });
       }

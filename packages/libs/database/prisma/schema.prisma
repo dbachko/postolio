@@ -321,8 +321,10 @@ model SocialAccount {
   publishingQueues     PublishingQueue[]
   accountMetricSamples AccountMetricSample[]
   accountMetricsLatest AccountMetricsLatest?
+  dmConversations      DMConversation[]
 
   @@unique([platform, externalAccountId])
+  @@index([platform, externalPageId])
   @@index([brandId, platform])
   @@index([brandId, sortOrder])
   @@map("social_accounts")
@@ -406,6 +408,7 @@ model ContentPublication {
   comments      PublicationComment[]
 
   @@unique([socialAccountId, externalPostId])
+  @@index([platform, externalPostId])
   @@index([contentId, platform])
   @@map("content_publications")
 }
@@ -471,6 +474,7 @@ model PublicationComment {
 
   @@unique([publicationId, externalCommentId])
   @@index([publicationId])
+  @@index([publicationId, status])
   @@map("publication_comments")
 }
 
@@ -783,9 +787,11 @@ model DMAutomationRule {
 model DMConversation {
   id                String  @id @default(cuid())
   brandId           String
+  socialAccountId   String
   ruleId            String? // Triggering rule (null = manual DM)
-  instagramUserId   String // Instagram user's ID (from Graph API)
-  instagramUsername String // Username for display
+  platform          Platform
+  participantExternalUserId String // External user ID (platform-specific)
+  participantUsername       String // Username / display handle for UI
 
   // Conversation state (for multi-step flows in Phase 2)
   state       String @default("active") // active, completed, abandoned
@@ -798,11 +804,13 @@ model DMConversation {
   completedAt   DateTime?
 
   brand    Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
   rule     DMAutomationRule? @relation(fields: [ruleId], references: [id])
   messages DMMessage[]
 
-  @@unique([brandId, instagramUserId]) // One conversation per user per brand
+  @@unique([brandId, socialAccountId, platform, participantExternalUserId]) // One conversation per user per account
   @@index([brandId, state])
+  @@index([socialAccountId, state])
   @@index([lastMessageAt])
   @@map("dm_conversations")
 }
@@ -811,11 +819,12 @@ model DMConversation {
 model DMMessage {
   id             String @id @default(cuid())
   conversationId String
+  platform       Platform
   direction      String // 'inbound' | 'outbound'
   messageText    String @db.Text
 
-  // Instagram metadata
-  externalMessageId String? // Instagram message ID (for outbound)
+  // Platform metadata
+  externalMessageId String? // Provider message id (if available)
   externalCommentId String? // If triggered by comment
 
   // Delivery tracking
@@ -828,6 +837,7 @@ model DMMessage {
 
   conversation DMConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
+  @@unique([conversationId, externalMessageId])
   @@index([conversationId, createdAt])
   @@index([status])
   @@map("dm_messages")

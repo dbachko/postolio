@@ -37,6 +37,29 @@ async function main() {
 
   console.log('✅ Test brand created/found:', testBrand.name);
 
+  // Create a sample Instagram social account (required for account-scoped conversations)
+  const testSocialAccount = await prisma.socialAccount.upsert({
+    where: {
+      platform_externalAccountId: {
+        platform: 'instagram',
+        externalAccountId: 'ig_test_account_1',
+      },
+    },
+    update: {},
+    create: {
+      brandId: testBrand.id,
+      platform: 'instagram',
+      externalAccountId: 'ig_test_account_1',
+      externalPageId: 'ig_test_page_1',
+      username: 'postolio_test_ig',
+      displayName: 'Postolio Test IG',
+      metadata: {},
+      sortOrder: 0,
+    },
+  });
+
+  console.log('✅ Created/found test social account:', testSocialAccount.id);
+
   // Create sample automation rules
 
   // Rule 1: Promo code distribution
@@ -123,23 +146,33 @@ async function main() {
 
   // Create a sample conversation
   const conversation = await prisma.dMConversation.upsert({
-    where: { brandId_instagramUserId: { brandId: testBrand.id, instagramUserId: 'ig_user_12345' } },
+    where: {
+      brandId_socialAccountId_platform_participantExternalUserId: {
+        brandId: testBrand.id,
+        socialAccountId: testSocialAccount.id,
+        platform: 'instagram',
+        participantExternalUserId: 'ig_user_12345',
+      },
+    },
     update: {},
     create: {
-      brandId: testBrand.id,
-      ruleId: promoRule.id,
-      instagramUserId: 'ig_user_12345',
-      instagramUsername: 'test_user_ig',
+      platform: 'instagram',
+      participantExternalUserId: 'ig_user_12345',
+      participantUsername: 'test_user_ig',
       state: 'active',
+      brand: { connect: { id: testBrand.id } },
+      socialAccount: { connect: { id: testSocialAccount.id } },
+      rule: { connect: { id: promoRule.id } },
     },
   });
 
-  console.log('✅ Created sample conversation with:', conversation.instagramUsername);
+  console.log('✅ Created sample conversation with:', conversation.participantUsername);
 
   // Create sample messages
   await prisma.dMMessage.create({
     data: {
       conversationId: conversation.id,
+      platform: 'instagram',
       direction: 'outbound',
       messageText: promoRule.messageTemplate.replace('{{name}}', 'test_user_ig'),
       externalMessageId: 'ig_msg_test_123',

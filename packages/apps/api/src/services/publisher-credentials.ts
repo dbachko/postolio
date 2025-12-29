@@ -124,6 +124,110 @@ export class PublisherCredentialsService {
   }
 
   /**
+   * Fetch fresh platform credentials for a specific social account with caching.
+   * This avoids the "primary account leakage" problem when a brand has multiple
+   * connected accounts for the same platform.
+   */
+  static async getCredentialsForSocialAccount(
+    socialAccountId: string
+  ): Promise<PublisherCredentials | null> {
+    try {
+      const redis = getRedisClient();
+      const cacheKey = `publisher:credentials:social:${socialAccountId}`;
+
+      if (redis) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            credentialsLogger.info(`Cache hit for social account ${socialAccountId} credentials`);
+            return JSON.parse(cached);
+          }
+        } catch (cacheError) {
+          credentialsLogger.warn('Redis cache read failed, falling back to Token Service', {
+            cacheKey,
+            ...formatError(cacheError),
+          });
+        }
+      }
+
+      const account = await prisma.socialAccount.findUnique({
+        where: { id: socialAccountId },
+        select: {
+          id: true,
+          platform: true,
+          externalAccountId: true,
+          externalPageId: true,
+          metadata: true,
+          brand: {
+            select: {
+              id: true,
+              name: true,
+              userId: true,
+            },
+          },
+        },
+      });
+
+      if (!account?.brand) {
+        credentialsLogger.error(`Social account not found: ${socialAccountId}`);
+        return null;
+      }
+
+      const accountMetadata = (account.metadata || {}) as Record<string, unknown>;
+      if (
+        accountMetadata &&
+        typeof accountMetadata === 'object' &&
+        (accountMetadata as any).disconnected
+      ) {
+        credentialsLogger.error(`Social account disconnected: ${socialAccountId}`);
+        return null;
+      }
+
+      const platform = String(account.platform);
+
+      const tokenServiceClient = await getTokenService();
+      const tokenData = await tokenServiceClient.getTokenForSocialAccount(
+        account.brand.userId,
+        account.brand.id,
+        platform,
+        account.id
+      );
+
+      if (!tokenData?.accessToken) {
+        credentialsLogger.error(`No token found for social account: ${socialAccountId}`);
+        return null;
+      }
+
+      const credentials: PublisherCredentials = {
+        accessToken: tokenData.accessToken,
+        accountId: tokenData.metadata?.accountId || account.externalAccountId,
+        pageId: tokenData.metadata?.pageId || account.externalPageId,
+        brandName: account.brand.name,
+        platform,
+      };
+
+      if (redis) {
+        try {
+          await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
+          credentialsLogger.info(
+            `Cached credentials for social account ${socialAccountId} (TTL: ${CACHE_TTL_SECONDS}s)`
+          );
+        } catch (cacheError) {
+          credentialsLogger.warn('Redis cache write failed', {
+            cacheKey,
+            ...formatError(cacheError),
+          });
+        }
+      }
+
+      return credentials;
+    } catch (error) {
+      credentialsLogger.error('Error fetching social account credentials', formatError(error));
+      return null;
+    }
+  }
+
+  /**
    * Validate that credentials are still valid
    */
   static async validateCredentials(credentials: PublisherCredentials): Promise<boolean> {

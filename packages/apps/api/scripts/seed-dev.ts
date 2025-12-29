@@ -135,6 +135,138 @@ async function main() {
     console.log('Onboarding test user already exists; leaving as-is to preserve local state.');
   }
 
+  // Seed an additional empty brand (queue template only) BEFORE the main demo brand so the main brand
+  // remains the most recently created one (and therefore the default selection in the UI).
+  const seedEmptyBrandWithDefaultQueueTemplate = async (opts: { name: string }) => {
+    const emptyBrand = await prisma.brand.create({
+      data: {
+        name: opts.name,
+        description: 'Seeded empty brand for local development (queue template only)',
+        userId: user.id,
+        preferences: {},
+        postingTimezone: 'UTC',
+      },
+      select: { id: true, preferences: true },
+    });
+
+    const igAccountId = `IG_EMPTY_${Math.random().toString(36).slice(2, 15)}`;
+    const igPageId = `FB_EMPTY_${Math.random().toString(36).slice(2, 15)}`;
+    const igHandle = opts.name.toLowerCase().replace(/\s+/g, '_') + '_empty';
+    const tokenUpdatedAt = new Date().toISOString();
+    const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const emptyInstagramAccount = await prisma.socialAccount.create({
+      data: {
+        brandId: emptyBrand.id,
+        platform: 'instagram',
+        externalAccountId: igAccountId,
+        externalPageId: igPageId,
+        username: igHandle,
+        displayName: opts.name,
+        metadata: {
+          account_type: 'BUSINESS',
+          biography: `Empty seeded account for ${opts.name}.`,
+          profile_picture_url: `https://i.pravatar.cc/150?u=${igAccountId}`,
+          tokenExpiresAt,
+          tokenUpdatedAt,
+        },
+      },
+      select: { id: true },
+    });
+
+    const currentPreferences =
+      emptyBrand.preferences &&
+      typeof emptyBrand.preferences === 'object' &&
+      !Array.isArray(emptyBrand.preferences)
+        ? (emptyBrand.preferences as Record<string, unknown>)
+        : {};
+
+    await prisma.brand.update({
+      where: { id: emptyBrand.id },
+      data: {
+        preferences: {
+          ...currentPreferences,
+          primarySocialAccountIds: {
+            instagram: emptyInstagramAccount.id,
+          },
+          defaultPostSocialAccountIds: [emptyInstagramAccount.id],
+        },
+      },
+      select: { id: true },
+    });
+
+    const defaultQueue = await prisma.publishingQueue.create({
+      data: {
+        socialAccountId: emptyInstagramAccount.id,
+        name: 'Default',
+        paused: false,
+        isDefault: true,
+      },
+      select: { id: true },
+    });
+
+    const defaultStorySlots = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '08:30',
+      laneKey: 'story',
+      enabled: true,
+    }));
+
+    const defaultPostSlots = [1, 3, 5].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '11:00',
+      laneKey: 'post',
+      enabled: true,
+    }));
+
+    const defaultReelSlots = [2, 4, 6].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '14:00',
+      laneKey: 'reel',
+      enabled: true,
+    }));
+
+    const defaultAnySlots = [0, 2, 4].map((dayOfWeek) => ({
+      queueId: defaultQueue.id,
+      socialAccountId: emptyInstagramAccount.id,
+      dayOfWeek,
+      localTime: '16:30',
+      laneKey: 'any',
+      enabled: true,
+    }));
+
+    const defaultSlots = [
+      ...defaultStorySlots,
+      ...defaultPostSlots,
+      ...defaultReelSlots,
+      ...defaultAnySlots,
+    ];
+    await prisma.publishingQueueSlot.createMany({ data: defaultSlots });
+
+    return {
+      brandId: emptyBrand.id,
+      socialAccountId: emptyInstagramAccount.id,
+      queueId: defaultQueue.id,
+      slotCount: defaultSlots.length,
+    };
+  };
+
+  console.log(
+    '\n==> Seeding an additional empty brand (no campaigns/posts/queue items) with a Default queue template…'
+  );
+  const emptyBrandSeed = await seedEmptyBrandWithDefaultQueueTemplate({
+    name: 'Empty Queue Template Brand',
+  });
+  console.log(
+    `✅ Seeded empty brand ${emptyBrandSeed.brandId} with Default queue template (${emptyBrandSeed.slotCount} slots) on social account ${emptyBrandSeed.socialAccountId}`
+  );
+
   console.log(`==> Creating brand "${brandName}" for user ${user.id}`);
 
   // Generate realistic Instagram profile data
@@ -302,6 +434,35 @@ async function main() {
         pageId: instagramPageId,
         pageName: facebookPageName,
         profile_picture_url: `https://i.pravatar.cc/150?u=${instagramPageId}`,
+        tokenExpiresAt: seededTokenExpiresAt,
+        tokenUpdatedAt: seededUpdatedAt,
+      },
+    },
+  });
+
+  // Create a second Instagram account to exercise multi-account Inbox filtering in dev
+  const instagramAltHandle = `${instagramHandle.replace(/_official$/, '')}_community`;
+  const instagramAltAccountId = `IG_${Math.random().toString(36).slice(2, 15)}`;
+  const instagramAltPageId = `FB_${Math.random().toString(36).slice(2, 15)}`;
+  const instagramAltFollowers = Math.max(
+    250,
+    Math.round(seededFollowers * (0.35 + Math.random() * 0.35))
+  );
+  const instagramAltSocialAccount = await prisma.socialAccount.create({
+    data: {
+      brandId: brand.id,
+      platform: 'instagram',
+      externalAccountId: instagramAltAccountId,
+      externalPageId: instagramAltPageId,
+      username: instagramAltHandle,
+      displayName: `${brandName} Community`,
+      sortOrder: 1,
+      metadata: {
+        account_type: 'BUSINESS',
+        followers_count: instagramAltFollowers,
+        biography: `Community updates and support for ${brandName}. 💬`,
+        website: `https://${brandName.toLowerCase().replace(/\s+/g, '')}.com/community`,
+        profile_picture_url: `https://i.pravatar.cc/150?u=${instagramAltAccountId}`,
         tokenExpiresAt: seededTokenExpiresAt,
         tokenUpdatedAt: seededUpdatedAt,
       },
@@ -1228,6 +1389,7 @@ async function main() {
   // Attach publications + mock comments using the created SocialAccounts
   console.log('==> Creating publications, comments, and saved replies');
   const instagram = instagramSocialAccount;
+  const instagramAlt = instagramAltSocialAccount;
   const facebook = facebookSocialAccount;
   const social = instagramSocialAccount;
 
@@ -1300,10 +1462,65 @@ async function main() {
       ],
     });
 
+    // Seed a couple of Instagram publications for the second IG account (multi-account UX proof)
+    if (i < 2) {
+      const instagramAltExternalPostId = `IGPOST_ALT_${randomSuffix()}_${i + 1}`;
+      const pubAlt = await prisma.contentPublication.upsert({
+        where: {
+          socialAccountId_externalPostId: {
+            socialAccountId: instagramAlt.id,
+            externalPostId: instagramAltExternalPostId,
+          },
+        },
+        update: {
+          contentId: c.id,
+          permalink: `https://instagram.com/p/${instagramAltExternalPostId}`,
+        },
+        create: {
+          contentId: c.id,
+          socialAccountId: instagramAlt.id,
+          platform: 'instagram',
+          externalPostId: instagramAltExternalPostId,
+          externalThreadRootId: null,
+          externalAccountId: instagramAlt.externalAccountId,
+          externalPageId: instagramAlt.externalPageId || undefined,
+          permalink: `https://instagram.com/p/${instagramAltExternalPostId}`,
+          publishedAt: c.postedAt || new Date(),
+          status: 'published',
+        },
+      });
+
+      await prisma.publicationComment.createMany({
+        data: [
+          {
+            publicationId: pubAlt.id,
+            platform: 'instagram',
+            externalCommentId: `${instagramAltExternalPostId}_c1`,
+            authorUsername: 'community_member',
+            text: 'This is super helpful — thank you!',
+            likeCount: 5,
+            status: 'open',
+            createdAt: new Date(Date.now() - 35 * 60 * 1000),
+          },
+          {
+            publicationId: pubAlt.id,
+            platform: 'instagram',
+            externalCommentId: `${instagramAltExternalPostId}_c2`,
+            authorUsername: 'support_seeker',
+            text: 'Does this work with multiple accounts?',
+            likeCount: 0,
+            status: 'open',
+            createdAt: new Date(Date.now() - 22 * 60 * 1000),
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
+
     // Seed a couple of Facebook publications for cross-platform UX testing
     if (i < 2) {
       const facebookExternalPostId = `FBPOST_${randomSuffix()}_${i + 1}`;
-      await prisma.contentPublication.upsert({
+      const facebookPub = await prisma.contentPublication.upsert({
         where: {
           socialAccountId_externalPostId: {
             socialAccountId: facebook.id,
@@ -1326,6 +1543,32 @@ async function main() {
           publishedAt: c.postedAt || new Date(),
           status: 'published',
         },
+      });
+
+      await prisma.publicationComment.createMany({
+        data: [
+          {
+            publicationId: facebookPub.id,
+            platform: 'facebook',
+            externalCommentId: `${facebookExternalPostId}_c1`,
+            authorUsername: 'Facebook User',
+            text: 'Love this! Great update.',
+            likeCount: 2,
+            status: 'open',
+            createdAt: new Date(Date.now() - 50 * 60 * 1000),
+          },
+          {
+            publicationId: facebookPub.id,
+            platform: 'facebook',
+            externalCommentId: `${facebookExternalPostId}_c2`,
+            authorUsername: 'Community Member',
+            text: 'Can you share more details?',
+            likeCount: 0,
+            status: 'resolved',
+            createdAt: new Date(Date.now() - 40 * 60 * 1000),
+          },
+        ],
+        skipDuplicates: true,
       });
     }
   }
@@ -1381,23 +1624,27 @@ async function main() {
     state: 'active' | 'archived' | 'spam';
     messagesCount: number;
     lastMessageDaysAgo: number;
+    socialAccountId?: string;
   }) {
-    const { username, state, messagesCount, lastMessageDaysAgo } = opts;
-    const instagramUserId = `IG_USER_${Math.random().toString(36).slice(2, 15)}`;
+    const { username, state, messagesCount, lastMessageDaysAgo, socialAccountId } = opts;
+    const participantExternalUserId = `IG_USER_${Math.random().toString(36).slice(2, 15)}`;
 
     const conversation = await prisma.dMConversation.create({
       data: {
-        brandId: brand.id,
-        instagramUserId,
-        instagramUsername: username,
+        platform: 'instagram',
+        participantExternalUserId,
+        participantUsername: username,
         state,
         lastMessageAt: new Date(now.getTime() - days(lastMessageDaysAgo)),
+        brand: { connect: { id: brand.id } },
+        socialAccount: { connect: { id: socialAccountId || instagram.id } },
       },
     });
 
     // Create messages for this conversation
     const messages: Array<{
       conversationId: string;
+      platform: 'instagram';
       direction: 'inbound' | 'outbound';
       messageText: string;
       externalMessageId: string;
@@ -1430,16 +1677,24 @@ async function main() {
       ],
     };
 
+    // Ensure the last message is inbound so conversations appear in the default "to review" Inbox view.
+    const startInbound = messagesCount % 2 === 1;
+    let inboundIdx = 0;
+    let outboundIdx = 0;
+
     for (let i = 0; i < messagesCount; i++) {
-      const isInbound = i % 2 === 0; // Alternate between inbound and outbound
+      const isInbound = startInbound ? i % 2 === 0 : i % 2 === 1; // Alternate, end inbound
       const messageAge = lastMessageDaysAgo + (messagesCount - i - 1) * 0.5; // Space messages out
       const messageTime = new Date(now.getTime() - days(messageAge));
 
       const templates = isInbound ? messageTemplates.inbound : messageTemplates.outbound;
-      const text = templates[i % templates.length];
+      const text = isInbound
+        ? templates[inboundIdx++ % templates.length]
+        : templates[outboundIdx++ % templates.length];
 
       messages.push({
         conversationId: conversation.id,
+        platform: 'instagram',
         direction: isInbound ? 'inbound' : 'outbound',
         messageText: text,
         externalMessageId: `IG_MSG_${Math.random().toString(36).slice(2, 15)}`,
@@ -1482,6 +1737,23 @@ async function main() {
     lastMessageDaysAgo: 3,
   });
 
+  // A couple of conversations on the second IG account (to validate multi-account Inbox filtering)
+  await createConversation({
+    username: 'creator_support',
+    state: 'active',
+    messagesCount: 5,
+    lastMessageDaysAgo: 0.25,
+    socialAccountId: instagramAlt.id,
+  });
+
+  await createConversation({
+    username: 'brand_fan_club',
+    state: 'active',
+    messagesCount: 7,
+    lastMessageDaysAgo: 1.5,
+    socialAccountId: instagramAlt.id,
+  });
+
   // Create archived conversations
   await createConversation({
     username: 'happy_customer_123',
@@ -1512,7 +1784,7 @@ async function main() {
     lastMessageDaysAgo: 10,
   });
 
-  console.log('✅ Created 8 DM conversations with messages (4 active, 2 archived, 2 spam)');
+  console.log('✅ Created 10 DM conversations with messages (6 active, 2 archived, 2 spam)');
 
   // Generate additional historical published content for analytics (60-90 days)
   console.log('==> Generating historical published content for analytics');
@@ -1791,138 +2063,6 @@ async function main() {
       console.warn('⚠️  Failed to seed account_metrics_latest (non-fatal):', err);
     }
   }
-
-  console.log(
-    '\n==> Seeding an additional empty brand (no campaigns/posts/queue items) with a Default queue template…'
-  );
-
-  const seedEmptyBrandWithDefaultQueueTemplate = async (opts: { name: string }) => {
-    const emptyBrand = await prisma.brand.create({
-      data: {
-        name: opts.name,
-        description: 'Seeded empty brand for local development (queue template only)',
-        userId: user.id,
-        preferences: {},
-        postingTimezone: 'UTC',
-      },
-      select: { id: true, preferences: true },
-    });
-
-    const igAccountId = `IG_EMPTY_${Math.random().toString(36).slice(2, 15)}`;
-    const igPageId = `FB_EMPTY_${Math.random().toString(36).slice(2, 15)}`;
-    const igHandle = opts.name.toLowerCase().replace(/\s+/g, '_') + '_empty';
-    const tokenUpdatedAt = new Date().toISOString();
-    const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    const emptyInstagramAccount = await prisma.socialAccount.create({
-      data: {
-        brandId: emptyBrand.id,
-        platform: 'instagram',
-        externalAccountId: igAccountId,
-        externalPageId: igPageId,
-        username: igHandle,
-        displayName: opts.name,
-        metadata: {
-          account_type: 'BUSINESS',
-          biography: `Empty seeded account for ${opts.name}.`,
-          profile_picture_url: `https://i.pravatar.cc/150?u=${igAccountId}`,
-          tokenExpiresAt,
-          tokenUpdatedAt,
-        },
-      },
-      select: { id: true },
-    });
-
-    const currentPreferences =
-      emptyBrand.preferences &&
-      typeof emptyBrand.preferences === 'object' &&
-      !Array.isArray(emptyBrand.preferences)
-        ? (emptyBrand.preferences as Record<string, unknown>)
-        : {};
-
-    await prisma.brand.update({
-      where: { id: emptyBrand.id },
-      data: {
-        preferences: {
-          ...currentPreferences,
-          primarySocialAccountIds: {
-            instagram: emptyInstagramAccount.id,
-          },
-          defaultPostSocialAccountIds: [emptyInstagramAccount.id],
-        },
-      },
-      select: { id: true },
-    });
-
-    const defaultQueue = await prisma.publishingQueue.create({
-      data: {
-        socialAccountId: emptyInstagramAccount.id,
-        name: 'Default',
-        paused: false,
-        isDefault: true,
-      },
-      select: { id: true },
-    });
-
-    const defaultStorySlots = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
-      queueId: defaultQueue.id,
-      socialAccountId: emptyInstagramAccount.id,
-      dayOfWeek,
-      localTime: '08:30',
-      laneKey: 'story',
-      enabled: true,
-    }));
-
-    const defaultPostSlots = [1, 3, 5].map((dayOfWeek) => ({
-      queueId: defaultQueue.id,
-      socialAccountId: emptyInstagramAccount.id,
-      dayOfWeek,
-      localTime: '11:00',
-      laneKey: 'post',
-      enabled: true,
-    }));
-
-    const defaultReelSlots = [2, 4, 6].map((dayOfWeek) => ({
-      queueId: defaultQueue.id,
-      socialAccountId: emptyInstagramAccount.id,
-      dayOfWeek,
-      localTime: '14:00',
-      laneKey: 'reel',
-      enabled: true,
-    }));
-
-    const defaultAnySlots = [0, 2, 4].map((dayOfWeek) => ({
-      queueId: defaultQueue.id,
-      socialAccountId: emptyInstagramAccount.id,
-      dayOfWeek,
-      localTime: '16:30',
-      laneKey: 'any',
-      enabled: true,
-    }));
-
-    const defaultSlots = [
-      ...defaultStorySlots,
-      ...defaultPostSlots,
-      ...defaultReelSlots,
-      ...defaultAnySlots,
-    ];
-    await prisma.publishingQueueSlot.createMany({ data: defaultSlots });
-
-    return {
-      brandId: emptyBrand.id,
-      socialAccountId: emptyInstagramAccount.id,
-      queueId: defaultQueue.id,
-      slotCount: defaultSlots.length,
-    };
-  };
-
-  const emptyBrandSeed = await seedEmptyBrandWithDefaultQueueTemplate({
-    name: 'Empty Queue Template Brand',
-  });
-
-  console.log(
-    `✅ Seeded empty brand ${emptyBrandSeed.brandId} with Default queue template (${emptyBrandSeed.slotCount} slots) on social account ${emptyBrandSeed.socialAccountId}`
-  );
 
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');

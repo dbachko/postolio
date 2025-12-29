@@ -168,6 +168,15 @@ class InstagramService {
     return credentials;
   }
 
+  private async getCredentialsOrThrowForSocialAccount(socialAccountId: string) {
+    const credentials =
+      await PublisherCredentialsService.getCredentialsForSocialAccount(socialAccountId);
+    if (!credentials || !credentials.accessToken || !credentials.accountId) {
+      throw new Error('Failed to get Instagram credentials');
+    }
+    return credentials;
+  }
+
   // ===============================
   // Instagram DMs (Messaging) API
   // ===============================
@@ -391,6 +400,66 @@ class InstagramService {
     }
   }
 
+  async sendDirectMessageForSocialAccount(
+    socialAccountId: string,
+    recipientId: string,
+    message: string
+  ): Promise<{ messageId: string }> {
+    if (!message || !message.trim()) throw new Error('Message must not be empty');
+    if (!recipientId) throw new Error('Recipient ID is required');
+
+    try {
+      const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      const url = fbGraph(`me/messages`);
+      const payload = {
+        recipient: { id: recipientId },
+        message: { text: message },
+        access_token: credentials.accessToken,
+      };
+
+      const response = await axios.post(url, payload);
+      const messageId = String(
+        (response.data as any)?.message_id || (response.data as any)?.id || ''
+      );
+
+      if (!messageId) {
+        throw new Error('Instagram did not return a message ID');
+      }
+
+      instagramLogger.info('DM sent via automation', {
+        socialAccountId,
+        recipientId,
+        messageId,
+      });
+
+      return { messageId };
+    } catch (error) {
+      const errorMsg = (error as any)?.response?.data?.error?.message || (error as Error).message;
+
+      if (/24.hour|messaging.window|Cannot message/i.test(errorMsg)) {
+        instagramLogger.warn('24-hour messaging window expired', {
+          socialAccountId,
+          recipientId,
+          error: errorMsg,
+        });
+        throw new Error('Cannot send message: 24-hour messaging window has expired');
+      }
+
+      if (/rate.limit|too.many/i.test(errorMsg)) {
+        instagramLogger.error('Instagram API rate limit exceeded', {
+          socialAccountId,
+          error: errorMsg,
+        });
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+
+      instagramLogger.error('Failed to send direct message', formatError(error));
+      throw new Error(`Failed to send direct message: ${errorMsg}`);
+    }
+  }
+
   /**
    * Reply to a comment directly (for DM automation)
    * Uses the /{comment-id}/replies endpoint which doesn't require media ID
@@ -444,6 +513,46 @@ class InstagramService {
     }
   }
 
+  async replyToCommentDirectForSocialAccount(
+    socialAccountId: string,
+    commentId: string,
+    message: string
+  ): Promise<{ commentId: string }> {
+    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+    if (!commentId) throw new Error('Comment ID is required');
+
+    try {
+      const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      const url = fbGraph(`${commentId}/replies`);
+      const payload = {
+        message,
+        access_token: credentials.accessToken,
+      };
+
+      const response = await axios.post(url, payload);
+      const replyId = String((response.data as any)?.id || '');
+
+      if (!replyId) {
+        throw new Error('Instagram did not return a comment ID');
+      }
+
+      instagramLogger.info('Comment reply sent via automation', {
+        socialAccountId,
+        commentId,
+        replyId,
+      });
+
+      return { commentId: replyId };
+    } catch (error) {
+      const errorMsg = (error as any)?.response?.data?.error?.message || (error as Error).message;
+
+      instagramLogger.error('Failed to reply to comment', formatError(error));
+      throw new Error(`Failed to reply to comment: ${errorMsg}`);
+    }
+  }
+
   /**
    * Reply to a specific comment on a media item
    * Instagram Graph API accepts replies by posting a new comment to the media
@@ -462,6 +571,36 @@ class InstagramService {
 
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      const url = fbGraph(`${mediaId}/comments`);
+      const payload = {
+        message,
+        reply_to_comment_id: commentId,
+        access_token: credentials.accessToken,
+      } as const;
+      const res = await axios.post(url, payload);
+      const id = String((res.data as any)?.id || '');
+      if (!id) throw new Error('Instagram did not return a comment id');
+      return { id };
+    } catch (error) {
+      instagramLogger.error('Failed to reply to comment', formatError(error));
+      throw new Error(
+        `Failed to reply to comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  async replyToCommentForSocialAccount(
+    socialAccountId: string,
+    mediaId: string,
+    commentId: string,
+    message: string
+  ): Promise<{ id: string }> {
+    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+
+    try {
+      const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
       await this.checkRateLimit(String(credentials.accountId));
 
       const url = fbGraph(`${mediaId}/comments`);
@@ -550,6 +689,28 @@ class InstagramService {
     } catch (error: any) {
       const message = (error?.response?.data?.error?.message as string) || (error as Error).message;
       // Normalize common unsupported responses
+      if (/Unsupported|Invalid parameter|Unknown path|(#|code)\s?100|not allowed/i.test(message)) {
+        throw new Error('Instagram API does not support liking comments for this account');
+      }
+      instagramLogger.error('Failed to like comment', formatError(error));
+      throw new Error(`Failed to like comment: ${message || 'Unknown error'}`);
+    }
+  }
+
+  async likeCommentForSocialAccount(
+    socialAccountId: string,
+    commentId: string
+  ): Promise<{ success: boolean }> {
+    try {
+      const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      const url = fbGraph(`${commentId}/likes`);
+      const res = await axios.post(url, { access_token: credentials.accessToken });
+      const ok = Boolean((res.data as any)?.success ?? true);
+      return { success: ok };
+    } catch (error: any) {
+      const message = (error?.response?.data?.error?.message as string) || (error as Error).message;
       if (/Unsupported|Invalid parameter|Unknown path|(#|code)\s?100|not allowed/i.test(message)) {
         throw new Error('Instagram API does not support liking comments for this account');
       }
@@ -1178,6 +1339,49 @@ class InstagramService {
       const total = countResponse.data.comments_count || 0;
 
       // Then get the actual comments
+      const url = fbGraph(
+        `${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.accessToken}`
+      );
+      const response = await axios.get(url);
+      const commentsRaw = Array.isArray(response.data?.data) ? response.data.data : [];
+      const comments: InstagramComment[] = commentsRaw.map((c: unknown) => {
+        const obj = c as Record<string, unknown>;
+        return {
+          id: String(obj.id ?? ''),
+          text: typeof obj.text === 'string' ? obj.text : undefined,
+          username: typeof obj.username === 'string' ? obj.username : undefined,
+          timestamp: typeof obj.timestamp === 'string' ? obj.timestamp : undefined,
+          like_count: typeof obj.like_count === 'number' ? obj.like_count : undefined,
+        };
+      });
+      return { data: comments, total };
+    } catch (error) {
+      instagramLogger.error('Failed to fetch post comments', formatError(error));
+      throw new Error(
+        `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Account-scoped variant of getPostComments. Use this for inbox reads/writes when a brand has
+   * multiple connected Instagram accounts.
+   */
+  async getPostCommentsForSocialAccount(
+    socialAccountId: string,
+    mediaId: string,
+    limit: number = 25
+  ): Promise<{ data: InstagramComment[]; total: number }> {
+    try {
+      const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
+      await this.checkRateLimit(String(credentials.accountId));
+
+      const countUrl = fbGraph(
+        `${mediaId}?fields=comments_count&access_token=${credentials.accessToken}`
+      );
+      const countResponse = await axios.get(countUrl);
+      const total = countResponse.data.comments_count || 0;
+
       const url = fbGraph(
         `${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.accessToken}`
       );

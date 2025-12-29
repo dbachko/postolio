@@ -79,8 +79,8 @@ function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
 
-        {message.status === 'failed' && message.failureReason && (
-          <div className="text-destructive px-2 text-xs">{message.failureReason}</div>
+        {message.status === 'failed' && message.errorMessage && (
+          <div className="text-destructive px-2 text-xs">{message.errorMessage}</div>
         )}
       </div>
     </div>

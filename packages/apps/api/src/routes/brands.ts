@@ -1,8 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { computePlaceholders } from '../services/placeholderService.js';
-import { instagramService } from '../services/instagram.js';
 import { getRedisClient } from '../services/redis.js';
-import { ingestBrandComments } from '../services/inbox-comments-ingestor.js';
+import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { getDatabaseClient } from '../config/database.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import {
@@ -322,39 +321,90 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Inbox: Comments overview with unread counts per post
-  fastify.get<{ Params: { id: string } }>(
-    '/:id/inbox/comments',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-        const { id: brandId } = request.params;
+  // Inbox: Unified items (comments + DMs) for multi-channel Inbox UI
+  fastify.get<{
+    Params: { id: string };
+    Querystring: {
+      socialAccountId?: string | string[];
+      channel?: string | string[];
+      platform?: string | string[];
+      view?: 'to_review' | 'all';
+      limit?: string;
+    };
+  }>('/:id/inbox/items', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { id: brandId } = request.params;
 
-        // Verify ownership
-        await assertBrandOwnership(userId, brandId);
+      // Verify ownership
+      await assertBrandOwnership(userId, brandId);
 
-        // Get Instagram SocialAccount for API calls
-        const instagramAccount = await prisma.socialAccount.findFirst({
-          where: {
-            brandId,
-            platform: 'instagram',
-          },
-        });
+      const parseList = (value: string | string[] | undefined | null): string[] => {
+        if (!value) return [];
+        const parts = Array.isArray(value) ? value : String(value).split(',');
+        return parts.map((v) => String(v || '').trim()).filter(Boolean);
+      };
 
-        // Prefer unresolved comment counts per publication for "new" activity.
+      const socialAccountIds = parseList(request.query.socialAccountId);
+      const channelsRaw = parseList(request.query.channel);
+      const platformsRaw = parseList(request.query.platform);
+      const view = request.query.view === 'all' ? 'all' : 'to_review';
+      const limit = Math.max(
+        1,
+        Math.min(100, Number.parseInt(String(request.query.limit || 50), 10) || 50)
+      );
+
+      const normalizePlatform = (value: string): string => {
+        const v = String(value || '')
+          .trim()
+          .toLowerCase();
+        if (v === 'ig') return 'instagram';
+        if (v === 'fb') return 'facebook';
+        return v;
+      };
+      const platformAllowList = new Set([
+        'instagram',
+        'facebook',
+        'linkedin',
+        'x',
+        'youtube',
+        'tiktok',
+      ]);
+      const platformsNormalized = platformsRaw
+        .map(normalizePlatform)
+        .filter((p) => platformAllowList.has(p));
+
+      const channels = channelsRaw.length ? new Set(channelsRaw) : null;
+      const platforms = platformsNormalized.length ? new Set(platformsNormalized) : null;
+
+      const items: any[] = [];
+
+      // -----------------------
+      // Comments (publication-centric)
+      // -----------------------
+      const includeComments =
+        (!channels && true) || (channels && (channels.has('comments') || channels.has('comment')));
+      const supportedCommentPlatforms = ['instagram', 'facebook'] as const;
+      const commentPlatforms = platforms
+        ? supportedCommentPlatforms.filter((p) => platforms.has(p))
+        : supportedCommentPlatforms;
+
+      if (includeComments && commentPlatforms.length) {
         const pubs = await prisma.contentPublication.findMany({
           where: {
-            platform: 'instagram',
-            socialAccount: { brandId, platform: 'instagram' },
+            platform: { in: commentPlatforms as any },
+            socialAccount: { brandId, platform: { in: commentPlatforms as any } },
+            ...(socialAccountIds.length ? { socialAccountId: { in: socialAccountIds } } : {}),
           },
           orderBy: { publishedAt: 'desc' },
           take: 200,
           select: {
             id: true,
-            externalPostId: true,
+            platform: true,
+            socialAccountId: true,
             permalink: true,
             publishedAt: true,
+            metricsLatest: { select: { comments: true } },
             content: {
               select: {
                 id: true,
@@ -370,80 +420,181 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        let items = await Promise.all(
-          pubs.map(async (pub) => {
-            // Local workflow counts
-            const [unresolvedCount, resolvedCount] = await Promise.all([
-              prisma.publicationComment.count({
-                where: { publicationId: pub.id, status: { not: 'resolved' } },
-              }),
-              prisma.publicationComment.count({
-                where: { publicationId: pub.id, status: 'resolved' },
-              }),
-            ]);
+        const publicationIds = pubs.map((p) => p.id).filter(Boolean);
+        const grouped = publicationIds.length
+          ? await prisma.publicationComment.groupBy({
+              by: ['publicationId', 'status'],
+              where: { publicationId: { in: publicationIds } },
+              _count: { _all: true },
+            })
+          : [];
 
-            let totalComments = unresolvedCount + resolvedCount;
-            let newCount = unresolvedCount;
+        const countsByPublicationId = new Map<
+          string,
+          { open: number; resolved: number; archived: number }
+        >();
+        for (const row of grouped) {
+          const entry = countsByPublicationId.get(row.publicationId) || {
+            open: 0,
+            resolved: 0,
+            archived: 0,
+          };
+          const status = String(row.status);
+          if (status === 'open') entry.open = row._count._all;
+          if (status === 'resolved') entry.resolved = row._count._all;
+          if (status === 'archived') entry.archived = row._count._all;
+          countsByPublicationId.set(row.publicationId, entry);
+        }
 
-            // If no local comment records, try a lightweight Graph lookup for counts
-            if (totalComments === 0 && pub.externalPostId && instagramAccount) {
-              try {
-                const redis = getRedisClient();
-                const cacheKey = `ig:comments_count:${pub.externalPostId}`;
-                const cached = redis ? await redis.get(cacheKey) : null;
-                if (cached !== null) {
-                  totalComments = Number(cached) || 0;
-                } else {
-                  const res = await instagramService.getPostComments(
-                    {
-                      id: brandId,
-                      instagramAccountId: instagramAccount.externalAccountId,
-                      instagramPageId: instagramAccount.externalPageId,
-                    } as any,
-                    String(pub.externalPostId),
-                    1 // minimal page to fetch accurate comments_count
-                  );
-                  totalComments = Number(res.total || 0);
-                  if (redis) await redis.setex(cacheKey, 300, String(totalComments));
-                }
-                newCount = Math.max(0, totalComments - resolvedCount);
-              } catch (e) {
-                request.log.warn({ err: e, pubId: pub.id }, 'Graph comments count fallback failed');
-              }
-            }
+        const latestComments = publicationIds.length
+          ? await prisma.publicationComment.findMany({
+              where: {
+                publicationId: { in: publicationIds },
+                ...(view === 'to_review' ? { status: 'open' } : {}),
+              },
+              orderBy: [{ publicationId: 'asc' }, { createdAt: 'desc' }],
+              distinct: ['publicationId'],
+              select: {
+                publicationId: true,
+                text: true,
+                authorUsername: true,
+                createdAt: true,
+              },
+            })
+          : [];
 
-            return {
-              postId: pub.content?.id || '',
-              caption: pub.content?.caption || null,
-              primaryAssetId: pub.content?.mediaAssets?.[0]?.assetId ?? null,
-              permalink: pub.permalink || null,
-              postedAt: pub.content?.postedAt || pub.publishedAt || null,
-              totalComments,
-              resolvedCount,
-              newCount,
-            };
-          })
+        const latestCommentByPublicationId = new Map(
+          latestComments.map((c) => [
+            c.publicationId,
+            {
+              text: c.text,
+              authorUsername: c.authorUsername,
+              createdAt: c.createdAt,
+            },
+          ])
         );
 
-        // Keep only those with new activity
-        items = items.filter((r) => r.postId && r.newCount > 0);
+        for (const pub of pubs) {
+          const counts = countsByPublicationId.get(pub.id) || {
+            open: 0,
+            resolved: 0,
+            archived: 0,
+          };
+          const persistedTotal = counts.open + counts.resolved + counts.archived;
+          const totalComments = pub.metricsLatest?.comments ?? persistedTotal;
+          const newCount = persistedTotal > 0 ? counts.open : totalComments;
 
-        // Sort and trim
-        items = items
-          .sort((a, b) => {
-            const ta = a.postedAt ? new Date(a.postedAt).getTime() : 0;
-            const tb = b.postedAt ? new Date(b.postedAt).getTime() : 0;
-            return tb - ta;
-          })
-          .slice(0, 50);
+          if (view === 'to_review' && (!pub.content?.id || newCount <= 0)) continue;
 
-        return reply.send({ items });
-      } catch (error) {
-        request.log.error({ err: error }, 'Inbox comments overview error');
-        return reply.code(500).send({ error: 'Failed to retrieve inbox comments' });
+          const latest = latestCommentByPublicationId.get(pub.id) || null;
+          const lastActivityAt =
+            latest?.createdAt || pub.content?.postedAt || pub.publishedAt || null;
+
+          items.push({
+            type: 'comment_thread',
+            platform: pub.platform,
+            socialAccountId: pub.socialAccountId,
+            publicationId: pub.id,
+            postId: pub.content?.id || '',
+            caption: pub.content?.caption || null,
+            primaryAssetId: pub.content?.mediaAssets?.[0]?.assetId ?? null,
+            permalink: pub.permalink || null,
+            postedAt: pub.content?.postedAt || pub.publishedAt || null,
+            totalComments,
+            resolvedCount: counts.resolved,
+            newCount,
+            lastActivityAt,
+            previewText: latest?.text || null,
+            previewAuthorUsername: latest?.authorUsername || null,
+          });
+        }
       }
+
+      // -----------------------
+      // DMs (conversation-centric)
+      // -----------------------
+      const includeDMs =
+        (!channels && true) || (channels && (channels.has('dms') || channels.has('dm')));
+      if (includeDMs) {
+        const where: any = { brandId };
+        if (socialAccountIds.length) where.socialAccountId = { in: socialAccountIds };
+        if (view === 'to_review') where.state = 'active';
+        if (platforms) where.platform = { in: Array.from(platforms) } as any;
+
+        const conversations = await prisma.dMConversation.findMany({
+          where,
+          orderBy: { lastMessageAt: 'desc' },
+          take: 200,
+          include: {
+            _count: { select: { messages: true } },
+          },
+        });
+
+        const conversationIds = conversations.map((c) => c.id);
+        const lastMessages = conversationIds.length
+          ? await prisma.dMMessage.findMany({
+              where: { conversationId: { in: conversationIds } },
+              orderBy: [{ conversationId: 'asc' }, { createdAt: 'desc' }],
+              distinct: ['conversationId'],
+              select: {
+                conversationId: true,
+                messageText: true,
+                direction: true,
+                createdAt: true,
+              },
+            })
+          : [];
+
+        const lastMessageByConversationId = new Map(
+          lastMessages.map((m) => [
+            m.conversationId,
+            {
+              text: m.messageText,
+              direction: m.direction,
+              createdAt: m.createdAt,
+            },
+          ])
+        );
+
+        for (const conv of conversations) {
+          const last = lastMessageByConversationId.get(conv.id) || null;
+          if (view === 'to_review' && last?.direction !== 'inbound') continue;
+
+          items.push({
+            type: 'dm_conversation',
+            platform: conv.platform,
+            socialAccountId: conv.socialAccountId,
+            conversationId: conv.id,
+            state: conv.state,
+            participantUsername: conv.participantUsername,
+            lastMessageAt: conv.lastMessageAt,
+            lastMessageText: last?.text || null,
+            lastMessageDirection: last?.direction || null,
+            messageCount: conv._count.messages,
+          });
+        }
+      }
+
+      items.sort((a, b) => {
+        const ta = a.lastActivityAt
+          ? new Date(a.lastActivityAt).getTime()
+          : a.lastMessageAt
+            ? new Date(a.lastMessageAt).getTime()
+            : 0;
+        const tb = b.lastActivityAt
+          ? new Date(b.lastActivityAt).getTime()
+          : b.lastMessageAt
+            ? new Date(b.lastMessageAt).getTime()
+            : 0;
+        return tb - ta;
+      });
+
+      return reply.send({ items: items.slice(0, limit) });
+    } catch (error) {
+      request.log.error({ err: error }, 'Inbox items error');
+      return reply.code(500).send({ error: 'Failed to retrieve inbox items' });
     }
-  );
+  });
 
   // Enqueue/trigger background ingestion of comments for a brand
   fastify.post<{ Params: { id: string } }>(
@@ -474,16 +625,27 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Run ingestion in the background (non-blocking)
-        setImmediate(async () => {
-          try {
-            await ingestBrandComments(brandId, 50, 100);
-          } catch (e) {
-            request.log.warn({ err: e }, 'Background comments ingestion failed');
+        let jobId: string | number | null = null;
+        try {
+          const job = await backgroundJobs.scheduleJob(JobType.INBOX_COMMENTS_INGEST, {
+            brandId,
+            maxPosts: 50,
+            perPostLimit: 100,
+            triggeredBy: userId,
+          });
+          jobId = job.id;
+        } catch (e) {
+          // If we fail to enqueue the job, remove the throttle key so the user can retry immediately.
+          if (redis) {
+            try {
+              await redis.del(throttleKey);
+            } catch {}
           }
-        });
+          throw e;
+        }
 
         nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-        return reply.send({ success: true, enqueued: true, nextAllowed });
+        return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
       } catch (error) {
         request.log.error({ err: error }, 'Failed to enqueue comments ingestion');
         return reply.code(500).send({ error: 'Failed to enqueue comments ingestion' });
@@ -554,67 +716,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err: error }, 'Content history error');
         return reply.code(500).send({ error: 'Failed to retrieve content history' });
       }
-    }
-  );
-
-  // ==========================
-  // Saved Replies (brand-level)
-  // ==========================
-  fastify.get<{ Params: { id: string } }>(
-    '/:id/replies',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const { id: brandId } = request.params;
-      const userId = request.user!.id;
-      await assertBrandOwnership(userId, brandId);
-      const rows = await prisma.savedReply.findMany({
-        where: { brandId },
-        orderBy: { updatedAt: 'desc' },
-      });
-      return reply.send({ replies: rows });
-    }
-  );
-
-  fastify.post<{
-    Params: { id: string };
-    Body: { title: string; body: string; isDefault?: boolean };
-  }>('/:id/replies', { preHandler: fastify.authenticate }, async (request, reply) => {
-    const { id: brandId } = request.params;
-    const userId = request.user!.id;
-    await assertBrandOwnership(userId, brandId);
-    const { title, body, isDefault } = request.body || ({} as any);
-    if (!title?.trim() || !body?.trim())
-      return reply.code(400).send({ error: 'Title and body are required' });
-    const row = await prisma.savedReply.create({
-      data: { brandId, userId, title: title.trim(), body, isDefault: !!isDefault },
-    });
-    return reply.code(201).send({ reply: row });
-  });
-
-  fastify.put<{
-    Params: { id: string; replyId: string };
-    Body: { title?: string; body?: string; isDefault?: boolean };
-  }>('/:id/replies/:replyId', { preHandler: fastify.authenticate }, async (request, reply) => {
-    const { id: brandId, replyId } = request.params;
-    const userId = request.user!.id;
-    await assertBrandOwnership(userId, brandId);
-    const data: any = {};
-    if (request.body?.title !== undefined) data.title = request.body.title;
-    if (request.body?.body !== undefined) data.body = request.body.body;
-    if (request.body?.isDefault !== undefined) data.isDefault = request.body.isDefault;
-    const row = await prisma.savedReply.update({ where: { id: replyId }, data });
-    return reply.send({ reply: row });
-  });
-
-  fastify.delete<{ Params: { id: string; replyId: string } }>(
-    '/:id/replies/:replyId',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const { id: brandId, replyId } = request.params;
-      const userId = request.user!.id;
-      await assertBrandOwnership(userId, brandId);
-      await prisma.savedReply.delete({ where: { id: replyId } });
-      return reply.send({ success: true });
     }
   );
 

@@ -64,9 +64,9 @@ export function Dashboard() {
     staleTime: 15_000,
   });
 
-  const commentsInboxQuery = useQuery({
-    queryKey: ['inbox-comments', brandId],
-    queryFn: () => brandApi.getCommentsInbox(brandId!),
+  const inboxItemsQuery = useQuery({
+    queryKey: ['inbox-items', brandId, 'dashboard'],
+    queryFn: () => brandApi.getInboxItems(brandId!, { view: 'to_review', limit: 50 }),
     enabled: Boolean(brandId),
     staleTime: 10_000,
   });
@@ -132,24 +132,21 @@ export function Dashboard() {
     [campaigns]
   );
 
-  const commentsInboxItems = useMemo(() => {
-    const items = ((commentsInboxQuery.data as any)?.items || []) as Array<{
-      postId: string;
-      caption: string | null;
-      permalink: string | null;
-      postedAt: string | null;
-      totalComments: number;
-      resolvedCount: number;
-      newCount: number;
-    }>;
+  const inboxItems = useMemo(() => {
+    const data = inboxItemsQuery.data as any;
+    const items = (data?.items || []) as Array<any>;
+    return items;
+  }, [inboxItemsQuery.data]);
 
-    return [...items].sort((a, b) => (b.newCount || 0) - (a.newCount || 0));
-  }, [commentsInboxQuery.data]);
-
-  const newCommentsCount = useMemo(
-    () => commentsInboxItems.reduce((sum, item) => sum + (item.newCount || 0), 0),
-    [commentsInboxItems]
-  );
+  const inboxSummary = useMemo(() => {
+    let commentThreads = 0;
+    let dmConversations = 0;
+    for (const item of inboxItems) {
+      if (item?.type === 'comment_thread') commentThreads += 1;
+      if (item?.type === 'dm_conversation') dmConversations += 1;
+    }
+    return { total: inboxItems.length, commentThreads, dmConversations };
+  }, [inboxItems]);
 
   const needsAttentionCount = useMemo(() => {
     const igConnected =
@@ -233,17 +230,19 @@ export function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">New Comments</CardTitle>
+            <CardTitle className="text-sm font-medium">Inbox to review</CardTitle>
             <MessageSquare className="text-muted-foreground h-4 w-4" aria-hidden="true" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{newCommentsCount}</div>
+            <div className="text-2xl font-bold">{inboxSummary.total}</div>
             <p className="text-muted-foreground text-xs">
-              Across {commentsInboxItems.length} posts.
+              {inboxSummary.commentThreads} comment thread
+              {inboxSummary.commentThreads === 1 ? '' : 's'} • {inboxSummary.dmConversations} DM
+              {inboxSummary.dmConversations === 1 ? '' : 's'}
             </p>
             <div className="mt-3">
               <Button asChild size="sm" variant="link" className="h-auto p-0">
-                <Link to="/inbox/comments">Open inbox →</Link>
+                <Link to="/inbox">Open inbox →</Link>
               </Button>
             </div>
           </CardContent>
@@ -415,15 +414,15 @@ export function Dashboard() {
         <Card className="lg:col-span-1">
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div className="space-y-1">
-              <CardTitle>Comments</CardTitle>
-              <p className="text-muted-foreground text-sm">Reply to new activity quickly.</p>
+              <CardTitle>Inbox</CardTitle>
+              <p className="text-muted-foreground text-sm">Everything that needs your attention.</p>
             </div>
             <Button asChild variant="outline" size="sm">
-              <Link to="/inbox/comments">Open</Link>
+              <Link to="/inbox">Open</Link>
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            {commentsInboxQuery.isLoading ? (
+            {inboxItemsQuery.isLoading ? (
               <div className="space-y-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3">
@@ -436,46 +435,73 @@ export function Dashboard() {
                   </div>
                 ))}
               </div>
-            ) : commentsInboxItems.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No recent comment activity.</p>
+            ) : inboxItems.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No items to review.</p>
             ) : (
               <div className="space-y-2">
-                {commentsInboxItems.slice(0, 5).map((item) => (
+                {inboxItems.slice(0, 5).map((item) => (
                   <div
-                    key={item.postId}
+                    key={item.type === 'comment_thread' ? item.publicationId : item.conversationId}
                     className="flex items-start justify-between gap-3 rounded-md border p-3"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">
                         <span className="line-clamp-2">
-                          {item.caption?.trim() ? item.caption.trim() : 'Post'}
+                          {item.type === 'comment_thread'
+                            ? item.caption?.trim()
+                              ? item.caption.trim()
+                              : 'Post'
+                            : item.participantUsername
+                              ? `@${item.participantUsername}`
+                              : 'Direct message'}
                         </span>
                       </div>
-                      {item.postedAt ? (
+                      {item.type === 'comment_thread' && item.postedAt ? (
                         <div className="text-muted-foreground mt-1 text-xs">
                           Posted {formatInUserTimezone(item.postedAt, 'MMM d', brandTimezone)}
                         </div>
                       ) : null}
-                      {item.permalink ? (
+                      {item.type === 'dm_conversation' && item.lastMessageAt ? (
+                        <div className="text-muted-foreground mt-1 text-xs">
+                          Last message{' '}
+                          {formatInUserTimezone(item.lastMessageAt, 'MMM d', brandTimezone)}
+                        </div>
+                      ) : null}
+                      {item.type === 'comment_thread' && item.previewText ? (
+                        <div className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+                          {item.previewAuthorUsername ? `@${item.previewAuthorUsername}: ` : ''}
+                          {item.previewText}
+                        </div>
+                      ) : null}
+                      {item.type === 'dm_conversation' && item.lastMessageText ? (
+                        <div className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+                          {item.lastMessageText}
+                        </div>
+                      ) : null}
+                      {item.type === 'comment_thread' && item.permalink ? (
                         <a
                           className="text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 text-xs underline"
                           href={item.permalink}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          View on Instagram <span aria-hidden="true">↗</span>
+                          View on {String(item.platform || 'platform')}{' '}
+                          <span aria-hidden="true">↗</span>
                         </a>
                       ) : null}
                     </div>
-                    <Badge variant={item.newCount > 0 ? 'info' : 'secondary'}>
-                      {item.newCount}
-                    </Badge>
+                    {item.type === 'comment_thread' ? (
+                      <Badge variant={item.newCount > 0 ? 'info' : 'secondary'}>
+                        {item.newCount}
+                      </Badge>
+                    ) : (
+                      <Badge variant="info">DM</Badge>
+                    )}
                   </div>
                 ))}
-                {commentsInboxItems.length > 5 ? (
+                {inboxItems.length > 5 ? (
                   <p className="text-muted-foreground text-xs">
-                    And {commentsInboxItems.length - 5} more post
-                    {commentsInboxItems.length - 5 === 1 ? '' : 's'}.
+                    And {inboxItems.length - 5} more item{inboxItems.length - 5 === 1 ? '' : 's'}.
                   </p>
                 ) : null}
               </div>

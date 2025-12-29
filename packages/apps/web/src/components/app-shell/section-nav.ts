@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from 'react';
-import { MessageCircle, Send, Bookmark, Plug, CalendarClock } from 'lucide-react';
+import { Inbox, Send, Bookmark, Plug, CalendarClock } from 'lucide-react';
 import type { NavigationItem } from './nav-config';
 
 export interface SectionNavItem {
@@ -11,16 +11,10 @@ export interface SectionNavItem {
 
 const inboxSectionItems: SectionNavItem[] = [
   {
-    label: 'Comments',
-    path: '/inbox/comments',
-    icon: MessageCircle,
-    description: 'Manage post comments',
-  },
-  {
-    label: 'Direct Messages',
-    path: '/inbox/dms',
-    icon: Send,
-    description: 'Reply to DMs',
+    label: 'Incoming',
+    path: '/inbox',
+    icon: Inbox,
+    description: 'All incoming messages and comments',
   },
   {
     label: 'Saved Replies',

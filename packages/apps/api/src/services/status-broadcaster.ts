@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
+import type { Platform } from '@postolio/database';
 
 export type ContentStatus =
   | 'draft'
@@ -60,9 +61,11 @@ export interface DMMessageEvent {
   conversationId: string;
   messageId: string;
   brandId: string;
+  socialAccountId: string;
+  platform: Platform;
   direction: 'inbound' | 'outbound';
   messageText: string;
-  instagramUsername: string;
+  participantUsername: string;
   timestamp: string;
 }
 
@@ -526,23 +529,37 @@ export class StatusBroadcaster {
   /**
    * Broadcast new DM message to connected clients
    */
-  async broadcastDMMessage(
-    conversationId: string,
-    messageId: string,
-    brandId: string,
-    direction: 'inbound' | 'outbound',
-    messageText: string,
-    instagramUsername: string
-  ): Promise<void> {
+  async broadcastDMMessage(params: {
+    conversationId: string;
+    messageId: string;
+    brandId: string;
+    socialAccountId: string;
+    platform: Platform;
+    direction: 'inbound' | 'outbound';
+    messageText: string;
+    participantUsername: string;
+  }): Promise<void> {
+    const {
+      conversationId,
+      messageId,
+      brandId,
+      socialAccountId,
+      platform,
+      direction,
+      messageText,
+      participantUsername,
+    } = params;
     const timestamp = Date.now();
     const event: DMMessageEvent = {
       type: 'dm_message',
       conversationId,
       messageId,
       brandId,
+      socialAccountId,
+      platform,
       direction,
       messageText,
-      instagramUsername,
+      participantUsername,
       timestamp: new Date(timestamp).toISOString(),
     };
 
@@ -564,8 +581,12 @@ export class StatusBroadcaster {
         direction,
         'messageText',
         messageText,
-        'instagramUsername',
-        instagramUsername,
+        'socialAccountId',
+        socialAccountId,
+        'platform',
+        platform,
+        'participantUsername',
+        participantUsername,
         'timestamp',
         timestamp.toString()
       );

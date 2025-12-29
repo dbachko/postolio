@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
+import { facebookService } from '../services/facebook.js';
 import {
   PostDetailParamsSchema,
   PaginationSchema,
@@ -213,7 +214,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  // Get comments for a post (Instagram via v2 publications)
+  // Get comments for a post (via v2 publications)
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/comments', async (request, reply) => {
     // Validate params
     const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
@@ -257,110 +258,198 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
       }
 
-      // Initialize default values
-      interface InstagramComment {
+      type PlatformComment = {
         id?: string;
         text?: string;
         username?: string;
         timestamp?: string;
-      }
-      let comments: InstagramComment[] = [];
+        like_count?: number;
+        workflow?: { status?: string } | null;
+      };
+
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+      const skip = Math.max(0, (pageNum - 1) * limitNum);
+      const freshnessTtlMs = 60_000;
+      const refreshRaw = String((request.query as any)?.refresh ?? '')
+        .trim()
+        .toLowerCase();
+      const refresh = refreshRaw === 'true' || refreshRaw === '1';
+
+      let comments: PlatformComment[] = [];
       let total = 0;
 
-      // If post is published and has an Instagram publication, fetch real comments
-      if (post.status === 'published' && post.brand) {
-        try {
-          const pub = await prisma.contentPublication.findFirst({
-            where: { contentId: postId, platform: 'instagram' },
-            select: { id: true, platform: true, socialAccountId: true, externalPostId: true },
-          });
-          if (pub && typeof pub.externalPostId === 'string') {
-            const res = await instagramService.getPostComments(
-              post.brand,
-              pub.externalPostId,
-              Number(limit)
-            );
-            comments = res.data;
-            total = res.total;
-
-            // Merge persisted workflow (resolved/snoozed)
-            try {
-              const ids = comments.map((c) => String(c.id || ''));
-              const rows = await prisma.publicationComment.findMany({
-                where: { publicationId: pub.id, externalCommentId: { in: ids } },
-                select: { externalCommentId: true, status: true },
-              });
-              const byId = new Map(rows.map((r) => [r.externalCommentId, r]));
-              comments = comments.map((c) => ({
-                ...c,
-                workflow: byId.get(String(c.id || '')) || null,
-              })) as any;
-            } catch (e) {
-              request.log.warn({ err: e }, 'Failed to merge comment workflows');
-            }
-
-            // Fallback: if Graph API returned no comments, surface locally-seeded comments
-            if ((!comments || comments.length === 0) && pub?.id) {
-              const localRows = await prisma.publicationComment.findMany({
-                where: { publicationId: pub.id },
-                orderBy: { createdAt: 'asc' },
-                select: {
-                  externalCommentId: true,
-                  text: true,
-                  authorUsername: true,
-                  createdAt: true,
-                  status: true,
-                },
-              });
-              comments = localRows.map((r) => ({
-                id: r.externalCommentId,
-                text: r.text || undefined,
-                username: r.authorUsername || undefined,
-                timestamp: r.createdAt?.toISOString(),
-                workflow: { status: r.status },
-              })) as any;
-              total = comments.length;
-            }
-          }
-        } catch (error) {
-          request.log.warn(
-            { err: error },
-            'Failed to fetch Instagram comments via Graph; falling back to local'
-          );
-          // Fallback: if Graph call failed, try locally persisted comments (from seeds/ingestion)
-          try {
-            const pub = await prisma.contentPublication.findFirst({
-              where: { contentId: postId, platform: 'instagram' },
-              select: { id: true },
-            });
-            if (pub?.id) {
-              const localRows = await prisma.publicationComment.findMany({
-                where: { publicationId: pub.id },
-                orderBy: { createdAt: 'asc' },
-                select: {
-                  externalCommentId: true,
-                  text: true,
-                  authorUsername: true,
-                  createdAt: true,
-                  status: true,
-                },
-              });
-              comments = localRows.map((r) => ({
-                id: r.externalCommentId,
-                text: r.text || undefined,
-                username: r.authorUsername || undefined,
-                timestamp: r.createdAt?.toISOString(),
-                workflow: { status: r.status },
-              })) as any;
-              total = comments.length;
-            }
-          } catch (fallbackErr) {
-            request.log.warn({ err: fallbackErr }, 'Local comments fallback failed');
-          }
-        }
+      // Only published posts are supported today
+      if (post.status !== 'published') {
+        return reply.send(paginatedResponse([], pageNum, limitNum, 0));
       }
 
-      return reply.send(paginatedResponse(comments, Number(page), Number(limit), total));
+      const supportedPlatforms = ['instagram', 'facebook'] as const;
+      const publicationId =
+        typeof (request.query as any)?.publicationId === 'string'
+          ? String((request.query as any).publicationId)
+          : null;
+
+      const pub = publicationId
+        ? await prisma.contentPublication.findFirst({
+            where: {
+              id: publicationId,
+              contentId: postId,
+              platform: { in: supportedPlatforms as any },
+            },
+            select: { id: true, platform: true, externalPostId: true, socialAccountId: true },
+          })
+        : await prisma.contentPublication.findFirst({
+            where: {
+              contentId: postId,
+              platform: { in: supportedPlatforms as any },
+              ...(post.targetSocialAccountId
+                ? { socialAccountId: post.targetSocialAccountId }
+                : {}),
+            },
+            orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+            select: { id: true, platform: true, externalPostId: true, socialAccountId: true },
+          });
+
+      if (!pub?.externalPostId) {
+        if (publicationId) {
+          return reply.code(404).send(ErrorResponses.notFound('Publication'));
+        }
+        return reply.send(paginatedResponse([], pageNum, limitNum, 0));
+      }
+
+      // DB-first read: if we've fetched this publication recently, return persisted comments
+      const [latestFetch, localTotal, localRows] = await Promise.all([
+        prisma.publicationComment.findFirst({
+          where: { publicationId: pub.id },
+          orderBy: { fetchedAt: 'desc' },
+          select: { fetchedAt: true },
+        }),
+        prisma.publicationComment.count({ where: { publicationId: pub.id } }),
+        prisma.publicationComment.findMany({
+          where: { publicationId: pub.id },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limitNum,
+          select: {
+            externalCommentId: true,
+            text: true,
+            authorUsername: true,
+            likeCount: true,
+            createdAt: true,
+            status: true,
+          },
+        }),
+      ]);
+
+      const isFresh =
+        !!latestFetch?.fetchedAt && Date.now() - latestFetch.fetchedAt.getTime() < freshnessTtlMs;
+
+      if (!refresh && isFresh && localRows.length > 0) {
+        comments = localRows.map((r) => ({
+          id: r.externalCommentId,
+          text: r.text || undefined,
+          username: r.authorUsername || undefined,
+          timestamp: r.createdAt?.toISOString(),
+          like_count: typeof r.likeCount === 'number' ? r.likeCount : undefined,
+          workflow: { status: String(r.status) },
+        }));
+        total = localTotal;
+        return reply.send(paginatedResponse(comments, pageNum, limitNum, total));
+      }
+
+      // Stale/missing: fetch from Graph using account-scoped credentials, then upsert to DB
+      try {
+        const externalPostId = String(pub.externalPostId);
+        const res =
+          pub.platform === 'instagram'
+            ? await instagramService.getPostCommentsForSocialAccount(
+                pub.socialAccountId,
+                externalPostId,
+                limitNum
+              )
+            : await facebookService.getPostCommentsForSocialAccount(
+                pub.socialAccountId,
+                externalPostId,
+                limitNum
+              );
+
+        // Persist comment payload (best-effort, preserve workflow status)
+        const now = new Date();
+        for (const c of res.data) {
+          const externalCommentId = String(c.id || '');
+          if (!externalCommentId) continue;
+          const createdAt = c.timestamp ? new Date(c.timestamp) : undefined;
+          try {
+            await prisma.publicationComment.upsert({
+              where: {
+                publicationId_externalCommentId: {
+                  publicationId: pub.id,
+                  externalCommentId,
+                },
+              } as any,
+              update: {
+                text: (c as any).text || null,
+                authorUsername: (c as any).username || null,
+                likeCount: typeof (c as any).like_count === 'number' ? (c as any).like_count : 0,
+                fetchedAt: now,
+              },
+              create: {
+                publicationId: pub.id,
+                platform: pub.platform,
+                externalCommentId,
+                text: (c as any).text || null,
+                authorUsername: (c as any).username || null,
+                likeCount: typeof (c as any).like_count === 'number' ? (c as any).like_count : 0,
+                status: 'open',
+                createdAt,
+                fetchedAt: now,
+              },
+            });
+          } catch (e) {
+            request.log.debug({ err: e }, 'Failed to upsert publicationComment');
+          }
+        }
+
+        // Merge workflow statuses for fetched ids
+        let byId = new Map<string, { status: string }>();
+        try {
+          const ids = res.data.map((c) => String(c.id || '')).filter(Boolean);
+          if (ids.length) {
+            const rows = await prisma.publicationComment.findMany({
+              where: { publicationId: pub.id, externalCommentId: { in: ids } },
+              select: { externalCommentId: true, status: true },
+            });
+            byId = new Map(rows.map((r) => [r.externalCommentId, { status: String(r.status) }]));
+          }
+        } catch (e) {
+          request.log.warn({ err: e }, 'Failed to merge comment workflows');
+        }
+
+        comments = res.data.map((c) => ({
+          id: c.id,
+          text: c.text,
+          username: c.username,
+          timestamp: c.timestamp,
+          like_count: (c as any).like_count,
+          workflow: byId.get(String(c.id || '')) || null,
+        }));
+        total = res.total;
+      } catch (error) {
+        request.log.warn({ err: error }, 'Failed to fetch comments via Graph');
+        // Last-resort: return whatever we have locally
+        comments = localRows.map((r) => ({
+          id: r.externalCommentId,
+          text: r.text || undefined,
+          username: r.authorUsername || undefined,
+          timestamp: r.createdAt?.toISOString(),
+          like_count: typeof r.likeCount === 'number' ? r.likeCount : undefined,
+          workflow: { status: String(r.status) },
+        }));
+        total = localTotal;
+      }
+
+      return reply.send(paginatedResponse(comments, pageNum, limitNum, total));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       app.log.error({ message }, 'Error fetching post comments:');
@@ -397,12 +486,34 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         if (post.status !== 'published')
           return reply.code(400).send(ErrorResponses.badRequest('Post is not published'));
 
-        const pub = await prisma.contentPublication.findFirst({
-          where: { contentId: postId, platform: 'instagram' },
-          select: { externalPostId: true },
-        });
+        const publicationId =
+          typeof (request.query as any)?.publicationId === 'string'
+            ? String((request.query as any).publicationId)
+            : null;
+
+        const supportedPlatforms = ['instagram', 'facebook'] as const;
+        const pub = publicationId
+          ? await prisma.contentPublication.findFirst({
+              where: {
+                id: publicationId,
+                contentId: postId,
+                platform: { in: supportedPlatforms as any },
+              },
+              select: { platform: true, externalPostId: true, socialAccountId: true },
+            })
+          : await prisma.contentPublication.findFirst({
+              where: {
+                contentId: postId,
+                platform: { in: supportedPlatforms as any },
+                ...(post.targetSocialAccountId
+                  ? { socialAccountId: post.targetSocialAccountId }
+                  : {}),
+              },
+              orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+              select: { platform: true, externalPostId: true, socialAccountId: true },
+            });
         if (!pub?.externalPostId) {
-          return reply.code(400).send(ErrorResponses.badRequest('Instagram publication not found'));
+          return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
         }
         // Idempotency: prevent duplicate replies within a short window
         const redis = getRedisClient();
@@ -419,12 +530,19 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         }
 
         try {
-          const res = await instagramService.replyToComment(
-            post.brand,
-            String(pub.externalPostId),
-            commentId,
-            message
-          );
+          const res =
+            pub.platform === 'instagram'
+              ? await instagramService.replyToCommentForSocialAccount(
+                  pub.socialAccountId,
+                  String(pub.externalPostId),
+                  commentId,
+                  message
+                )
+              : await facebookService.replyToCommentForSocialAccount(
+                  pub.socialAccountId,
+                  commentId,
+                  message
+                );
           return reply.send(successResponse(res));
         } catch (innerErr) {
           // On failure, release the lock to allow immediate retry
@@ -466,12 +584,33 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
       if (post.brand.userId !== userId)
         return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
-      const pub = await prisma.contentPublication.findFirst({
-        where: { contentId: postId, platform: 'instagram' },
-        select: { id: true },
-      });
-      if (!pub)
-        return reply.code(400).send(ErrorResponses.badRequest('Instagram publication not found'));
+      const publicationId =
+        typeof (request.query as any)?.publicationId === 'string'
+          ? String((request.query as any).publicationId)
+          : null;
+
+      const supportedPlatforms = ['instagram', 'facebook'] as const;
+      const pub = publicationId
+        ? await prisma.contentPublication.findFirst({
+            where: {
+              id: publicationId,
+              contentId: postId,
+              platform: { in: supportedPlatforms as any },
+            },
+            select: { id: true, platform: true },
+          })
+        : await prisma.contentPublication.findFirst({
+            where: {
+              contentId: postId,
+              platform: { in: supportedPlatforms as any },
+              ...(post.targetSocialAccountId
+                ? { socialAccountId: post.targetSocialAccountId }
+                : {}),
+            },
+            orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+            select: { id: true, platform: true },
+          });
+      if (!pub) return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
 
       const data: any = {};
       if (status) data.status = status;
@@ -483,7 +622,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         update: data,
         create: {
           publicationId: pub.id,
-          platform: 'instagram',
+          platform: pub.platform,
           externalCommentId: commentId,
           text: null,
           status: (status as any) || 'open',
@@ -526,13 +665,50 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
         if (post.brand.userId !== userId)
           return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
-        const res = await instagramService.likeComment(post.brand, commentId);
+        const publicationId =
+          typeof (request.query as any)?.publicationId === 'string'
+            ? String((request.query as any).publicationId)
+            : null;
+
+        const supportedPlatforms = ['instagram', 'facebook'] as const;
+        const pub = publicationId
+          ? await prisma.contentPublication.findFirst({
+              where: {
+                id: publicationId,
+                contentId: postId,
+                platform: { in: supportedPlatforms as any },
+              },
+              select: { platform: true, socialAccountId: true },
+            })
+          : await prisma.contentPublication.findFirst({
+              where: {
+                contentId: postId,
+                platform: { in: supportedPlatforms as any },
+                ...(post.targetSocialAccountId
+                  ? { socialAccountId: post.targetSocialAccountId }
+                  : {}),
+              },
+              orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+              select: { platform: true, socialAccountId: true },
+            });
+        if (!pub) {
+          return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
+        }
+
+        const res =
+          pub.platform === 'instagram'
+            ? await instagramService.likeCommentForSocialAccount(pub.socialAccountId, commentId)
+            : await facebookService.likeCommentForSocialAccount(pub.socialAccountId, commentId);
         return reply.send(successResponse(res));
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         // Surface a 400 when API indicates unsupported to avoid implying a server fault
-        const status = /not support|unsupported|not allowed/i.test(message) ? 400 : 500;
-        return reply.code(status).send(ErrorResponses.badRequest(message));
+        if (/not support|unsupported|not allowed/i.test(message)) {
+          return reply.code(400).send(ErrorResponses.badRequest(message));
+        }
+        return reply
+          .code(500)
+          .send(ErrorResponses.internalError(`Failed to like comment: ${message}`));
       }
     }
   );
@@ -563,40 +739,78 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         if (post.status !== 'published')
           return reply.code(400).send(ErrorResponses.badRequest('Post is not published'));
 
-        const pub = await prisma.contentPublication.findFirst({
-          where: { contentId: postId, platform: 'instagram' },
-          select: { id: true },
-        });
-        if (!pub)
-          return reply.code(400).send(ErrorResponses.badRequest('Instagram publication not found'));
+        const publicationId =
+          typeof (request.query as any)?.publicationId === 'string'
+            ? String((request.query as any).publicationId)
+            : null;
+
+        const supportedPlatforms = ['instagram', 'facebook'] as const;
+        const pub = publicationId
+          ? await prisma.contentPublication.findFirst({
+              where: {
+                id: publicationId,
+                contentId: postId,
+                platform: { in: supportedPlatforms as any },
+              },
+              select: { id: true, platform: true },
+            })
+          : await prisma.contentPublication.findFirst({
+              where: {
+                contentId: postId,
+                platform: { in: supportedPlatforms as any },
+                ...(post.targetSocialAccountId
+                  ? { socialAccountId: post.targetSocialAccountId }
+                  : {}),
+              },
+              orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+              select: { id: true, platform: true },
+            });
+        if (!pub) return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
 
         let marked = 0;
-        // If a set of comment IDs is provided, upsert them to resolved in a batch-y loop
-        if (Array.isArray(commentIds) && commentIds.length > 0) {
-          for (const cid of commentIds) {
-            const id = String(cid || '');
-            if (!id) continue;
-            const row = await prisma.publicationComment.upsert({
+        const ids = Array.isArray(commentIds)
+          ? [...new Set(commentIds.map((cid) => String(cid || '')).filter(Boolean))]
+          : [];
+
+        if (ids.length > 0) {
+          const existing = await prisma.publicationComment.findMany({
+            where: { publicationId: pub.id, externalCommentId: { in: ids } },
+            select: { externalCommentId: true, status: true },
+          });
+
+          const existingIds = new Set(existing.map((r) => r.externalCommentId));
+          const idsToResolve = existing
+            .filter((r) => r.status === 'open')
+            .map((r) => r.externalCommentId);
+          const idsToCreate = ids.filter((id) => !existingIds.has(id));
+
+          if (idsToResolve.length) {
+            const res = await prisma.publicationComment.updateMany({
               where: {
-                publicationId_externalCommentId: {
-                  publicationId: pub.id,
-                  externalCommentId: id,
-                },
-              } as any,
-              update: { status: 'resolved' },
-              create: {
                 publicationId: pub.id,
-                platform: 'instagram',
+                externalCommentId: { in: idsToResolve },
+                status: 'open',
+              },
+              data: { status: 'resolved' },
+            });
+            marked += res.count;
+          }
+
+          if (idsToCreate.length) {
+            const res = await prisma.publicationComment.createMany({
+              data: idsToCreate.map((id) => ({
+                publicationId: pub.id,
+                platform: pub.platform,
                 externalCommentId: id,
                 status: 'resolved',
-              },
+              })),
+              skipDuplicates: true,
             });
-            if (row) marked++;
+            marked += res.count;
           }
         } else {
-          // Fallback: mark any existing persisted comments as resolved
           const res = await prisma.publicationComment.updateMany({
-            where: { publicationId: pub.id, status: { not: 'resolved' } },
+            where: { publicationId: pub.id, status: 'open' },
             data: { status: 'resolved' },
           });
           marked = res.count;

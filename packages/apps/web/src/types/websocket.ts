@@ -102,9 +102,11 @@ export interface WebSocketMessage {
     | DMConversationUpdateData;
   conversationId?: string;
   messageId?: string;
+  socialAccountId?: string;
+  platform?: string;
   direction?: 'inbound' | 'outbound';
   messageText?: string;
-  instagramUsername?: string;
+  participantUsername?: string;
   state?: 'active' | 'archived' | 'spam';
   lastMessageAt?: string;
   timestamp?: string | number; // For latency measurement in ping/pong or event timestamp
@@ -131,9 +133,11 @@ export interface DMMessageData {
   conversationId: string;
   messageId: string;
   brandId: string;
+  socialAccountId: string;
+  platform: string;
   direction: 'inbound' | 'outbound';
   messageText: string;
-  instagramUsername: string;
+  participantUsername: string;
   timestamp: string;
 }
 

@@ -1,3 +1,5 @@
+import type { Platform } from '@/lib/platform-config';
+
 export interface User {
   id: string;
   email: string;
@@ -519,18 +521,22 @@ export interface DMAutomationAnalytics {
 
 export type ConversationState = 'active' | 'archived' | 'spam';
 export type MessageDirection = 'inbound' | 'outbound';
-export type MessageStatus = 'sent' | 'failed' | 'delivered' | 'read';
+export type MessageStatus = 'pending' | 'sent' | 'failed' | 'delivered' | 'read';
 
 export interface DMConversation {
   id: string;
   brandId: string;
+  socialAccountId: string;
   ruleId: string | null;
-  instagramUserId: string;
-  instagramUsername: string;
+  platform: Platform;
+  participantExternalUserId: string;
+  participantUsername: string;
   state: ConversationState;
-  lastMessageAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  currentStep: number;
+  contextData: unknown | null;
+  startedAt: string;
+  lastMessageAt: string;
+  completedAt: string | null;
   rule?: {
     id: string;
     name: string;
@@ -539,24 +545,23 @@ export interface DMConversation {
   lastMessage?: {
     text: string;
     direction: MessageDirection;
-    createdAt: Date;
+    createdAt: string;
   } | null;
 }
 
 export interface DMMessage {
   id: string;
   conversationId: string;
+  platform: Platform;
   direction: MessageDirection;
   messageText: string;
   externalMessageId: string | null;
   externalCommentId: string | null;
   status: MessageStatus;
-  sentAt: Date | null;
-  deliveredAt: Date | null;
-  readAt: Date | null;
-  failureReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  errorMessage: string | null;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
 }
 
 export interface SavedReply {

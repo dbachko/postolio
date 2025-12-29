@@ -14,6 +14,8 @@ export enum JobType {
   CAMPAIGN_WINDOW_MAINTENANCE = 'campaign-window-maintenance',
   PUBLISHING_QUEUE_WINDOW_MAINTENANCE = 'publishing-queue-window-maintenance',
   NOTIFICATION_RETENTION = 'notification-retention',
+  INBOX_COMMENTS_INGEST = 'inbox-comments-ingest',
+  INBOX_COMMENTS_BACKFILL = 'inbox-comments-backfill',
 }
 
 interface JobData {
@@ -89,6 +91,14 @@ export class BackgroundJobQueue {
 
     this.queue.process(JobType.NOTIFICATION_RETENTION, async () => {
       return await this.processNotificationRetention();
+    });
+
+    this.queue.process(JobType.INBOX_COMMENTS_INGEST, async (job) => {
+      return await this.processInboxCommentsIngest(job);
+    });
+
+    this.queue.process(JobType.INBOX_COMMENTS_BACKFILL, async (job) => {
+      return await this.processInboxCommentsBackfill(job);
     });
   }
 
@@ -429,6 +439,19 @@ export class BackgroundJobQueue {
       }
     );
 
+    // Inbox comments backfill (optional; calls external APIs) - hourly by default
+    if (process.env.ENABLE_INBOX_COMMENTS_BACKFILL === 'true') {
+      await this.queue.add(
+        JobType.INBOX_COMMENTS_BACKFILL,
+        { type: JobType.INBOX_COMMENTS_BACKFILL },
+        {
+          repeat: {
+            cron: process.env.INBOX_COMMENTS_BACKFILL_CRON || '0 * * * *',
+          },
+        }
+      );
+    }
+
     this.logger.info('Recurring background jobs scheduled');
   }
 
@@ -438,6 +461,114 @@ export class BackgroundJobQueue {
     const { notificationsService } = await import('./notifications.js');
     const res = await notificationsService.purgeOld(maxAgeDays);
     return { deletedCount: res.deleted, duration: Date.now() - start };
+  }
+
+  private async processInboxCommentsIngest(job: Bull.Job<JobData>): Promise<{
+    brandId: string;
+    postsProcessed: number;
+    commentsUpserted: number;
+    duration: number;
+  }> {
+    const start = Date.now();
+    const brandId = String(job.data.metadata?.brandId ?? '').trim();
+    const maxPosts = Number(job.data.metadata?.maxPosts ?? 50);
+    const perPostLimit = Number(job.data.metadata?.perPostLimit ?? 100);
+    const minStaleMs = Number(job.data.metadata?.minStaleMs ?? 0);
+
+    if (!brandId) {
+      throw new Error('Missing brandId for inbox comments ingest job');
+    }
+
+    await job.progress(5);
+
+    const { ingestBrandComments } = await import('./inbox-comments-ingestor.js');
+    await job.progress(15);
+
+    const result = await ingestBrandComments(
+      brandId,
+      Number.isFinite(maxPosts) ? maxPosts : 50,
+      Number.isFinite(perPostLimit) ? perPostLimit : 100,
+      {
+        minStaleMs: Number.isFinite(minStaleMs) ? minStaleMs : 0,
+      }
+    );
+    await job.progress(100);
+
+    return {
+      brandId,
+      ...result,
+      duration: Date.now() - start,
+    };
+  }
+
+  private async processInboxCommentsBackfill(job: Bull.Job<JobData>): Promise<{
+    brandsTotal: number;
+    brandsProcessed: number;
+    brandsFailed: number;
+    postsProcessed: number;
+    commentsUpserted: number;
+    duration: number;
+  }> {
+    const start = Date.now();
+    const prisma = (await import('../config/database.js')).getDatabaseClient();
+    const { ingestBrandComments } = await import('./inbox-comments-ingestor.js');
+
+    const maxPosts = Number(
+      job.data.metadata?.maxPosts ?? process.env.INBOX_COMMENTS_BACKFILL_MAX_POSTS ?? 20
+    );
+    const perPostLimit = Number(
+      job.data.metadata?.perPostLimit ?? process.env.INBOX_COMMENTS_BACKFILL_PER_POST_LIMIT ?? 50
+    );
+    const minStaleMs = Number(
+      job.data.metadata?.minStaleMs ??
+        process.env.INBOX_COMMENTS_BACKFILL_MIN_STALE_MS ??
+        15 * 60 * 1000
+    );
+
+    const brands = await prisma.brand.findMany({
+      where: { socialAccounts: { some: { platform: { in: ['instagram', 'facebook'] } } } },
+      select: { id: true },
+    });
+
+    const safeMaxPosts = Number.isFinite(maxPosts) ? maxPosts : 20;
+    const safePerPostLimit = Number.isFinite(perPostLimit) ? perPostLimit : 50;
+    const safeMinStaleMs = Number.isFinite(minStaleMs) ? minStaleMs : 15 * 60 * 1000;
+
+    let brandsProcessed = 0;
+    let brandsFailed = 0;
+    let postsProcessed = 0;
+    let commentsUpserted = 0;
+
+    for (let i = 0; i < brands.length; i++) {
+      const brand = brands[i];
+      try {
+        const res = await ingestBrandComments(brand.id, safeMaxPosts, safePerPostLimit, {
+          minStaleMs: safeMinStaleMs,
+        });
+        brandsProcessed++;
+        postsProcessed += res.postsProcessed;
+        commentsUpserted += res.commentsUpserted;
+      } catch (error) {
+        brandsFailed++;
+        this.logger.warn('Inbox comments backfill failed for brand', {
+          brandId: brand.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      await job.progress(Math.min(99, Math.round(((i + 1) / brands.length) * 100)));
+    }
+
+    await job.progress(100);
+
+    return {
+      brandsTotal: brands.length,
+      brandsProcessed,
+      brandsFailed,
+      postsProcessed,
+      commentsUpserted,
+      duration: Date.now() - start,
+    };
   }
 
   private async processCampaignWindowMaintenance(): Promise<{

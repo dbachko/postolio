@@ -1,6 +1,7 @@
 import type { HttpRequest } from '../http/http';
 
 import type { ImageProvider } from '@/types/campaign-wizard';
+import type { Platform } from '@/lib/platform-config';
 
 type BrandImageProviderPreference = {
   imageProvider: ImageProvider | null;
@@ -75,19 +76,75 @@ export class BrandClient {
     ) as Promise<ImageAnalyticsResponse>;
   }
 
-  // Inbox: Comments overview
-  getCommentsInbox(brandId: string) {
-    return this.request(`/api/brands/${encodeURIComponent(brandId)}/inbox/comments`) as Promise<{
-      items: Array<{
-        postId: string;
-        caption: string | null;
-        primaryAssetId: string | null;
-        permalink: string | null;
-        postedAt: string | null;
-        totalComments: number;
-        resolvedCount: number;
-        newCount: number;
-      }>;
+  // Inbox: Unified items (comments + DMs)
+  getInboxItems(
+    brandId: string,
+    options?: {
+      socialAccountIds?: string[];
+      channels?: Array<'comments' | 'dms'>;
+      platforms?: string[];
+      view?: 'to_review' | 'all';
+      limit?: number;
+    }
+  ) {
+    const params = new URLSearchParams();
+
+    const socialAccountIds = options?.socialAccountIds || [];
+    for (const id of socialAccountIds) {
+      if (!id) continue;
+      params.append('socialAccountId', id);
+    }
+
+    const channels = options?.channels || [];
+    for (const channel of channels) {
+      if (!channel) continue;
+      params.append('channel', channel);
+    }
+
+    const platforms = options?.platforms || [];
+    for (const platform of platforms) {
+      if (!platform) continue;
+      params.append('platform', platform);
+    }
+
+    if (options?.view) params.set('view', options.view);
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/inbox/items${qs ? `?${qs}` : ''}`
+    ) as Promise<{
+      items: Array<
+        | {
+            type: 'comment_thread';
+            platform: Platform;
+            socialAccountId: string;
+            publicationId: string;
+            postId: string;
+            caption: string | null;
+            primaryAssetId: string | null;
+            permalink: string | null;
+            postedAt: string | null;
+            totalComments: number;
+            resolvedCount: number;
+            newCount: number;
+            lastActivityAt: string | null;
+            previewText: string | null;
+            previewAuthorUsername: string | null;
+          }
+        | {
+            type: 'dm_conversation';
+            platform: Platform;
+            socialAccountId: string;
+            conversationId: string;
+            state: 'active' | 'archived' | 'spam';
+            participantUsername: string;
+            lastMessageAt: string;
+            lastMessageText: string | null;
+            lastMessageDirection: 'inbound' | 'outbound' | null;
+            messageCount: number;
+          }
+      >;
     }>;
   }
 
@@ -388,62 +445,5 @@ export class BrandClient {
 
   getInstagramBestTimeStatus(brandId: string) {
     return this.request(`/api/brands/${encodeURIComponent(brandId)}/instagram/best-time/status`);
-  }
-
-  // Saved replies
-  getSavedReplies(brandId: string) {
-    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies`);
-  }
-
-  createSavedReply(brandId: string, data: { title: string; body: string; isDefault?: boolean }) {
-    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  updateSavedReply(
-    brandId: string,
-    replyId: string,
-    data: { title?: string; body?: string; isDefault?: boolean }
-  ) {
-    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies/${replyId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  deleteSavedReply(brandId: string, replyId: string) {
-    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies/${replyId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Instagram DMs
-  getDmThreads(brandId: string, opts?: { limit?: number; after?: string }) {
-    const params = new URLSearchParams();
-    if (opts?.limit) params.set('limit', String(opts.limit));
-    if (opts?.after) params.set('after', opts.after);
-    const qs = params.toString();
-    return this.request(
-      `/api/brands/${encodeURIComponent(brandId)}/instagram/dms/threads${qs ? `?${qs}` : ''}`
-    );
-  }
-
-  getDmMessages(brandId: string, threadId: string, opts?: { limit?: number; before?: string }) {
-    const params = new URLSearchParams();
-    if (opts?.limit) params.set('limit', String(opts.limit));
-    if (opts?.before) params.set('before', opts.before);
-    const qs = params.toString();
-    return this.request(
-      `/api/brands/${encodeURIComponent(brandId)}/instagram/dms/threads/${encodeURIComponent(threadId)}/messages${qs ? `?${qs}` : ''}`
-    );
-  }
-
-  sendDmMessage(brandId: string, threadId: string, text: string) {
-    return this.request(
-      `/api/brands/${encodeURIComponent(brandId)}/instagram/dms/threads/${encodeURIComponent(threadId)}/messages`,
-      { method: 'POST', body: JSON.stringify({ text }) }
-    );
   }
 }

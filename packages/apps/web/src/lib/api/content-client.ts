@@ -240,12 +240,30 @@ export class ContentClient {
     return this.request(`/api/posts/${postId}/insights`);
   }
 
-  getPostComments(postId: string, page = 1, limit = 20) {
-    return this.request(`/api/posts/${postId}/comments?page=${page}&limit=${limit}`);
+  getPostComments(
+    postId: string,
+    page = 1,
+    limit = 20,
+    opts?: { publicationId?: string; refresh?: boolean }
+  ) {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    if (opts?.refresh) params.set('refresh', 'true');
+    return this.request(`/api/posts/${postId}/comments?${params.toString()}`);
   }
 
-  replyToComment(postId: string, commentId: string, message: string) {
-    return this.request(`/api/posts/${postId}/comments/${commentId}/reply`, {
+  replyToComment(
+    postId: string,
+    commentId: string,
+    message: string,
+    opts?: { publicationId?: string }
+  ) {
+    const params = new URLSearchParams();
+    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    const qs = params.toString();
+    return this.request(`/api/posts/${postId}/comments/${commentId}/reply${qs ? `?${qs}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
@@ -253,23 +271,38 @@ export class ContentClient {
 
   // hide/delete removed
 
-  likeComment(postId: string, commentId: string) {
-    return this.request(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST' });
+  likeComment(postId: string, commentId: string, opts?: { publicationId?: string }) {
+    const params = new URLSearchParams();
+    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    const qs = params.toString();
+    return this.request(`/api/posts/${postId}/comments/${commentId}/like${qs ? `?${qs}` : ''}`, {
+      method: 'POST',
+    });
   }
 
   setCommentWorkflow(
     postId: string,
     commentId: string,
-    data: { status?: 'open' | 'resolved' | 'archived' }
+    data: { status?: 'open' | 'resolved' | 'archived' },
+    opts?: { publicationId?: string }
   ) {
-    return this.request(`/api/posts/${postId}/comments/${commentId}/workflow`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const params = new URLSearchParams();
+    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    const qs = params.toString();
+    return this.request(
+      `/api/posts/${postId}/comments/${commentId}/workflow${qs ? `?${qs}` : ''}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
   }
 
-  markAllCommentsRead(postId: string, commentIds?: string[]) {
-    return this.request(`/api/posts/${postId}/comments/mark-all-read`, {
+  markAllCommentsRead(postId: string, commentIds?: string[], opts?: { publicationId?: string }) {
+    const params = new URLSearchParams();
+    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    const qs = params.toString();
+    return this.request(`/api/posts/${postId}/comments/mark-all-read${qs ? `?${qs}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ commentIds }),
     });

@@ -1,5 +1,4 @@
 import { FastifyPluginAsync } from 'fastify';
-import { instagramService } from '../services/instagram.js';
 import { instagramBestTimeService } from '../services/instagram-best-time.js';
 import type { BestTimePayload } from '../services/instagram-best-time.js';
 import { getRedisClient, redisService } from '../services/redis.js';
@@ -14,7 +13,6 @@ import { assertBrandOwnership, assertInstagramConnected } from '../services/owne
  * This file contains ONLY Instagram-specific features:
  * - Sync status monitoring
  * - Best time to post analytics
- * - Direct messaging (DMs)
  */
 const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/brands/:brandId/instagram/sync-status
@@ -150,106 +148,6 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
         generatedAt: meta?.generatedAt,
         nextRefreshAt: ttl > 0 ? new Date(Date.now() + ttl * 1000).toISOString() : null,
       });
-    }
-  );
-
-  // Instagram DMs API
-
-  // GET /api/brands/:brandId/instagram/dms/threads
-  fastify.get<{ Params: { brandId: string }; Querystring: { limit?: number; after?: string } }>(
-    '/:brandId/instagram/dms/threads',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const { brandId } = request.params;
-      const { limit, after } = request.query || {};
-      const userId = request.user!.id;
-      try {
-        await assertBrandOwnership(userId, brandId);
-
-        const configured = await instagramService.isConfigured(brandId);
-        if (!configured) {
-          return reply.code(501).send({ supported: false, threads: [] });
-        }
-
-        const res = await instagramService.listDmThreads(brandId, { limit, after });
-        if (!res.supported) {
-          return reply.code(501).send({ supported: false, threads: [] });
-        }
-        return reply.send(res);
-      } catch (error) {
-        request.log.error({ err: error }, 'Failed to fetch Instagram DM threads');
-        throw error;
-      }
-    }
-  );
-
-  // GET /api/brands/:brandId/instagram/dms/threads/:threadId/messages
-  fastify.get<{
-    Params: { brandId: string; threadId: string };
-    Querystring: { limit?: number; before?: string };
-  }>(
-    '/:brandId/instagram/dms/threads/:threadId/messages',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const { brandId, threadId } = request.params;
-      const { limit, before } = request.query || {};
-      const userId = request.user!.id;
-      try {
-        await assertBrandOwnership(userId, brandId);
-
-        const configured = await instagramService.isConfigured(brandId);
-        if (!configured) {
-          return reply.code(501).send({ supported: false, messages: [] });
-        }
-
-        const res = await instagramService.getDmThreadMessages(brandId, threadId, {
-          limit,
-          before,
-        });
-        if (!res.supported) {
-          return reply.code(501).send({ supported: false, messages: [] });
-        }
-        return reply.send(res);
-      } catch (error) {
-        request.log.error({ err: error }, 'Failed to fetch Instagram DM messages');
-        throw error;
-      }
-    }
-  );
-
-  // POST /api/brands/:brandId/instagram/dms/threads/:threadId/messages
-  fastify.post<{ Params: { brandId: string; threadId: string }; Body: { text: string } }>(
-    '/:brandId/instagram/dms/threads/:threadId/messages',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const { brandId, threadId } = request.params;
-      const userId = request.user!.id;
-      const { text } = (request.body || {}) as { text?: string };
-      if (!text || !text.trim())
-        return reply.code(400).send({ error: 'Message must not be empty' });
-      try {
-        await assertBrandOwnership(userId, brandId);
-
-        const configured = await instagramService.isConfigured(brandId);
-        if (!configured) {
-          return reply
-            .code(501)
-            .send({ supported: false, message: 'Instagram messaging not configured' });
-        }
-
-        const res = await instagramService.sendDmMessage(brandId, threadId, text);
-        if (!res.supported)
-          return reply
-            .code(501)
-            .send({ supported: false, message: res.message || 'Not supported' });
-        if (!res.success && res.errorCode === 'WINDOW_CLOSED') {
-          return reply.code(403).send({ supported: true, success: false, error: 'WINDOW_CLOSED' });
-        }
-        return reply.send({ supported: true, success: true });
-      } catch (error) {
-        request.log.error({ err: error }, 'Failed to send Instagram DM message');
-        throw error;
-      }
     }
   );
 };

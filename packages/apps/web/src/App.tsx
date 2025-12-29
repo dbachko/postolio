@@ -42,8 +42,7 @@ import OnboardingPage from './pages/Onboarding';
 import { useOnboardingStatus } from './hooks/useOnboardingStatus';
 import { AuthInterceptor } from './lib/auth-interceptor';
 const PostPage = lazy(() => import('./pages/Post'));
-const InboxComments = lazy(() => import('./pages/InboxComments'));
-const InboxDMs = lazy(() => import('./pages/InboxDMs'));
+const Inbox = lazy(() => import('./pages/Inbox'));
 const SavedReplies = lazy(() => import('./pages/SavedReplies'));
 const Snippets = lazy(() => import('./pages/Snippets'));
 const Limits = lazy(() => import('./pages/Limits'));
@@ -131,35 +130,13 @@ const router = createBrowserRouter([
   { path: '/__tz', element: <TzRenderTest />, errorElement: <RouteError /> },
   {
     path: '/inbox',
-    element: <Navigate to="/inbox/comments" replace />,
-    errorElement: <RouteError />,
-  },
-  {
-    path: '/inbox/comments',
     element: (
       <ProtectedRoute>
         <OnboardingGuard>
           <Layout>
             <ErrorBoundary>
               <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-                <InboxComments />
-              </Suspense>
-            </ErrorBoundary>
-          </Layout>
-        </OnboardingGuard>
-      </ProtectedRoute>
-    ),
-    errorElement: <RouteError />,
-  },
-  {
-    path: '/inbox/dms',
-    element: (
-      <ProtectedRoute>
-        <OnboardingGuard>
-          <Layout>
-            <ErrorBoundary>
-              <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-                <InboxDMs />
+                <Inbox />
               </Suspense>
             </ErrorBoundary>
           </Layout>

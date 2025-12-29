@@ -32,7 +32,10 @@ const httpsConfig = (() => {
   return undefined;
 })();
 
-// Determine API protocol: default to https when local HTTPS is configured for Vite
+// Determine API protocol:
+// In local dev we usually run both the Vite server and API server with TLS (ai.localhost cert),
+// so default to https when Vite HTTPS is configured.
+// Override with API_PROTOCOL or API_HTTPS when needed.
 const defaultApiProtocol = httpsConfig ? 'https' : 'http';
 const apiProtocol =
   process.env.API_PROTOCOL ||
@@ -142,7 +145,10 @@ export default defineConfig({
             },
             // Proxy WebSocket connections
             '/ws': {
-              target: `${apiProtocol === 'https' ? 'wss' : 'ws'}://${process.env.API_HOST || 'localhost'}:3000`,
+              // Use the same API protocol as HTTP proxying; `ws: true` upgrades the connection.
+              // Using `https://` here avoids intermittent "socket hang up" errors seen with `wss://`
+              // targets in some Node/Vite/http-proxy combinations.
+              target: `${apiProtocol}://${process.env.API_HOST || 'localhost'}:3000`,
               ws: true,
               changeOrigin: true,
               secure: false,
