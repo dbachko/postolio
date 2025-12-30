@@ -481,7 +481,18 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             archived: 0,
           };
           const persistedTotal = counts.open + counts.resolved + counts.archived;
-          const totalComments = pub.metricsLatest?.comments ?? persistedTotal;
+          const metricsTotalRaw = pub.metricsLatest?.comments;
+          const metricsTotal =
+            typeof metricsTotalRaw === 'number' && Number.isFinite(metricsTotalRaw)
+              ? metricsTotalRaw
+              : 0;
+          const totalComments = Math.max(persistedTotal, metricsTotal);
+
+          // Inbox is engagement-driven; don't show posts with zero comment activity.
+          if (totalComments <= 0) continue;
+
+          // If we haven't ingested comment rows yet, treat the total as "to review" so the thread
+          // appears and selecting it can hydrate details via Graph.
           const newCount = persistedTotal > 0 ? counts.open : totalComments;
 
           if (view === 'to_review' && (!pub.content?.id || newCount <= 0)) continue;
@@ -557,6 +568,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         for (const conv of conversations) {
+          if (conv._count.messages <= 0) continue;
           const last = lastMessageByConversationId.get(conv.id) || null;
           if (view === 'to_review' && last?.direction !== 'inbound') continue;
 
@@ -597,61 +609,175 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Enqueue/trigger background ingestion of comments for a brand
-  fastify.post<{ Params: { id: string } }>(
-    '/:id/inbox/comments/ingest',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-        const { id: brandId } = request.params;
-        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+  fastify.post<{
+    Params: { id: string };
+    Querystring: {
+      sync?: string;
+      socialAccountId?: string | string[];
+      maxPosts?: string;
+      perPostLimit?: string;
+    };
+  }>('/:id/inbox/comments/ingest', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { id: brandId } = request.params;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
 
-        // Throttle via Redis to avoid overloading the Graph API
-        const redis = getRedisClient();
-        const throttleKey = `ingest:brand:comments:${brandId}`;
-        let nextAllowed: string | null = null;
-        if (redis) {
-          const ttl = await redis.ttl(throttleKey);
-          if (ttl > 0) {
-            nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
-            return reply.code(429).send({
-              success: false,
-              error: 'Ingestion recently requested',
-              nextAllowed,
-            });
-          }
-          await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
-        }
+      const parseList = (value: string | string[] | undefined | null): string[] => {
+        if (!value) return [];
+        const parts = Array.isArray(value) ? value : String(value).split(',');
+        return parts.map((v) => String(v || '').trim()).filter(Boolean);
+      };
 
-        // Run ingestion in the background (non-blocking)
-        let jobId: string | number | null = null;
-        try {
-          const job = await backgroundJobs.scheduleJob(JobType.INBOX_COMMENTS_INGEST, {
-            brandId,
-            maxPosts: 50,
-            perPostLimit: 100,
-            triggeredBy: userId,
-          });
-          jobId = job.id;
-        } catch (e) {
-          // If we fail to enqueue the job, remove the throttle key so the user can retry immediately.
-          if (redis) {
-            try {
-              await redis.del(throttleKey);
-            } catch {}
-          }
-          throw e;
-        }
+      const socialAccountIds = parseList(request.query.socialAccountId);
+      const sync = String(request.query.sync || '').toLowerCase() === 'true';
+      const maxPosts = Math.max(
+        1,
+        Math.min(200, Number.parseInt(String(request.query.maxPosts || 50), 10) || 50)
+      );
+      const perPostLimit = Math.max(
+        1,
+        Math.min(200, Number.parseInt(String(request.query.perPostLimit || 100), 10) || 100)
+      );
 
-        nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-        return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
-      } catch (error) {
-        request.log.error({ err: error }, 'Failed to enqueue comments ingestion');
-        return reply.code(500).send({ error: 'Failed to enqueue comments ingestion' });
+      if (sync) {
+        const { ingestBrandComments } = await import('../services/inbox-comments-ingestor.js');
+        const result = await ingestBrandComments(brandId, maxPosts, perPostLimit, {
+          socialAccountIds,
+        });
+        return reply.send({ success: true, enqueued: false, result });
       }
+
+      // Throttle via Redis to avoid overloading the Graph API
+      const redis = getRedisClient();
+      const throttleKey = `ingest:brand:comments:${brandId}`;
+      let nextAllowed: string | null = null;
+      if (redis) {
+        const ttl = await redis.ttl(throttleKey);
+        if (ttl > 0) {
+          nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
+          return reply.code(429).send({
+            success: false,
+            error: 'Ingestion recently requested',
+            nextAllowed,
+          });
+        }
+        await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
+      }
+
+      // Run ingestion in the background (non-blocking)
+      let jobId: string | number | null = null;
+      try {
+        const job = await backgroundJobs.scheduleJob(JobType.INBOX_COMMENTS_INGEST, {
+          brandId,
+          socialAccountIds,
+          maxPosts,
+          perPostLimit,
+          triggeredBy: userId,
+        });
+        jobId = job.id;
+      } catch (e) {
+        // If we fail to enqueue the job, remove the throttle key so the user can retry immediately.
+        if (redis) {
+          try {
+            await redis.del(throttleKey);
+          } catch {}
+        }
+        throw e;
+      }
+
+      nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to enqueue comments ingestion');
+      return reply.code(500).send({ error: 'Failed to enqueue comments ingestion' });
     }
-  );
+  });
+
+  // Enqueue/trigger background ingestion of DMs for a brand
+  fastify.post<{
+    Params: { id: string };
+    Querystring: {
+      sync?: string;
+      socialAccountId?: string | string[];
+      maxThreads?: string;
+      perThreadLimit?: string;
+    };
+  }>('/:id/inbox/dms/ingest', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { id: brandId } = request.params;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+
+      const parseList = (value: string | string[] | undefined | null): string[] => {
+        if (!value) return [];
+        const parts = Array.isArray(value) ? value : String(value).split(',');
+        return parts.map((v) => String(v || '').trim()).filter(Boolean);
+      };
+
+      const socialAccountIds = parseList(request.query.socialAccountId);
+      const sync = String(request.query.sync || '').toLowerCase() === 'true';
+      const maxThreads = Math.max(
+        1,
+        Math.min(50, Number.parseInt(String(request.query.maxThreads || 25), 10) || 25)
+      );
+      const perThreadLimit = Math.max(
+        1,
+        Math.min(50, Number.parseInt(String(request.query.perThreadLimit || 30), 10) || 30)
+      );
+
+      if (sync) {
+        const { ingestBrandDMs } = await import('../services/inbox-dm-ingestor.js');
+        const result = await ingestBrandDMs(brandId, maxThreads, perThreadLimit, {
+          socialAccountIds,
+        });
+        return reply.send({ success: true, enqueued: false, result });
+      }
+
+      const redis = getRedisClient();
+      const throttleKey = `ingest:brand:dms:${brandId}`;
+      let nextAllowed: string | null = null;
+      if (redis) {
+        const ttl = await redis.ttl(throttleKey);
+        if (ttl > 0) {
+          nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
+          return reply.code(429).send({
+            success: false,
+            error: 'Ingestion recently requested',
+            nextAllowed,
+          });
+        }
+        await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
+      }
+
+      let jobId: string | number | null = null;
+      try {
+        const job = await backgroundJobs.scheduleJob(JobType.INBOX_DMS_INGEST, {
+          brandId,
+          socialAccountIds,
+          maxThreads,
+          perThreadLimit,
+          triggeredBy: userId,
+        });
+        jobId = job.id;
+      } catch (e) {
+        if (redis) {
+          try {
+            await redis.del(throttleKey);
+          } catch {}
+        }
+        throw e;
+      }
+
+      nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to enqueue DMs ingestion');
+      return reply.code(500).send({ error: 'Failed to enqueue DMs ingestion' });
+    }
+  });
 
   // Brand content history (moved from content.ts)
   fastify.get<{ Params: { id: string } }>(

@@ -16,6 +16,7 @@ export enum JobType {
   NOTIFICATION_RETENTION = 'notification-retention',
   INBOX_COMMENTS_INGEST = 'inbox-comments-ingest',
   INBOX_COMMENTS_BACKFILL = 'inbox-comments-backfill',
+  INBOX_DMS_INGEST = 'inbox-dms-ingest',
 }
 
 interface JobData {
@@ -99,6 +100,10 @@ export class BackgroundJobQueue {
 
     this.queue.process(JobType.INBOX_COMMENTS_BACKFILL, async (job) => {
       return await this.processInboxCommentsBackfill(job);
+    });
+
+    this.queue.process(JobType.INBOX_DMS_INGEST, async (job) => {
+      return await this.processInboxDMsIngest(job);
     });
   }
 
@@ -474,6 +479,10 @@ export class BackgroundJobQueue {
     const maxPosts = Number(job.data.metadata?.maxPosts ?? 50);
     const perPostLimit = Number(job.data.metadata?.perPostLimit ?? 100);
     const minStaleMs = Number(job.data.metadata?.minStaleMs ?? 0);
+    const socialAccountIdsRaw = job.data.metadata?.socialAccountIds;
+    const socialAccountIds = Array.isArray(socialAccountIdsRaw)
+      ? (socialAccountIdsRaw as unknown[]).map(String).filter(Boolean)
+      : [];
 
     if (!brandId) {
       throw new Error('Missing brandId for inbox comments ingest job');
@@ -490,6 +499,7 @@ export class BackgroundJobQueue {
       Number.isFinite(perPostLimit) ? perPostLimit : 100,
       {
         minStaleMs: Number.isFinite(minStaleMs) ? minStaleMs : 0,
+        socialAccountIds,
       }
     );
     await job.progress(100);
@@ -569,6 +579,46 @@ export class BackgroundJobQueue {
       commentsUpserted,
       duration: Date.now() - start,
     };
+  }
+
+  private async processInboxDMsIngest(job: Bull.Job<JobData>): Promise<{
+    brandId: string;
+    accountsProcessed: number;
+    threadsProcessed: number;
+    conversationsUpserted: number;
+    messagesInserted: number;
+    duration: number;
+  }> {
+    const start = Date.now();
+    const brandId = String(job.data.metadata?.brandId ?? '').trim();
+    const maxThreads = Number(job.data.metadata?.maxThreads ?? 25);
+    const perThreadLimit = Number(job.data.metadata?.perThreadLimit ?? 30);
+    const minStaleMs = Number(job.data.metadata?.minStaleMs ?? 0);
+    const socialAccountIdsRaw = job.data.metadata?.socialAccountIds;
+    const socialAccountIds = Array.isArray(socialAccountIdsRaw)
+      ? (socialAccountIdsRaw as unknown[]).map(String).filter(Boolean)
+      : [];
+
+    if (!brandId) {
+      throw new Error('Missing brandId for inbox DMs ingest job');
+    }
+
+    await job.progress(5);
+    const { ingestBrandDMs } = await import('./inbox-dm-ingestor.js');
+    await job.progress(15);
+
+    const result = await ingestBrandDMs(
+      brandId,
+      Number.isFinite(maxThreads) ? maxThreads : 25,
+      Number.isFinite(perThreadLimit) ? perThreadLimit : 30,
+      {
+        socialAccountIds,
+        minStaleMs: Number.isFinite(minStaleMs) ? minStaleMs : 0,
+      }
+    );
+
+    await job.progress(100);
+    return { brandId, ...result, duration: Date.now() - start };
   }
 
   private async processCampaignWindowMaintenance(): Promise<{

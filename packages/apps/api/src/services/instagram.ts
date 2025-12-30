@@ -229,6 +229,36 @@ class InstagramService {
     return { supported: true, threads, paging: res.paging };
   }
 
+  async listDmThreadsForSocialAccount(
+    socialAccountId: string,
+    opts: { limit?: number; after?: string } = {}
+  ): Promise<{
+    supported: boolean;
+    threads: Array<{ id: string; updated_time?: string; participants?: any[] }>;
+    paging?: any;
+  }> {
+    const limit = opts.limit ?? 25;
+    const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
+    await this.checkRateLimit(String(credentials.accountId));
+
+    const qs = [`limit=${limit}`, `access_token=${credentials.accessToken}`];
+    if (opts.after) qs.push(`after=${encodeURIComponent(opts.after)}`);
+
+    const paths = [
+      `${credentials.accountId}/conversations?${qs.join('&')}`,
+      `${credentials.pageId}/conversations?platform=instagram&${qs.join('&')}`,
+    ].filter(Boolean) as string[];
+
+    const res = await this.tryGraphGet<{ data: any[]; paging?: any }>(paths);
+    if (!res) return { supported: false, threads: [] };
+    const threads = (res.data || []).map((c: any) => ({
+      id: String(c.id || ''),
+      updated_time: c.updated_time,
+      participants: (c.participants && c.participants.data) || c.participants || [],
+    }));
+    return { supported: true, threads, paging: res.paging };
+  }
+
   async getDmThreadMessages(
     brand: BrandData | string,
     threadId: string,
@@ -257,6 +287,44 @@ class InstagramService {
         .join('&')}`,
     ]);
     if (!res) return { supported: false, messages: [] };
+    const rows = (res as any).data ? (res as any).data : (res as any).messages?.data || [];
+    const messages = rows.map((m: any) => ({
+      id: String(m.id || ''),
+      message: m.message,
+      from: m.from,
+      created_time: m.created_time,
+    }));
+    return { supported: true, messages, paging: (res as any).paging };
+  }
+
+  async getDmThreadMessagesForSocialAccount(
+    socialAccountId: string,
+    threadId: string,
+    opts: { limit?: number; before?: string } = {}
+  ): Promise<{
+    supported: boolean;
+    messages: Array<{ id: string; message?: string; from?: any; created_time?: string }>;
+    paging?: any;
+  }> {
+    const limit = opts.limit ?? 50;
+    const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
+    await this.checkRateLimit(String(credentials.accountId));
+
+    const qs = [
+      `limit=${limit}`,
+      `access_token=${credentials.accessToken}`,
+      `fields=from,to,message,created_time,id`,
+    ];
+    if (opts.before) qs.push(`before=${encodeURIComponent(opts.before)}`);
+
+    const res = await this.tryGraphGet<{ data: any[]; paging?: any }>([
+      `${threadId}/messages?${qs.join('&')}`,
+      `${threadId}?fields=messages{from,to,message,created_time,id}&${qs
+        .filter((q) => !q.startsWith('fields='))
+        .join('&')}`,
+    ]);
+    if (!res) return { supported: false, messages: [] };
+
     const rows = (res as any).data ? (res as any).data : (res as any).messages?.data || [];
     const messages = rows.map((m: any) => ({
       id: String(m.id || ''),

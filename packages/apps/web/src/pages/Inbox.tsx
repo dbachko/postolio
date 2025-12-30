@@ -86,6 +86,7 @@ export default function Inbox() {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const autoSyncedAccountsRef = useRef<Set<string>>(new Set());
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [channel, setChannel] = useState<InboxChannelFilter>('all');
@@ -157,6 +158,61 @@ export default function Inbox() {
   });
 
   const items = useMemo(() => ((inboxData as any)?.items || []) as InboxItem[], [inboxData]);
+
+  const syncInboxMutation = useMutation({
+    mutationFn: async (vars: { socialAccountId: string; silent?: boolean }) => {
+      if (!brandId) throw new Error('No brand selected');
+      const socialAccountId = String(vars.socialAccountId || '').trim();
+      if (!socialAccountId) throw new Error('No social account selected');
+
+      const [commentsRes, dmsRes] = await Promise.allSettled([
+        brandApi.ingestInboxComments(brandId, {
+          socialAccountIds: [socialAccountId],
+          sync: true,
+          maxPosts: 20,
+          perPostLimit: 50,
+        }),
+        brandApi.ingestInboxDMs(brandId, {
+          socialAccountIds: [socialAccountId],
+          sync: true,
+          maxThreads: 25,
+          perThreadLimit: 30,
+        }),
+      ]);
+
+      const commentsOk = commentsRes.status === 'fulfilled';
+      const dmsOk = dmsRes.status === 'fulfilled';
+      if (!commentsOk && !dmsOk) {
+        const err = commentsRes.status === 'rejected' ? commentsRes.reason : dmsRes.reason;
+        throw err instanceof Error ? err : new Error('Failed to sync inbox');
+      }
+      return { commentsOk, dmsOk };
+    },
+    onSuccess: async (_data, vars) => {
+      await refetchInbox();
+      if (!vars.silent) {
+        const commentsOk = Boolean((_data as any)?.commentsOk);
+        const dmsOk = Boolean((_data as any)?.dmsOk);
+        if (commentsOk && dmsOk) toast.success('Inbox synced');
+        else if (commentsOk) toast.info('Synced comments. DMs may need additional permissions.');
+        else toast.info('Synced DMs. Comments may need additional permissions.');
+      }
+    },
+    onError: (e: any, vars) => {
+      autoSyncedAccountsRef.current.delete(String(vars?.socialAccountId || ''));
+      if (!vars?.silent) toast.error(e?.message || 'Failed to sync inbox');
+    },
+  });
+
+  // Auto-sync when switching accounts so inbox shows existing activity (comments + DMs).
+  useEffect(() => {
+    if (!brandId) return;
+    if (!selectedAccountId) return;
+    if (autoSyncedAccountsRef.current.has(selectedAccountId)) return;
+    autoSyncedAccountsRef.current.add(selectedAccountId);
+    syncInboxMutation.mutate({ socialAccountId: selectedAccountId, silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId, selectedAccountId]);
 
   const scopedItems = useMemo(() => {
     let next = items;
@@ -707,6 +763,19 @@ export default function Inbox() {
                   <SelectItem value="instagram">Instagram</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  syncInboxMutation.mutate({ socialAccountId: selectedAccountId, silent: false })
+                }
+                disabled={!selectedAccountId || syncInboxMutation.isPending}
+              >
+                <RotateCw className="mr-1 h-4 w-4" />
+                {syncInboxMutation.isPending ? 'Syncing…' : 'Sync'}
+              </Button>
             </div>
           </div>
 

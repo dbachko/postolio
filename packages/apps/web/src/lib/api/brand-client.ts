@@ -148,6 +148,93 @@ export class BrandClient {
     }>;
   }
 
+  ingestInboxComments(
+    brandId: string,
+    options?: {
+      socialAccountIds?: string[];
+      sync?: boolean;
+      maxPosts?: number;
+      perPostLimit?: number;
+    }
+  ) {
+    const params = new URLSearchParams();
+
+    const socialAccountIds = options?.socialAccountIds || [];
+    for (const id of socialAccountIds) {
+      if (!id) continue;
+      params.append('socialAccountId', id);
+    }
+
+    if (options?.sync) params.set('sync', 'true');
+    if (options?.maxPosts) params.set('maxPosts', String(options.maxPosts));
+    if (options?.perPostLimit) params.set('perPostLimit', String(options.perPostLimit));
+
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/inbox/comments/ingest${qs ? `?${qs}` : ''}`,
+      { method: 'POST' }
+    ) as Promise<
+      | {
+          success: true;
+          enqueued: true;
+          jobId?: string | number | null;
+          nextAllowed?: string | null;
+        }
+      | {
+          success: true;
+          enqueued: false;
+          result: { postsProcessed: number; commentsUpserted: number };
+        }
+      | { success: false; error: string; nextAllowed?: string }
+    >;
+  }
+
+  ingestInboxDMs(
+    brandId: string,
+    options?: {
+      socialAccountIds?: string[];
+      sync?: boolean;
+      maxThreads?: number;
+      perThreadLimit?: number;
+    }
+  ) {
+    const params = new URLSearchParams();
+
+    const socialAccountIds = options?.socialAccountIds || [];
+    for (const id of socialAccountIds) {
+      if (!id) continue;
+      params.append('socialAccountId', id);
+    }
+
+    if (options?.sync) params.set('sync', 'true');
+    if (options?.maxThreads) params.set('maxThreads', String(options.maxThreads));
+    if (options?.perThreadLimit) params.set('perThreadLimit', String(options.perThreadLimit));
+
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/inbox/dms/ingest${qs ? `?${qs}` : ''}`,
+      { method: 'POST' }
+    ) as Promise<
+      | {
+          success: true;
+          enqueued: true;
+          jobId?: string | number | null;
+          nextAllowed?: string | null;
+        }
+      | {
+          success: true;
+          enqueued: false;
+          result: {
+            accountsProcessed: number;
+            threadsProcessed: number;
+            conversationsUpserted: number;
+            messagesInserted: number;
+          };
+        }
+      | { success: false; error: string; nextAllowed?: string }
+    >;
+  }
+
   // CRUD
   getBrands() {
     return this.request('/api/brands');
