@@ -5,12 +5,10 @@ import { useBrandStore } from '@/stores/brandStore';
 import { brand as brandApi } from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 
-import { AppEmptyState } from '@/components/AppEmptyState';
-import {
-  SocialAccountQueueSettingsPanel,
-  type SocialAccountOption,
-} from '@/components/social/SocialAccountQueueSettingsDialog';
-import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
+import { AppEmptyState } from '@/components/app-empty-state';
+import { SocialAccountQueueSettingsPanel } from '@/components/social/social-account-queue-settings-dialog/components/queue-settings-panel';
+import type { SocialAccountOption } from '@/components/social/social-account-queue-settings-dialog/types';
+import { SocialAccountAvatar } from '@/components/social/social-account-avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

@@ -7,7 +7,7 @@ export type CampaignType =
   | 'thought_leadership'
   | 'custom';
 
-export type ImageSource = 'ai' | 'assets' | 'mix';
+export type ImageSource = 'ai' | 'assets' | 'stock' | 'mix';
 
 export type ImageProvider = 'dalle-3' | 'gemini-2.5-flash' | 'gemini-3-pro';
 

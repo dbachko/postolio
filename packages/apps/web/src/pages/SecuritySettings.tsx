@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SessionList } from '../components/sessions/SessionList';
-import { SecurityDashboard } from '../components/security/SecurityDashboard';
+import { SessionList } from '@/components/sessions/session-list';
+import { SecurityDashboard } from '@/components/security/security-dashboard';
 import { Shield, Smartphone } from 'lucide-react';
 
 export function SecuritySettings() {

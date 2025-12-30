@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
-import { AssetSidebar } from '@/right-sidebar/AssetSidebar';
-import { PageHeader } from '@/components/PageHeader';
+import { AssetSidebar } from '@/right-sidebar/asset-sidebar';
+import { PageHeader } from '@/components/page-header';
 
 export default function AssetDetail() {
   const { assetId } = useParams<{ assetId: string }>();

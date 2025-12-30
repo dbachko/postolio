@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Briefcase } from 'lucide-react';
-import { FacebookIcon, TikTokIcon, XBrandIcon, YouTubeIcon } from '@/components/icons/BrandIcons';
+import { FacebookIcon, TikTokIcon, XBrandIcon, YouTubeIcon } from '@/components/icons/brand-icons';
 import { cn } from '@/lib/utils';
 
 export type Platform =

@@ -2,9 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pause, Play, Edit, Calendar, Loader2, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CampaignAnalytics } from '@/components/CampaignAnalytics';
-import { CampaignEditDialog } from '@/components/CampaignEditDialog';
-import { CampaignPostsGrid } from '@/components/CampaignPostsGrid';
+import { CampaignAnalytics } from '@/components/campaign-analytics';
+import { CampaignEditDialog } from '@/components/campaign-edit-dialog';
+import { CampaignPostsGrid } from '@/components/campaign-posts-grid';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { TIMEOUTS } from '@/constants/timeouts';
-import { SiteFooter } from '@/components/SiteFooter';
+import { SiteFooter } from '@/components/site-footer';
 
 export function EmailVerify() {
   const [searchParams] = useSearchParams();

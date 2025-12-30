@@ -13,10 +13,8 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
 import { X } from 'lucide-react';
-import {
-  SocialAccountQueueSettingsPanel,
-  type SocialAccountOption,
-} from '@/components/social/SocialAccountQueueSettingsDialog';
+import { SocialAccountQueueSettingsPanel } from '@/components/social/social-account-queue-settings-dialog/components/queue-settings-panel';
+import type { SocialAccountOption } from '@/components/social/social-account-queue-settings-dialog/types';
 
 type ConnectedAccount = {
   id: string;

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { PageHeader } from '@/components/PageHeader';
+import { PageHeader } from '@/components/page-header';
 import { useBrandStore } from '../stores/brandStore';
 import AssetLibrary from '@/features/assets/components/AssetLibrary';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { AppEmptyState } from '@/components/app-empty-state';
 import { Card, CardContent } from '@/components/ui/card';
 
 export function Assets() {

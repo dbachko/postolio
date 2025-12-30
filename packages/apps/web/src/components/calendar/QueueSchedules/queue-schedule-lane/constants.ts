@@ -1,0 +1,1 @@
+export const DND_ITEM_TYPE = 'POSTOLIO_QUEUE_DND_ITEM';

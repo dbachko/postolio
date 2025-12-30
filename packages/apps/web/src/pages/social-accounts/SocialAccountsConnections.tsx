@@ -1,7 +1,7 @@
 import { useBrandStore } from '@/stores/brandStore';
 
-import { AppEmptyState } from '@/components/AppEmptyState';
-import { SocialAccountsManager } from '@/components/social/SocialAccountsManager';
+import { AppEmptyState } from '@/components/app-empty-state';
+import { SocialAccountsManager } from '@/components/social/social-accounts-manager';
 
 export function SocialAccountsConnections() {
   const selectedBrand = useBrandStore((s) => s.selectedBrand);

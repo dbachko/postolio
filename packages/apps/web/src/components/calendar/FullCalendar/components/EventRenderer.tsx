@@ -1,5 +1,5 @@
 import type { MouseEventHandler } from 'react';
-import { PostPreviewCard } from '@/components/PostPreviewCard';
+import { PostPreviewCard } from '@/components/post-preview-card';
 import type { CalendarItem } from '@/types/calendar';
 import type { SocialAccountsById } from '@/types/social-accounts';
 import type { CalendarEvent } from '../types';

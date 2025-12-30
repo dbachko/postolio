@@ -5,7 +5,7 @@ import { brand as brandApi } from '../lib/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageHeader } from '@/components/PageHeader';
+import { PageHeader } from '@/components/page-header';
 import { useQuery } from '@tanstack/react-query';
 
 /**

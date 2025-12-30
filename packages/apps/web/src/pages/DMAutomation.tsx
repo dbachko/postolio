@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useBrandStore } from '@/stores/brandStore';
-import { RulesList } from '../components/dm-automation/RulesList';
-import { AnalyticsDashboard } from '../components/dm-automation/AnalyticsDashboard';
+import { RulesList } from '@/components/dm-automation/rules-list';
+import { AnalyticsDashboard } from '@/components/dm-automation/analytics-dashboard';
 
 export function DMAutomation() {
   const { selectedBrand } = useBrandStore();

@@ -30,10 +30,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SocialAccountAvatar } from '@/components/social/SocialAccountAvatar';
-import { CommentCard } from '@/components/inbox/CommentCard';
-import { MessageThread } from '@/components/inbox/MessageThread';
-import { ReplyBox } from '@/components/inbox/ReplyBox';
+import { SocialAccountAvatar } from '@/components/social/social-account-avatar';
+import { CommentCard } from '@/components/inbox/comment-card';
+import { MessageThread } from '@/components/inbox/message-thread';
+import { ReplyBox } from '@/components/inbox/reply-box';
 import type { WebSocketMessage } from '@/types/websocket';
 
 type InboxChannelFilter = 'all' | 'comments' | 'dms';

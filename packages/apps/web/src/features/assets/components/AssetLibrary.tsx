@@ -4,7 +4,7 @@ import { CalendarDays, Loader2, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { assetsApi, type AssetType, type AssetUsageEntry } from '@/features/assets/api/client';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { AppEmptyState } from '@/components/app-empty-state';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';

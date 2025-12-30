@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, TrendingUp, TrendingDown } from 'lucide-react';
 import { formatNumber, formatPercent } from '@/utils/formatNumber';
-import { TimeSeriesChart } from '@/components/analytics-common';
+import { TimeSeriesChart } from '@/components/analytics-common/time-series-chart';
 
 type DemographicsStatus =
   | 'available'

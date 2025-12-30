@@ -6,17 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
-import { FormField } from '@/components/forms/FormField';
-import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated';
-import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated';
-import { MagicLinkForm } from '@/components/auth/MagicLinkForm';
+import { PasswordStrengthMeter } from '@/components/password-strength-meter';
+import { FormField } from '@/components/forms/form-field';
+import { GoogleSignInIsolated } from '@/components/auth/google-sign-in-isolated';
+import { FacebookSignInIsolated } from '@/components/auth/facebook-sign-in-isolated';
+import { MagicLinkForm } from '@/components/auth/magic-link-form';
 import { validationRules } from '../utils/validation';
 import { TIMEOUTS } from '../constants/timeouts';
 import { getUserTimezone } from '../lib/timezone';
 import { Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { SiteFooter } from '@/components/SiteFooter';
+import { SiteFooter } from '@/components/site-footer';
 
 interface RegisterFormData {
   email: string;

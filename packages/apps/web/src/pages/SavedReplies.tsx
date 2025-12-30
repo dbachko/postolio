@@ -7,7 +7,7 @@ import { Plus, MessageSquare, Edit, Trash2, Star, AlertCircle } from 'lucide-rea
 import { toast } from 'sonner';
 import { savedReplies, type SavedReply } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
-import { SavedReplyDialog } from '@/components/inbox/SavedReplyDialog';
+import { SavedReplyDialog } from '@/components/inbox/saved-reply-dialog';
 import {
   AlertDialog,
   AlertDialogAction,

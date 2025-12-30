@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { PageHeader } from '@/components/PageHeader';
+import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,15 +14,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useBrandStore } from '@/stores/brandStore';
-import {
-  KPICard,
-  AccountHealthScore,
-  TopPostsGrid,
-  PostsPerformanceTable,
-  InsightsPanel,
-  RecommendationsPanel,
-  ForecastCharts,
-} from '@/components/analytics-common';
+import { AccountHealthScore } from '@/components/analytics-common/account-health-score';
+import { ForecastCharts } from '@/components/analytics-common/forecast-charts';
+import { InsightsPanel } from '@/components/analytics-common/insights-panel';
+import { KPICard } from '@/components/analytics-common/kpi-card';
+import { PostsPerformanceTable } from '@/components/analytics-common/posts-performance-table';
+import { RecommendationsPanel } from '@/components/analytics-common/recommendations-panel';
+import { TopPostsGrid } from '@/components/analytics-common/top-posts-grid';
 import { formatNumber, formatPercent } from '@/utils/formatNumber';
 import {
   useAccountAIInsights,

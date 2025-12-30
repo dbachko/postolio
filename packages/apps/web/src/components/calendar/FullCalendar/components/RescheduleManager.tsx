@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { RescheduleDialog } from '@/components/RescheduleDialog';
+import { RescheduleDialog } from '@/components/reschedule-dialog';
 import { content as contentApi } from '@/lib/api';
 import type { CalendarItem } from '@/types/calendar';
 import type { RescheduleState } from '../types';

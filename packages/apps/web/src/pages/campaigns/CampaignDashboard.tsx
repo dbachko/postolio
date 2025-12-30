@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useNavigate } from 'react-router-dom';
-import { CampaignsList } from '@/components/CampaignsList';
+import { CampaignsList } from '@/components/campaigns-list';
 import {
   Select,
   SelectContent,

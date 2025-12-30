@@ -3,7 +3,7 @@ import { render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PageMetaProvider } from '@/contexts/PageMetaContext';
-import PostPage from './Post';
+import PostPage from './post';
 
 vi.mock('@/lib/api', () => ({
   content: {

@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
-import type { PostStatus } from '@/components/PostStatusCard';
-import { InstagramIcon } from '@/components/icons/BrandIcons';
-import { PostStatusBadge } from '@/components/PostStatusBadge';
+import type { PostStatus } from '@/components/post-status-card/types';
+import { InstagramIcon } from '@/components/icons/brand-icons';
+import { PostStatusBadge } from '@/components/post-status-badge';
 
 interface PostSidebarStatusPanelProps {
   status: PostStatus;

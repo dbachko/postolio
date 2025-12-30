@@ -13,7 +13,7 @@ import {
   Search,
   Video,
 } from 'lucide-react';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { AppEmptyState } from '@/components/app-empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

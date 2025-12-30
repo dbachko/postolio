@@ -7,7 +7,7 @@ import { Plus, ClipboardList, Edit, Trash2, Star, AlertCircle } from 'lucide-rea
 import { toast } from 'sonner';
 import { snippets as snippetsApi, type Snippet } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
-import { CreateSnippetDialog } from '@/components/caption/CreateSnippetDialog';
+import { CreateSnippetDialog } from '@/components/caption/create-snippet-dialog';
 import {
   AlertDialog,
   AlertDialogAction,

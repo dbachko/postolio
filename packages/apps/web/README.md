@@ -2,6 +2,11 @@
 
 This is the frontend web application for Postolio. It is a single-page application built with React and Vite, providing the user interface for managing brands, content, and analytics.
 
+## Rules
+
+- Repo-wide rules: `AGENTS.md` (at the monorepo root)
+- Web-specific rules: `AGENTS.md` (this directory)
+
 ## Development
 
 ### Scripts
@@ -36,9 +41,9 @@ If Vite shows an error about a missing `@postolio/*/dist/*` file, it means that 
 ## UI Components (shadcn/ui)
 
 - We standardize on shadcn/ui primitives installed locally under `src/components/ui`.
-- Usage guide: see `docs/SHADCN-UI-USAGE.md` for install commands, import rules, tokens/colors, and composition patterns.
+- Usage guide: see `../../docs/SHADCN-UI-USAGE.md` for install commands, import rules, tokens/colors, and composition patterns.
 - Always import from `@/components/ui/<component>` and prefer design tokens like `text-foreground`, `bg-background`, `border` over palette utilities.
-- CI guard: `pnpm -w run lint:colors` blocks Tailwind palette utilities outside of UI primitives. Replace with tokens or dynamic inline styles.
+- Lint guard: ESLint blocks non-alias imports of UI primitives (see `eslint.config.js`).
 
 ### Local HTTPS on ai.localhost
 

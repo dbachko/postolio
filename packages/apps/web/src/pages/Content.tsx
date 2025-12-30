@@ -1,6 +1,6 @@
 import { useBrandStore } from '../stores/brandStore';
-import { ContentCalendar } from '../components/ContentCalendar';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { ContentCalendar } from '@/components/content-calendar';
+import { AppEmptyState } from '@/components/app-empty-state';
 
 export function Content() {
   const { selectedBrand } = useBrandStore();

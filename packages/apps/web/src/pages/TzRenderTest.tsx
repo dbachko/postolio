@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { PostPreviewCard } from '@/components/PostPreviewCard';
+import { PostPreviewCard } from '@/components/post-preview-card';
 import type { CalendarItem } from '@/types/calendar';
 
 /**

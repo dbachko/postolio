@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated';
-import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated';
-import { MagicLinkForm } from '@/components/auth/MagicLinkForm';
-import { SiteFooter } from '@/components/SiteFooter';
+import { GoogleSignInIsolated } from '@/components/auth/google-sign-in-isolated';
+import { FacebookSignInIsolated } from '@/components/auth/facebook-sign-in-isolated';
+import { MagicLinkForm } from '@/components/auth/magic-link-form';
+import { SiteFooter } from '@/components/site-footer';
 
 export function Login() {
   const [email, setEmail] = useState('');

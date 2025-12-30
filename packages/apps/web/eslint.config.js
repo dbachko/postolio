@@ -45,4 +45,91 @@ export default [
       ],
     },
   },
+  // Component-module conventions (avoid barrels; keep entry files readable)
+  {
+    files: ['src/components/**/*.{ts,tsx}'],
+    ignores: ['src/components/ui/**/*'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ExportAllDeclaration',
+          message:
+            'Re-exports are not allowed in src/components. Import from the defining file instead.',
+        },
+        {
+          selector: 'ExportNamedDeclaration[source]',
+          message:
+            'Re-exports are not allowed in src/components. Import from the defining file instead.',
+        },
+      ],
+    },
+  },
+  // In component modules, types/constants/utils should be imported directly from their files.
+  // Avoid exporting types from `index.tsx` so consumers don’t depend on “index as a barrel”.
+  {
+    files: ['src/components/**/index.tsx'],
+    ignores: ['src/components/ui/**/*'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ExportAllDeclaration',
+          message:
+            'Re-exports are not allowed in src/components. Import from the defining file instead.',
+        },
+        {
+          selector: 'ExportNamedDeclaration[source]',
+          message:
+            'Re-exports are not allowed in src/components. Import from the defining file instead.',
+        },
+        {
+          selector: 'ExportNamedDeclaration[exportKind="type"]',
+          message:
+            'Do not export types from component index.tsx. Put them in types.ts and import directly.',
+        },
+        {
+          selector: 'ExportNamedDeclaration[declaration.type="TSInterfaceDeclaration"]',
+          message:
+            'Do not export interfaces from component index.tsx. Put them in types.ts and import directly.',
+        },
+        {
+          selector: 'ExportNamedDeclaration[declaration.type="TSTypeAliasDeclaration"]',
+          message:
+            'Do not export types from component index.tsx. Put them in types.ts and import directly.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/components/**/*.{ts,tsx}'],
+    ignores: ['src/components/ui/**/*'],
+    rules: {
+      'max-lines': [
+        'error',
+        {
+          // Hard cap for React component files (industry-standard range is ~200-400).
+          // We enforce 300 to keep component modules readable and encourage extraction.
+          max: 300,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/components/**/*.ts'],
+    ignores: ['src/components/ui/**/*'],
+    rules: {
+      'max-lines': [
+        'error',
+        {
+          // Allow slightly larger non-UI modules (hooks/utils) while still preventing runaway files.
+          max: 400,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
+    },
+  },
 ];

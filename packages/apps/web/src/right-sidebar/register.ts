@@ -2,7 +2,7 @@ import { SidebarRegistry } from './registry';
 import { NotificationsSidebar } from './NotificationsSidebar';
 import { PostSidebar } from './PostSidebar';
 import { BrandProfileSidebar } from './BrandProfileSidebar';
-import { AssetSidebar } from './AssetSidebar';
+import { AssetSidebar } from './asset-sidebar';
 import { AssetUploadSidebar } from './AssetUploadSidebar';
 import { PublishingScheduleSidebar } from './PublishingScheduleSidebar';
 

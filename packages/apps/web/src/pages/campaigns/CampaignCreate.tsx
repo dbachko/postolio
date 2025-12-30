@@ -1,5 +1,5 @@
-import { CampaignWizard } from '@/components/campaign-wizard/CampaignWizard';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { CampaignWizard } from '@/components/campaign-wizard/campaign-wizard';
+import { AppEmptyState } from '@/components/app-empty-state';
 
 interface Props {
   brandId?: string;

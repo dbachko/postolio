@@ -1,0 +1,108 @@
+import { useMemo } from 'react';
+import { useCampaignWizard } from '@/hooks/useCampaignWizard';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+
+function computeSchedule(start: string, end: string, frequency: string): string[] {
+  const dates: string[] = [];
+  if (!start || !end) return dates;
+  const s = new Date(start);
+  const e = new Date(end);
+  const current = new Date(s);
+  const f = (frequency || '').toLowerCase().trim();
+
+  // Built-ins
+  const builtins = new Set(['daily', 'every2days', '3weekly']);
+  if (builtins.has(f)) {
+    while (current <= e) {
+      dates.push(current.toISOString().slice(0, 10));
+      switch (f) {
+        case 'daily':
+          current.setDate(current.getDate() + 1);
+          break;
+        case 'every2days':
+          current.setDate(current.getDate() + 2);
+          break;
+        case '3weekly': {
+          const day = current.getDay();
+          if (day === 1)
+            current.setDate(current.getDate() + 2); // Mon->Wed
+          else if (day === 3)
+            current.setDate(current.getDate() + 2); // Wed->Fri
+          else current.setDate(current.getDate() + 3); // Fri->Mon
+          break;
+        }
+      }
+    }
+    return dates;
+  }
+  // For custom schedules, do not attempt to parse free text.
+  // We will feed the raw input to the LLM later.
+  return [];
+}
+
+export function Step6TimelineReview() {
+  const { timeline, frequency, postingTime, updateField, prevStep, nextStep } = useCampaignWizard();
+
+  const items = useMemo(() => {
+    if (!timeline?.startDate || !timeline?.endDate || !frequency) return [] as string[];
+    return computeSchedule(timeline.startDate, timeline.endDate, frequency);
+  }, [timeline?.startDate, timeline?.endDate, frequency]);
+
+  const applyOptimal = (time: string) => {
+    updateField('postingTime', time);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Optimal Times</CardTitle>
+        </CardHeader>
+        <CardContent className="flex gap-2">
+          {['10:00', '14:00', '18:00'].map((t) => (
+            <Button
+              key={t}
+              variant={t === postingTime ? 'default' : 'outline'}
+              onClick={() => applyOptimal(t)}
+            >
+              {t}
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Schedule Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {items.length === 0 ? (
+            <div className="text-muted-foreground text-sm">
+              Set your timeline and frequency to preview schedule.
+            </div>
+          ) : (
+            <div className="grid gap-2 md:grid-cols-2">
+              {items.map((d) => (
+                <div
+                  key={d}
+                  className="flex items-center justify-between rounded border p-2 text-sm"
+                >
+                  <span>{d}</span>
+                  <span className="text-muted-foreground">{postingTime}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={prevStep}>
+          Back
+        </Button>
+        <Button onClick={nextStep}>Continue</Button>
+      </div>
+    </div>
+  );
+}

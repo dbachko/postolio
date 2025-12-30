@@ -26,7 +26,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { SocialAccountsPicker } from '@/components/social/SocialAccountsPicker';
+import { SocialAccountsPicker } from '@/components/social/social-accounts-picker';
 
 export default function UiKitchenSink() {
   const [platforms, setPlatforms] = useState<string[]>(['instagram']);

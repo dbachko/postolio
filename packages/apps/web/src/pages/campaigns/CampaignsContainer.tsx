@@ -6,7 +6,7 @@ import { useCampaignMutations } from '@/hooks/useCampaignMutations';
 import { CampaignDashboard } from './CampaignDashboard';
 import { CampaignCreate } from './CampaignCreate';
 import { CampaignDetails } from './CampaignDetails';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { AppEmptyState } from '@/components/app-empty-state';
 
 type View = 'dashboard' | 'create' | 'details';
 

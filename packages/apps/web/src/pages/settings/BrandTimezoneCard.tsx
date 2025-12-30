@@ -3,7 +3,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Clock, Info, Save } from 'lucide-react';
-import { AsyncTimezoneCombobox } from '@/components/timezone/AsyncTimezoneCombobox';
+import { AsyncTimezoneCombobox } from '@/components/timezone/async-timezone-combobox';
 
 interface BrandTimezoneCardProps {
   brandName: string;

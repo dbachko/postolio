@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+
+# Allow skipping locally with: SKIP_PRECOMMIT=1 git commit ...
+if [ "$SKIP_PRECOMMIT" = "1" ]; then
+  echo "[pre-commit] SKIP_PRECOMMIT=1 set, skipping checks."
+  exit 0
+fi
+
+set -e
+
+echo "[pre-commit] Running Prettier (staged) and targeted lint..."
+
+# Only check staged files to keep commits fast.
+STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+PRETTIER_FILES="$(echo "$STAGED_FILES" | grep -E '\\.(ts|tsx|md)$' || true)"
+if [ -n "$PRETTIER_FILES" ]; then
+  echo "$PRETTIER_FILES" | tr '\n' '\0' | xargs -0 pnpm prettier --check --ignore-path .gitignore
+fi
+
+# If web app files are being committed, lint the web app.
+if echo "$STAGED_FILES" | grep -q '^packages/apps/web/'; then
+  pnpm --filter @postolio/web lint
+fi
+
+echo "[pre-commit] All checks passed."
+

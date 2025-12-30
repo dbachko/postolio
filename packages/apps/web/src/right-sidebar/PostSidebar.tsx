@@ -1,5 +1,5 @@
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { PostEditor } from '@/components/post-editor/PostEditor';
+import { PostEditor } from '@/components/post-editor/post-editor';
 
 type PostSidebarLayout = 'sidebar' | 'page';
 
