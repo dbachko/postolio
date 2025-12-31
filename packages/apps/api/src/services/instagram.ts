@@ -131,6 +131,10 @@ class InstagramService {
     // Instagram service initialization
   }
 
+  private sanitizeGraphPath(path: string): string {
+    return String(path).replace(/access_token=[^&]+/g, 'access_token=***');
+  }
+
   /**
    * Check if a brand has Instagram connected
    *
@@ -184,16 +188,31 @@ class InstagramService {
    * Try multiple Graph paths and return the first successful data[] response
    */
   private async tryGraphGet<T = any>(paths: string[]): Promise<T | null> {
+    let lastError: unknown = null;
     for (const p of paths) {
       try {
         const res = await axios.get(fbGraph(p));
         const data = (res.data as any)?.data ?? null;
         if (Array.isArray(data)) return res.data as T;
         if ((res.data as any)?.id || (res.data as any)?.messages) return res.data as T;
-      } catch {
+      } catch (error) {
+        lastError = error;
         // ignore and try next
       }
     }
+
+    if (lastError) {
+      const err: any = lastError as any;
+      const status = err?.response?.status ?? null;
+      const responseData = err?.response?.data ?? null;
+      instagramLogger.warn('Facebook Graph API request failed for all candidate paths', {
+        status,
+        paths: paths.map((p) => this.sanitizeGraphPath(p)),
+        responseData,
+        ...formatError(lastError),
+      });
+    }
+
     return null;
   }
 

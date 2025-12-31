@@ -1,8 +1,11 @@
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from './instagram.js';
 import { PublisherCredentialsService } from './publisher-credentials.js';
+import { logger as baseLogger } from '@postolio/logger';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
+const logger = baseLogger.child({ module: 'inbox-dm-ingestor' });
 
 function safeDate(value: unknown): Date | null {
   if (value instanceof Date) return value;
@@ -92,10 +95,21 @@ export async function ingestBrandDMs(
       threadsRes = await instagramService.listDmThreadsForSocialAccount(account.id, {
         limit: Math.max(1, Math.min(maxThreads, 50)),
       });
-    } catch {
+    } catch (error) {
+      logger.warn('Failed to list Instagram DM threads', {
+        brandId,
+        socialAccountId: account.id,
+        ...formatError(error),
+      });
       continue;
     }
-    if (!threadsRes.supported) continue;
+    if (!threadsRes.supported) {
+      logger.info('Instagram DM threads not supported for social account', {
+        brandId,
+        socialAccountId: account.id,
+      });
+      continue;
+    }
 
     // Determine "self" ids to distinguish inbound vs outbound.
     let selfIds = new Set<string>();
@@ -156,10 +170,23 @@ export async function ingestBrandDMs(
             limit: Math.max(1, Math.min(perThreadLimit, 50)),
           }
         );
-      } catch {
+      } catch (error) {
+        logger.warn('Failed to fetch Instagram DM thread messages', {
+          brandId,
+          socialAccountId: account.id,
+          threadId,
+          ...formatError(error),
+        });
         continue;
       }
-      if (!messagesRes.supported) continue;
+      if (!messagesRes.supported) {
+        logger.info('Instagram DM thread messages not supported', {
+          brandId,
+          socialAccountId: account.id,
+          threadId,
+        });
+        continue;
+      }
 
       let latestMessageAt: Date | null = null;
       for (const m of messagesRes.messages) {

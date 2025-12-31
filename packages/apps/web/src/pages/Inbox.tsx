@@ -118,8 +118,15 @@ export default function Inbox() {
   const socialAccounts = useMemo(() => {
     const accounts = (connectedAccountsData as any)?.socialAccounts || [];
     return (accounts as Array<any>).slice().sort((a, b) => {
-      if (a.platform !== b.platform) return String(a.platform).localeCompare(String(b.platform));
-      return (a.sortOrder || 0) - (b.sortOrder || 0);
+      const aDisconnected = Boolean(a?.disconnected);
+      const bDisconnected = Boolean(b?.disconnected);
+      if (aDisconnected !== bDisconnected) return aDisconnected ? 1 : -1;
+
+      const aOrder = typeof a?.sortOrder === 'number' ? a.sortOrder : 0;
+      const bOrder = typeof b?.sortOrder === 'number' ? b.sortOrder : 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+
+      return String(a?.createdAt || '').localeCompare(String(b?.createdAt || ''));
     });
   }, [connectedAccountsData]);
 
