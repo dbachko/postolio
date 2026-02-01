@@ -1,5 +1,7 @@
 # JWT Security Improvements
 
+**Last Reviewed:** January 31, 2026
+
 ## Overview
 
 This document outlines the comprehensive JWT security improvements implemented in the Postolio API.
@@ -111,9 +113,9 @@ const response = await fetch('/api/auth/login', {
   credentials: 'include', // Important for cookies
 });
 
-const { token } = await response.json();
-// Access token in response body
-// Refresh token set as HTTP-only cookie
+const { user } = await response.json();
+// Access token is not returned in the response body
+// auth_token + refresh_token are set as HttpOnly cookies
 ```
 
 ### Refresh Access Token
@@ -125,9 +127,9 @@ const response = await fetch('/api/auth/refresh', {
   credentials: 'include', // Sends refresh token cookie
 });
 
-const { token } = await response.json();
-// New access token in response
-// New refresh token set as cookie (rotation)
+const { message } = await response.json();
+// New access token is set as HttpOnly cookie
+// New refresh token set as HttpOnly cookie (rotation)
 ```
 
 ### Logout
@@ -136,7 +138,6 @@ const { token } = await response.json();
 // POST /api/auth/logout
 await fetch('/api/auth/logout', {
   method: 'POST',
-  headers: { Authorization: `Bearer ${accessToken}` },
   credentials: 'include',
 });
 // Invalidates refresh token and clears cookies
@@ -176,8 +177,8 @@ await fetch('/api/auth/logout', {
 ### Backward Compatibility
 
 - Existing JWT tokens continue to work until expiry
-- Bearer token authentication still supported
-- Cookie-based auth works alongside Bearer tokens
+- Cookie-based auth is the default for the web app
+- Bearer tokens remain optional for non-browser clients where enabled
 
 ## Monitoring & Debugging
 

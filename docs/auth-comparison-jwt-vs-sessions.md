@@ -1,5 +1,7 @@
 # Authentication Comparison: JWT vs Session Cookies
 
+**Last Reviewed:** January 31, 2026
+
 ## Executive Summary
 
 For Postolio's use case (a traditional web application with long-lived user sessions), **session cookies are the superior choice**. This matches what major platforms like Google, Facebook, and Instagram use.
@@ -13,9 +15,9 @@ For Postolio's use case (a traditional web application with long-lived user sess
 - ✅ JWT-based authentication
 - ✅ Refresh token rotation (database-backed)
 - ✅ HTTP-only cookies for token storage
-- ❌ Short 1-hour JWT expiration causing frequent logouts
-- ❌ Inconsistent storage (cookies + localStorage)
-- ❌ Complex refresh logic in frontend
+- ✅ Automatic refresh in the web app
+- ✅ Cookie-only auth flow (no localStorage tokens)
+- ❌ Short 1-hour JWT expiration causing frequent logouts (if refresh disabled)
 
 ---
 
@@ -158,7 +160,7 @@ cookie: {
 
 1. **Users logging out after 15 minutes** - JWT expires too fast
 2. **Complex refresh logic** - Frontend has multiple strategies to refresh tokens
-3. **Token in localStorage** - Security risk + inconsistent with HTTP-only cookies
+3. **Token in localStorage (resolved)** - Cookie-only auth now in place
 4. **Can't implement "logout all devices"** - Would need JWT blacklist = database anyway
 
 ### What Users Expect:
@@ -206,7 +208,7 @@ cookie: {
 3. **Simpler Codebase**
    - Remove 280 lines of token refresh logic (`useTokenRefresh.ts`)
    - Remove refresh token rotation complexity
-   - Remove localStorage token management
+   - LocalStorage token management already removed; keep cookie-only flow
    - No token expiration edge cases
 
 4. **Production Ready**
@@ -272,7 +274,7 @@ cookie: {
 
 ### JWT Vulnerabilities:
 
-1. **XSS**: If stored in localStorage (current issue)
+1. **XSS**: If stored in localStorage (pre-Phase 1 issue)
 2. **Cannot Revoke**: Compromised token valid until expiration
 3. **Token Theft**: If stolen, attacker has access until expiration
 4. **Refresh Token Rotation Complexity**: Easy to mess up
@@ -375,7 +377,7 @@ Activity updates: Async, don't block response
 1. Remove `useTokenRefresh.ts` hook
 2. Simplify API client (remove refresh logic)
 3. Update auth store
-4. Remove localStorage token management
+4. Remove localStorage token management (done in current web app)
 
 ### Phase 3: Testing (2-3 hours)
 

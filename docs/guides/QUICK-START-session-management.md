@@ -1,24 +1,24 @@
 # Quick Start: Session Management Upgrade
 
-**Goal:** Fix the "logged out every 15 minutes" issue and improve security
+**Goal:** Verify cookie-only auth and prevent regressions
 
-**Time to implement Phase 1:** ~2 days
+**Time to verify Phase 1:** ~1 hour
 
 ---
 
 ## TL;DR
 
-Your users get logged out every 15 minutes because:
+Users were getting logged out every 15 minutes because:
 
 1. Access tokens expire in 15 minutes (good for security)
-2. There's no automatic refresh mechanism (bad for UX)
-3. Tokens are stored in localStorage (XSS vulnerability)
+2. There was no automatic refresh mechanism (bad for UX, now fixed)
+3. Access tokens were stored in localStorage (XSS vulnerability, now removed)
 
-**Solution:** Implement automatic token refresh + HttpOnly cookies
+**Solution:** Automatic token refresh + HttpOnly cookies (already implemented)
 
 ---
 
-## Phase 1: Critical Fixes (Start Here!)
+## Phase 1: Critical Fixes (Implemented)
 
 ### What You'll Get
 
@@ -29,7 +29,7 @@ After Phase 1:
 - ✅ XSS vulnerability eliminated
 - ✅ Seamless authentication
 
-### Files You'll Change
+### Files to Review
 
 ```
 packages/
@@ -37,211 +37,32 @@ packages/
 │   ├── api/
 │   │   └── src/
 │   │       └── routes/
-│   │           └── auth.ts (3 changes)
+│   │           └── auth.ts
 │   └── web/
 │       └── src/
+│           ├── App.tsx
 │           ├── lib/
-│           │   ├── api.ts (major refactor)
-│           │   └── auth-interceptor.ts (NEW FILE)
-│           ├── stores/
-│           │   └── authStore.ts (cleanup)
-│           └── main.tsx (add 1 line)
+│           │   ├── auth-interceptor.ts
+│           │   └── http/
+│           │       └── http.ts
+│           └── stores/
+│               └── authStore.ts
 ```
 
 ### Step-by-Step Instructions
 
-#### Step 1: Backend Changes (30 minutes)
+#### Step 1: Backend verification (10 minutes)
 
-**File:** `packages/apps/api/src/routes/auth.ts`
+- Confirm `packages/apps/api/src/routes/auth.ts` does not return access tokens in JSON responses.
+- Confirm `auth_token` and `refresh_token` cookies are HttpOnly and `SameSite=Lax`.
+- Confirm `/api/auth/refresh` relies on cookies (no token response body).
 
-Find these 3 locations and remove `token` from response:
+#### Step 2: Frontend verification (15 minutes)
 
-```typescript
-// Location 1: ~line 120 (register)
-// Location 2: ~line 307 (login)
-// Location 3: ~line 355 (refresh)
-
-// CHANGE THIS:
-return reply.code(201).send({
-  token: accessToken, // ❌ DELETE THIS LINE
-  user,
-});
-
-// TO THIS:
-return reply.code(201).send({
-  user,
-  message: 'Login successful',
-});
-```
-
-Also update cookie settings (all 3 locations):
-
-```typescript
-// Change sameSite from 'lax' to 'strict'
-reply.setCookie('auth_token', accessToken, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict', // ✅ Change this
-  // ... rest stays the same
-});
-```
-
-**Test it:**
-
-```bash
-cd packages/apps/api
-pnpm dev
-
-# In another terminal:
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}' \
-  -v | jq
-
-# Verify: No "token" field in response
-# Verify: "Set-Cookie" header in response
-```
-
-#### Step 2: Frontend Changes (1 hour)
-
-**A. Create auto-refresh interceptor:**
-
-```bash
-# Create new file
-touch packages/apps/web/src/lib/auth-interceptor.ts
-```
-
-Copy this code into the new file:
-
-```typescript
-import { apiClient } from './api';
-
-export class AuthInterceptor {
-  private static refreshTimer: NodeJS.Timeout | null = null;
-
-  static startAutoRefresh() {
-    console.log('[Auth] Auto-refresh enabled');
-
-    // Refresh every 12 minutes (tokens expire in 15)
-    this.refreshTimer = setInterval(
-      async () => {
-        try {
-          await apiClient.refreshToken();
-          console.log('[Auth] Token refreshed');
-        } catch (error) {
-          console.error('[Auth] Refresh failed:', error);
-        }
-      },
-      12 * 60 * 1000
-    );
-  }
-
-  static stopAutoRefresh() {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-    }
-  }
-}
-```
-
-**B. Update API client:**
-
-File: `packages/apps/web/src/lib/api.ts`
-
-Find the `request` method and update it:
-
-```typescript
-private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    credentials: 'include',  // ✅ ADD THIS - critical for cookies!
-  });
-
-  // Handle 401 errors
-  if (response.status === 401 && endpoint !== '/api/auth/refresh') {
-    // Try to refresh token
-    const refreshed = await this.refreshToken().catch(() => false);
-    if (refreshed) {
-      // Retry original request
-      return this.request(endpoint, options);
-    }
-    // Redirect to login
-    window.location.href = '/login';
-  }
-
-  return response.json();
-}
-```
-
-**Remove localStorage code:**
-
-In the same file, find and delete:
-
-```typescript
-// DELETE these methods:
-constructor() {
-  this.token = localStorage.getItem('auth_token');  // ❌ DELETE
-}
-
-setToken(token: string) {
-  this.token = token;  // ❌ DELETE
-  localStorage.setItem('auth_token', token);  // ❌ DELETE
-}
-
-// In request method, DELETE this:
-if (this.token) {
-  headers.Authorization = `Bearer ${this.token}`;  // ❌ DELETE
-}
-```
-
-**C. Update auth store:**
-
-File: `packages/apps/web/src/stores/authStore.ts`
-
-```typescript
-// Remove localStorage references:
-
-// BEFORE:
-checkAuth: async () => {
-  const token = localStorage.getItem('auth_token'); // ❌ DELETE
-  if (!token) return;
-  // ...
-};
-
-// AFTER:
-checkAuth: async () => {
-  try {
-    const response = await apiClient.getProfile();
-    set({ user: response.user, isAuthenticated: true });
-  } catch {
-    set({ user: null, isAuthenticated: false });
-  }
-};
-```
-
-**D. Initialize auto-refresh:**
-
-File: `packages/apps/web/src/main.tsx`
-
-Add one line:
-
-```typescript
-import { AuthInterceptor } from './lib/auth-interceptor';
-
-// Add this before ReactDOM.render:
-AuthInterceptor.startAutoRefresh();
-
-ReactDOM.createRoot(document.getElementById('root')!)
-  .render
-  // ... rest of code
-  ();
-```
+- `packages/apps/web/src/lib/http/http.ts` uses `credentials: 'include'` and handles 401 refresh via `AuthInterceptor`.
+- `packages/apps/web/src/lib/auth-interceptor.ts` performs refresh without storing auth tokens in localStorage.
+- `packages/apps/web/src/stores/authStore.ts` does not read or write auth tokens in localStorage.
+- `packages/apps/web/src/App.tsx` starts/stops auto-refresh on mount/unmount.
 
 #### Step 3: Test It (30 minutes)
 
@@ -310,15 +131,11 @@ curl https://postolio.example/health
 
 **Fix:**
 
-```bash
-# Check .env
-COOKIE_DOMAIN=localhost  # dev
-# COOKIE_DOMAIN=.postolio.example  # prod
-
-# Update cors in api/src/app.ts
+```typescript
+// Update cors in packages/apps/api/src/app.ts
 fastify.register(cors, {
-  origin: 'http://localhost:5173',  # dev
-  credentials: true,  # ✅ Required for cookies
+  origin: 'http://localhost:5173', // dev
+  credentials: true, // ✅ Required for cookies
 });
 ```
 
@@ -339,7 +156,7 @@ fetch('/api/brands', {
 
 ## What's Next?
 
-After Phase 1 is working:
+After Phase 1 is verified:
 
 ### Phase 2: Enhanced Security (optional but recommended)
 
@@ -361,12 +178,13 @@ See full plan: `docs/guides/session-management-implementation-plan.md`
 
 ### Key Files
 
-| File                              | Purpose        | Changes                      |
-| --------------------------------- | -------------- | ---------------------------- |
-| `api/src/routes/auth.ts`          | Auth endpoints | Remove token from response   |
-| `web/src/lib/api.ts`              | API client     | Add `credentials: 'include'` |
-| `web/src/lib/auth-interceptor.ts` | Auto-refresh   | NEW FILE                     |
-| `web/src/main.tsx`                | App entry      | Call `startAutoRefresh()`    |
+| File                                            | Purpose        | Notes                        |
+| ----------------------------------------------- | -------------- | ---------------------------- |
+| `packages/apps/api/src/routes/auth.ts`          | Auth endpoints | No token in response body    |
+| `packages/apps/web/src/lib/http/http.ts`        | HTTP client    | `credentials: 'include'`     |
+| `packages/apps/web/src/lib/auth-interceptor.ts` | Auto-refresh   | Refresh without localStorage |
+| `packages/apps/web/src/stores/authStore.ts`     | Auth state     | No localStorage token access |
+| `packages/apps/web/src/App.tsx`                 | App entry      | Starts/stops auto-refresh    |
 
 ### Key Concepts
 
@@ -379,7 +197,7 @@ See full plan: `docs/guides/session-management-implementation-plan.md`
 
 - [ ] Backend doesn't return token in response body
 - [ ] Frontend doesn't use localStorage
-- [ ] Cookies are HttpOnly + Secure + SameSite=Strict
+- [ ] Cookies are HttpOnly + Secure + SameSite=Lax
 - [ ] Auto-refresh runs every 12 minutes
 - [ ] Users stay logged in for 30 days
 - [ ] All tests passing

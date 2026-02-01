@@ -1,8 +1,9 @@
 # Session Management Research: Enterprise Best Practices
 
 **Date:** October 2025
-**Status:** Research Complete
-**Next Steps:** Implementation Planning
+**Last Reviewed:** January 31, 2026
+**Status:** Research Complete (Phase 1 implemented)
+**Next Steps:** Phases 2-4 planning
 
 ## Executive Summary
 
@@ -16,12 +17,12 @@ This document provides comprehensive research on how major platforms (Google, Fa
 4. **Device fingerprinting** enables trusted device features and better security
 5. **Absolute + Sliding timeouts** provide the right balance of security and UX
 
-### Current Postolio Issues
+### Current Postolio Issues (pre-Phase 1)
 
 - ✅ **Good:** Refresh token rotation already implemented
 - ✅ **Good:** HttpOnly cookies for refresh tokens
-- ❌ **Critical:** Access tokens stored in localStorage (XSS vulnerable)
-- ❌ **Critical:** No automatic token refresh (causes 15-min logouts)
+- ✅ **Resolved:** Access tokens removed from localStorage (cookie-only auth)
+- ✅ **Resolved:** Automatic token refresh implemented
 - ⚠️ **Important:** No absolute session timeout
 - ⚠️ **Important:** No device management UI
 
@@ -195,7 +196,7 @@ If an attacker steals a refresh token and uses it, the legitimate user's next re
 | **Memory Only**     | ❌ No          | ❌ No           | ❌ No           | Access tokens (short-lived) |
 | **HttpOnly Cookie** | ❌ No          | ✅ Yes\*        | ✅ Yes          | ✅ **Recommended**          |
 
-\*CSRF mitigated with SameSite=Strict + CSRF tokens
+\*CSRF mitigated with SameSite (Lax/Strict) + CSRF tokens; current implementation uses SameSite=Lax
 
 **Recommendation:** Use HttpOnly cookies exclusively for both access and refresh tokens.
 
@@ -288,7 +289,7 @@ class AuthInterceptor {
 reply.setCookie('auth_token', accessToken, {
   httpOnly: true, // Prevents JavaScript access (XSS protection)
   secure: true, // HTTPS only
-  sameSite: 'strict', // CSRF protection
+  sameSite: 'lax', // Current setting
   domain: '.postolio.example', // Subdomain sharing
   path: '/', // All paths
   maxAge: 15 * 60, // 15 minutes
@@ -297,7 +298,7 @@ reply.setCookie('auth_token', accessToken, {
 reply.setCookie('refresh_token', refreshToken, {
   httpOnly: true,
   secure: true,
-  sameSite: 'strict',
+  sameSite: 'lax',
   domain: '.postolio.example',
   path: '/api/auth/refresh', // Restricted path (additional security)
   maxAge: 30 * 24 * 60 * 60, // 30 days

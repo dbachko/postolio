@@ -1,7 +1,7 @@
 # Session Management Upgrade - Documentation Index
 
-**Last Updated:** October 2025
-**Status:** Ready for Implementation
+**Last Updated:** January 31, 2026
+**Status:** Phase 1 implemented; Phases 2-4 planned
 
 ---
 
@@ -9,13 +9,19 @@
 
 This directory contains comprehensive research, implementation plans, and operational guides for upgrading Postolio's session management to enterprise-grade standards.
 
-### The Problem
+### Background (pre-Phase 1)
 
-Users are getting logged out every 15 minutes because:
+Users were getting logged out every 15 minutes because:
 
 1. Access tokens expire in 15 minutes (good for security)
-2. No automatic token refresh mechanism (bad for UX)
-3. Tokens stored in localStorage (XSS vulnerability)
+2. No automatic token refresh mechanism (bad for UX, now fixed)
+3. Access tokens stored in localStorage (XSS vulnerability, now removed)
+
+### Current State (Phase 1)
+
+- Access and refresh tokens are stored in HttpOnly cookies; no auth tokens in localStorage.
+- Automatic refresh runs in the web app via `packages/apps/web/src/lib/auth-interceptor.ts` and is started in `packages/apps/web/src/App.tsx`.
+- All HTTP requests include credentials for cookie auth in `packages/apps/web/src/lib/http/http.ts`.
 
 ### The Solution
 
@@ -55,7 +61,7 @@ Implement industry-standard session management:
 - Step-by-step instructions
 - Troubleshooting guide
 
-**Purpose:** Get the critical fixes deployed ASAP.
+**Purpose:** Verify the critical fixes and prevent regressions.
 
 #### Comprehensive Plan
 
@@ -87,7 +93,7 @@ Implement industry-standard session management:
 
 ## 🚀 Quick Start
 
-### Option 1: Minimum Viable (2 days)
+### Option 1: Verification (Phase 1 already implemented)
 
 Just fix the logout problem:
 
@@ -95,9 +101,9 @@ Just fix the logout problem:
 # Read this first
 cat docs/guides/QUICK-START-session-management.md
 
-# Then implement Phase 1
-# - Remove localStorage usage
-# - Add automatic token refresh
+# Then verify Phase 1 behavior
+# - No auth tokens in localStorage
+# - Automatic token refresh is running
 # - HttpOnly cookies only
 ```
 
@@ -123,24 +129,24 @@ cat docs/guides/session-management-implementation-plan.md
 
 ## 📋 Implementation Phases
 
-### Phase 1: Critical Fixes (2 days) 🔴 **DO THIS FIRST**
+### Phase 1: Critical Fixes (2 days) 🔴 **IMPLEMENTED**
 
-**Goal:** Fix XSS vulnerability and logout issue
+**Goal:** Keep XSS vulnerability fixed and prevent regressions
 
-**Changes:**
+**Changes (already implemented):**
 
 - Remove access tokens from API response body
-- Stop using localStorage
+- No auth tokens in localStorage (verified)
 - Implement automatic token refresh
 - HttpOnly cookies exclusively
 
-**Files to modify:**
+**Files to review:**
 
-- `packages/apps/api/src/routes/auth.ts` (3 changes)
-- `packages/apps/web/src/lib/api.ts` (major refactor)
-- `packages/apps/web/src/lib/auth-interceptor.ts` (NEW)
-- `packages/apps/web/src/stores/authStore.ts` (cleanup)
-- `packages/apps/web/src/main.tsx` (1 line)
+- `packages/apps/api/src/routes/auth.ts`
+- `packages/apps/web/src/lib/http/http.ts`
+- `packages/apps/web/src/lib/auth-interceptor.ts`
+- `packages/apps/web/src/stores/authStore.ts`
+- `packages/apps/web/src/App.tsx`
 
 **Testing:**
 
@@ -218,15 +224,15 @@ pnpm --filter=cdk deploy API-dev Web-dev
 - Comprehensive audit logging
 - Redis-based storage
 
-### ❌ Critical Issues
+### ❌ Critical Issues (pre-Phase 1)
 
-| Issue                         | Impact                        | Fix In  |
-| ----------------------------- | ----------------------------- | ------- |
-| Access tokens in localStorage | **XSS vulnerability**         | Phase 1 |
-| No auto-refresh               | Users logged out every 15 min | Phase 1 |
-| Tokens in response body       | Encourages bad practices      | Phase 1 |
-| No absolute timeout           | Sessions could last forever   | Phase 2 |
-| No device management          | Users can't control sessions  | Phase 3 |
+| Issue                         | Impact                        | Fix In         |
+| ----------------------------- | ----------------------------- | -------------- |
+| Access tokens in localStorage | **XSS vulnerability**         | Phase 1 (done) |
+| No auto-refresh               | Users logged out every 15 min | Phase 1 (done) |
+| Tokens in response body       | Encourages bad practices      | Phase 1 (done) |
+| No absolute timeout           | Sessions could last forever   | Phase 2        |
+| No device management          | Users can't control sessions  | Phase 3        |
 
 ---
 
@@ -345,7 +351,7 @@ aws logs tail /aws/ecs/postolio-api --follow --filter-pattern "401"
 1. Check browser console for refresh errors
 2. Verify `credentials: 'include'` in all fetch calls
 3. Verify CORS allows credentials
-4. Check auto-refresh is initialized in main.tsx
+4. Check auto-refresh is initialized in `packages/apps/web/src/App.tsx`
 
 **See:** `guides/QUICK-START-session-management.md#troubleshooting`
 
@@ -355,8 +361,8 @@ aws logs tail /aws/ecs/postolio-api --follow --filter-pattern "401"
 
 **Solution:**
 
-1. Check COOKIE_DOMAIN environment variable
-2. Verify CORS configuration includes `credentials: true`
+1. Verify CORS configuration includes `credentials: true`
+2. Ensure requests are sent to the same host used for cookies
 3. In development, ensure NODE_ENV=development (for secure: false)
 
 **See:** `runbooks/session-management-operations.md#cookies-not-being-set`
@@ -551,14 +557,14 @@ Now          +2 days       +2 weeks      +4 weeks      +6 weeks
 - [ ] Understand the problem (15-min logouts)
 - [ ] Review current auth implementation
 
-### Phase 1 Implementation
+### Phase 1 Verification
 
-- [ ] Backend: Remove token from response
-- [ ] Backend: Update cookie settings
-- [ ] Frontend: Create auth-interceptor.ts
-- [ ] Frontend: Update api.ts
-- [ ] Frontend: Clean up authStore.ts
-- [ ] Frontend: Initialize in main.tsx
+- [ ] Backend: No token in response body (`packages/apps/api/src/routes/auth.ts`)
+- [ ] Backend: HttpOnly + SameSite=Lax cookies
+- [ ] Frontend: `credentials: 'include'` in `packages/apps/web/src/lib/http/http.ts`
+- [ ] Frontend: Auto-refresh in `packages/apps/web/src/lib/auth-interceptor.ts`
+- [ ] Frontend: Started in `packages/apps/web/src/App.tsx`
+- [ ] Frontend: No auth token access in `packages/apps/web/src/stores/authStore.ts`
 - [ ] Test: Run phase1-security.test.ts
 - [ ] Test: Manual browser testing
 - [ ] Deploy: API to dev
@@ -586,4 +592,4 @@ Remember: Phase 1 alone fixes the main issue. Phases 2-4 are enhancements.
 **Document Version:** 1.0
 **Created:** October 2025
 **Purpose:** Master index for session management upgrade
-**Status:** Ready for implementation
+**Status:** Phase 1 implemented; Phases 2-4 planned
