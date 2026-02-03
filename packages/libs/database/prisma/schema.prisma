@@ -808,7 +808,7 @@ model DMConversation {
   rule     DMAutomationRule? @relation(fields: [ruleId], references: [id])
   messages DMMessage[]
 
-  @@unique([brandId, socialAccountId, platform, participantExternalUserId]) // One conversation per user per account
+  @@unique([brandId, socialAccountId, platform, participantExternalUserId], map: "dm_conv_brand_account_platform_participant_key") // One conversation per user per account
   @@index([brandId, state])
   @@index([socialAccountId, state])
   @@index([lastMessageAt])
