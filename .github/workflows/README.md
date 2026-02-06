@@ -8,28 +8,22 @@ This directory contains GitHub Actions workflows for the Postolio monorepo, impl
 
 ### 🚀 deploy.yml - Main Deployment Pipeline
 
-**Trigger:** Push to main/develop, PR, or manual dispatch
+**Trigger:** Manual dispatch (`workflow_dispatch`) only
 
 **Key Features:**
 
-- **Intelligent Change Detection:** Only deploys changed stacks and their dependents
-- **Parallel Deployments:** Microservices deploy concurrently for speed
-- **Environment Management:** Automatic environment selection based on branch
+- **Manual Deploys From UI:** Run from the GitHub Actions UI with an explicit `ref` (branch/tag/SHA)
+- **Environment Selection:** Choose `dev`, `staging`, or `prod` via workflow input
 - **Docker Layer Caching:** Uses GitHub Actions cache for faster builds
 - **CDK Integration:** Deploys infrastructure as code without manual installation
-- **Service Discovery:** Automatic service registration with AWS Cloud Map
 
 **Jobs:**
 
-1. `detect-changes` - Analyzes which packages have changed
-2. `test` - Runs tests on changed packages (PR only)
-3. `build-images` - Builds and pushes Docker images to ECR
-4. `deploy-infrastructure` - Deploys CDK stacks (Service Discovery, Monitoring, EventBridge)
-5. `deploy-microservices` - Deploys Lambda microservices in parallel
-6. `deploy-main-app` - Deploys main API on ECS Fargate
-7. `deploy-frontend` - Builds and deploys React app to S3/CloudFront
-8. `e2e-tests` - Runs Playwright tests (non-prod only)
-9. `deployment-summary` - Generates deployment report
+1. `detect-changes` - Plans the deploy (environment, stacks, images, resolved commit SHA)
+2. `build-images` - Builds and pushes Docker images to ECR (or no-ops)
+3. `deploy-stacks` - Deploys CDK stacks (sequentially)
+4. `deploy-frontend` - Builds and deploys the React app to S3/CloudFront
+5. `deployment-summary` - Generates deployment report
 
 ### ✅ pr-checks.yml - Pull Request Validation
 
@@ -45,24 +39,6 @@ This directory contains GitHub Actions workflows for the Postolio monorepo, impl
 6. `cdk-diff` - Shows infrastructure changes
 7. `pr-summary` - Comments PR with check results
 
-### 🔄 rollback.yml - Emergency Rollback
-
-**Trigger:** Manual dispatch only
-
-**Features:**
-
-- Rollback individual services or all services
-- Automatic version detection (finds previous version)
-- Manual version specification support
-- Health checks after rollback
-- Creates GitHub issue for tracking
-
-**Supported Services:**
-
-- API (ECS service)
-- Web (S3/CloudFront)
-- All Lambda microservices
-
 ### 🧹 cleanup.yml - Resource Cleanup
 
 **Trigger:** Daily at 2 AM UTC or manual
@@ -73,6 +49,15 @@ This directory contains GitHub Actions workflows for the Postolio monorepo, impl
 2. **Lambda Versions:** Keeps only last 10 versions
 3. **CloudWatch Logs:** Deletes old/empty log streams
 4. **Dry Run Mode:** Test cleanup without deletion
+
+### 🧯 cleanup-failed-stacks.yml - Cleanup Failed CloudFormation Stacks
+
+**Trigger:** Manual dispatch only
+
+**Use Cases:**
+
+- Delete stacks stuck in failed states (`ROLLBACK_COMPLETE`, `CREATE_FAILED`, `UPDATE_ROLLBACK_COMPLETE`)
+- Cleanup a single stack by name or all failed stacks for an environment
 
 ## Environment Configuration
 
@@ -138,43 +123,14 @@ FB_OAUTH_DEBUG: false
 
 ## Deployment Strategies
 
-### Branch-Based Deployments
-
-- `main` → Production
-- `develop` → Staging
-- Feature branches → Dev (PR deployments)
-
-### Service Deployment Matrix
-
-Services are deployed based on change detection (including transitive dependents):
-
-| Service        | Path                                 | Deployment Target |
-| -------------- | ------------------------------------ | ----------------- |
-| API            | `packages/apps/api/**`               | ECS Fargate       |
-| Web            | `packages/apps/web/**`               | S3 + CloudFront   |
-| Token Service  | `packages/services/token-service/**` | Lambda            |
-| Publisher      | `packages/services/publisher/**`     | Lambda            |
-| Other Services | `packages/services/**`               | Lambda            |
-| Infrastructure | `packages/infra/**`                  | All Stacks        |
-
-Dependent rollout rules:
-
-- `foundation` → redeploys all stacks (everything depends on it)
-- `auth` → also redeploys `scheduling`, `publishing`, `api`
-- `scheduling` → also redeploys `publishing`, `api`
-- `publishing` → also redeploys `api`
-
 ### Manual Deployment
 
 ```bash
-# Deploy specific environment
-gh workflow run deploy.yml -f environment=staging
+# Deploy a specific ref to staging
+gh workflow run deploy.yml -f ref=main -f environment=staging
 
-# Deploy specific services
-gh workflow run deploy.yml -f environment=dev -f services="api,web"
-
-# Rollback to previous version
-gh workflow run rollback.yml -f environment=prod -f service=api -f version=previous
+# Deploy specific stacks (comma-separated or "all")
+gh workflow run deploy.yml -f ref=1a2b3c4d -f environment=dev -f stacks="api,web"
 ```
 
 ## Performance Optimizations

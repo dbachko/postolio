@@ -1,12 +1,13 @@
 name: Deploy Stack-Based Architecture
+run-name: Deploy ${{ github.event.inputs.environment }} @ ${{ github.event.inputs.ref }}
 
 on:
-  push:
-    branches: [main, master, develop]
-  pull_request:
-    branches: [main, develop]
   workflow_dispatch:
     inputs:
+      ref:
+        description: 'Git ref to deploy (branch, tag, or commit SHA)'
+        required: true
+        default: 'main'
       environment:
         description: 'Environment to deploy'
         required: true
@@ -26,7 +27,7 @@ on:
         default: false
 
 concurrency:
-  group: deploy-stack-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
+  group: deploy-stack-${{ github.event.inputs.ref || github.ref }}-${{ github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 permissions:
@@ -52,6 +53,8 @@ jobs:
     name: Detect Changes & Plan Deployment
     runs-on: ubuntu-latest
     outputs:
+      deploy-ref: ${{ steps.deploy-ref.outputs.ref }}
+      deploy-sha: ${{ steps.deploy-ref.outputs.sha }}
       environment: ${{ steps.env.outputs.environment }}
       foundation-changed: ${{ steps.changes.outputs.foundation }}
       auth-changed: ${{ steps.changes.outputs.auth }}
@@ -73,19 +76,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Resolve deploy ref
+        id: deploy-ref
+        shell: bash
+        run: |
+          echo "ref=${{ github.event.inputs.ref || github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Determine environment
         id: env
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
-          else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          fi
+          echo "environment=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
 
       - name: Determine diff base for change detection
         if: github.event_name != 'workflow_dispatch'
@@ -366,6 +369,9 @@ jobs:
       - name: Checkout code
         if: ${{ matrix.image.name != 'noop' }}
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.detect-changes.outputs.deploy-sha }}
 
       - name: Skip image build (no images changed)
         if: ${{ matrix.image.name == 'noop' }}
@@ -398,7 +404,7 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.image.name }}-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.image.name }}-${{ needs.detect-changes.outputs.environment }}-${{ needs.detect-changes.outputs.deploy-sha }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.image.name }}-${{ needs.detect-changes.outputs.environment }}-latest
           cache-from: type=gha,scope=${{ matrix.image.scope }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.scope }}
@@ -427,6 +433,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.detect-changes.outputs.deploy-sha }}
 
       - name: CDK Setup
         uses: ./.github/actions/cdk-setup
@@ -622,19 +631,19 @@ jobs:
           # If build-images ran and a given image was built, use the per-commit tag.
           # Otherwise, reuse the existing environment "latest" tag.
           if [[ "${{ needs.build-images.result }}" == "success" && "$api_built" == "true" ]]; then
-            API_IMAGE_TAG="api-$ENV-${{ github.sha }}"
+            API_IMAGE_TAG="api-$ENV-${{ needs.detect-changes.outputs.deploy-sha }}"
           else
             API_IMAGE_TAG="api-$ENV-latest"
           fi
 
           if [[ "${{ needs.build-images.result }}" == "success" && "$assets_built" == "true" ]]; then
-            ASSETS_IMAGE_TAG="assets-$ENV-${{ github.sha }}"
+            ASSETS_IMAGE_TAG="assets-$ENV-${{ needs.detect-changes.outputs.deploy-sha }}"
           else
             ASSETS_IMAGE_TAG="assets-$ENV-latest"
           fi
 
           if [[ "${{ needs.build-images.result }}" == "success" && "$analytics_built" == "true" ]]; then
-            ANALYTICS_IMAGE_TAG="analytics-$ENV-${{ github.sha }}"
+            ANALYTICS_IMAGE_TAG="analytics-$ENV-${{ needs.detect-changes.outputs.deploy-sha }}"
           else
             ANALYTICS_IMAGE_TAG="analytics-$ENV-latest"
           fi
@@ -792,6 +801,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.detect-changes.outputs.deploy-sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -893,7 +905,7 @@ jobs:
           echo "🎉 Stack-Based Deployment Summary"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📍 Environment: ${{ needs.detect-changes.outputs.environment }}"
-          echo "🔄 Commit: ${{ github.sha }}"
+          echo "🔄 Commit: ${{ needs.detect-changes.outputs.deploy-sha }}"
           echo ""
           echo "📊 Job Results:"
           echo "  - Stack Deployment: ${{ needs.deploy-stacks.result }}"
@@ -926,7 +938,7 @@ jobs:
           exit 1
 
       - name: Send deployment notification
-        if: needs.detect-changes.outputs.environment == 'prod' && github.event_name == 'push'
+        if: needs.detect-changes.outputs.environment == 'prod'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -938,7 +950,7 @@ jobs:
             ## 🚀 Production Deployment Complete (Stack-Based)
 
             **Environment:** ${{ needs.detect-changes.outputs.environment }}
-            **Commit:** ${{ github.sha }}
+            **Commit:** ${{ needs.detect-changes.outputs.deploy-sha }}
             **Deployed by:** ${{ github.actor }}
 
             ### Deployed Stacks:
@@ -953,6 +965,6 @@ jobs:
             await github.rest.repos.createCommitComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              commit_sha: '${{ github.sha }}',
+              commit_sha: '${{ needs.detect-changes.outputs.deploy-sha }}',
               body: summary
             });
