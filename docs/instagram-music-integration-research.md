@@ -315,7 +315,7 @@ The Instagram Graph API is Meta's official interface for developers to programma
 
 **Real-World Examples**:
 
-- **Sony Music vs Marriott (2024)**: $139M+ statutory damages for 900+ unlicensed influencer campaigns
+- **Sony Music vs Marriott (2024)**: $139M+ statutory damages for 900+ unlicensed influencer promotions
 - **Warner Music vs Iconic (2022)**: Lawsuit for systematic unlicensed music use
 - Demonstrates active enforcement and significant legal risks
 
@@ -382,7 +382,7 @@ The Instagram Graph API is Meta's official interface for developers to programma
 **Capabilities**:
 
 - Enterprise social media management
-- Campaign tracking and analytics
+- Content performance tracking and analytics
 - Instagram Reels publishing
 - No API support for Instagram music stickers
 
@@ -1306,7 +1306,7 @@ Platforms can qualify for safe harbor if they:
 
 **Sony Music vs Marriott International (2024)**:
 
-- **Claim**: Unlicensed use of Sony's music in 900+ influencer campaigns
+- **Claim**: Unlicensed use of Sony's music in 900+ influencer promotions
 - **Statutory Damages**: Up to $139 million ($150,000 per infringement)
 - **Context**: Marriott paid influencers to create branded content using popular music
 - **Outcome**: Lawsuit ongoing, demonstrates active enforcement
@@ -1379,7 +1379,7 @@ Meta's automated copyright detection system scans all uploads for copyrighted mu
 - Paid advertising
 - Sponsored content
 - E-commerce product showcases
-- Business marketing campaigns
+- Business marketing initiatives
 
 **Consequences of Violating Commercial Use Restrictions**:
 

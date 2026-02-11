@@ -1905,7 +1905,6 @@ class InstagramService {
     const contentData = {
       brandId: brand.id!,
 
-      campaignId: null,
       caption: post.caption,
       hashtags: extractHashtagsFromCaption(post.caption || ''),
       status: 'published' as const,
@@ -1929,7 +1928,6 @@ class InstagramService {
         where: { id: matchingDraft.id },
         select: {
           generationParams: true,
-          campaignId: true,
           scheduledAt: true,
           mediaAssets: {
             select: { assetId: true, displayOrder: true },
@@ -1949,8 +1947,6 @@ class InstagramService {
           postedAt: contentData.postedAt,
           scheduledAt: current?.scheduledAt ?? contentData.postedAt,
           schedulingError: null,
-
-          campaignId: current?.campaignId || null,
           generationParams: {
             ...existingParams,
             // Preserve existing, add import details

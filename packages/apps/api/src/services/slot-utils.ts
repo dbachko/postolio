@@ -3,7 +3,7 @@ import { TimezoneService } from './timezone.js';
 const MIN_SLOT_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Compute upcoming posting slots for a campaign based on frequency and postingTime(s).
+ * Compute upcoming posting slots for a schedule cadence based on frequency and postingTime(s).
  * Returns Date objects representing the brand-local time converted to UTC for storage.
  */
 export async function computeUpcomingSlots(
@@ -72,7 +72,7 @@ export async function computeUpcomingSlots(
     }
   }
 
-  // Keep cursor aligned to the original campaign cadence even after the start date passes
+  // Keep cursor aligned to the original cadence even after the start date passes
   while (cursor < todayStart) {
     cursorStr = addDays(cursorStr, intervalDays);
     cursor = toUtcMidnight(cursorStr);

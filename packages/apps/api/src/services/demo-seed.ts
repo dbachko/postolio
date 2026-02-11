@@ -38,23 +38,19 @@ function getDemoAssetS3KeyByIndex(index: number): string | null {
 /**
  * Seed a per-user demo workspace for a brand.
  *
- * This creates a small set of campaigns and posts that exercise the main flows:
+ * This creates a small set of posts that exercise the main flows:
  * - Draft, scheduled, and published content
- * - Multiple campaigns with different purposes
  *
  * The seed is intentionally lightweight and idempotent:
- * - If the brand already has campaigns or content, nothing is created.
+ * - If the brand already has content, nothing is created.
  */
 export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Promise<void> {
   const { brandId, userId, includeAnalytics = true } = options;
 
-  const [campaignCount, contentCount] = await Promise.all([
-    prisma.campaign.count({ where: { brandId } }),
-    prisma.content.count({ where: { brandId } }),
-  ]);
+  const contentCount = await prisma.content.count({ where: { brandId } });
 
   // If this brand already has data, do not overwrite it.
-  if (campaignCount > 0 || contentCount > 0) {
+  if (contentCount > 0) {
     return;
   }
 
@@ -92,82 +88,20 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
     // Non-fatal: demo can still function with content-only data.
   }
 
-  // Primary campaign showcasing an "up and running" brand
-  const launchCampaign = await prisma.campaign.create({
-    data: {
-      name: 'Demo Launch Campaign',
-      brandId,
-      status: 'active',
-      color: '#3B82F6',
-      campaignType: 'promotional',
-      previewGenerated: true,
-      startedAt: new Date(now.getTime() - days(3)),
-      config: {
-        duration: {
-          start: new Date(now.getTime() - days(3)).toISOString().slice(0, 10),
-          end: new Date(now.getTime() + days(7)).toISOString().slice(0, 10),
-        },
-        frequency: 'daily',
-        postingTimes: ['09:00', '18:00'],
-        themes: ['launch', 'social_proof', 'benefits'],
-        style: 'informative',
-        goals: ['increase engagement', 'grow followers'],
-        demo: true,
-      } as any,
-      contentPillars: ['launch', 'benefits', 'social_proof'],
-      urgencyTactics: ['limited_time'],
-    },
-  });
-
-  // Secondary campaign for evergreen / educational posts
-  const evergreenCampaign = await prisma.campaign.create({
-    data: {
-      name: 'Evergreen Education',
-      brandId,
-      status: 'preview',
-      color: '#10B981',
-      campaignType: 'educational',
-      previewGenerated: true,
-      startedAt: null,
-      config: {
-        duration: {
-          start: new Date(now.getTime() + days(1)).toISOString().slice(0, 10),
-          end: new Date(now.getTime() + days(14)).toISOString().slice(0, 10),
-        },
-        frequency: 'every2days',
-        postingTime: '11:00',
-        themes: ['tips', 'behind_the_scenes'],
-        style: 'educational',
-        goals: ['build authority'],
-        demo: true,
-      } as any,
-      contentPillars: ['tips', 'behind_the_scenes'],
-      urgencyTactics: [],
-    },
-  });
-
   // Base helper for building demo posts
   const makePost = (input: {
     caption: string;
     status: 'draft' | 'scheduled' | 'published' | 'failed';
     daysOffset: number;
-    forCampaign?: 'launch' | 'evergreen' | null;
     imageIndex?: number;
   }) => {
     const when = new Date(now.getTime() + days(input.daysOffset));
     const scheduledAt = input.status === 'scheduled' || input.status === 'published' ? when : null;
     const postedAt =
       input.status === 'published' ? new Date(when.getTime() + 60 * 60 * 1000) : null;
-    const campaignId =
-      input.forCampaign === 'launch'
-        ? launchCampaign.id
-        : input.forCampaign === 'evergreen'
-          ? evergreenCampaign.id
-          : null;
 
     return {
       brandId,
-      campaignId,
       caption: input.caption,
       hashtags: ['#postolio', '#demo', '#socialmedia'],
       status: input.status,
@@ -188,35 +122,30 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
         'Welcome to your demo workspace 🎉 Edit this post to see how content changes across the app.',
       status: 'published',
       daysOffset: -2,
-      forCampaign: 'launch',
       imageIndex: 0, // post-welcome.png
     }),
     makePost({
       caption: 'Share a quick win or testimonial from your customers to build social proof.',
       status: 'published',
       daysOffset: -1,
-      forCampaign: 'launch',
       imageIndex: 1, // post-testimonial.png
     }),
     makePost({
       caption: 'Behind-the-scenes snapshot: show how your product or service is made.',
       status: 'scheduled',
       daysOffset: 1,
-      forCampaign: 'launch',
       imageIndex: 2, // post-bts.png
     }),
     makePost({
       caption: 'Educational tip: highlight one problem your audience faces and how to solve it.',
       status: 'draft',
       daysOffset: 0,
-      forCampaign: 'evergreen',
       imageIndex: 3, // post-tip.png
     }),
     makePost({
       caption: 'Evergreen post idea: share a checklist or framework your audience can reuse.',
       status: 'draft',
       daysOffset: 0,
-      forCampaign: 'evergreen',
       imageIndex: 4, // post-checklist.png
     }),
   ];

@@ -23,7 +23,6 @@ export interface ContentWithMetadata extends ContentBase {
   scheduledAt?: Date | null;
   postedAt?: Date | null;
   brandId?: string;
-  campaignId?: string | null;
   contentGroupId?: string | null;
   targetSocialAccountId?: string | null;
   schedulingError?: string | null;
@@ -53,7 +52,6 @@ export interface ContentResponse {
   scheduledAt?: Date | null;
   postedAt?: Date | null;
   brandId?: string;
-  campaignId?: string | null;
   contentGroupId?: string | null;
   targetSocialAccountId?: string | null;
   schedulingError?: string | null;
@@ -105,9 +103,6 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   }
   if (content.brandId !== undefined) {
     response.brandId = content.brandId;
-  }
-  if (content.campaignId !== undefined) {
-    response.campaignId = content.campaignId;
   }
   if (content.contentGroupId !== undefined) {
     response.contentGroupId = content.contentGroupId;

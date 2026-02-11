@@ -64,7 +64,6 @@ model Asset {
   archivedAt        DateTime?
 
   folder            AssetFolder?  @relation(fields: [folderId], references: [id])
-  campaignAssets    CampaignAsset[]
 
   @@index([brandId, processingStatus])
   @@index([brandId, fileType])
@@ -96,30 +95,6 @@ model AssetFolder {
   @@map("asset_folders")
 }
 
-model CampaignAsset {
-  id                String    @id @default(cuid())
-  campaignId        String    // From main DB
-  assetId           String
-
-  // AI Selection metadata
-  timesUsed         Int       @default(0)
-  lastUsedAt        DateTime?
-  selectionScore    Float?
-  manuallySelected  Boolean   @default(false)
-
-  aiDescription     String?
-  aiTags            String[]
-
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  asset             Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
-
-  @@unique([campaignId, assetId])
-  @@index([campaignId])
-  @@map("campaign_assets")
-}
-
 enum AssetType {
   image
   video
@@ -138,6 +113,5 @@ enum ProcessingStatus {
 
 enum FolderType {
   general
-  campaign_pool
   brand_assets
 }

@@ -8,11 +8,10 @@ export function useFilteredEvents(
   filters: CalendarFilters,
   timezone: string
 ): CalendarEvent[] {
-  const { campaigns, statuses, searchQuery } = filters;
+  const { statuses, searchQuery } = filters;
 
   return useMemo(() => {
     const filterSnapshot: CalendarFilters = {
-      campaigns,
       statuses,
       searchQuery,
     };
@@ -28,9 +27,6 @@ export function useFilteredEvents(
       const isPlaceholder = item.type === 'placeholder';
 
       const status = isPlaceholder ? 'placeholder' : readString(record.status);
-      const campaignId = readString(isPlaceholder ? item.campaignId : record.campaignId);
-      const campaignName = readString(isPlaceholder ? item.campaignName : record.campaignName);
-      const campaignColor = readString(isPlaceholder ? item.campaignColor : record.campaignColor);
       const scheduledAt = readString(isPlaceholder ? item.scheduledAt : record.scheduledAt);
       const postedAt = readString(record.postedAt);
 
@@ -43,9 +39,6 @@ export function useFilteredEvents(
         resource: {
           type: item.type,
           status,
-          campaignId,
-          campaignName,
-          campaignColor,
           placeholder: isPlaceholder,
           scheduledAt,
           postedAt,
@@ -69,7 +62,7 @@ export function useFilteredEvents(
     });
 
     return events;
-  }, [items, campaigns, statuses, searchQuery, timezone]);
+  }, [items, statuses, searchQuery, timezone]);
 }
 
 function buildTitle(item: CalendarDataItem, record: Record<string, unknown>): string {

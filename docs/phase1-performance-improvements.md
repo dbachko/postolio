@@ -120,7 +120,6 @@ Where:
 - `src/services/audit-logger.ts` (updated)
 - `src/server.ts` (updated)
 - `src/plugins/auth.ts` (lint fixes)
-- `src/routes/campaign.ts` (lint fixes)
 - `src/routes/growth.ts` (lint fixes)
 
 ## Testing Checklist

@@ -53,9 +53,6 @@ export function useQueueSlotPlaceholders({
           id: `queue-slot:${i.queueId}:${i.laneKey}:${i.scheduledAt}`,
           scheduledAt: i.scheduledAt,
           message: 'Queue slot',
-          campaignId: null,
-          campaignName: null,
-          campaignColor: null,
           queueAtCapacity,
           // Extra fields consumed by PostPreviewCard -> open create with prefill
           targetSocialAccountId: effectiveSingleDestinationId,

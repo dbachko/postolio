@@ -91,8 +91,7 @@ export default function ImageAnalytics() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            No image generations yet. Create a campaign with AI-generated images to see analytics
-            here.
+            No image generations yet. Create posts with AI-generated images to see analytics here.
           </AlertDescription>
         </Alert>
       )}
@@ -250,7 +249,7 @@ export default function ImageAnalytics() {
                 </li>
                 <li>• Set your preferred provider in Brand Settings to control costs</li>
                 <li>
-                  • Monitor generation logs to identify which campaigns consume the most resources
+                  • Monitor generation logs to identify which posts consume the most resources
                 </li>
               </ul>
             </AlertDescription>

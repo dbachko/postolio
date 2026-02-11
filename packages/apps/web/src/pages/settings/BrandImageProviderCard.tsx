@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Palette, Info, Save, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getImageProviders } from '@/lib/api/image-providers';
-import type { ImageProvider } from '@/types/campaign-wizard';
+import type { ImageProvider } from '@/types/image-providers';
 
 interface BrandImageProviderCardProps {
   brandName: string;
@@ -61,8 +61,8 @@ export default function BrandImageProviderCard({
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            This setting will be used for all campaigns unless overridden during campaign creation.
-            Leave empty to use the system default (recommended for most users).
+            This setting will be used as the default for new AI image generations. Leave empty to
+            use the system default (recommended for most users).
           </AlertDescription>
         </Alert>
 

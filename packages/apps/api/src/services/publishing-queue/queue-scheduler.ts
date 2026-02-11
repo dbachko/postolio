@@ -39,7 +39,7 @@ export class PublishingQueueSchedulerService {
    * Recompute the queue-managed scheduling window for a brand across ALL of its social accounts.
    *
    * - Computes upcoming slot instances per social account (brand timezone)
-   * - Skips reserved fixed-time/campaign schedules (per social account)
+   * - Skips reserved fixed-time schedules (per social account)
    * - Assigns queued items to slot instances (per queueId + laneKey) in chronological order
    * - Cancels queue-managed schedules that fall outside the window
    * - Schedules/reschedules queue-managed items inside the window

@@ -31,15 +31,6 @@ vi.mock('../../../services/redis.js', () => {
   };
 });
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // Minimal in-memory Prisma mock for this suite
 vi.mock('../../../config/database.js', () => {
   const contents: any[] = [];
@@ -59,7 +50,6 @@ vi.mock('../../../config/database.js', () => {
           updatedAt: new Date(),
           contentType: data.contentType ?? 'post',
           shareToFeed: data.shareToFeed ?? null,
-          campaignId: data.campaignId ?? null,
           schedulingError: data.schedulingError ?? null,
           scheduledAt: data.scheduledAt ?? null,
           postedAt: data.postedAt ?? null,

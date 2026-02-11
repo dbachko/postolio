@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { hexToRgba } from '@/utils/campaign-colors';
+import { hexToRgba } from '@/utils/color';
 
 function pickFromPalette(palette: string[], key: string): string | null {
   if (!palette.length) return null;

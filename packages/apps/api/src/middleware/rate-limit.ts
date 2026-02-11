@@ -20,14 +20,6 @@ export const RateLimitTiers = {
     errorMessage: 'Too many AI generation requests. Please wait before trying again.',
   },
 
-  // Campaign operations
-  CAMPAIGN_OPERATIONS: {
-    max: 20,
-    timeWindow: '1 minute',
-    keyGenerator: (req: FastifyRequest) => `campaign:${req.user?.id || req.ip}`,
-    errorMessage: 'Too many campaign operations. Please slow down.',
-  },
-
   // Content publishing
   PUBLISHING: {
     max: 30,
@@ -184,11 +176,7 @@ export function applyRateLimiting(app: FastifyInstance, redisClient: RedisLikeCl
   }
   // AI Generation endpoints
   app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
-    const aiEndpoints = [
-      '/api/content/generate',
-      '/api/campaigns/create',
-      '/api/campaigns/regenerate',
-    ];
+    const aiEndpoints = ['/api/content/generate'];
 
     if (aiEndpoints.some((endpoint) => request.url.startsWith(endpoint))) {
       await createRateLimiter(redisClient, 'AI_GENERATION')(request, reply);

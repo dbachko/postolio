@@ -44,12 +44,11 @@ export async function publishContent(
   try {
     logger.info('Publishing content', { contentId, platform });
 
-    // Get content with brand and campaign
+    // Get content with brand and media assets
     const content = await prisma.content.findUnique({
       where: { id: contentId },
       include: {
         brand: true,
-        campaign: true,
         mediaAssets: {
           select: { assetId: true, displayOrder: true },
           orderBy: { displayOrder: 'asc' },
@@ -61,21 +60,6 @@ export async function publishContent(
       return {
         success: false,
         error: 'Content not found',
-        retryable: false,
-      };
-    }
-
-    // If content is associated with a campaign, enforce campaign status
-    if (content.campaignId && content.campaign && content.campaign.status !== 'active') {
-      const status = String(content.campaign.status || '').toLowerCase() || 'unknown';
-      logger.warn('Publishing blocked: campaign is not active', {
-        contentId,
-        campaignId: content.campaignId,
-        campaignStatus: content.campaign.status,
-      });
-      return {
-        success: false,
-        error: `Cannot publish content for a ${status} campaign`,
         retryable: false,
       };
     }

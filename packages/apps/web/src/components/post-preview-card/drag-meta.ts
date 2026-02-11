@@ -11,17 +11,6 @@ export function getPostCardDragMeta(item: CalendarItem): PostCardDragMeta {
 
   const record = item as unknown as Record<string, unknown>;
 
-  const campaignStatus =
-    typeof record.campaignStatus === 'string' ? record.campaignStatus.trim() : '';
-  if (campaignStatus === 'paused') {
-    return {
-      show: true,
-      canDrag: false,
-      tooltip:
-        'Dragging is disabled because this campaign is paused. Unpause the campaign to reschedule posts.',
-    };
-  }
-
   const itemStatus = typeof record.status === 'string' ? record.status.trim() : '';
   if (itemStatus === 'published') {
     return { show: true, canDrag: false, tooltip: 'Published posts cannot be moved.' };

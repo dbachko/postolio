@@ -95,7 +95,7 @@ export function getContentDisplayStatus(content: Content): DisplayStatus {
         label: 'Skipped',
         showSpinner: false,
         variant: 'outline',
-        description: 'Content was skipped during campaign pause',
+        description: 'Content was skipped during publishing',
       };
 
     default:

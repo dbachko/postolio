@@ -1,6 +1,6 @@
 import type { HttpRequest } from '../http/http';
 
-import type { ImageProvider } from '@/types/campaign-wizard';
+import type { ImageProvider } from '@/types/image-providers';
 import type { Platform } from '@/lib/platform-config';
 
 type BrandImageProviderPreference = {

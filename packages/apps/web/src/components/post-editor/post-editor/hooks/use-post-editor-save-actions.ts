@@ -18,7 +18,6 @@ export function usePostEditorSaveActions(params: {
   formData: PostEditorFormState;
   hasChanges: boolean;
   firstCommentOpen: boolean;
-  selectedCampaign: string | null;
   selectedTargetSocialAccountId: string | null;
   scheduleBlocker: string | null;
   validation: { ok: boolean };
@@ -27,7 +26,6 @@ export function usePostEditorSaveActions(params: {
     contentId: string;
     caption?: string;
     scheduledAt?: string | null;
-    campaignId?: string | null;
     firstComment?: string;
     contentType?: InstagramContentType;
     shareToFeed?: boolean;
@@ -55,7 +53,6 @@ export function usePostEditorSaveActions(params: {
     queueSupportedForPost,
     scheduleBlocker,
     scheduleContentGroup,
-    selectedCampaign,
     selectedTargetSocialAccountId,
     validation,
     validationError,
@@ -138,7 +135,6 @@ export function usePostEditorSaveActions(params: {
       contentId: string;
       caption?: string;
       scheduledAt?: string | null;
-      campaignId?: string | null;
       firstComment?: string;
       contentType?: InstagramContentType;
       shareToFeed?: boolean;
@@ -146,7 +142,6 @@ export function usePostEditorSaveActions(params: {
     } = {
       contentId: id,
       caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
-      campaignId: selectedCampaign || null,
       firstComment:
         formData.contentType === 'story'
           ? ''
@@ -201,7 +196,6 @@ export function usePostEditorSaveActions(params: {
     post?.targetSocialAccountId,
     scheduleBlocker,
     scheduleContentGroup,
-    selectedCampaign,
     selectedTargetSocialAccountId,
     validation.ok,
     validationError,

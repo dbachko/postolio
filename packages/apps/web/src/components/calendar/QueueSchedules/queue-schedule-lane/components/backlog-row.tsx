@@ -47,18 +47,11 @@ export function BacklogRow({
 
   const contentStatus =
     typeof contentForRules?.status === 'string' ? String(contentForRules.status).trim() : '';
-  const campaignStatus =
-    typeof contentForRules?.campaignStatus === 'string'
-      ? String(contentForRules.campaignStatus).trim()
-      : '';
-  const blockedByCampaign = campaignStatus === 'paused';
   const blockedByStatus = contentStatus === 'published';
-  const canDrag = !scheduleAheadAtCapacity && !blockedByCampaign && !blockedByStatus;
+  const canDrag = !scheduleAheadAtCapacity && !blockedByStatus;
   const dragTooltip = (() => {
     if (canDrag) return 'Drag to schedule.';
     if (scheduleAheadAtCapacity) return scheduleLimitMessage;
-    if (blockedByCampaign)
-      return 'Dragging is disabled because this campaign is paused. Unpause the campaign to reschedule posts.';
     if (blockedByStatus) return 'Published posts cannot be moved.';
     return 'Dragging is disabled.';
   })();

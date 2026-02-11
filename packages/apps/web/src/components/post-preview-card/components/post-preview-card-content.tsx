@@ -8,7 +8,6 @@ import type { KeyboardEvent } from 'react';
 import type { PostCardDragMeta } from '../drag-meta';
 import { POST_PREVIEW_WIDE_MIN_WIDTH_PX } from '../constants';
 import type { PostStatus } from '../types';
-import { CampaignDotIndicator } from './campaign-dot-indicator';
 import { DestinationIndicator } from './destination-indicator';
 import { OptimisticIndicator } from './optimistic-indicator';
 import { PreviewImage } from './preview-image';
@@ -28,7 +27,6 @@ type PostPreviewCardContentProps = {
   onOpen: () => void;
   hideDestinations: boolean;
   socialAccountsById?: SocialAccountsById;
-  onOpenCampaign: (campaignId: string) => void;
 };
 
 export function PostPreviewCardContent({
@@ -45,7 +43,6 @@ export function PostPreviewCardContent({
   onOpen,
   hideDestinations,
   socialAccountsById,
-  onOpenCampaign,
 }: PostPreviewCardContentProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
@@ -65,7 +62,6 @@ export function PostPreviewCardContent({
     if (item.type === 'placeholder') return null;
     return (
       <div className="flex items-center gap-1">
-        <CampaignDotIndicator item={item} onOpenCampaign={onOpenCampaign} />
         <DestinationIndicator
           item={item}
           hideDestinations={hideDestinations}
@@ -73,7 +69,7 @@ export function PostPreviewCardContent({
         />
       </div>
     );
-  }, [hideDestinations, item, onOpenCampaign, socialAccountsById]);
+  }, [hideDestinations, item, socialAccountsById]);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {

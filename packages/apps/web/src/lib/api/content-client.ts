@@ -38,7 +38,6 @@ export class ContentClient {
     imageFile?: File;
     assetIds?: string[]; // Array of asset IDs (single image or carousel)
     contentType?: InstagramContentType;
-    campaignId?: string;
     scheduledAt?: string;
     shareToFeed?: boolean;
     firstComment?: string;
@@ -49,7 +48,6 @@ export class ContentClient {
       brandId: data.brandId,
       caption: data.caption,
     };
-    if (data.campaignId) body.campaignId = data.campaignId;
     if (data.scheduledAt) body.scheduledAt = data.scheduledAt;
     if (data.contentType) body.contentType = data.contentType;
     if (data.assetIds) body.assetIds = data.assetIds;

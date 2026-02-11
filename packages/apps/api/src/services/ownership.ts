@@ -13,15 +13,6 @@ type BrandOwnershipPayload = Prisma.BrandGetPayload<{
   };
 }>;
 
-type CampaignAccessPayload = Prisma.CampaignGetPayload<{
-  select: {
-    id: true;
-    brandId: true;
-    status: true;
-    name: true;
-  };
-}>;
-
 type SocialAccountAccessPayload = Prisma.SocialAccountGetPayload<{
   select: {
     id: true;
@@ -138,34 +129,6 @@ export async function assertPublishingQueueAccess(
   }
 
   return queue;
-}
-
-export async function assertCampaignAccess(
-  userId: string,
-  campaignId: string
-): Promise<CampaignAccessPayload> {
-  const campaign = await prisma.campaign.findFirst({
-    where: {
-      id: campaignId,
-      brand: {
-        userId,
-      },
-    },
-    select: {
-      id: true,
-      brandId: true,
-      status: true,
-      name: true,
-    },
-  });
-
-  if (!campaign) {
-    throw new APIError('Campaign not found or access denied', 'CAMPAIGN_NOT_FOUND', 404, {
-      campaignId,
-    });
-  }
-
-  return campaign;
 }
 
 export async function assertInstagramConnected(brandId: string): Promise<{

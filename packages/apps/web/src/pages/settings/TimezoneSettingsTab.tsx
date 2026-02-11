@@ -14,7 +14,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { auth as authApi, brand as brandApi } from '../../lib/api';
 import BrandTimezoneCard from './BrandTimezoneCard';
 import BrandImageProviderCard from './BrandImageProviderCard';
-import type { ImageProvider } from '@/types/campaign-wizard';
+import type { ImageProvider } from '@/types/image-providers';
 import { AsyncTimezoneCombobox } from '@/components/timezone/async-timezone-combobox';
 
 export default function TimezoneSettingsTab() {

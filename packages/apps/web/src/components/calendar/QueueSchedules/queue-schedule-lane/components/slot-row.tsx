@@ -47,17 +47,6 @@ export function SlotRow({
       typeof (estimatedItem as any)?.content?.status === 'string'
         ? String((estimatedItem as any).content.status).trim()
         : '';
-    const campaignStatus =
-      typeof (estimatedItem as any)?.content?.campaignStatus === 'string'
-        ? String((estimatedItem as any).content.campaignStatus).trim()
-        : '';
-    if (campaignStatus === 'paused') {
-      return {
-        disabled: true,
-        reason:
-          'Dragging is disabled because this campaign is paused. Unpause the campaign to reschedule posts.',
-      };
-    }
     if (status === 'published') {
       return { disabled: true, reason: 'Published posts cannot be moved.' };
     }
@@ -104,12 +93,6 @@ export function SlotRow({
         ? String((occupiedContent as any).status).trim()
         : '';
     if (status === 'published') return 'Published posts cannot be moved.';
-    const campaignStatus =
-      typeof (occupiedContent as any)?.campaignStatus === 'string'
-        ? String((occupiedContent as any).campaignStatus).trim()
-        : '';
-    if (campaignStatus === 'paused')
-      return 'Dragging is disabled because this campaign is paused. Unpause the campaign to reschedule posts.';
     return 'Dragging is disabled.';
   }, [
     canDrag,

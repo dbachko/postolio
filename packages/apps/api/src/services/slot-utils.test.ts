@@ -38,7 +38,7 @@ describe('computeUpcomingSlots (utils)', () => {
     expect(slots.length).toBe(4);
   });
 
-  it('keeps every2days cadence anchored to campaign start', async () => {
+  it('keeps every2days cadence anchored to start', async () => {
     vi.setSystemTime(new Date('2025-01-05T08:00:00Z'));
     const slots = await computeUpcomingSlots(
       new Date('2025-01-01T00:00:00Z'),

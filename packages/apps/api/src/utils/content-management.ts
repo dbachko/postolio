@@ -6,7 +6,6 @@ import { Prisma } from '@postolio/database';
 
 import { schedulerService } from '../services/scheduler.js';
 import { getAssetsClient } from '../services/assets-media.js';
-import { assertBrandOwnership, assertCampaignAccess } from '../services/ownership.js';
 import {
   validateContentPayload,
   type ContentType as ValidationContentType,
@@ -21,7 +20,6 @@ export interface CreateManualContentBody {
   caption: string;
   assetIds?: string[]; // Asset IDs from Assets database (single image or carousel)
   contentType?: ValidationContentType;
-  campaignId?: string;
   scheduledAt?: string;
   shareToFeed?: boolean;
   firstComment?: string;
@@ -212,21 +210,6 @@ export function validateInstagramContentForCreate(params: {
 }
 
 /**
- * Verifies brand ownership and optional campaign access
- */
-export async function verifyBrandAndCampaign(
-  userId: string,
-  brandId: string,
-  campaignId?: string
-): Promise<void> {
-  await assertBrandOwnership(userId, brandId);
-
-  if (campaignId) {
-    await assertCampaignAccess(userId, campaignId);
-  }
-}
-
-/**
  * Resolves and validates assets for content creation
  */
 export async function resolveAssets(
@@ -310,7 +293,6 @@ export async function createContentInTransaction(
     brandId: string;
     caption: string;
     contentType?: string;
-    campaignId?: string;
     scheduledAt?: string;
     shareToFeed?: boolean;
     firstComment?: string;
@@ -321,7 +303,6 @@ export async function createContentInTransaction(
   prismaClient: any
 ) {
   const status = params.scheduledAt ? 'scheduled' : 'draft';
-  const resolvedCampaignId = params.campaignId || null;
 
   return await prismaClient.$transaction(async (tx: any) => {
     const created = await tx.content.create({
@@ -330,7 +311,6 @@ export async function createContentInTransaction(
         hashtags: extractHashtagsFromCaption(params.caption),
         status,
         brandId: params.brandId,
-        campaignId: resolvedCampaignId,
         contentGroupId: params.contentGroupId ?? null,
         scheduledAt: params.scheduledAt ? new Date(params.scheduledAt) : null,
         contentType: params.contentType || 'post',
@@ -362,7 +342,6 @@ export async function createContentInTransaction(
         hashtags: true,
         status: true,
         brandId: true,
-        campaignId: true,
         contentGroupId: true,
         targetSocialAccountId: true,
         schedulingError: true,

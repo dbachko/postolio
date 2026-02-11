@@ -16,10 +16,6 @@ vi.mock('@/lib/api', () => ({
     publishPost: vi.fn(),
     deletePost: vi.fn(),
   },
-  campaign: {
-    getScheduleAheadLimit: vi.fn(),
-    listCampaigns: vi.fn(),
-  },
   analytics: {
     getPublicationsByContent: vi.fn(),
     getPublicationLatest: vi.fn(),
@@ -40,11 +36,7 @@ vi.mock('@/contexts/TimezoneContext', () => ({
   }),
 }));
 
-import {
-  content as contentApi,
-  analytics as analyticsApi,
-  campaign as campaignApi,
-} from '@/lib/api';
+import { content as contentApi, analytics as analyticsApi } from '@/lib/api';
 import { assetsApi } from '@/features/assets/api/client';
 
 describe('PostDetail', () => {
@@ -67,7 +59,6 @@ describe('PostDetail', () => {
         createdAt: '2025-12-08T00:00:00.000Z',
         updatedAt: '2025-12-08T00:00:00.000Z',
         brandId,
-        campaignId: null,
         schedulingError: null,
         firstComment: null,
         firstCommentStatus: null,
@@ -77,17 +68,12 @@ describe('PostDetail', () => {
         mediaAssetCount: 1,
         primaryAssetId: assetId,
         brand: { id: brandId, name: 'Brand' },
-        campaign: null,
         instagramPermalink: null,
       },
     });
 
     vi.mocked(analyticsApi.getPublicationsByContent).mockResolvedValue({ success: true, data: [] });
     vi.mocked(contentApi.getPostComments).mockResolvedValue({ data: { comments: [] } });
-    vi.mocked(campaignApi.getScheduleAheadLimit).mockResolvedValue({
-      data: { tier: 'test', maxAllowed: 10, currentCount: 0 },
-    } as any);
-    vi.mocked(campaignApi.listCampaigns).mockResolvedValue({ campaigns: [] } as any);
 
     vi.mocked(assetsApi.getBatchAssets).mockResolvedValue({
       assets: {

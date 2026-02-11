@@ -69,7 +69,7 @@ npm test -- test/microservices/integration-test.ts
 - Security validation
 - Performance optimizations
 - Error handling with circuit breakers
-- End-to-end campaign lifecycle
+- End-to-end scheduling and publishing lifecycle
 
 ### 3. Local Testing Script
 

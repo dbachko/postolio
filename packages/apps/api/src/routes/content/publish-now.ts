@@ -25,14 +25,6 @@ const publishNowRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(isImmutable ? 400 : 404).send({ error: authResult.error });
       }
 
-      const campaignStatus = authResult.data?.campaignStatus;
-      if (authResult.data?.campaignId && campaignStatus && campaignStatus !== 'active') {
-        return reply.code(400).send({
-          error: 'campaign_not_active',
-          message: `Cannot publish content for a ${String(campaignStatus).toLowerCase()} campaign`,
-        });
-      }
-
       const result = await schedulerService.publishNow(contentId, userId);
       if (!result.success) {
         return reply.code(400).send({

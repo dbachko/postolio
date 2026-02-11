@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { brand as brandApi, campaign as campaignApi, content as contentApi } from '@/lib/api';
-import type { Campaign, Content } from '@/lib/api';
+import { brand as brandApi, content as contentApi } from '@/lib/api';
+import type { Content } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import { useInstagramBestTime, useRefreshInstagramBestTime } from '@/hooks/useBestTime';
@@ -12,7 +12,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CommentsInboxItem } from './types';
 import { BestTimeCard } from './components/best-time-card';
-import { CampaignsCard } from './components/campaigns-card';
 import { CommentsCard } from './components/comments-card';
 import { DashboardKpis } from './components/dashboard-kpis';
 import { DraftsCard } from './components/drafts-card';
@@ -55,13 +54,6 @@ export function Dashboard() {
     queryFn: () => contentApi.getDrafts(brandId!),
     enabled: Boolean(brandId),
     staleTime: 10_000,
-  });
-
-  const campaignsQuery = useQuery({
-    queryKey: ['campaigns', brandId],
-    queryFn: () => campaignApi.listCampaigns(brandId),
-    enabled: Boolean(brandId),
-    staleTime: 15_000,
   });
 
   const commentsInboxQuery = useQuery({
@@ -129,15 +121,6 @@ export function Dashboard() {
   );
   const draftPreviewAssetsQuery = useAssetsByIds(draftPreviewAssetIds);
 
-  const campaigns = useMemo(
-    () => ((campaignsQuery.data as any)?.campaigns || []) as Campaign[],
-    [campaignsQuery.data]
-  );
-  const activeCampaigns = useMemo(
-    () => campaigns.filter((campaign) => campaign.status === 'active'),
-    [campaigns]
-  );
-
   const commentsInboxItems = useMemo(() => {
     const items = ((commentsInboxQuery.data as any)?.items || []) as Array<any>;
 
@@ -185,7 +168,7 @@ export function Dashboard() {
         <div className="space-y-2">
           <h2 className="text-foreground text-xl font-semibold">Welcome to Postolio</h2>
           <p className="text-muted-foreground text-sm">
-            Create your first brand to start campaigns, plan content, and track performance.
+            Create your first brand to start planning content and tracking performance.
           </p>
         </div>
         <Button size="lg" asChild>
@@ -229,7 +212,6 @@ export function Dashboard() {
         needsAttentionCount={needsAttentionCount}
         newCommentsCount={newCommentsCount}
         commentsInboxPostsCount={commentsInboxItems.length}
-        activeCampaignsCount={activeCampaigns.length}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -256,8 +238,6 @@ export function Dashboard() {
           brandTimezone={brandTimezone}
           onCreatePost={() => openSidebar('post-create')}
         />
-
-        <CampaignsCard isLoading={campaignsQuery.isLoading} campaigns={campaigns} />
 
         <DraftsCard
           isLoading={draftsQuery.isLoading}

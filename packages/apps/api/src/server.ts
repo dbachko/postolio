@@ -31,9 +31,7 @@ import contentRoutes from './routes/content/index.js';
 import videoRoutes from './routes/video.js';
 import analyticsRoutes from './routes/analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
-import campaignRoutes from './routes/campaign.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
-import forecastingRoutes from './routes/forecasting.js';
 import recommendationsRoutes from './routes/recommendations.js';
 import publicationsRoutes from './routes/publications.js';
 import brandStyleRoutes from './routes/brand-style.js';
@@ -57,6 +55,9 @@ import savedRepliesRoutes from './routes/saved-replies.js';
 import snippetsRoutes from './routes/snippets.js';
 import imageProviderRoutes from './routes/image-providers.js';
 import publishingQueuesRoutes from './routes/publishing-queues.js';
+import recipesRoutes from './routes/recipes.js';
+import skillsRoutes from './routes/skills.js';
+import runsRoutes from './routes/runs.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import type { Redis } from 'ioredis';
@@ -279,10 +280,7 @@ export function buildFastify(): FastifyInstance {
   // All analytics (scheduler + v2) under /api/analytics/*
   app.register(analyticsRoutes, { prefix: '/api' });
   app.register(autopilotRoutes, { prefix: '/api/autopilot' });
-  // Mount campaigns at plural REST path
-  app.register(campaignRoutes, { prefix: '/api/campaigns' });
   app.register(aiInsightsRoutes, { prefix: '/api/ai-insights' }); // AI-powered insights
-  app.register(forecastingRoutes, { prefix: '/api/forecasting' }); // Predictive analytics
   app.register(recommendationsRoutes, { prefix: '/api/recommendations' }); // Smart recommendations
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' });
   app.register(legalRoutes, { prefix: '/api/legal' });
@@ -325,6 +323,11 @@ export function buildFastify(): FastifyInstance {
 
   // Image Providers API
   app.register(imageProviderRoutes, { prefix: '/api/image-providers' });
+
+  // Recipes + Skills + Runs
+  app.register(recipesRoutes, { prefix: '/api/recipes' });
+  app.register(skillsRoutes, { prefix: '/api/skills' });
+  app.register(runsRoutes, { prefix: '/api/runs' });
 
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload
@@ -481,10 +484,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
       const statusBroadcaster = new StatusBroadcaster(app, redis);
       schedulerAdapter.setBroadcaster(statusBroadcaster);
-
-      // Inject status broadcaster into campaign service for real-time updates
-      const { campaignService } = await import('./services/campaign.js');
-      campaignService.setStatusBroadcaster(statusBroadcaster);
 
       // Make broadcaster available to background jobs
       const { setStatusBroadcaster } = await import('./services/broadcast-registry.js');

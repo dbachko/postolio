@@ -1,7 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Filter, Search, X } from 'lucide-react';
-import { campaign as campaignApi, type Campaign } from '@/lib/api';
 import { useCalendarFilterStore, type ContentStatus } from '@/stores/calendarFilterStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -10,67 +8,24 @@ import { Input } from '@/components/ui/input';
 import { STATUS_OPTIONS } from '../utils';
 import { getPostStatusTextClass } from '@/utils/post-status-colors';
 
-interface ContentFiltersBarProps {
-  brandId: string;
-}
-
-export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
+export function ContentFiltersBar() {
   const [isOpen, setIsOpen] = useState(false);
-  const campaigns = useCalendarFilterStore((s) => s.campaigns);
   const statuses = useCalendarFilterStore((s) => s.statuses);
   const searchQuery = useCalendarFilterStore((s) => s.searchQuery);
-  const setCampaigns = useCalendarFilterStore((s) => s.setCampaigns);
   const setStatuses = useCalendarFilterStore((s) => s.setStatuses);
   const setSearchQuery = useCalendarFilterStore((s) => s.setSearchQuery);
   const clearAll = useCalendarFilterStore((s) => s.clearAll);
   const toggleStatus = useCalendarFilterStore((s) => s.toggleStatus);
 
-  const { data: campaignsData } = useQuery({
-    queryKey: ['campaigns', brandId],
-    queryFn: () => campaignApi.listCampaigns(brandId),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const allCampaigns = (campaignsData?.campaigns || []) as Campaign[];
-
-  const campaignOptions = useMemo(() => {
-    return [
-      { label: 'No campaign', value: 'none', color: 'hsl(var(--muted-foreground))' as const },
-      ...allCampaigns.map((campaign) => ({
-        label: campaign.name,
-        value: campaign.id,
-        color: campaign.color ?? null,
-      })),
-    ];
-  }, [allCampaigns]);
-
-  const hasAnyActiveFilters = campaigns.length > 0 || statuses.length > 0 || !!searchQuery;
-  const activeFilterCount =
-    (campaigns.length > 0 ? 1 : 0) + (statuses.length > 0 ? 1 : 0) + (searchQuery ? 1 : 0);
+  const hasAnyActiveFilters = statuses.length > 0 || !!searchQuery;
+  const activeFilterCount = (statuses.length > 0 ? 1 : 0) + (searchQuery ? 1 : 0);
   const isFiltersActive = isOpen || hasAnyActiveFilters;
-
-  const toggleCampaign = (campaignId: string) => {
-    const cleanId = campaignId.trim();
-    if (!cleanId) return;
-    const next = campaigns.includes(cleanId)
-      ? campaigns.filter((c) => c !== cleanId)
-      : [...campaigns, cleanId];
-    setCampaigns(next);
-  };
   const statusIcon: Record<ContentStatus, React.ComponentType<{ className?: string }>> = {
     draft: Clock,
     scheduled: Clock,
     published: CheckCircle2,
     failed: AlertTriangle,
     skipped: AlertTriangle,
-  };
-
-  const campaignColorById = (id: string): string => {
-    if (id === 'none') return 'hsl(var(--muted-foreground))';
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-    const hue = hash % 360;
-    return `hsl(${hue} 68% 48%)`;
   };
 
   return (
@@ -105,9 +60,7 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <h3 className="text-base font-semibold">Calendar Filters</h3>
-                <p className="text-muted-foreground text-sm">
-                  Filter by status, campaign, or search.
-                </p>
+                <p className="text-muted-foreground text-sm">Filter by status or search.</p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -152,7 +105,7 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
                   <Input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search captions, hashtags, or campaigns"
+                    placeholder="Search captions or hashtags"
                     className="h-9 pr-10 pl-9"
                   />
                   {searchQuery && (
@@ -212,57 +165,6 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
                           <Icon className="h-4 w-4" />
                         </span>
                         <span className="text-sm">{option.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="bg-background rounded-lg border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Campaigns</div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary hover:text-primary h-auto px-0 py-0 text-sm font-medium hover:bg-transparent"
-                    disabled={campaigns.length === 0}
-                    onClick={() => setCampaigns([])}
-                  >
-                    Unselect all
-                  </Button>
-                </div>
-
-                <div className="max-h-[17rem] space-y-1 overflow-auto pr-1">
-                  {campaignOptions.map((option) => {
-                    const checked = campaigns.includes(option.value);
-                    const id = `calendar-filter-campaign-${option.value}`;
-                    const campaignColor =
-                      typeof (option as any).color === 'string' &&
-                      (option as any).color.trim().length > 0
-                        ? String((option as any).color).trim()
-                        : campaignColorById(option.value);
-                    return (
-                      <label
-                        key={option.value}
-                        htmlFor={id}
-                        className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1"
-                      >
-                        <Checkbox
-                          id={id}
-                          checked={checked}
-                          onCheckedChange={() => toggleCampaign(option.value)}
-                          className="h-3.5 w-3.5"
-                        />
-                        <span
-                          className={cn(
-                            'border-border inline-flex h-3 w-3 shrink-0 rounded-full border',
-                            checked ? 'opacity-100' : 'opacity-40'
-                          )}
-                          style={{ backgroundColor: campaignColor }}
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 truncate text-sm">{option.label}</span>
                       </label>
                     );
                   })}

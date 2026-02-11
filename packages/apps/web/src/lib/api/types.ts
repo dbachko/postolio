@@ -44,18 +44,6 @@ export interface Content {
   createdAt: string;
   updatedAt: string;
   brandId: string;
-  campaignId?: string | null;
-  campaignName?: string | null;
-  campaignColor?: string | null;
-  campaignStatus?:
-    | 'creating'
-    | 'preview'
-    | 'active'
-    | 'paused'
-    | 'completed'
-    | 'failed'
-    | 'processing'
-    | null;
   permalink?: string | null;
   schedulingError?: string | null;
   publishingQueueItemId?: string | null;
@@ -116,68 +104,6 @@ export interface LoginHistoryItem {
 export interface LoginHistoryResponse {
   history: LoginHistoryItem[];
   total: number;
-}
-
-export interface CampaignConfig {
-  name: string;
-  brandId: string;
-  duration: { start: string | Date; end: string | Date };
-  frequency: string;
-  themes: string[];
-  style: string;
-  postingTime: string;
-  priority?: number;
-  campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
-  promotionDetails?: { discountPercentage?: number; promoCode?: string; limitedQuantity?: boolean };
-  contentPillars?: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
-  goals?: string[];
-  seasonalityAssist?: boolean;
-}
-
-export interface CampaignPreview {
-  campaignId: string;
-  configId: string;
-  examplePosts: Content[];
-  campaignPlan: {
-    name: string;
-    duration: { start: string; end: string };
-    estimatedTotalPosts: number;
-    postingSchedule: string;
-    themes: string[];
-    style: string;
-    postingTime: string;
-  };
-}
-
-export interface Campaign {
-  id: string;
-  name: string;
-  status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing';
-  brandId: string;
-  color?: string | null;
-  priority?: number;
-  config?: {
-    duration?: { start: string; end: string };
-    frequency?: string;
-    themes?: string[];
-    style?: string | string[];
-    postingTime?: string;
-    priority?: number;
-  };
-  // In list views, content is omitted to reduce payload. Keep optional.
-  content?: Content[];
-  // Lightweight counts returned by list endpoint
-  contentCount?: number;
-  scheduledCount?: number;
-  publishedCount?: number;
-  errorMessage?: string | null;
-  previewGenerated?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  lastModifiedAt?: string;
-  lastModifiedBy?: string;
 }
 
 export interface Notification {

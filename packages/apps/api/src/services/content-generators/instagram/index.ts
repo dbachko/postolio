@@ -5,17 +5,11 @@ import { contentLogger } from '../logger.js';
 import { enforceHashtagDiversity } from '../hashtag-utils.js';
 import { generateBrandContentImage } from '../image-generation.js';
 import type { ContentGenerationRequest, GeneratedContent, ContentGenerator } from '../types.js';
-import {
-  loadBrandContext,
-  loadCampaignContext,
-  loadRecentContentWindow,
-  loadBrandLocation,
-} from './context.js';
-import { buildPromoHint, buildSystemPrompt } from './prompt.js';
+import { loadBrandContext, loadRecentContentWindow, loadBrandLocation } from './context.js';
+import { buildSystemPrompt } from './prompt.js';
 import { buildFallbackGeneratedContent } from './fallback.js';
 import { instagramResponseSchema, parseInstagramResponse } from './schema.js';
 import { getInstagramSamplingConfig } from './config.js';
-import type { CampaignContext } from './types.js';
 
 export const generateInstagramContent: ContentGenerator = async (
   brandName,
@@ -26,7 +20,6 @@ export const generateInstagramContent: ContentGenerator = async (
     reqId,
     brandId: request.brandId,
     count: request.count,
-    campaignId: request.campaignId,
   });
 
   const openai = getOpenAIClient();
@@ -67,10 +60,6 @@ export const generateInstagramContent: ContentGenerator = async (
 
   const { count, theme, style } = request;
 
-  const campaignContext = request.campaignId
-    ? await loadCampaignContext(request.campaignId, reqId)
-    : null;
-
   const brandContext = await loadBrandContext(request.brandId, reqId);
   const brandLocation = await loadBrandLocation(request.brandId, reqId);
 
@@ -83,20 +72,6 @@ export const generateInstagramContent: ContentGenerator = async (
     : [];
 
   const { priorOpeners, priorHashtagUsage } = await loadRecentContentWindow(request.brandId, reqId);
-
-  const campaignType = campaignContext?.campaignType || undefined;
-  const campaignThemes: string[] = Array.isArray(campaignContext?.config?.themes)
-    ? (campaignContext!.config!.themes as string[]).slice(0, 6)
-    : [];
-
-  let pillarNames: string[] = [];
-  if (campaignContext?.contentPillars && typeof campaignContext.contentPillars === 'object') {
-    const cp = campaignContext.contentPillars as { pillars?: Array<{ name: string }> };
-    const pillars = cp.pillars;
-    pillarNames = Array.isArray(pillars) ? pillars.map((pillar) => pillar.name).slice(0, 6) : [];
-  }
-
-  const promoHint = buildPromoHint(campaignContext);
   const nowISODate = new Date().toISOString().slice(0, 10);
   const brandCountryCode = (brandLocation?.countryCode as string | null | undefined) ?? null;
   const brandTimezone = (brandLocation?.postingTimezone as string | null | undefined) ?? null;
@@ -111,11 +86,6 @@ export const generateInstagramContent: ContentGenerator = async (
     motifs,
     composition,
     topTopics,
-    campaignContext,
-    campaignType,
-    campaignThemes,
-    pillarNames,
-    promoHint,
     theme,
     style,
     dynamicBannedStarts,
@@ -255,7 +225,6 @@ export const generateInstagramContent: ContentGenerator = async (
             {
               preferredProvider: request.imageProvider,
               brandId: request.brandId,
-              campaignId: request.campaignId,
             }
           );
           const imageUrl = imageResult.imageUrl;

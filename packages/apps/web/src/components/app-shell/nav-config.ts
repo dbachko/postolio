@@ -1,15 +1,18 @@
 import {
   BarChart3,
+  BookOpen,
   ClipboardList,
   FileEdit,
   FileText,
   Images,
-  Megaphone,
   MessageSquare,
+  PlayCircle,
   Send,
   Settings,
   Users,
+  Wrench,
 } from 'lucide-react';
+import type { ComponentType, SVGProps } from 'react';
 
 export type NavMatchType = 'exact' | 'startsWith';
 
@@ -38,6 +41,13 @@ export const mainNavItems: NavigationItem[] = [
     matchType: 'exact',
   },
   {
+    label: 'Recipes',
+    path: '/recipes',
+    icon: BookOpen,
+    description: 'Reusable workflows',
+    matchType: 'exact',
+  },
+  {
     label: 'Assets',
     path: '/assets',
     icon: Images,
@@ -50,13 +60,6 @@ export const mainNavItems: NavigationItem[] = [
     icon: ClipboardList,
     description: 'Reusable caption snippets',
     matchType: 'exact',
-  },
-  {
-    label: 'Campaigns',
-    path: '/campaigns',
-    icon: Megaphone,
-    description: 'Manage content campaigns',
-    matchType: 'startsWith',
   },
   {
     label: 'Inbox',
@@ -101,6 +104,20 @@ export const auxNavItems: NavigationItem[] = [
     description: 'Automated DM responses',
     matchType: 'exact',
   },
+  {
+    label: 'Skills',
+    path: '/skills',
+    icon: Wrench,
+    description: 'Configure skills and BYOK',
+    matchType: 'exact',
+  },
+  {
+    label: 'Runs',
+    path: '/runs',
+    icon: PlayCircle,
+    description: 'Execution history',
+    matchType: 'startsWith',
+  },
 ];
 
 export const allNavItems: NavigationItem[] = [
@@ -115,4 +132,3 @@ export const isRouteActive = (item: NavigationItem, currentPath: string): boolea
   }
   return currentPath === item.path;
 };
-import type { ComponentType, SVGProps } from 'react';

@@ -10,15 +10,6 @@ vi.mock('../../plugins/csrf-auto-protect.js', () => ({
   default: (async () => {}) as any,
 }));
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // Disable Redis-backed rate limiting in these tests.
 vi.mock('../../services/redis.js', () => {
   const redisService = {
@@ -47,10 +38,6 @@ vi.mock('../../services/ownership.js', () => ({
   })),
 }));
 
-vi.mock('../../services/placeholderService.js', () => ({
-  computePlaceholders: vi.fn(async () => []),
-}));
-
 vi.mock('../../services/timezone.js', () => ({
   TimezoneService: {
     getBrandTimezone: vi.fn(async () => 'UTC'),
@@ -72,8 +59,6 @@ vi.mock('../../config/database.js', () => {
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
     brandId: 'brand-1',
-    campaignId: 'camp-1',
-    campaign: { id: 'camp-1', name: 'Campaign', color: '#000000' },
     publications: [
       {
         platform: 'instagram',
@@ -102,9 +87,6 @@ vi.mock('../../config/database.js', () => {
 
         return [contentRecord];
       }),
-    },
-    campaign: {
-      findMany: vi.fn(async () => []),
     },
   } as any;
 

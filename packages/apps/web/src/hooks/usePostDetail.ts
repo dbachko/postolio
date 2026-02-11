@@ -35,12 +35,6 @@ export interface PostDetailData {
       operationId?: string;
     };
   };
-  campaignId?: string | null;
-  campaign?: {
-    id: string;
-    name: string;
-    status?: string;
-  } | null;
 }
 
 export function usePostDetail(postId: string | undefined): UseQueryResult<PostDetailData> {

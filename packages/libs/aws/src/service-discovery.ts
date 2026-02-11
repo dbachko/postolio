@@ -19,7 +19,6 @@ const SERVICE_PARAMETER_TEMPLATES: Record<string, string> = {
   publisher: '/postolio/{env}/publishing/publisher-url',
   'retry-handler': '/postolio/{env}/publishing/retry-handler-url',
   'dlq-processor': '/postolio/{env}/publishing/dlq-processor-url',
-  'campaign-dlq-processor': '/postolio/{env}/publishing/campaign-dlq-processor-url',
 };
 
 export interface ServiceEndpoint {

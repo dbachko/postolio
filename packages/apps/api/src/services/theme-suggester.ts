@@ -2,13 +2,6 @@ import { getBrandProfileContext } from './brand-profile.js';
 import { classifyTopicsToCanonical, canonicalizeTopic } from '@postolio/taxonomy';
 import { getDatabaseClient } from '../config/database.js';
 
-export type CampaignType =
-  | 'promotional'
-  | 'educational'
-  | 'seasonal'
-  | 'thought_leadership'
-  | 'custom';
-
 export interface ThemeSuggestion {
   value: string;
   score: number; // 0..1
@@ -17,61 +10,15 @@ export interface ThemeSuggestion {
   reasons?: string[];
 }
 
-const FALLBACK_BY_TYPE: Record<CampaignType, string[]> = {
-  promotional: [
-    'product showcase',
-    'customer stories',
-    'limited-time offer',
-    'bundle & save',
-    'new arrivals',
-    'behind the scenes',
-  ],
-  educational: [
-    'tips & tutorials',
-    'how-to guides',
-    'best practices',
-    'common mistakes',
-    'industry insights',
-    'faq',
-  ],
-  seasonal: ['seasonal content', 'holiday stories', 'event highlights', 'gift guides'],
-  thought_leadership: [
-    'industry insights',
-    'trends & predictions',
-    'opinion pieces',
-    'case studies',
-    'customer stories',
-  ],
-  custom: ['product showcase', 'tips & tutorials', 'company culture', 'user generated content'],
-};
-
-const BOOST_TERMS: Record<Exclude<CampaignType, 'custom'>, string[]> = {
-  promotional: [
-    'offer',
-    'sale',
-    'deal',
-    'discount',
-    'limited',
-    'launch',
-    'product',
-    'new',
-    'drop',
-    'bundle',
-    'testimonial',
-    'customer',
-  ],
-  educational: ['tips', 'tutorial', 'how to', 'guide', 'best practice', 'mistake', 'faq'],
-  seasonal: ['season', 'holiday', 'black friday', 'christmas', 'summer', 'winter', 'event'],
-  thought_leadership: [
-    'insight',
-    'trend',
-    'opinion',
-    'analysis',
-    'prediction',
-    'industry',
-    'state of',
-  ],
-};
+const FALLBACK_THEMES: string[] = [
+  'product showcase',
+  'customer stories',
+  'tips & tutorials',
+  'behind the scenes',
+  'company culture',
+  'industry insights',
+  'faq',
+];
 
 function normalize(str: string): string {
   return str.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 64);
@@ -126,37 +73,11 @@ export async function storeUserThemes(brandId: string, themes: string[]): Promis
   }
 }
 
-function boostScoreByCampaignType(value: string, type?: CampaignType): number {
-  if (!type || type === 'custom') return 0;
-  const terms = BOOST_TERMS[type] || [];
-  const v = ` ${value.toLowerCase()} `;
-  let boost = 0;
-  for (const t of terms) {
-    if (v.includes(` ${t} `) || v.includes(` ${t}s `)) boost += 0.05;
-  }
-  return Math.min(0.25, boost); // cap boost
-}
-
-function boostScoreByGoals(value: string, goals?: string): number {
-  if (!goals) return 0;
-  const g = goals.toLowerCase();
-  const v = value.toLowerCase();
-  let boost = 0;
-  // very light keyword matching
-  if (/awareness|reach|visibility/.test(g) && /awareness|trend|viral/.test(v)) boost += 0.05;
-  if (/conversion|sales|revenue|checkout|signup/.test(g) && /testimonial|product|offer/.test(v))
-    boost += 0.075;
-  if (/education|learn|teach|inform/.test(g) && /tips|how|guide|faq/.test(v)) boost += 0.075;
-  return Math.min(0.2, boost);
-}
-
 export async function suggestThemes(params: {
   brandId: string;
-  campaignType?: CampaignType | null;
-  goals?: string | null;
   limit?: number;
 }): Promise<{ suggestions: ThemeSuggestion[] }> {
-  const { brandId, campaignType, goals, limit = 8 } = params;
+  const { brandId, limit = 8 } = params;
 
   const ctx = await getBrandProfileContext(brandId);
   const prisma = getDatabaseClient();
@@ -232,7 +153,7 @@ export async function suggestThemes(params: {
         value: normalize(value),
         score: 1 - index * 0.01,
         source: 'user',
-        reasons: ['Saved from your previous campaigns'],
+        reasons: ['Saved from your previous posts'],
       });
     });
   } catch (err) {
@@ -261,9 +182,7 @@ export async function suggestThemes(params: {
       const base = Math.max(0.1, c.score);
       const perf = performanceByTheme.get(v) || 0;
       const perfBoost = perf > 0 ? Math.min(0.2, perf * 0.4) : 0; // cap boost
-      const ctBoost = boostScoreByCampaignType(v, (campaignType || undefined) as CampaignType);
-      const goalBoost = boostScoreByGoals(v, goals || undefined);
-      const score = Math.min(1, base + ctBoost + goalBoost + perfBoost);
+      const score = Math.min(1, base + perfBoost);
       const reasons: string[] = [];
       const contrib = topicContribution.get(v);
       if (contrib && contrib.size) {
@@ -273,8 +192,6 @@ export async function suggestThemes(params: {
           .map(([name]) => name);
         if (top.length) reasons.push(`Topics: ${top.join(', ')}`);
       }
-      if (ctBoost > 0) reasons.push(`Campaign boost +${Math.round(ctBoost * 100)}%`);
-      if (goalBoost > 0) reasons.push(`Goals boost +${Math.round(goalBoost * 100)}%`);
       if (perfBoost > 0) reasons.push(`Performance +${Math.round(perf * 100)}% vs avg`);
       reasons.push('Source: brand topics');
       out.push({ value: v, score, source: 'profile', perfDelta: perf, reasons });
@@ -294,10 +211,8 @@ export async function suggestThemes(params: {
       const k = normalize(theme);
       const perf = performanceByTheme.get(k) || 0;
       const perfBoost = perf > 0 ? Math.min(0.2, perf * 0.4) : 0;
-      const ctBoost = boostScoreByCampaignType(k, (campaignType || undefined) as CampaignType);
-      const s = 0.35 + ctBoost + perfBoost;
+      const s = 0.35 + perfBoost;
       const reasons: string[] = [`Tone: ${tone}`];
-      if (ctBoost > 0) reasons.push(`Campaign boost +${Math.round(ctBoost * 100)}%`);
       if (perfBoost > 0) reasons.push(`Performance +${Math.round(perf * 100)}% vs avg`);
       reasons.push('Source: tone heuristic');
       out.push({
@@ -321,20 +236,17 @@ export async function suggestThemes(params: {
 
   // 3) Fallbacks if insufficient data
   if (suggestions.length < Math.min(4, limit)) {
-    const type = (campaignType || 'custom') as CampaignType;
-    const fb = (FALLBACK_BY_TYPE[type] || FALLBACK_BY_TYPE.custom).map((v, i) => {
+    const fb = FALLBACK_THEMES.map((v, i) => {
       const k = normalize(v);
       const perf = performanceByTheme.get(k) || 0;
       const perfBoost = perf > 0 ? Math.min(0.15, perf * 0.3) : 0;
-      const ctBoost = boostScoreByCampaignType(k, (campaignType || undefined) as CampaignType);
       return {
         value: k,
-        score: 0.28 - i * 0.02 + perfBoost + ctBoost,
+        score: 0.28 - i * 0.02 + perfBoost,
         source: 'fallback' as const,
         perfDelta: perf,
         reasons: [
-          'Source: campaign defaults',
-          ctBoost > 0 ? `Campaign boost +${Math.round(ctBoost * 100)}%` : undefined,
+          'Source: defaults',
           perfBoost > 0 ? `Performance +${Math.round(perf * 100)}% vs avg` : undefined,
         ].filter(Boolean) as string[],
       };

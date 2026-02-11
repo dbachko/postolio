@@ -9,7 +9,6 @@ interface BaseMessage<T extends string> {
 type PingMessage = BaseMessage<'ping'>;
 interface SubscribeMessage extends BaseMessage<'subscribe'> {
   brandId?: string;
-  campaignId?: string;
   rooms?: string[]; // Support subscribing to multiple rooms
 }
 type UnsubscribeMessage = BaseMessage<'unsubscribe'>;
@@ -24,7 +23,6 @@ type OutboundPayload =
   | {
       type: 'subscribed';
       brandId?: string;
-      campaignId?: string;
       rooms?: string[];
       timestamp: string;
     }
@@ -290,11 +288,6 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
     socket.brandId = message.brandId; // Keep for backward compatibility
   }
 
-  // Handle campaign subscription
-  if (message.campaignId) {
-    roomsToSubscribe.push(`campaign:${message.campaignId}`);
-  }
-
   // Handle explicit rooms array
   if (message.rooms && Array.isArray(message.rooms)) {
     roomsToSubscribe.push(...message.rooms);
@@ -304,7 +297,7 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
     socket.send(
       JSON.stringify({
         type: 'error',
-        message: 'At least one room identifier required (brandId, campaignId, or rooms)',
+        message: 'At least one room identifier required (brandId or rooms)',
       })
     );
     return;
@@ -335,7 +328,6 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
     JSON.stringify({
       type: 'subscribed',
       brandId: message.brandId,
-      campaignId: message.campaignId,
       rooms: Array.from(socket.subscribedRooms),
       timestamp: new Date().toISOString(),
     })

@@ -22,7 +22,6 @@ export const PlatformEventSchema = z.object({
     'postolio.content',
     'postolio.scheduler',
     'postolio.platform',
-    'postolio.campaign',
     'postolio.analytics',
     'postolio.token',
   ]),
@@ -41,7 +40,6 @@ export const ContentCreatedEventSchema = PlatformEventSchema.extend({
     brandId: z.string(),
     caption: z.string(),
     mediaUrl: z.string().url().optional(),
-    campaignId: z.string().optional(),
     status: z.enum(['draft', 'scheduled', 'published']),
   }),
 });
@@ -160,49 +158,6 @@ export const PostFailedEventSchema = PlatformEventSchema.extend({
   }),
 });
 
-// Campaign Events
-export const CampaignCreatedEventSchema = PlatformEventSchema.extend({
-  source: z.literal('postolio.campaign'),
-  type: z.literal('campaign.created'),
-  data: z.object({
-    campaignId: z.string(),
-    brandId: z.string(),
-    name: z.string(),
-    config: z.object({
-      duration: z.number(),
-      frequency: z.enum(['daily', 'weekly']),
-      themes: z.array(z.string()),
-      priority: z.number().min(1).max(10),
-    }),
-    scheduleCount: z.number(),
-  }),
-});
-
-export const CampaignStartedEventSchema = PlatformEventSchema.extend({
-  source: z.literal('postolio.campaign'),
-  type: z.literal('campaign.started'),
-  data: z.object({
-    campaignId: z.string(),
-    brandId: z.string(),
-    startedAt: z.string().datetime(),
-  }),
-});
-
-export const CampaignCompletedEventSchema = PlatformEventSchema.extend({
-  source: z.literal('postolio.campaign'),
-  type: z.literal('campaign.completed'),
-  data: z.object({
-    campaignId: z.string(),
-    brandId: z.string(),
-    completedAt: z.string().datetime(),
-    stats: z.object({
-      totalPosts: z.number(),
-      publishedPosts: z.number(),
-      failedPosts: z.number(),
-    }),
-  }),
-});
-
 // Token Events
 export const TokenRefreshedEventSchema = PlatformEventSchema.extend({
   source: z.literal('postolio.token'),
@@ -235,9 +190,6 @@ export const EventSchemaRegistry = {
   'schedule.ready': ScheduleReadyEventSchema,
   'post.published': PostPublishedEventSchema,
   'post.failed': PostFailedEventSchema,
-  'campaign.created': CampaignCreatedEventSchema,
-  'campaign.started': CampaignStartedEventSchema,
-  'campaign.completed': CampaignCompletedEventSchema,
   'token.refreshed': TokenRefreshedEventSchema,
   'token.expired': TokenExpiredEventSchema,
 } as const;
@@ -253,9 +205,6 @@ export type ScheduleCanceledEvent = z.infer<typeof ScheduleCanceledEventSchema>;
 export type ScheduleReadyEvent = z.infer<typeof ScheduleReadyEventSchema>;
 export type PostPublishedEvent = z.infer<typeof PostPublishedEventSchema>;
 export type PostFailedEvent = z.infer<typeof PostFailedEventSchema>;
-export type CampaignCreatedEvent = z.infer<typeof CampaignCreatedEventSchema>;
-export type CampaignStartedEvent = z.infer<typeof CampaignStartedEventSchema>;
-export type CampaignCompletedEvent = z.infer<typeof CampaignCompletedEventSchema>;
 export type TokenRefreshedEvent = z.infer<typeof TokenRefreshedEventSchema>;
 export type TokenExpiredEvent = z.infer<typeof TokenExpiredEventSchema>;
 

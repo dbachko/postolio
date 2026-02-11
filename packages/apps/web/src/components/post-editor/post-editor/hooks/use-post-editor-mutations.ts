@@ -37,7 +37,6 @@ export function usePostEditorMutations(params: {
       contentId: string;
       caption?: string;
       scheduledAt?: string | null;
-      campaignId?: string | null;
       firstComment?: string;
       contentType?: InstagramContentType;
       shareToFeed?: boolean;

@@ -19,7 +19,7 @@ export const VisualSectionSchema = z.object({
 });
 
 export const OverlaySchema = z.object({
-  type: z.enum(['SEASONAL', 'TRENDING', 'CAMPAIGN']),
+  type: z.enum(['SEASONAL', 'TRENDING']),
   label: z.string().optional(),
   createdAt: z
     .string()
@@ -35,7 +35,6 @@ export const OverlaySchema = z.object({
   source: z
     .object({
       reason: z.string().optional(),
-      campaignId: z.string().optional(),
       sampleSize: z.number().int().optional(),
       effectEstimate: z.number().optional(),
       method: z.string().optional(),

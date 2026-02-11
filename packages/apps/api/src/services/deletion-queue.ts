@@ -116,15 +116,6 @@ export class DeletionQueueService {
         },
       });
 
-      // Delete campaigns
-      await tx.campaign.deleteMany({
-        where: {
-          brand: {
-            userId,
-          },
-        },
-      });
-
       // Delete brands
       await tx.brand.deleteMany({
         where: { userId },

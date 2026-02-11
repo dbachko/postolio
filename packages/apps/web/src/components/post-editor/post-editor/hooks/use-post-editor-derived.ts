@@ -33,8 +33,6 @@ export function usePostEditorDerived(params: {
   limitMessage: string;
   formData: PostEditorFormState;
   firstCommentOpen: boolean;
-  selectedCampaign: string | null;
-  selectedCampaignPaused: boolean | undefined;
   selectedPlatformAccountIds: string[];
   platformPickerOptions: SocialAccountsPickerOption[];
   selectedPlatforms: Platform[];
@@ -59,8 +57,6 @@ export function usePostEditorDerived(params: {
     post,
     publishingSupported,
     schedulingSupported,
-    selectedCampaign,
-    selectedCampaignPaused,
     selectedPlatformAccountIds,
     selectedPlatforms,
   } = params;
@@ -207,7 +203,6 @@ export function usePostEditorDerived(params: {
     validationOk: validation.ok,
     validationError,
     hasScheduleTime: Boolean(formData.scheduledAt),
-    pausedCampaign: Boolean(selectedCampaignPaused),
     hasSelectedPlatforms,
     schedulingSupported: effectiveSchedulingSupported,
   });
@@ -216,22 +211,16 @@ export function usePostEditorDerived(params: {
   const hasDraftInputs =
     Boolean((formData.caption || '').trim()) ||
     (firstCommentOpen && Boolean((formData.firstComment || '').trim())) ||
-    (formData.carouselAssets?.length ?? 0) > 0 ||
-    Boolean(selectedCampaign);
+    (formData.carouselAssets?.length ?? 0) > 0;
   const saveDraftDisabled = !hasDraftInputs;
   const saveDraftBlocker = saveDraftDisabled
-    ? 'Add a caption, media, first comment, or campaign before saving a draft.'
+    ? 'Add a caption, media, or first comment before saving a draft.'
     : null;
 
-  const publishNowDisabled =
-    !validation.ok ||
-    !hasSelectedPlatforms ||
-    !publishingSupported ||
-    Boolean(selectedCampaignPaused);
+  const publishNowDisabled = !validation.ok || !hasSelectedPlatforms || !publishingSupported;
   const publishNowBlocker = (() => {
     if (!hasSelectedPlatforms) return 'Select at least one destination in Destinations.';
     if (!publishingSupported) return 'Publishing is not available for this destination.';
-    if (selectedCampaignPaused) return 'Cannot publish content for a paused campaign.';
     if (!validation.ok) return validationError || 'Please fix validation errors before continuing.';
     return null;
   })();

@@ -31,15 +31,6 @@ vi.mock('../../../services/redis.js', () => {
   };
 });
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // Force publish-now to always authorize for these tests.
 vi.mock('../../../services/content-operations/authorization.js', async () => {
   const actual = await vi.importActual<any>(
@@ -50,7 +41,7 @@ vi.mock('../../../services/content-operations/authorization.js', async () => {
     ...actual,
     verifyContentEditable: vi.fn(async () => ({
       authorized: true,
-      data: { campaignId: null, campaignStatus: null },
+      data: {},
     })),
   };
 });

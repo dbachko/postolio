@@ -98,7 +98,7 @@ export class BrandAnalysisOrchestrator {
         if (fetched && fetched.length) posts = fetched;
       }
 
-      // Classify posts into core/seasonal/trending and filter out generated/campaign posts
+      // Classify posts into core/seasonal/trending and filter out generated posts
       const countryCode =
         (options as any)?.brandInfo?.countryCode || (undefined as string | undefined);
       let freezeCore = true; // Smart Freeze default ON

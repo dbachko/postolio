@@ -10,15 +10,6 @@ vi.mock('../../plugins/csrf-auto-protect.js', () => ({
   default: (async () => {}) as any,
 }));
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // Disable Redis-backed rate limiting in these tests.
 vi.mock('../../services/redis.js', () => {
   const redisService = {

@@ -35,13 +35,6 @@ export const BrandParamsSchema = z.object({
 });
 
 /**
- * Campaign params
- */
-export const CampaignParamsSchema = z.object({
-  campaignId: z.string().cuid('Invalid campaign ID format'),
-});
-
-/**
  * Content params
  */
 export const ContentParamsSchema = z.object({
@@ -79,37 +72,6 @@ export const ContentGenerationSchema = z.object({
   count: z.number().int().min(1).max(10).default(1),
   style: z.string().optional(),
   additionalContext: z.string().max(1000).optional(),
-});
-
-/**
- * Campaign creation request
- */
-export const CampaignCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  brandId: z.string().cuid(),
-  config: z.object({
-    frequency: z.enum(['daily', 'every-other-day', 'weekly']),
-    themes: z.array(z.string()).min(1).max(10),
-    duration: z.number().int().min(1).max(365),
-    priority: z.number().int().min(1).max(10).default(5),
-    postingTime: z.string().optional(),
-  }),
-  status: z.enum(['creating', 'preview', 'active', 'paused']).optional(),
-});
-
-/**
- * Campaign update request
- */
-export const CampaignUpdateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  config: z
-    .object({
-      frequency: z.enum(['daily', 'every-other-day', 'weekly']).optional(),
-      themes: z.array(z.string()).min(1).max(10).optional(),
-      priority: z.number().int().min(1).max(10).optional(),
-    })
-    .optional(),
-  status: z.enum(['active', 'paused']).optional(),
 });
 
 /**
@@ -157,7 +119,7 @@ export const AnalyticsRequestSchema = z
 export const SearchSchema = z
   .object({
     q: z.string().min(1).max(200),
-    type: z.enum(['content', 'campaign', 'brand']).optional(),
+    type: z.enum(['content', 'brand']).optional(),
   })
   .merge(PaginationSchema);
 

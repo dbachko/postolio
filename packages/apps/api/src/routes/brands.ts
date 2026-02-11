@@ -1,5 +1,4 @@
 import { FastifyPluginAsync } from 'fastify';
-import { computePlaceholders } from '../services/placeholderService.js';
 import { getRedisClient } from '../services/redis.js';
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -208,14 +207,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           ],
         };
 
-        // Get existing content for the month with campaign info for color coding
+        // Get existing content for the month
         let content: Array<any> = [];
         let hasPublications = true;
         try {
           content = await prisma.content.findMany({
             where: whereWithPublications,
             include: {
-              campaign: { select: { id: true, name: true, color: true, status: true } },
               publications: { select: { platform: true, permalink: true, publishedAt: true } },
               publishingQueueItem: { select: { id: true } },
               mediaAssets: {
@@ -234,7 +232,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             content = await prisma.content.findMany({
               where: whereWithoutPublications,
               include: {
-                campaign: { select: { id: true, name: true, color: true, status: true } },
                 publishingQueueItem: { select: { id: true } },
                 mediaAssets: {
                   select: { assetId: true, displayOrder: true },
@@ -253,21 +250,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        // Get active campaigns
-        const campaigns = await prisma.campaign.findMany({
-          where: { brandId, status: { in: ['active', 'preview'] } },
-        });
+        const placeholders: any[] = [];
 
-        // Compute placeholders (timezone-aware). If it fails, degrade gracefully to empty.
-        let placeholders: any[] = [];
-        try {
-          placeholders = await computePlaceholders(campaigns, content, monthStart, monthEnd);
-        } catch (e) {
-          request.log.warn({ err: e }, 'Placeholder computation failed; returning content only');
-          placeholders = [];
-        }
-
-        // Map to response format with CDN URLs and campaign colors
+        // Map to response format with CDN URLs
         const contentWithUrls = content.map((item) => {
           const pubs = hasPublications ? item.publications || [] : [];
           const ig = hasPublications ? pubs.find((p: any) => p.platform === 'instagram') : null;
@@ -301,10 +286,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             primaryAssetId,
             mediaAssets: normalizedMediaAssets,
             mediaAssetCount: (item as any)?._count?.mediaAssets ?? null,
-            campaignId: item.campaignId,
-            campaignName: item.campaign?.name,
-            campaignColor: item.campaign?.color,
-            campaignStatus: item.campaign?.status ?? null,
             permalink: primaryPermalink,
             firstComment: (item as any).firstComment ?? null,
             firstCommentStatus: (item as any).firstCommentStatus ?? null,

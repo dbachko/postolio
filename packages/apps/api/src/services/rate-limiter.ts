@@ -66,20 +66,7 @@ export class RateLimiter {
   }
 }
 
-// Pre-configured rate limiters for common use cases
-export const campaignRateLimiter = new RateLimiter({
-  windowMs: 60 * 1000, // 1 minute window
-  maxRequests: 10, // 10 campaign operations per minute per user
-  keyPrefix: 'campaign_rl',
-});
-
-export const pauseResumeRateLimiter = new RateLimiter({
-  windowMs: 5 * 60 * 1000, // 5 minute window
-  maxRequests: 20, // 20 pause/resume operations per 5 minutes per user
-  keyPrefix: 'pause_resume_rl',
-});
-
-// Draft rate limiter removed (campaign drafts feature deprecated)
+// Pre-configured rate limiters were removed; define per-endpoint rate limits in middleware.
 
 /**
  * Fastify middleware for rate limiting

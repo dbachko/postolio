@@ -3,24 +3,18 @@ import type { CalendarFilterState } from '@/stores/calendarFilterStore';
 
 export interface PlaceholderItem {
   id: string;
-  campaignId?: string | null;
-  campaignName?: string | null;
   scheduledAt: string;
   message?: string;
-  campaignColor?: string | null;
   queueAtCapacity?: boolean;
 }
 
 export type CalendarDataItem = CalendarContentItem | (PlaceholderItem & { type: 'placeholder' });
 
-export type CalendarFilters = Pick<CalendarFilterState, 'campaigns' | 'statuses' | 'searchQuery'>;
+export type CalendarFilters = Pick<CalendarFilterState, 'statuses' | 'searchQuery'>;
 
 export interface CalendarEventResource {
   type: CalendarDataItem['type'];
   status?: string | null;
-  campaignId: string | null;
-  campaignName: string | null;
-  campaignColor: string | null;
   placeholder: boolean;
   scheduledAt?: string | null;
   postedAt?: string | null;

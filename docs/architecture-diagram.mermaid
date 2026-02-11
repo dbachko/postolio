@@ -20,7 +20,7 @@ graph TB
     
     subgraph ComputeServices["🔧 Compute Services"]
         subgraph ECSCluster["🚢 ECS Fargate Cluster"]
-            MainApp["📦 Main Postolio Service<br/>Node.js 22 + Fastify<br/>• User Auth (JWT + 2FA)<br/>• Brand Management<br/>• Campaign Orchestration<br/>• AI Content Generation"]
+            MainApp["📦 Main Postolio Service<br/>Node.js 22 + Fastify<br/>• User Auth (JWT + 2FA)<br/>• Brand Management<br/>• Scheduling & Automation<br/>• AI Content Generation"]
         end
         
         TokenLambda["⚡ Token Service Lambda<br/>• OAuth Storage<br/>• KMS Encryption<br/>• Auto Rotation"]
@@ -30,7 +30,7 @@ graph TB
     end
     
     subgraph DataStorage["💾 Data Storage Layer"]
-        RDS[("🗄️ RDS PostgreSQL<br/>• Users & Auth<br/>• Brands<br/>• Campaigns<br/>• Content")]
+        RDS[("🗄️ RDS PostgreSQL<br/>• Users & Auth<br/>• Brands<br/>• Content")]
         DynamoTokens[("🔥 DynamoDB<br/>OAuth Tokens<br/>TTL & GSI")]
         DynamoSchedules[("🔥 DynamoDB<br/>Schedules<br/>4 GSIs")]
         Redis[("⚡ ElastiCache Redis<br/>Sessions & Caching<br/>Port 6380")]
@@ -39,7 +39,7 @@ graph TB
     end
     
     subgraph Integration["🔌 AWS Integration Services"]
-        EventBridge["🔄 EventBridge<br/>Event Bus<br/>• campaign.created<br/>• schedule.ready<br/>• post.published"]
+        EventBridge["🔄 EventBridge<br/>Event Bus<br/>• schedule.ready<br/>• post.published"]
         SecretsManager["🔐 Secrets Manager<br/>API Keys & Credentials"]
         KMS["🔑 KMS<br/>Encryption Keys"]
     %% Cloud Map removed in migration to direct URLs

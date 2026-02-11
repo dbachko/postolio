@@ -14,7 +14,6 @@ export async function generateBrandContentImage(
   options?: {
     preferredProvider?: ImageProvider;
     brandId?: string;
-    campaignId?: string;
     contentId?: string;
   }
 ): Promise<ImageGenerationResult> {
@@ -42,7 +41,6 @@ export async function generateBrandContentImage(
     preferredProvider: options?.preferredProvider,
     enableFallback: true, // Always enable fallback
     brandId: options?.brandId || 'unknown',
-    campaignId: options?.campaignId,
     contentId: options?.contentId,
   });
 

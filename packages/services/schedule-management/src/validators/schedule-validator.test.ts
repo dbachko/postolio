@@ -6,7 +6,6 @@ describe('Schedule Validator', () => {
     it('should validate a complete valid schedule request', () => {
       const validRequest = {
         contentId: 'content-123',
-        campaignId: 'campaign-456',
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',

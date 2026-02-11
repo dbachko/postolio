@@ -292,7 +292,6 @@ export class SchedulerAdapter {
     success: boolean;
     scheduleId?: string;
     brandId?: string;
-    campaignId?: string;
     error?: string;
   }> {
     // Store original state for rollback
@@ -300,7 +299,6 @@ export class SchedulerAdapter {
     let originalScheduledAt: Date | null = null;
     // Minimal content info for notifications in catch
     let fetchedContent: { brandId: string; brand: { userId: string } } | null = null;
-    let campaignIdForEvents: string | undefined;
 
     try {
       // 1. Get content with brand and user info
@@ -312,7 +310,6 @@ export class SchedulerAdapter {
               user: true,
             },
           },
-          campaign: true, // Include campaign data for validation
           mediaAssets: {
             select: {
               displayOrder: true,
@@ -328,7 +325,6 @@ export class SchedulerAdapter {
           await eventEmitter.emitScheduleFailed({
             contentId,
             brandId: undefined,
-            campaignId: undefined,
             operation: 'create',
             error: 'Content not found',
           });
@@ -341,14 +337,12 @@ export class SchedulerAdapter {
         return { success: false, error: 'Content not found' };
       }
       fetchedContent = { brandId: content.brandId, brand: { userId: content.brand.userId } };
-      campaignIdForEvents = content.campaignId ?? undefined;
 
       const emitScheduleFailure = async (message: string) => {
         try {
           await eventEmitter.emitScheduleFailed({
             contentId,
             brandId: content.brandId,
-            campaignId: content.campaignId ?? undefined,
             operation: 'create',
             error: message,
           });
@@ -359,88 +353,6 @@ export class SchedulerAdapter {
           });
         }
       };
-
-      // If content belongs to a campaign, enforce campaign validation rules.
-      // Standalone content (no campaign) is now allowed to be scheduled.
-      if (content.campaignId) {
-        // Validate campaign exists and is in a valid state
-        if (!content.campaign) {
-          logger.error('Scheduling blocked: campaign not found for content', {
-            campaignId: content.campaignId,
-            contentId,
-          });
-          await emitScheduleFailure('Associated campaign not found');
-          return {
-            success: false,
-            error: 'Associated campaign not found',
-          };
-        }
-
-        const campaignStatus = content.campaign.status;
-        const contentStatus = content.status as ContentStatus;
-        const isDraftLike = ['draft', 'skipped', 'failed'].includes(contentStatus);
-
-        // Paused campaigns: never schedule new content until resumed
-        if (campaignStatus === 'paused') {
-          logger.warn('Scheduling blocked: campaign is paused', {
-            campaignId: content.campaignId,
-            contentId,
-          });
-          const msg = 'Cannot schedule content for paused campaign. Please resume the campaign.';
-          await emitScheduleFailure(msg);
-          return {
-            success: false,
-            error: msg,
-          };
-        }
-
-        // For other non-active statuses, only allow draft-like posts in limited auto-recovery cases
-        if (campaignStatus !== 'active') {
-          if (!isDraftLike) {
-            logger.warn('Scheduling blocked: campaign not active', {
-              campaignId: content.campaignId,
-              status: campaignStatus,
-            });
-            const msg = `Cannot schedule content for ${campaignStatus.toLowerCase()} campaign`;
-            await emitScheduleFailure(msg);
-            return {
-              success: false,
-              error: msg,
-            };
-          }
-
-          // Auto-activate campaign only for draft posts from recoverable non-active states
-          const recoverableStatuses: string[] = ['creating', 'preview', 'failed'];
-          if (contentStatus === 'draft' && recoverableStatuses.includes(campaignStatus)) {
-            logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', {
-              campaignId: content.campaignId,
-              contentId,
-            });
-            try {
-              await prisma.campaign.update({
-                where: { id: content.campaignId },
-                data: { status: 'active' },
-              });
-              logger.info('Campaign activated for auto-recovery', {
-                campaignId: content.campaignId,
-              });
-            } catch (campaignUpdateError) {
-              logger.error('Failed to activate campaign during auto-recovery', {
-                error: campaignUpdateError,
-              });
-              // Don't fail the scheduling - continue with scheduling anyway
-            }
-          } else {
-            // Non-recoverable non-active statuses (e.g., completed) should not schedule new content
-            const msg = `Cannot schedule content for ${campaignStatus.toLowerCase()} campaign`;
-            await emitScheduleFailure(msg);
-            return {
-              success: false,
-              error: msg,
-            };
-          }
-        }
-      }
 
       // Store original state for potential rollback
       originalStatus = content.status as ContentStatus;
@@ -797,14 +709,12 @@ export class SchedulerAdapter {
               socialAccountId: resolvedSocialAccountId,
               timezone: brandTimezone,
               localTime: customTime ? customTime.toISOString() : undefined,
-              campaignName: content.campaign?.name,
             },
             ...(schedulerPlatform === 'instagram' &&
             normalizedContentType === 'reel' &&
             typeof content.shareToFeed === 'boolean'
               ? { shareToFeed: Boolean(content.shareToFeed) }
               : {}),
-            ...(content.campaignId ? { campaignId: content.campaignId } : {}),
             ...(schedulerPlatform === 'instagram' &&
             typeof content.thumbOffset === 'number' &&
             content.thumbOffset >= 0
@@ -925,19 +835,6 @@ export class SchedulerAdapter {
         );
       }
 
-      // 9. Emit campaign-content association event for tracking
-      if (awsScheduleCreated && content.campaignId) {
-        await eventEmitter.emitCampaignContentAssociated(
-          content.campaignId,
-          content.id,
-          content.brandId,
-          {
-            userId: userId || content.brand.userId,
-            operation: 'content.scheduled',
-          }
-        );
-      }
-
       // Log with timezone context
       if (awsScheduleCreated) {
         const localTimeDisplay = TimezoneService.formatWithTimezone(
@@ -959,7 +856,6 @@ export class SchedulerAdapter {
             success: true,
             scheduleId: scheduleId!,
             brandId: content.brandId,
-            campaignId: content.campaignId ?? undefined,
           }
         : {
             success: false,
@@ -973,7 +869,6 @@ export class SchedulerAdapter {
         await eventEmitter.emitScheduleFailed({
           contentId,
           brandId: fetchedContent?.brandId,
-          campaignId: campaignIdForEvents,
           operation: 'create',
           error: message,
         });
@@ -1041,7 +936,6 @@ export class SchedulerAdapter {
     success: boolean;
     scheduleId?: string;
     brandId?: string;
-    campaignId?: string;
     error?: string;
   }> {
     // Store original state for rollback
@@ -1050,7 +944,6 @@ export class SchedulerAdapter {
     let originalSchedulingError: string | null = null;
     let currentParams: GenerationParams = {};
     let fetchedContent: { brandId: string; brand: { userId: string } } | null = null;
-    let campaignIdForEvents: string | undefined;
 
     const operationId = randomUUID();
 
@@ -1063,7 +956,6 @@ export class SchedulerAdapter {
               user: true,
             },
           },
-          campaign: true,
           mediaAssets: {
             select: {
               displayOrder: true,
@@ -1081,7 +973,6 @@ export class SchedulerAdapter {
       }
 
       fetchedContent = { brandId: content.brandId, brand: { userId: content.brand.userId } };
-      campaignIdForEvents = content.campaignId ?? undefined;
 
       originalStatus = content.status as ContentStatus;
       originalScheduledAt = content.scheduledAt;
@@ -1298,14 +1189,12 @@ export class SchedulerAdapter {
           socialAccountId: resolvedSocialAccountId,
           timezone: brandTimezone,
           localTime: scheduledTimeUTC.toISOString(),
-          campaignName: content.campaign?.name,
         },
         ...(schedulerPlatform === 'instagram' &&
         normalizedContentType === 'reel' &&
         typeof content.shareToFeed === 'boolean'
           ? { shareToFeed: Boolean(content.shareToFeed) }
           : {}),
-        ...(content.campaignId ? { campaignId: content.campaignId } : {}),
         ...(schedulerPlatform === 'instagram' &&
         typeof content.thumbOffset === 'number' &&
         content.thumbOffset >= 0
@@ -1344,7 +1233,6 @@ export class SchedulerAdapter {
         success: true,
         scheduleId,
         brandId: content.brandId,
-        campaignId: content.campaignId ?? undefined,
       };
     } catch (error) {
       logger.error('Error publishing content (publish-now)', { error });
@@ -1354,7 +1242,6 @@ export class SchedulerAdapter {
         await eventEmitter.emitScheduleFailed({
           contentId,
           brandId: fetchedContent?.brandId,
-          campaignId: campaignIdForEvents,
           operation: 'create',
           error: message,
         });
@@ -1566,7 +1453,7 @@ export class SchedulerAdapter {
           // Content has a scheduled time but no AWS schedule ID
           // This typically happens when:
           // 1. Initial scheduling failed (e.g., AWS was down)
-          // 2. Campaign started but scheduling failed
+          // 2. A prior workflow attempted to schedule but did not persist schedule metadata
           // 3. Manual scheduling attempt failed
 
           logger.warn(
@@ -1644,58 +1531,8 @@ export class SchedulerAdapter {
               error: `Failed to create schedule: ${scheduleResult.error}`,
             };
           }
-        } else if (content.campaignId) {
-          // NEW: Handle draft posts from campaigns that failed to start properly
-          // When a campaign fails to start, posts are created as drafts with campaignId but no scheduleId
-          // User is trying to "reschedule" (set a time) on these drafts - treat as initial schedule
-          logger.warn(
-            'AUTO-RECOVERY: Draft content with campaign has no schedule - creating new schedule',
-            { contentId, campaignId: content.campaignId }
-          );
-
-          const newTimeLocal = isLocalTime
-            ? newTime
-            : TimezoneService.toLocal(newTimeUTC, brandTimezone);
-
-          // First update the content with the new scheduled time
-          await prisma.content.update({
-            where: { id: contentId },
-            data: {
-              scheduledAt: newTimeUTC,
-              status: 'scheduled' as ContentStatus,
-            },
-          });
-
-          // Then create the AWS schedule
-          const scheduleResult = await this.scheduleContent(
-            contentId,
-            newTimeLocal,
-            content.brand.userId
-          );
-
-          if (scheduleResult.success) {
-            logger.info('AUTO-RECOVERY SUCCESS: Draft content scheduled', {
-              contentId,
-              scheduledAt: newTimeUTC.toISOString(),
-            });
-            return { success: true };
-          } else {
-            // Rollback the status change if scheduling failed
-            await prisma.content.update({
-              where: { id: contentId },
-              data: {
-                scheduledAt: null,
-                status: 'draft' as ContentStatus,
-                schedulingError: scheduleResult.error,
-              },
-            });
-            return {
-              success: false,
-              error: `Failed to schedule content: ${scheduleResult.error}`,
-            };
-          }
         } else {
-          // Content is truly not scheduled (draft with no scheduledAt and no campaign)
+          // Content is truly not scheduled (draft with no scheduledAt)
           return {
             success: false,
             error:

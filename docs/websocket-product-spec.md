@@ -8,10 +8,10 @@ Real-time bidirectional communication system for Postolio using AWS infrastructu
 
 - **Purpose**: Enable real-time status updates and notifications for content scheduling and publishing operations
 - **Target Users**: Content creators and social media managers using Postolio platform
-- **Key Scenarios**:
-  1. Real-time content status updates (scheduled → publishing → published)
-  2. Campaign progress notifications
-  3. Live error notifications for failed publications
+  - **Key Scenarios**:
+    1. Real-time content status updates (scheduled → publishing → published)
+    2. Content generation progress notifications
+    3. Live error notifications for failed publications
 
 ## Core Features
 
@@ -25,7 +25,7 @@ Real-time bidirectional communication system for Postolio using AWS infrastructu
 
 - When content is scheduled, I want to see real-time status changes, so I can monitor publication progress
 - When publishing fails, I want immediate notification, so I can take corrective action quickly
-- When multiple team members work on campaigns, I want live updates, so I can avoid conflicts
+- When multiple team members work on the same content and schedules, I want live updates, so I can avoid conflicts
 - When connection drops, I want automatic reconnection, so I can maintain real-time awareness
 
 ## Current Implementation Analysis

@@ -405,10 +405,26 @@ jobs:
       - name: Run CDK diff
         working-directory: packages/infra/cdk
         run: |
-          echo "## CDK Stack Changes" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          pnpm cdk diff --all --context environment=dev >> $GITHUB_STEP_SUMMARY 2>&1
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          if [[ -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
+            echo "GITHUB_STEP_SUMMARY is not set; running CDK diff without step summary output."
+            pnpm cdk diff --all --context environment=dev || true
+            exit 0
+          fi
+
+          echo "## CDK Stack Changes" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+
+          set +e
+          pnpm cdk diff --all --context environment=dev >> "$GITHUB_STEP_SUMMARY" 2>&1
+          status=$?
+          set -e
+
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+
+          # AWS CDK returns exit code 1 when differences are detected. Treat that as success for PR checks.
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
 
   # ============================================
   # PR Summary

@@ -11,12 +11,12 @@ export enum JobType {
   TOKEN_MIGRATION = 'token-migration',
   TOKEN_INTEGRITY_CHECK = 'token-integrity-check',
   AUDIT_LOG_CLEANUP = 'audit-log-cleanup',
-  CAMPAIGN_WINDOW_MAINTENANCE = 'campaign-window-maintenance',
   PUBLISHING_QUEUE_WINDOW_MAINTENANCE = 'publishing-queue-window-maintenance',
   NOTIFICATION_RETENTION = 'notification-retention',
   INBOX_COMMENTS_INGEST = 'inbox-comments-ingest',
   INBOX_COMMENTS_BACKFILL = 'inbox-comments-backfill',
   INBOX_DMS_INGEST = 'inbox-dms-ingest',
+  RECIPE_RUN_EXECUTE = 'recipe-run-execute',
 }
 
 interface JobData {
@@ -82,10 +82,6 @@ export class BackgroundJobQueue {
       return await this.processAuditLogCleanup(job);
     });
 
-    this.queue.process(JobType.CAMPAIGN_WINDOW_MAINTENANCE, async () => {
-      return await this.processCampaignWindowMaintenance();
-    });
-
     this.queue.process(JobType.PUBLISHING_QUEUE_WINDOW_MAINTENANCE, async () => {
       return await this.processPublishingQueueWindowMaintenance();
     });
@@ -104,6 +100,17 @@ export class BackgroundJobQueue {
 
     this.queue.process(JobType.INBOX_DMS_INGEST, async (job) => {
       return await this.processInboxDMsIngest(job);
+    });
+
+    this.queue.process(JobType.RECIPE_RUN_EXECUTE, async (job) => {
+      const runIdRaw = job.data.metadata?.runId;
+      const runId = typeof runIdRaw === 'string' ? runIdRaw : '';
+      if (!runId) {
+        throw new Error('Missing runId for recipe run execute job');
+      }
+
+      const { executeRecipeRun } = await import('./recipe-runs/run-executor.js');
+      return await executeRecipeRun(runId);
     });
   }
 
@@ -411,17 +418,6 @@ export class BackgroundJobQueue {
       }
     );
 
-    // Campaign sliding window maintenance - every 30 minutes
-    await this.queue.add(
-      JobType.CAMPAIGN_WINDOW_MAINTENANCE,
-      { type: JobType.CAMPAIGN_WINDOW_MAINTENANCE },
-      {
-        repeat: {
-          cron: '*/30 * * * *',
-        },
-      }
-    );
-
     // Publishing queue window maintenance - every 5 minutes
     await this.queue.add(
       JobType.PUBLISHING_QUEUE_WINDOW_MAINTENANCE,
@@ -619,97 +615,6 @@ export class BackgroundJobQueue {
 
     await job.progress(100);
     return { brandId, ...result, duration: Date.now() - start };
-  }
-
-  private async processCampaignWindowMaintenance(): Promise<{
-    processed: number;
-    generated: number;
-  }> {
-    const start = Date.now();
-    let processed = 0;
-    let generated = 0;
-    try {
-      const prisma = (await import('../config/database.js')).getDatabaseClient();
-      const { campaignSlidingWindowService } = await import('./campaign-sliding-window.js');
-      const { getMaxScheduledAheadForTier } = await import('../constants/subscription.js');
-
-      // Find active campaigns with user info; cap batch size to avoid long jobs
-      const campaigns = await prisma.campaign.findMany({
-        where: { status: 'active' },
-        select: {
-          id: true,
-          brand: { select: { userId: true, user: { select: { subscriptionTier: true } } } },
-        },
-        take: 200,
-        orderBy: { updatedAt: 'desc' },
-      });
-
-      // Group by user
-      const byUser = new Map<string, { tier: string; campaignIds: string[] }>();
-      for (const c of campaigns) {
-        const userId = c.brand.userId;
-        const tier = c.brand.user?.subscriptionTier || 'free';
-        const entry = byUser.get(userId) || { tier, campaignIds: [] };
-        entry.campaignIds.push(c.id);
-        byUser.set(userId, entry);
-      }
-
-      // Distribute in rounds across each user's campaigns
-      for (const [userId, info] of byUser) {
-        const now = new Date();
-        const maxAhead = getMaxScheduledAheadForTier(info.tier);
-        let remaining = Number.POSITIVE_INFINITY;
-        if (Number.isFinite(maxAhead)) {
-          const current = await prisma.content.count({
-            where: {
-              brand: { userId },
-              scheduledAt: { gte: now },
-              status: { in: ['scheduled', 'draft'] },
-            },
-          });
-          remaining = Math.max(0, (maxAhead as number) - current);
-        }
-        if (remaining <= 0) continue;
-
-        const ids = info.campaignIds;
-        const maxRounds = Math.min(remaining, 50);
-        for (let round = 0; round < maxRounds; round++) {
-          let roundGenerated = 0;
-          for (const id of ids) {
-            processed += 1;
-            try {
-              const res = await campaignSlidingWindowService.maintainWindow(id, 1);
-              if (res.generated && res.generated > 0) {
-                generated += res.generated;
-                roundGenerated += res.generated;
-                if (Number.isFinite(remaining)) remaining -= res.generated;
-                if (remaining <= 0) break;
-              }
-            } catch {
-              // continue
-            }
-          }
-          if (remaining <= 0 || roundGenerated === 0) break;
-        }
-      }
-
-      this.logger.info('Campaign window maintenance completed', {
-        processed,
-        generated,
-        durationMs: Date.now() - start,
-      });
-      return { processed, generated };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.logger.error('Campaign window maintenance error', {
-        error: {
-          name: err.name,
-          message: err.message,
-          stack: err.stack,
-        },
-      });
-      return { processed, generated };
-    }
   }
 
   private async processPublishingQueueWindowMaintenance(): Promise<{

@@ -32,4 +32,4 @@ This prevents “HTML instead of JSON” when the API returns 403/409/etc. (e.g.
 
 - API health: `curl -i https://<domain>/api/health` → `200` with JSON.
 - Blocked signup (allowlist off): POST `.../api/auth/register` → `403` JSON. Should NOT be HTML.
-- SPA routes: navigate to deep links like `/login` or `/campaigns/123` → should load `index.html` and render.
+- SPA routes: navigate to deep links like `/login` or `/content/123` → should load `index.html` and render.

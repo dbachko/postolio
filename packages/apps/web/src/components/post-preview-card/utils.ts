@@ -124,9 +124,6 @@ export const getPlaceholderCreateParams = (
   const scheduledAt = typeof item.scheduledAt === 'string' ? item.scheduledAt.trim() : '';
   if (scheduledAt) params.scheduledAt = scheduledAt;
 
-  const campaignId = typeof item.campaignId === 'string' ? item.campaignId.trim() : '';
-  if (campaignId && campaignId !== 'none') params.campaignId = campaignId;
-
   const targetSocialAccountId =
     typeof record.targetSocialAccountId === 'string' && record.targetSocialAccountId.trim()
       ? record.targetSocialAccountId.trim()

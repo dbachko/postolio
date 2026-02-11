@@ -63,7 +63,7 @@ test.describe('WebSocket Connection Management', () => {
     await authenticatedPage.goto('/brands');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.goto('/campaigns');
+    await authenticatedPage.goto('/content');
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.goto('/dashboard');

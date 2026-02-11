@@ -1,6 +1,6 @@
 /**
  * Publishing Stack - Content Publishing Microservices
- * Groups publisher, retry-handler, dlq-processor, and campaign-event-dlq-processor services
+ * Groups publisher, retry-handler, and dlq-processor services
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -146,30 +146,6 @@ export class PublishingStack extends cdk.Stack {
         principals: [new iam.AnyPrincipal()],
         actions: ['sqs:*'],
         resources: [this.deadLetterQueue.queueArn],
-        conditions: {
-          Bool: {
-            'aws:SecureTransport': 'false',
-          },
-        },
-      })
-    );
-
-    // Campaign-specific dead letter queue
-    const campaignDLQ = new sqs.Queue(this, 'CampaignEventDLQ', {
-      queueName: `${prefix}-campaign-dlq`,
-      encryption: sqs.QueueEncryption.KMS_MANAGED,
-      retentionPeriod: cdk.Duration.days(14),
-      visibilityTimeout: cdk.Duration.minutes(15),
-    });
-
-    // Add SSL requirement policy to CampaignEventDLQ
-    campaignDLQ.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowSSLRequestsOnly',
-        effect: iam.Effect.DENY,
-        principals: [new iam.AnyPrincipal()],
-        actions: ['sqs:*'],
-        resources: [campaignDLQ.queueArn],
         conditions: {
           Bool: {
             'aws:SecureTransport': 'false',
@@ -371,7 +347,6 @@ export class PublishingStack extends cdk.Stack {
                 this.publishingQueue.queueArn,
                 this.retryQueue.queueArn,
                 this.deadLetterQueue.queueArn,
-                campaignDLQ.queueArn,
               ],
             }),
             // EventBridge permissions (allow put to Scheduling bus for status events)
@@ -619,46 +594,6 @@ export class PublishingStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
-    // 4. Campaign Event DLQ Processor Function
-    const campaignDLQProcessorFunction = new lambdaNodejs.NodejsFunction(
-      this,
-      'CampaignDLQProcessorFunction',
-      {
-        functionName: `${prefix}-campaign-dlq-processor`,
-        runtime: lambda.Runtime.NODEJS_22_X,
-        handler: 'index.handler',
-        entry: path.join(
-          __dirname,
-          '../../../../services/campaign-event-dlq-processor/src/index.ts'
-        ),
-        depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
-        timeout: cdk.Duration.minutes(5),
-        memorySize: 512,
-        role: publishingLambdaRole,
-        vpc: vpc,
-        securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
-        environment: {
-          NODE_ENV: environment,
-          SERVICE_NAME: 'campaign-event-dlq-processor',
-          ENVIRONMENT: environment,
-          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-          // AWS_REGION is automatically provided by Lambda runtime
-          SCHEDULES_TABLE: schedulesTableName,
-          CAMPAIGN_DLQ_URL: campaignDLQ.queueUrl,
-          EVENT_BUS_NAME: publishingEventBus.eventBusName,
-          KMS_KEY_ID: encryptionKey.keyId,
-          ALERT_TOPIC_ARN: alertTopic.topicArn,
-          ...(sentryDsn && { SENTRY_BACKEND_DSN: sentryDsn }),
-        },
-        logGroup: logs.LogGroup.fromLogGroupName(
-          this,
-          'CampaignDLQProcessorLogGroup',
-          `/aws/lambda/${prefix}-campaign-dlq-processor`
-        ),
-        tracing: lambda.Tracing.ACTIVE,
-      }
-    );
-
     // ==================== Event Sources ====================
     // Connect publisher to main publishing queue
     publisherFunction.addEventSource(
@@ -684,20 +619,11 @@ export class PublishingStack extends cdk.Stack {
       })
     );
 
-    // Connect campaign DLQ processor to campaign dead letter queue
-    campaignDLQProcessorFunction.addEventSource(
-      new SqsEventSource(campaignDLQ, {
-        batchSize: 5,
-        maxBatchingWindow: cdk.Duration.seconds(30),
-      })
-    );
-
     // ==================== CloudWatch Monitoring ====================
     const functions = [
       { func: publisherFunction, name: 'publisher' },
       { func: retryHandlerFunction, name: 'retry-handler' },
       { func: dlqProcessorFunction, name: 'dlq-processor' },
-      { func: campaignDLQProcessorFunction, name: 'campaign-dlq-processor' },
     ];
 
     functions.forEach(({ func, name }) => {
@@ -903,15 +829,6 @@ export class PublishingStack extends cdk.Stack {
       ],
       true
     );
-
-    // Suppress CampaignEventDLQ not having a DLQ (it IS a DLQ itself)
-    NagSuppressions.addResourceSuppressions(campaignDLQ, [
-      {
-        id: 'AwsSolutions-SQS3',
-        reason:
-          'This queue IS a dead letter queue for campaign events - it does not need its own DLQ',
-      },
-    ]);
 
     // Suppress log retention function IAM issues (created automatically by CDK)
     NagSuppressions.addResourceSuppressions(

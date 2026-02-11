@@ -63,7 +63,6 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           asset = await importImageFromExternalUrl(externalUrl!, {
             contentId,
             brandId: content.brand.id,
-            campaignId: content.campaignId,
             originalPrompt: 'User uploaded image',
             source: 'user_upload',
           });
@@ -80,7 +79,6 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
             updatedAt: true,
             brandId: true,
-            campaignId: true,
             schedulingError: true,
             hashtags: true,
             contentType: true,

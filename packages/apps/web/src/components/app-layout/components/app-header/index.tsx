@@ -12,8 +12,6 @@ import {
 } from '@/components/app-shell/nav-config';
 import { getSectionNavItems } from '@/components/app-shell/section-nav';
 import { Button } from '@/components/ui/button';
-import { WizardHelpDialog } from '@/components/campaign-wizard/shared/wizard-help-dialog';
-import { RightHelpDrawer } from '@/components/help/right-help-drawer';
 
 import { AppHeaderSearchDialog } from '../app-header-search-dialog';
 import { CreateActionsMenu } from './components/create-actions-menu';
@@ -30,8 +28,6 @@ export function AppHeader() {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -163,9 +159,6 @@ export function AppHeader() {
             <CreateActionsMenu
               selectedBrandId={selectedBrand?.id ?? null}
               onCreatePost={() => openSidebar('post-create')}
-              onCreateCampaign={() => {
-                navigate('/campaigns/create');
-              }}
               onUploadAsset={(brandId) => openSidebar('asset-upload', { id: brandId })}
             />
 
@@ -193,9 +186,6 @@ export function AppHeader() {
         filteredItems={filteredItems}
         onSelectPath={handleSearchSelect}
       />
-
-      <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <RightHelpDrawer open={helpDrawerOpen} onOpenChange={setHelpDrawerOpen} />
     </>
   );
 }

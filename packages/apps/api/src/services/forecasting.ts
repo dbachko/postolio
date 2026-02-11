@@ -47,21 +47,6 @@ export interface ForecastReport {
   recommendations: string[];
 }
 
-export interface CampaignForecast {
-  campaignId: string;
-  estimatedPerformance: {
-    totalPosts: number;
-    predictedEngagement: number;
-    predictedReach: number;
-    predictedEngagementRate: number;
-    confidence: number;
-  };
-  successProbability: number; // 0-100
-  optimalDuration: number; // Days
-  risks: string[];
-  opportunities: string[];
-}
-
 export class ForecastingService {
   /**
    * Generate forecasts for a brand
@@ -160,103 +145,6 @@ export class ForecastingService {
         },
       },
       recommendations,
-    };
-  }
-
-  /**
-   * Predict campaign performance
-   *
-   * If brandId is not provided, it is derived from the campaign.
-   */
-  async predictCampaignPerformance(
-    campaignId: string,
-    brandId?: string
-  ): Promise<CampaignForecast> {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      include: {
-        content: {
-          include: {
-            publications: {
-              include: { metricsLatest: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!campaign) {
-      throw new Error('Campaign not found');
-    }
-
-    // Get brand's historical performance
-    const resolvedBrandId = brandId ?? campaign.brandId;
-    const brandForecast = await this.generateForecast(resolvedBrandId, 30, 90);
-
-    // Extract campaign configuration
-    const config = (campaign.config as any) || {};
-    const postsPerWeek = config.postsPerWeek || 3; // Default to 3 posts per week
-    const duration = config.duration?.weeks || 4; // Default to 4 weeks
-
-    // Calculate campaign metrics
-    const totalPosts = postsPerWeek * duration;
-    const avgEngagementRate = brandForecast.forecasts.engagementRate.current;
-
-    // Estimate campaign performance based on brand trends
-    const predictedEngagement = totalPosts * avgEngagementRate * 100; // Rough estimate
-    const predictedReach = brandForecast.forecasts.reach.expectedReach * (totalPosts / 7); // Weekly estimate
-    const predictedEngagementRate = avgEngagementRate;
-
-    // Calculate success probability (0-100)
-    const successProbability = this.calculateSuccessProbability(
-      campaign,
-      brandForecast,
-      totalPosts
-    );
-
-    // Determine optimal duration
-    const optimalDuration = this.calculateOptimalDuration(
-      postsPerWeek,
-      brandForecast.forecasts.engagementRate.trend
-    );
-
-    // Identify risks and opportunities
-    const risks: string[] = [];
-    const opportunities: string[] = [];
-
-    if (brandForecast.forecasts.engagement.trend === 'decreasing') {
-      risks.push('Current engagement trend is declining. Consider refreshing content strategy.');
-    }
-
-    if (postsPerWeek > 7) {
-      risks.push('High posting frequency may lead to audience fatigue.');
-    }
-
-    if (brandForecast.forecasts.engagementRate.confidence < 60) {
-      risks.push('Historical data shows high variance. Results may be unpredictable.');
-    }
-
-    if (brandForecast.forecasts.engagement.trend === 'increasing') {
-      opportunities.push('Capitalize on growing engagement momentum.');
-    }
-
-    if (avgEngagementRate > 0.05) {
-      opportunities.push('Above-average engagement rate provides strong foundation.');
-    }
-
-    return {
-      campaignId,
-      estimatedPerformance: {
-        totalPosts,
-        predictedEngagement,
-        predictedReach,
-        predictedEngagementRate,
-        confidence: brandForecast.forecasts.engagement.confidence,
-      },
-      successProbability,
-      optimalDuration,
-      risks,
-      opportunities,
     };
   }
 
@@ -530,52 +418,6 @@ export class ForecastingService {
     const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
     const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
     return squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length;
-  }
-
-  /**
-   * Calculate campaign success probability
-   */
-  private calculateSuccessProbability(
-    campaign: any,
-    brandForecast: ForecastReport,
-    totalPosts: number
-  ): number {
-    let probability = 50; // Base probability
-
-    // Positive factors
-    if (brandForecast.forecasts.engagement.trend === 'increasing') probability += 20;
-    if (brandForecast.forecasts.engagementRate.current > 0.05) probability += 15;
-    if (totalPosts >= 10 && totalPosts <= 30) probability += 10; // Optimal range
-    if (brandForecast.forecasts.engagement.confidence > 70) probability += 15;
-
-    // Negative factors
-    if (brandForecast.forecasts.engagement.trend === 'decreasing') probability -= 20;
-    if (totalPosts > 50) probability -= 15; // Too many posts
-    if (brandForecast.forecasts.engagement.confidence < 50) probability -= 15;
-
-    return Math.max(0, Math.min(100, probability));
-  }
-
-  /**
-   * Calculate optimal campaign duration
-   */
-  private calculateOptimalDuration(postsPerWeek: number, trend: string): number {
-    let baseDuration = 4; // 4 weeks default
-
-    if (trend === 'increasing') {
-      baseDuration = 6; // Ride the momentum longer
-    } else if (trend === 'decreasing') {
-      baseDuration = 2; // Shorter campaign to test and adjust
-    }
-
-    // Adjust for posting frequency
-    if (postsPerWeek > 5) {
-      baseDuration = Math.max(2, baseDuration - 1);
-    } else if (postsPerWeek < 3) {
-      baseDuration = Math.min(8, baseDuration + 2);
-    }
-
-    return baseDuration;
   }
 
   /**

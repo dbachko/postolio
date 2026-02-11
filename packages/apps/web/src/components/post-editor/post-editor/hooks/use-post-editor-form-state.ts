@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { assetsApi } from '@/features/assets/api/client';
-import { campaign as campaignApi } from '@/lib/api';
-import type { Campaign } from '@/lib/api';
-import { toast } from 'sonner';
 
 import type { AssetReference } from '@/components/multi-image-uploader/types';
 import type { PostEditorFormState } from '@/components/post-editor/post-editor-main-body/types';
@@ -39,7 +36,6 @@ export function usePostEditorFormState(params: {
     platformsInitializedRef,
     post,
     postAssetIds,
-    selectedBrandId,
     selectedTargetSocialAccountId,
     setSelectedPlatformAccountIds,
   } = params;
@@ -52,9 +48,6 @@ export function usePostEditorFormState(params: {
   const scheduledAtTouchedRef = useRef(false);
 
   const [firstCommentOpen, setFirstCommentOpen] = useState(false);
-  const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
 
   const handleScheduledAtChange = useCallback((value: string) => {
     scheduledAtTouchedRef.current = true;
@@ -85,7 +78,6 @@ export function usePostEditorFormState(params: {
       firstComment: (post as any).firstComment || '',
     });
     setFirstCommentOpen(Boolean((post as any).firstComment));
-    setSelectedCampaign(post.campaign?.id || post.campaignId || null);
 
     const candidate =
       typeof post.targetSocialAccountId === 'string' ? post.targetSocialAccountId.trim() : '';
@@ -123,7 +115,6 @@ export function usePostEditorFormState(params: {
 
     const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
     const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId);
-    const originalCampaignId = post.campaign?.id || post.campaignId || null;
     const postContentType = (post.contentType as InstagramContentType) || 'post';
     const formShareToFeed = formData.shareToFeed ?? true;
     const postShareToFeed =
@@ -146,7 +137,6 @@ export function usePostEditorFormState(params: {
       formData.contentType !== postContentType ||
       formShareToFeed !== postShareToFeed ||
       formFirstComment !== postFirstComment ||
-      (selectedCampaign || null) !== originalCampaignId ||
       selectedTargetSocialAccountId !== postTargetSocialAccountId;
 
     setHasChanges(changed);
@@ -159,7 +149,6 @@ export function usePostEditorFormState(params: {
     id,
     isMultiDestinationGroup,
     post,
-    selectedCampaign,
     selectedTargetSocialAccountId,
   ]);
 
@@ -182,7 +171,6 @@ export function usePostEditorFormState(params: {
   const searchParams = useMemo(() => new URLSearchParams(locationSearch), [locationSearch]);
   const qCaption = searchParams.get('caption');
   const qScheduledAt = searchParams.get('scheduledAt');
-  const qCampaignId = searchParams.get('campaignId');
   const qContentType = searchParams.get('contentType');
   const qTargetSocialAccountId = searchParams.get('targetSocialAccountId');
   const qTargetSocialAccountIds = searchParams.get('targetSocialAccountIds');
@@ -235,7 +223,6 @@ export function usePostEditorFormState(params: {
     setFormData(createEmptyPostFormState());
     setHasChanges(false);
     setFirstCommentOpen(false);
-    setSelectedCampaign(null);
     setSelectedPlatformAccountIds([]);
     platformsInitializedRef.current = false;
     formInitializedRef.current = false;
@@ -268,7 +255,6 @@ export function usePostEditorFormState(params: {
     const hasPrefillInput =
       Boolean(qCaption) ||
       Boolean(qScheduledAt) ||
-      Boolean(qCampaignId) ||
       Boolean(normalizedTargetSocialAccountIds?.length) ||
       Boolean(normalizedContentType) ||
       prefillAssetIds.length > 0;
@@ -277,10 +263,7 @@ export function usePostEditorFormState(params: {
     }
 
     const hasBasicPrefill =
-      Boolean(qCaption) ||
-      Boolean(qScheduledAt) ||
-      Boolean(qCampaignId) ||
-      Boolean(normalizedContentType);
+      Boolean(qCaption) || Boolean(qScheduledAt) || Boolean(normalizedContentType);
     const hasAssetPrefill = prefillAssetIds.length > 0;
     const hasPlatformPrefill = Boolean(normalizedTargetSocialAccountIds?.length);
 
@@ -300,7 +283,6 @@ export function usePostEditorFormState(params: {
           contentType: normalizedContentType ?? prev.contentType,
         };
       });
-      if (qCampaignId) setSelectedCampaign(qCampaignId);
       prefillAppliedRef.current = { ...prefillAppliedRef.current, basic: true };
     }
 
@@ -336,7 +318,6 @@ export function usePostEditorFormState(params: {
     platformPickerOptions,
     prefillAssetIds,
     prefillAssets,
-    qCampaignId,
     qCaption,
     qContentType,
     qScheduledAt,
@@ -355,33 +336,6 @@ export function usePostEditorFormState(params: {
     setFormData((prev) => (prev.scheduledAt === next ? prev : { ...prev, scheduledAt: next }));
   }, [brandTimezone, isCreating, qScheduledAt]);
 
-  useEffect(() => {
-    let mounted = true;
-    const fetchCampaigns = async () => {
-      const brandId = isCreating ? selectedBrandId : post?.brand?.id;
-      if (!brandId) return;
-      setIsLoadingCampaigns(true);
-      try {
-        const res = await campaignApi.listCampaigns(brandId);
-        if (mounted) setCampaigns((res.campaigns || []) as Campaign[]);
-      } catch (_error) {
-        if (mounted) toast.error('Failed to load campaigns');
-      } finally {
-        if (mounted) setIsLoadingCampaigns(false);
-      }
-    };
-    fetchCampaigns();
-    return () => {
-      mounted = false;
-    };
-  }, [isCreating, post?.brand?.id, selectedBrandId]);
-
-  const selectedCampaignData = useMemo(
-    () => campaigns.find((c) => c.id === selectedCampaign) || null,
-    [campaigns, selectedCampaign]
-  );
-  const selectedCampaignPaused = selectedCampaignData?.status === 'paused';
-
   const hasScheduleTime = Boolean(formData.scheduledAt);
 
   return {
@@ -394,11 +348,6 @@ export function usePostEditorFormState(params: {
     hasScheduleTime,
     firstCommentOpen,
     setFirstCommentOpen,
-    selectedCampaign,
-    setSelectedCampaign,
-    campaigns,
-    isLoadingCampaigns,
-    selectedCampaignPaused,
     handleScheduledAtChange,
   };
 }

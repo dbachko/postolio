@@ -282,12 +282,11 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(platformError.statusCode).send(platformError.body);
         }
 
-        // Get content with brand and campaign
+        // Get content with brand
         const content = await prisma.content.findUnique({
           where: { id: contentId },
           include: {
             brand: true,
-            campaign: true,
             mediaAssets: {
               select: { assetId: true, displayOrder: true },
               orderBy: { displayOrder: 'asc' },
@@ -331,15 +330,6 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(403).send({
             error: 'forbidden',
             message: 'You do not have permission to publish this content',
-          });
-        }
-
-        // Enforce campaign status: do not publish content from non-active campaigns
-        if (content.campaignId && content.campaign && content.campaign.status !== 'active') {
-          const status = String(content.campaign.status || '').toLowerCase() || 'unknown';
-          return reply.code(400).send({
-            error: 'campaign_not_active',
-            message: `Cannot publish content for a ${status} campaign`,
           });
         }
 
@@ -557,7 +547,6 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
               'published',
               {
                 platform,
-                campaignId: content.campaignId ?? undefined,
                 externalPostId: publishResult.externalPostId,
                 permalink: publishResult.permalink,
                 publishedAt: publishResult.publishedAt,

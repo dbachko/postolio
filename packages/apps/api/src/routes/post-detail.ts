@@ -52,7 +52,6 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           createdAt: true,
           updatedAt: true,
           brandId: true,
-          campaignId: true,
           contentGroupId: true,
           schedulingError: true,
           firstComment: true,
@@ -68,13 +67,6 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
             select: {
               id: true,
               name: true,
-            },
-          },
-          campaign: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
             },
           },
           publications: { select: { platform: true, permalink: true, id: true } },
@@ -114,7 +106,6 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         generationParams: post.generationParams,
         schedulingError: post.schedulingError,
         brand: post.brand,
-        campaign: post.campaign,
         mediaAssets: post.mediaAssets ?? [],
         mediaAssetCount: post.mediaAssets?.length ?? 0,
         primaryAssetId: post.mediaAssets?.[0]?.assetId ?? null,

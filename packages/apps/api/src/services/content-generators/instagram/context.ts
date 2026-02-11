@@ -2,7 +2,7 @@ import { Prisma, type ContentStatus } from '@postolio/database';
 import { getDatabaseClient } from '../../../config/database.js';
 import { getBrandProfileContext, type BrandProfileContext } from '../../brand-profile.js';
 import { contentLogger } from '../logger.js';
-import type { BrandLocationContext, CampaignContext, RecentItem } from './types.js';
+import type { BrandLocationContext, RecentItem } from './types.js';
 
 const prisma = getDatabaseClient();
 
@@ -15,35 +15,6 @@ export function pickRecentWindowConfig(): { windowCount: number; windowDays: num
     : 0;
 
   return { windowCount, windowDays };
-}
-
-export async function loadCampaignContext(
-  campaignId: string,
-  reqId: string
-): Promise<CampaignContext | null> {
-  try {
-    const raw = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: {
-        id: true,
-        name: true,
-        campaignType: true,
-        contentPillars: true,
-        urgencyTactics: true,
-        seasonalContext: true,
-        config: true,
-      },
-    });
-    return raw as unknown as CampaignContext;
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    contentLogger.warn('Failed to load campaign context for generation; proceeding without it', {
-      reqId,
-      campaignId,
-      error: { name: err.name, message: err.message, stack: err.stack },
-    });
-    return null;
-  }
 }
 
 export async function loadBrandContext(

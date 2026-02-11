@@ -244,7 +244,6 @@ model Brand {
   // instagramAccountId    String?  @deprecated
   user                  User     @relation(fields: [userId], references: [id])
   content              Content[]
-  campaigns            Campaign[]
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

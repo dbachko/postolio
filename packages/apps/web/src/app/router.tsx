@@ -14,7 +14,6 @@ import { Assets } from '@/pages/Assets';
 import AssetDetail from '@/pages/AssetDetail';
 import Analytics from '@/pages/Analytics';
 import AnalyticsAccount from '@/pages/AnalyticsAccount';
-import Campaigns from '@/pages/Campaigns';
 import { Content } from '@/pages/Content';
 import { DMAutomation } from '@/pages/DMAutomation';
 import { SocialAccountsConnections } from '@/pages/social-accounts/SocialAccountsConnections';
@@ -34,6 +33,10 @@ import { PasswordReset } from '@/pages/PasswordReset';
 import TzRenderTest from '@/pages/TzRenderTest';
 import NotificationsPage from '@/pages/Notifications';
 import OnboardingPage from '@/pages/Onboarding';
+import { Recipes } from '@/pages/Recipes';
+import { Skills } from '@/pages/Skills';
+import { Runs } from '@/pages/Runs';
+import { RunDetail } from '@/pages/RunDetail';
 
 import { ProtectedRoute, OnboardingGuard } from './guards';
 import { LazyLoadingFallback } from './lazy-loading-fallback';
@@ -191,6 +194,26 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
   },
   {
+    path: '/recipes',
+    element: appShell(<Recipes />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/skills',
+    element: appShell(<Skills />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/runs',
+    element: appShell(<Runs />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/runs/:runId',
+    element: appShell(<RunDetail />),
+    errorElement: <RouteError />,
+  },
+  {
     path: '/analytics',
     element: appShell(<Analytics />, {
       wrapErrorBoundary: true,
@@ -221,25 +244,8 @@ export const router = createBrowserRouter([
     element: appShell(<Drafts />, { wrapErrorBoundary: true, wrapSuspense: true }),
   },
   {
-    path: '/campaigns',
-    element: appShell(<Campaigns />),
-  },
-  {
     path: '/dm-automation',
     element: appShell(<DMAutomation />, { onboarding: false }),
-  },
-  {
-    path: '/campaigns/create',
-    element: appShell(<Campaigns />),
-  },
-  {
-    path: '/campaigns/:campaignId/edit',
-    element: appShell(<Campaigns />),
-  },
-  {
-    path: '/campaigns/:campaignId',
-    element: appShell(<Campaigns />),
-    errorElement: <RouteError />,
   },
   {
     path: '/posts/:postId',

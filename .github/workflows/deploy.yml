@@ -159,7 +159,6 @@ jobs:
               - 'packages/services/publisher/**'
               - 'packages/services/retry-handler/**'
               - 'packages/services/dlq-processor/**'
-              - 'packages/services/campaign-event-dlq-processor/**'
               - 'packages/infra/cdk/lib/stacks/publishing-stack.ts'
               - 'packages/libs/**'
             api:

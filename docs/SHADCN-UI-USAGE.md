@@ -34,13 +34,11 @@ We do not keep legacy Tailwind color classes. Use shadcn tokens and neutral styl
   - Don’t use `text-blue-600`, `bg-red-100`, `border-gray-200`, etc.
   - Prefer neutral or tokenized classes that adapt to theme.
 - Exception: dynamic, data-driven colors are allowed
-  - Keep colors that come from data (e.g., brand/campaign palette, user-selected color chips).
+  - Keep colors that come from data (e.g., brand palette, user-selected color chips).
   - Apply via inline styles or CSS variables, not Tailwind palette utilities.
-    - Example (campaign accent):
+    - Example (accent border):
       ```tsx
-      <div
-        style={{ borderLeftColor: campaignColor, borderLeftWidth: 4, borderLeftStyle: 'solid' }}
-      />
+      <div style={{ borderLeftColor: accentColor, borderLeftWidth: 4, borderLeftStyle: 'solid' }} />
       ```
     - Example (chip):
       ```tsx

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { campaign as campaignApi } from '@/lib/api';
+import { httpGet } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { getLocalSetting, setLocalSetting } from '@/lib/settings/localSettings';
 import { AlertTriangle } from 'lucide-react';
@@ -22,7 +22,7 @@ export function ScheduleLimitBanner() {
 
   const limitsQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead'],
-    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    queryFn: async () => httpGet('/api/account/limits/schedule-ahead'),
     staleTime: 60 * 1000,
   });
 

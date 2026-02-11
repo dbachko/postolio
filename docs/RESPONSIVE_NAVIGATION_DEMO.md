@@ -15,7 +15,7 @@
 - **Keyboard Shortcut**: Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux)
 - **Smart Search**: Search through all navigation items and quick actions
 - **Descriptions**: Each navigation item shows helpful descriptions
-- **Quick Actions**: Direct access to common tasks like creating campaigns
+- **Quick Actions**: Direct access to common tasks like creating posts
 
 ### ♿ Accessibility Features
 

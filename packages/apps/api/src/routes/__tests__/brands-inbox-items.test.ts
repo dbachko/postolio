@@ -24,14 +24,6 @@ vi.mock('../../services/background-jobs.js', () => ({
   },
 }));
 
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 vi.mock('../../services/redis.js', () => {
   const redisService = {
     increment: vi.fn(async () => null),

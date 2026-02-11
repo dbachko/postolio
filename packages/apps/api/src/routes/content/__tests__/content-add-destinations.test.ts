@@ -31,15 +31,6 @@ vi.mock('../../../services/redis.js', () => {
   };
 });
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 vi.mock('../../../services/assets-media.js', () => {
   const getAssetsClient = vi.fn(() => ({
     getBatchAssets: vi.fn(async (assetIds: string[]) =>
@@ -100,7 +91,6 @@ vi.mock('../../../config/database.js', () => {
       hashtags: [],
       status: 'draft',
       brandId: 'brand-1',
-      campaignId: null,
       contentGroupId: null,
       targetSocialAccountId: 'sa-1',
       schedulingError: null,
@@ -206,7 +196,6 @@ vi.mock('../../../config/database.js', () => {
           hashtags: data.hashtags ?? [],
           status: data.status ?? 'draft',
           brandId: data.brandId,
-          campaignId: data.campaignId ?? null,
           contentGroupId: data.contentGroupId ?? null,
           targetSocialAccountId: data.targetSocialAccountId ?? null,
           schedulingError: data.schedulingError ?? null,

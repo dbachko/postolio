@@ -5,7 +5,6 @@ import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
 import { extractHashtagsFromCaption } from '../utils/hashtag-extractor.js';
-import type { ImageProvider } from './image-providers/types.js';
 
 const prisma = getDatabaseClient();
 const rollingLogger = baseLogger.child({ module: 'rolling-content' });
@@ -40,22 +39,11 @@ class RollingContentService {
    */
   async onPostPublished(contentId: string): Promise<void> {
     try {
-      // Get the published content with brand and campaign info
+      // Get the published content with brand info
       const content = await prisma.content.findUnique({
         where: { id: contentId },
         include: {
           brand: true,
-          campaign: {
-            include: {
-              content: {
-                where: {
-                  status: { in: ['scheduled', 'published'] },
-                  scheduledAt: { not: null },
-                },
-                orderBy: { scheduledAt: 'asc' },
-              },
-            },
-          },
         },
       });
 
@@ -69,7 +57,7 @@ class RollingContentService {
       );
 
       // Check if we need to generate more content
-      await this.checkAndGenerateContent(content.brandId, content.campaignId);
+      await this.checkAndGenerateContent(content.brandId);
     } catch (error) {
       rollingLogger.error('Error in rolling content generation', formatError(error));
     }
@@ -78,7 +66,7 @@ class RollingContentService {
   /**
    * Check content queue status and generate if needed
    */
-  async checkAndGenerateContent(brandId: string, campaignId?: string | null): Promise<void> {
+  async checkAndGenerateContent(brandId: string): Promise<void> {
     // Prevent multiple simultaneous generations for the same brand
     if (this.isProcessing.has(brandId)) {
       rollingLogger.info(`Rolling generation already in progress for brand: ${brandId}`);
@@ -106,7 +94,7 @@ class RollingContentService {
       }
 
       // Generate content to fill the gap
-      await this.generateAndScheduleContent(brandId, campaignId, queueStatus);
+      await this.generateAndScheduleContent(brandId, queueStatus);
     } finally {
       this.isProcessing.delete(brandId);
     }
@@ -155,21 +143,16 @@ class RollingContentService {
    */
   private async generateAndScheduleContent(
     brandId: string,
-    campaignId: string | null | undefined,
     queueStatus: QueueStatus
   ): Promise<void> {
     try {
       // Get brand information and style profile
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
-        include: {
-          campaigns: {
-            where: {
-              status: 'active',
-              ...(campaignId && { id: campaignId }),
-            },
-            include: { content: true },
-          },
+        select: {
+          id: true,
+          name: true,
+          preferences: true,
         },
       });
 
@@ -177,48 +160,31 @@ class RollingContentService {
         throw new Error(`Brand ${brandId} not found`);
       }
 
-      // Get active campaign or use brand defaults
-      const activeCampaign = brand.campaigns.find((c) => c.id === campaignId) || brand.campaigns[0];
       let themes = ['lifestyle', 'inspiration', 'behind-the-scenes']; // defaults
       let style = 'modern'; // default
-      let imageProvider: ImageProvider | undefined;
-
-      if (activeCampaign) {
-        const configRaw = activeCampaign.config as unknown;
-        const config =
-          configRaw && typeof configRaw === 'object'
-            ? (configRaw as { themes?: string[]; style?: string; imageProvider?: ImageProvider })
-            : {};
-        themes = config.themes || themes;
-        style = config.style || style;
-        imageProvider = config.imageProvider;
-        rollingLogger.info(`Using campaign ${activeCampaign.name} for rolling generation`);
-      } else {
-        // Use brand preferences if no active campaign
-        const prefsRaw = brand.preferences as unknown;
-        let prefs: { themes?: string[]; style?: string } | undefined;
-        if (prefsRaw && typeof prefsRaw === 'object' && 'contentStrategy' in prefsRaw) {
-          const maybeRecord = prefsRaw as Record<string, unknown>;
-
-          const contentStrategyVal = maybeRecord.contentStrategy;
-          if (contentStrategyVal && typeof contentStrategyVal === 'object') {
-            const csObj = contentStrategyVal as {
-              themes?: unknown;
-              style?: unknown;
-            };
-            const themesVal = Array.isArray(csObj.themes)
-              ? csObj.themes.filter((t): t is string => typeof t === 'string')
-              : undefined;
-            const styleVal = typeof csObj.style === 'string' ? csObj.style : undefined;
-            prefs = { themes: themesVal, style: styleVal };
-          }
+      // Prefer brand-level content strategy (if configured).
+      const prefsRaw = brand.preferences as unknown;
+      let prefs: { themes?: string[]; style?: string } | undefined;
+      if (prefsRaw && typeof prefsRaw === 'object' && 'contentStrategy' in prefsRaw) {
+        const maybeRecord = prefsRaw as Record<string, unknown>;
+        const contentStrategyVal = maybeRecord.contentStrategy;
+        if (contentStrategyVal && typeof contentStrategyVal === 'object') {
+          const csObj = contentStrategyVal as {
+            themes?: unknown;
+            style?: unknown;
+          };
+          const themesVal = Array.isArray(csObj.themes)
+            ? csObj.themes.filter((t): t is string => typeof t === 'string')
+            : undefined;
+          const styleVal = typeof csObj.style === 'string' ? csObj.style : undefined;
+          prefs = { themes: themesVal, style: styleVal };
         }
-        if (prefs) {
-          themes = prefs.themes || themes;
-          style = prefs.style || style;
-        }
-        rollingLogger.info(`Using brand preferences for rolling generation`);
       }
+      if (prefs) {
+        themes = prefs.themes || themes;
+        style = prefs.style || style;
+      }
+      rollingLogger.info('Using brand preferences for rolling generation');
 
       // Get or generate style profile
 
@@ -240,7 +206,6 @@ class RollingContentService {
           count: 1,
           theme,
           style,
-          imageProvider,
         };
 
         const content = await generateInstagramContent(brand.name, contentRequest);
@@ -255,7 +220,6 @@ class RollingContentService {
             caption: content.caption,
             hashtags: extractHashtagsFromCaption(content.caption),
             brandId,
-            campaignId: activeCampaign?.id || null,
             status: 'scheduled', // Auto-schedule rolling content
             generationParams: {
               source: 'rolling_generation',
@@ -336,7 +300,7 @@ class RollingContentService {
     }
 
     // Schedule 24 hours after the last post (daily frequency)
-    // In production, this should respect the campaign's frequency settings
+    // In production, this should respect brand-level preferences and queue slots.
     const nextSlot = new Date(lastScheduled.scheduledAt.getTime() + 24 * 60 * 60 * 1000);
 
     // Ensure it's at a reasonable hour (9 AM to 8 PM)
@@ -354,8 +318,7 @@ class RollingContentService {
    * Manual trigger for rolling generation (for testing/debugging)
    */
   async triggerManual(
-    brandId: string,
-    campaignId?: string
+    brandId: string
   ): Promise<{ success: boolean; message: string; generated: number }> {
     try {
       const queueStatus = await this.checkContentQueue(brandId);
@@ -368,7 +331,7 @@ class RollingContentService {
         };
       }
 
-      await this.generateAndScheduleContent(brandId, campaignId, queueStatus);
+      await this.generateAndScheduleContent(brandId, queueStatus);
 
       return {
         success: true,

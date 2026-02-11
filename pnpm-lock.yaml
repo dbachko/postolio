@@ -1297,55 +1297,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/services/campaign-event-dlq-processor:
-    dependencies:
-      '@aws-lambda-powertools/logger':
-        specifier: ^2.30.0
-        version: 2.30.0
-      '@aws-lambda-powertools/metrics':
-        specifier: ^2.30.0
-        version: 2.30.0
-      '@aws-lambda-powertools/tracer':
-        specifier: ^2.30.0
-        version: 2.30.0
-      '@aws-sdk/client-eventbridge':
-        specifier: ^3.956.0
-        version: 3.956.0
-      '@aws-sdk/client-sqs':
-        specifier: ^3.956.0
-        version: 3.956.0
-      '@postolio/aws':
-        specifier: workspace:*
-        version: link:../../libs/aws
-      '@postolio/errors':
-        specifier: workspace:*
-        version: link:../../libs/errors
-      '@postolio/observability':
-        specifier: workspace:*
-        version: link:../../libs/observability
-      '@prisma/adapter-pg':
-        specifier: ^6.19.1
-        version: 6.19.1
-      pg:
-        specifier: ^8.16.3
-        version: 8.16.3
-    devDependencies:
-      '@postolio/tsconfig':
-        specifier: workspace:*
-        version: link:../../libs/tsconfig
-      '@types/aws-lambda':
-        specifier: ^8.10.159
-        version: 8.10.159
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.16
-        version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@25.0.3)(@vitest/ui@4.0.16)(jiti@2.6.1)(jsdom@27.3.0)(lightningcss@1.30.2)(sass@1.97.1)(tsx@4.21.0)
-
   packages/services/dlq-processor:
     dependencies:
       '@aws-lambda-powertools/logger':

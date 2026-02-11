@@ -1,7 +1,7 @@
 /**
  * Integration tests for Publisher Lambda
  * Tests critical publishing workflows including Instagram publishing,
- * credential validation, campaign blocking, and error handling
+ * credential validation, and error handling
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -22,10 +22,6 @@ interface ScheduleDueDetail {
 
 // Mock @postolio/aws module
 vi.mock('@postolio/aws', () => ({
-  getCampaignByContentId: vi.fn(),
-  getCampaignById: vi.fn(),
-  isCampaignActive: vi.fn(),
-  getCampaignBlockReason: vi.fn(),
   getServiceUrl: vi.fn(),
   signRequest: vi.fn(),
   API_VERSIONS: { FACEBOOK_GRAPH: 'v21.0' },
@@ -43,10 +39,6 @@ const fetchMock = vi.fn();
 global.fetch = fetchMock as typeof fetch;
 
 describe('Publisher Lambda', () => {
-  let getCampaignByContentIdMock: ReturnType<typeof vi.fn>;
-  let getCampaignByIdMock: ReturnType<typeof vi.fn>;
-  let isCampaignActiveMock: ReturnType<typeof vi.fn>;
-  let getCampaignBlockReasonMock: ReturnType<typeof vi.fn>;
   let getServiceUrlMock: ReturnType<typeof vi.fn>;
   let signRequestMock: ReturnType<typeof vi.fn>;
 
@@ -60,25 +52,12 @@ describe('Publisher Lambda', () => {
 
     // Get mock functions from the mocked module
     const aws = await import('@postolio/aws');
-    getCampaignByContentIdMock = aws.getCampaignByContentId as ReturnType<typeof vi.fn>;
-    getCampaignByIdMock = aws.getCampaignById as ReturnType<typeof vi.fn>;
-    isCampaignActiveMock = aws.isCampaignActive as ReturnType<typeof vi.fn>;
-    getCampaignBlockReasonMock = aws.getCampaignBlockReason as ReturnType<typeof vi.fn>;
     getServiceUrlMock = aws.getServiceUrl as ReturnType<typeof vi.fn>;
     signRequestMock = aws.signRequest as ReturnType<typeof vi.fn>;
 
     // Reset module mocks
-    getCampaignByContentIdMock.mockReset();
-    getCampaignByIdMock.mockReset();
-    isCampaignActiveMock.mockReset();
-    getCampaignBlockReasonMock.mockReset();
     getServiceUrlMock.mockReset();
     signRequestMock.mockReset();
-
-    // Default mocks for campaign functions (no campaign associated)
-    getCampaignByContentIdMock.mockResolvedValue(null);
-    isCampaignActiveMock.mockReturnValue(true);
-    getCampaignBlockReasonMock.mockReturnValue(null);
 
     // Mock service URL and request signing
     getServiceUrlMock.mockResolvedValue('https://token-service.example.com');
@@ -354,135 +333,6 @@ describe('Publisher Lambda', () => {
       expect(sqsCall.args[0].input.QueueUrl).toBe(
         'https://sqs.us-east-1.amazonaws.com/123456789/test-retry-queue'
       );
-    });
-  });
-
-  describe('Campaign Blocking', () => {
-    it('should skip publishing when campaign state is unavailable (missing from DynamoDB)', async () => {
-      // Arrange: Mock DynamoDB schedule with a campaignId
-      dynamoMock.on(QueryCommand).resolves({
-        Items: [
-          {
-            pk: 'BRAND#brand-789',
-            sk: 'SCHEDULE#test-schedule-123',
-            scheduleId: 'test-schedule-123',
-            contentId: 'content-456',
-            brandId: 'brand-789',
-            userId: 'user-001',
-            campaignId: 'campaign-001',
-            platform: 'instagram',
-            caption: 'Test post',
-          },
-        ],
-      });
-
-      // Simulate missing campaign record in DynamoDB cache
-      getCampaignByContentIdMock.mockResolvedValueOnce(null);
-      getCampaignByIdMock.mockResolvedValueOnce(null);
-
-      // Mock skip event
-      eventBridgeMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
-
-      // Mock schedule deletion
-      schedulerMock.on(DeleteScheduleCommand).resolves({});
-
-      // Mock DynamoDB update
-      dynamoMock.on(UpdateCommand).resolves({});
-
-      // Act
-      const { handler } = await import('./index.js');
-      const event: EventBridgeEvent<'schedule.due', ScheduleDueDetail> = {
-        version: '0',
-        id: 'test-event-id',
-        'detail-type': 'schedule.due',
-        source: 'postolio.scheduling',
-        account: '123456789',
-        time: new Date().toISOString(),
-        region: 'us-east-1',
-        resources: [],
-        detail: {
-          scheduleId: 'test-schedule-123',
-        },
-      };
-
-      await handler(event, {} as Context);
-
-      // Assert: Verify post.skipped event was published
-      const eventCall = eventBridgeMock.commandCalls(PutEventsCommand)[0];
-      expect(eventCall.args[0].input.Entries?.[0].DetailType).toBe('post.skipped');
-      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain('campaign');
-      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain(
-        'Campaign state unavailable (missing from DynamoDB)'
-      );
-      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain('"campaignStatus":"unknown"');
-
-      // Should not call token service or Instagram API
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it('should skip publishing if campaign is paused', async () => {
-      // Arrange: Mock DynamoDB schedule with campaign
-      dynamoMock.on(QueryCommand).resolves({
-        Items: [
-          {
-            pk: 'BRAND#brand-789',
-            sk: 'SCHEDULE#test-schedule-123',
-            scheduleId: 'test-schedule-123',
-            contentId: 'content-456',
-            brandId: 'brand-789',
-            userId: 'user-001',
-            campaignId: 'campaign-001',
-            platform: 'instagram',
-            caption: 'Test post',
-          },
-        ],
-      });
-
-      // Mock campaign functions to return paused campaign
-      const pausedCampaign = {
-        campaignId: 'campaign-001',
-        status: 'paused',
-        active: false,
-      };
-      getCampaignByContentIdMock.mockResolvedValueOnce(pausedCampaign);
-      getCampaignByIdMock.mockResolvedValueOnce(pausedCampaign);
-      isCampaignActiveMock.mockReturnValueOnce(false);
-      getCampaignBlockReasonMock.mockReturnValueOnce('Campaign is paused');
-
-      // Mock skip event
-      eventBridgeMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
-
-      // Mock schedule deletion
-      schedulerMock.on(DeleteScheduleCommand).resolves({});
-
-      // Mock DynamoDB update
-      dynamoMock.on(UpdateCommand).resolves({});
-
-      // Act
-      const { handler } = await import('./index.js');
-      const event: EventBridgeEvent<'schedule.due', ScheduleDueDetail> = {
-        version: '0',
-        id: 'test-event-id',
-        'detail-type': 'schedule.due',
-        source: 'postolio.scheduling',
-        account: '123456789',
-        time: new Date().toISOString(),
-        region: 'us-east-1',
-        resources: [],
-        detail: {
-          scheduleId: 'test-schedule-123',
-        },
-      };
-
-      await handler(event, {} as Context);
-
-      // Assert: Verify post.skipped event was published
-      const eventCall = eventBridgeMock.commandCalls(PutEventsCommand)[0];
-      expect(eventCall.args[0].input.Entries?.[0].DetailType).toBe('post.skipped');
-      expect(eventCall.args[0].input.Entries?.[0].Detail).toContain('campaign');
-
-      // Should not call token service or Instagram API (no fetch calls)
-      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

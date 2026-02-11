@@ -83,7 +83,7 @@ export function ContentCalendarHeader({
             <TabsTrigger value="queue">Queue</TabsTrigger>
           </TabsList>
         </Tabs>
-        <ContentFiltersBar brandId={brandId} />
+        <ContentFiltersBar />
       </div>
     </div>
   );

@@ -128,11 +128,6 @@ it('should recommend high-performing hashtags', async () => {
   - Upper/lower confidence bounds
   - Metric-specific forecasts (engagement, followerGrowth, engagementRate, reach)
 
-- **Campaign Prediction**
-  - Expected performance based on historical data
-  - Confidence levels for campaign forecasts
-  - Error handling for non-existent campaigns
-
 **Example Test**:
 
 ```typescript

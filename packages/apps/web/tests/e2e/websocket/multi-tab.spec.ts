@@ -119,7 +119,7 @@ test.describe('Multi-Tab WebSocket Synchronization', () => {
     await page2.goto('/dashboard');
 
     const page3 = await context.newPage();
-    await page3.goto('/campaigns');
+    await page3.goto('/content');
 
     wsHelper1 = new WebSocketHelper(page1);
     await wsHelper1.setupMessageMonitoring();
@@ -162,7 +162,7 @@ test.describe('Multi-Tab WebSocket Synchronization', () => {
     await page1.waitForURL('/dashboard');
 
     const page2 = await context.newPage();
-    await page2.goto('/campaigns');
+    await page2.goto('/content');
 
     wsHelper1 = new WebSocketHelper(page1);
     wsHelper2 = new WebSocketHelper(page2);

@@ -3,7 +3,7 @@ import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { brand as brandApi, campaign as campaignApi } from '@/lib/api';
+import { brand as brandApi, httpGet } from '@/lib/api';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useCalendarItems } from '../hooks/useCalendarItems';
 import { useFilteredEvents } from '../hooks/useFilteredEvents';
@@ -159,7 +159,7 @@ function FullCalendarImpl({
 
   const scheduleAheadLimitQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead', brandId],
-    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    queryFn: async () => httpGet('/api/account/limits/schedule-ahead'),
     enabled: Boolean(brandId),
     staleTime: 60 * 1000,
     gcTime: GC_TIMES.LONG,

@@ -12,7 +12,6 @@ export type MinimalPost = {
   media_type?: string;
   media_url?: string;
   // Optional metadata that upstream APIs may provide
-  campaignId?: string;
   origin?: string;
   generated?: boolean;
   generated_by?: string;
@@ -22,7 +21,7 @@ export type SeasonalClassification = {
   corePosts: MinimalPost[];
   seasonalPosts: MinimalPost[];
   trendingPosts: MinimalPost[];
-  generatedOrCampaignPosts: MinimalPost[];
+  excludedPosts: MinimalPost[];
   seasonalLabel?: string;
   seasonalExpiresAt?: string;
   stats: {
@@ -30,7 +29,7 @@ export type SeasonalClassification = {
     coreCount: number;
     seasonalCount: number;
     trendingCount: number;
-    generatedOrCampaignCount: number;
+    excludedCount: number;
   };
 };
 
@@ -116,10 +115,9 @@ function inferSeasonalLabel(post: MinimalPost, countryCode?: string): string | u
   return undefined;
 }
 
-function isGeneratedOrCampaign(p: MinimalPost): boolean {
+function isExcludedFromCore(p: MinimalPost): boolean {
   if (p.generated === true) return true;
   if (typeof p.generated_by === 'string' && p.generated_by.length > 0) return true;
-  if (typeof p.campaignId === 'string' && p.campaignId.length > 0) return true;
   if (typeof p.origin === 'string' && /postolio/i.test(p.origin)) return true;
   if (typeof p.caption === 'string' && /postolio/i.test(p.caption)) return true;
   return false;
@@ -141,15 +139,15 @@ export function classifyPosts(
   const now = Date.now();
   const trendingHorizonMs = 14 * 24 * 60 * 60 * 1000; // 14 days
 
-  const generatedOrCampaignPosts: MinimalPost[] = [];
+  const excludedPosts: MinimalPost[] = [];
   const seasonalBuckets: Record<string, MinimalPost[]> = {};
   const seasonalPosts: MinimalPost[] = [];
   const trendingPosts: MinimalPost[] = [];
   const coreCandidates: MinimalPost[] = [];
 
   for (const p of posts || []) {
-    if (isGeneratedOrCampaign(p)) {
-      generatedOrCampaignPosts.push(p);
+    if (isExcludedFromCore(p)) {
+      excludedPosts.push(p);
       continue;
     }
     const label = inferSeasonalLabel(p, opts.countryCode);
@@ -182,7 +180,7 @@ export function classifyPosts(
     corePosts: coreCandidates,
     seasonalPosts,
     trendingPosts,
-    generatedOrCampaignPosts,
+    excludedPosts,
     seasonalLabel,
     seasonalExpiresAt,
     stats: {
@@ -190,7 +188,7 @@ export function classifyPosts(
       coreCount: coreCandidates.length,
       seasonalCount: seasonalPosts.length,
       trendingCount: trendingPosts.length,
-      generatedOrCampaignCount: generatedOrCampaignPosts.length,
+      excludedCount: excludedPosts.length,
     },
   };
 }

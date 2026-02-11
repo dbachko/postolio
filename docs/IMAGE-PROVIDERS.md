@@ -16,11 +16,10 @@ The multi-provider image generation system allows Postolio to generate AI images
 - Google Gemini 3 Pro ($0.15/img)
 - DALL-E 3 ($0.04/img)
 
-✅ **Three-Tier Provider Selection**:
+✅ **Two-Tier Provider Selection**:
 
-1. Campaign-level preference (highest priority)
-2. Brand-level preference (fallback)
-3. System default (Gemini Flash)
+1. Brand-level preference (highest priority)
+2. System default (Gemini Flash)
 
 ✅ **Cost Tracking & Analytics**:
 
@@ -34,7 +33,7 @@ The multi-provider image generation system allows Postolio to generate AI images
 - Automatic provider fallback on failures
 - Database logging for all generations
 - Brand context enhancement (tones, color palettes)
-- Configurable per-campaign or per-brand
+- Configurable per-brand
 
 ## Architecture
 
@@ -66,7 +65,6 @@ packages/apps/api/src/services/image-providers/
 model ImageGenerationLog {
   id             String   @id @default(cuid())
   brandId        String
-  campaignId     String?
   contentId      String?
   provider       String   // Provider used
   prompt         String   @db.Text
@@ -81,7 +79,6 @@ model ImageGenerationLog {
   createdAt      DateTime @default(now())
 
   @@index([brandId, createdAt])
-  @@index([campaignId])
   @@index([provider, createdAt])
   @@map("image_generation_logs")
 }
@@ -176,24 +173,18 @@ Expected response:
 
 ## Usage
 
-### Campaign Creation (Frontend)
+### Brand Preference (Frontend)
 
-Users can select an image provider during campaign creation:
+Users select an image provider at the brand level:
 
-1. Navigate to **Create Campaign**
-2. In **Step 4: Image Preferences**, select image source:
-   - AI Generated
-   - My Assets
-   - Mix Both
-3. If AI or Mix selected, choose provider:
-   - Gemini 2.5 Flash (recommended)
-   - DALL-E 3
-   - Gemini 3 Pro
-4. System uses campaign preference > brand preference > system default
+1. Navigate to **Settings → Brand Settings**
+2. Find **AI Image Provider**
+3. Select preferred provider or "Use system default"
+4. System uses brand preference > system default
 
 ### Brand Settings
 
-Set a default provider for all campaigns:
+Set a default provider for a brand:
 
 1. Navigate to **Settings → Brand Settings**
 2. Scroll to **AI Image Provider** card
@@ -234,9 +225,9 @@ View image generation analytics:
 ### Tips
 
 1. **Set brand defaults**: Configure preferred provider in brand settings
-2. **Monitor analytics**: Review cost dashboard to identify expensive campaigns
+2. **Monitor analytics**: Review cost dashboard to identify expensive usage
 3. **Use fallback**: Enable automatic fallback to avoid failures
-4. **Batch generations**: System reuses providers for campaign efficiency
+4. **Batch generations**: Reduce retries and regenerate less where possible
 
 ## Monitoring
 
@@ -297,7 +288,7 @@ LIMIT 10;
 **Solution**:
 
 1. Review analytics dashboard
-2. Identify campaigns using expensive providers
+2. Identify brands using expensive providers
 3. Update brand defaults to Gemini Flash
 4. Educate users on provider selection
 
@@ -326,7 +317,7 @@ pnpm --filter api test -- src/routes/__tests__/image-providers.test.ts
 
 ### Manual Testing
 
-1. Create a test campaign with AI images
+1. Create a test post with AI images
 2. Try different providers
 3. Verify images generate correctly
 4. Check analytics dashboard updates
@@ -368,7 +359,7 @@ WHERE created_at < NOW() - INTERVAL '90 days';
 ## Security
 
 - ✅ API keys stored in AWS Secrets Manager (production)
-- ✅ Authentication required for brand/campaign preferences
+- ✅ Authentication required for brand preferences
 - ✅ Ownership validation on all brand operations
 - ✅ Input validation on all endpoints
 - ✅ No API keys exposed to frontend

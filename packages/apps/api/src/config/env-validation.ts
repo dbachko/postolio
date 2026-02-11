@@ -35,6 +35,19 @@ export interface EnvironmentConfig {
   PORT: number;
 }
 
+function normalizeNodeEnv(value: string): 'dev' | 'prod' | 'test' | null {
+  const raw = String(value || '')
+    .trim()
+    .toLowerCase();
+  if (!raw) return null;
+
+  if (raw === 'development') return 'dev';
+  if (raw === 'production') return 'prod';
+
+  if (raw === 'dev' || raw === 'prod' || raw === 'test') return raw;
+  return null;
+}
+
 /**
  * Validate and parse environment variables
  */
@@ -71,10 +84,13 @@ export function validateEnvironment(): EnvironmentConfig {
   }
 
   // Validate NODE_ENV
-  const nodeEnv = process.env.NODE_ENV || 'dev';
-  if (!['dev', 'prod', 'test'].includes(nodeEnv)) {
-    throw new Error('NODE_ENV must be one of: dev, prod, test');
+  const normalizedNodeEnv = normalizeNodeEnv(process.env.NODE_ENV || 'dev');
+  if (!normalizedNodeEnv) {
+    throw new Error(
+      'NODE_ENV must be one of: dev, prod, test (aliases: development→dev, production→prod)'
+    );
   }
+  process.env.NODE_ENV = normalizedNodeEnv;
 
   // Warning for missing optional but important variables
   const missingOptional: string[] = [];
@@ -84,7 +100,7 @@ export function validateEnvironment(): EnvironmentConfig {
     }
   }
 
-  if (missingOptional.length > 0 && nodeEnv === 'prod') {
+  if (missingOptional.length > 0 && normalizedNodeEnv === 'prod') {
     console.warn(
       `Warning: Missing optional environment variables in production: ${missingOptional.join(', ')}`
     );
@@ -101,7 +117,7 @@ export function validateEnvironment(): EnvironmentConfig {
     ASSETS_API_SERVICE_TOKEN: process.env.ASSETS_API_SERVICE_TOKEN!,
     REDIS_URL: process.env.REDIS_URL,
     SCHEDULER_API_URL: process.env.SCHEDULER_API_URL,
-    NODE_ENV: nodeEnv as 'dev' | 'prod' | 'test',
+    NODE_ENV: normalizedNodeEnv,
     PORT: port,
   };
 }

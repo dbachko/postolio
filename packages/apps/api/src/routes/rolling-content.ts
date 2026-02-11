@@ -88,9 +88,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         body: {
           type: 'object',
-          properties: {
-            campaignId: { type: 'string' },
-          },
+          properties: {},
         },
       },
       preHandler: fastify.authenticate,
@@ -99,12 +97,11 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         if (!ensureAuth(request, reply)) return;
         const { brandId } = request.params as BrandParams;
-        const { campaignId } = request.body as { campaignId?: string };
 
         // Verify brand ownership
         const brand = await assertBrandOwnership(request.user.id, brandId);
 
-        const result = await rollingContentService.triggerManual(brandId, campaignId);
+        const result = await rollingContentService.triggerManual(brandId);
 
         return reply.send({
           success: result.success,

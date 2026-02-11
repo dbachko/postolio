@@ -51,7 +51,12 @@ model User {
   accountLockedUntil  DateTime? @map("accountlockeduntil") // Account lock expiration time
 
   brands                  Brand[]
-  modifiedCampaigns       Campaign[]
+  // Recipes + Skills + Runs
+  recipeTemplatesCreated        RecipeTemplate[]
+  recipeTemplateVersionsCreated RecipeTemplateVersion[]
+  skillInstallationsCreated     SkillInstallation[]
+  encryptedSecretsCreated       EncryptedSecret[]
+  recipeRunsCreated             RecipeRun[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   notificationState       UserNotificationState?
@@ -78,11 +83,15 @@ model Brand {
   postingTimezone         String? // Brand-specific posting timezone (null = use user's timezone)
   countryCode             String? // ISO 3166-1 alpha-2 country code for seasonality/holidays
   user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaigns               Campaign[]
   content                 Content[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   socialAccounts          SocialAccount[]
+  // Recipes + Skills + Runs
+  recipeTemplates         RecipeTemplate[]
+  skillInstallations      SkillInstallation[]
+  encryptedSecrets        EncryptedSecret[]
+  recipeRuns              RecipeRun[]
   // Inbox & Replies
   savedReplies            SavedReply[]
   snippets                Snippet[]
@@ -128,7 +137,6 @@ model Content {
   postedAt              DateTime?
   generationParams      Json?
   brandId               String
-  campaignId            String?
   contentGroupId        String?
   targetSocialAccountId String?
   schedulingError       String?
@@ -140,7 +148,6 @@ model Content {
   firstCommentPostedAt  DateTime? // ISO timestamp of successful comment
   firstCommentError     String? // Error message if comment failed
   brand                 Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  campaign              Campaign?            @relation(fields: [campaignId], references: [id])
   contentGroup          ContentGroup?        @relation(fields: [contentGroupId], references: [id], onDelete: SetNull)
   targetSocialAccount   SocialAccount?       @relation(fields: [targetSocialAccountId], references: [id])
   mediaAssets           ContentMediaAsset[]
@@ -150,50 +157,9 @@ model Content {
   @@index([brandId, status])
   @@index([scheduledAt])
   @@index([brandId, status, scheduledAt])
-  @@index([campaignId])
   @@index([contentGroupId])
   // Ensure idempotent imports from Instagram per brand
   @@map("content")
-}
-
-enum CampaignTypeEnum {
-  promotional
-  educational
-  seasonal
-  thought_leadership
-  custom
-}
-
-model Campaign {
-  id                String           @id @default(cuid())
-  name              String
-  brandId           String
-  status            CampaignStatus   @default(creating)
-  config            Json
-  previewGenerated  Boolean          @default(false)
-  errorMessage      String?
-  // Visual identification: hex color code for calendar/timeline display
-  color             String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  startedAt         DateTime?
-  completedAt       DateTime?
-  lastModifiedAt    DateTime         @default(now()) @updatedAt
-  lastModifiedById  String?
-  modificationCount Int              @default(0)
-  // NEW: Campaign classification and structured metadata
-  campaignType      CampaignTypeEnum @default(custom)
-  contentPillars    Json?
-  urgencyTactics    Json?
-  seasonalContext   Json?
-  brand             Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  lastModifiedBy    User?            @relation(fields: [lastModifiedById], references: [id])
-  content           Content[]
-
-  @@index([status])
-  @@index([campaignType])
-  @@index([brandId, status])
-  @@map("campaigns")
 }
 
 model ContentMediaAsset {
@@ -214,7 +180,6 @@ model ContentMediaAsset {
 model ImageGenerationLog {
   id             String   @id @default(cuid())
   brandId        String
-  campaignId     String?
   contentId      String?
   provider       String // 'dalle-3', 'gemini-2.5-flash', etc.
   prompt         String   @db.Text
@@ -229,19 +194,18 @@ model ImageGenerationLog {
   createdAt      DateTime @default(now())
 
   @@index([brandId, createdAt])
-  @@index([campaignId])
   @@index([provider, createdAt])
   @@map("image_generation_logs")
 }
 
-// CampaignDraft model removed; drafts feature fully deprecated
+// Draft model removed; drafts feature fully deprecated
 
 enum ContentStatus {
   draft // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)
   scheduled // Content scheduled for future posting (replaces approved with scheduledAt)
   published // Successfully posted to social platform(s)
   failed // Publishing failed
-  skipped // Missed during campaign pause
+  skipped // Missed due to a scheduling pause or window constraint
   unavailable // Post removed or no longer accessible on the platform
 }
 
@@ -571,16 +535,6 @@ model AccountMetricsLatest {
   @@map("account_metrics_latest")
 }
 
-enum CampaignStatus {
-  creating
-  preview
-  active
-  paused
-  completed
-  failed
-  processing
-}
-
 // Week start preference for calendar views
 enum WeekStartPreference {
   monday
@@ -874,4 +828,264 @@ model DMAutomationEvent {
   @@index([ruleId])
   @@index([rateLimited])
   @@map("dm_automation_events")
+}
+
+// ==========================================
+// Recipes + Skills + Runs — New Models (v1)
+// ==========================================
+
+enum RecipeCategory {
+  get_started
+  content
+  growth
+  social
+  other
+}
+
+enum RecipeTemplateStatus {
+  draft
+  published
+  archived
+}
+
+model RecipeTemplate {
+  id              String             @id @default(cuid())
+  brandId          String?
+  slug            String
+  name            String
+  description     String?
+  category        RecipeCategory     @default(other)
+  isCurated       Boolean            @default(false)
+  status          RecipeTemplateStatus @default(draft)
+  createdByUserId String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  brand         Brand?                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdByUser User?                 @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  versions      RecipeTemplateVersion[]
+  runs          RecipeRun[]
+
+  @@unique([brandId, slug])
+  @@index([brandId, status, category])
+  @@index([brandId, createdAt])
+  @@map("recipe_templates")
+}
+
+model RecipeTemplateVersion {
+  id              String   @id @default(cuid())
+  recipeTemplateId String
+  version         Int
+  configJson      Json
+  changelog       String?
+  isPublished     Boolean  @default(false)
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  recipeTemplate RecipeTemplate @relation(fields: [recipeTemplateId], references: [id], onDelete: Cascade)
+  createdByUser  User?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  runs           RecipeRun[]
+
+  @@unique([recipeTemplateId, version])
+  @@index([recipeTemplateId, createdAt])
+  @@map("recipe_template_versions")
+}
+
+enum SkillModeSupport {
+  managed
+  byok
+  both
+}
+
+enum SkillMode {
+  managed
+  byok
+}
+
+model SkillDefinition {
+  id             String          @id
+  name           String
+  description    String
+  icon           String?
+  modeSupported  SkillModeSupport @default(managed)
+  scopesJson     Json            @default("{}")
+  configSchemaJson Json          @default("{}")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  installations SkillInstallation[]
+
+  @@map("skill_definitions")
+}
+
+model SkillInstallation {
+  id                String    @id @default(cuid())
+  brandId            String
+  skillDefinitionId  String
+  enabled            Boolean   @default(true)
+  mode               SkillMode @default(managed)
+  configJson          Json      @default("{}")
+  secretId           String?
+  createdByUserId    String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  brand           Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  skillDefinition SkillDefinition @relation(fields: [skillDefinitionId], references: [id], onDelete: Cascade)
+  secret          EncryptedSecret? @relation(fields: [secretId], references: [id], onDelete: SetNull)
+  createdByUser   User?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([brandId, skillDefinitionId])
+  @@index([brandId, enabled])
+  @@map("skill_installations")
+}
+
+model EncryptedSecret {
+  id              String   @id @default(cuid())
+  brandId          String
+  kind            String
+  name            String
+  ciphertext      Bytes
+  iv              Bytes
+  tag             Bytes
+  keyVersion      Int      @default(1)
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  rotatedAt       DateTime?
+
+  brand             Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdByUser     User?              @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  skillInstallations SkillInstallation[]
+
+  @@index([brandId, kind])
+  @@map("encrypted_secrets")
+}
+
+enum RecipeRunTrigger {
+  manual
+  schedule
+  api
+  chat
+}
+
+enum RecipeRunStatus {
+  queued
+  running
+  success
+  failed
+  canceled
+}
+
+enum RecipeRunStepType {
+  llm
+  skill_call
+  transform
+  export
+}
+
+enum RecipeRunStepStatus {
+  queued
+  running
+  success
+  failed
+  skipped
+}
+
+enum RecipeRunArtifactKind {
+  markdown
+  text
+  json
+  asset
+}
+
+enum RecipeCostProvider {
+  openai
+  anthropic
+  replicate
+  internal
+  unknown
+}
+
+model RecipeRun {
+  id                     String          @id @default(cuid())
+  brandId                 String
+  recipeTemplateId        String
+  recipeTemplateVersionId String
+  trigger                RecipeRunTrigger
+  status                 RecipeRunStatus @default(queued)
+  inputJson              Json
+  startedAt              DateTime?
+  finishedAt             DateTime?
+  createdByUserId         String?
+  errorCode              String?
+  errorMessage           String?
+  internalError          String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  brand                 Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  recipeTemplate        RecipeTemplate       @relation(fields: [recipeTemplateId], references: [id], onDelete: Cascade)
+  recipeTemplateVersion RecipeTemplateVersion @relation(fields: [recipeTemplateVersionId], references: [id], onDelete: Cascade)
+  createdByUser         User?                @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  steps                 RecipeRunStep[]
+  artifacts             RecipeRunArtifact[]
+  costs                 RecipeRunCost[]
+
+  @@index([brandId, createdAt])
+  @@index([brandId, status])
+  @@map("recipe_runs")
+}
+
+model RecipeRunStep {
+  id                String             @id @default(cuid())
+  runId             String
+  index             Int
+  type              RecipeRunStepType
+  name              String
+  status            RecipeRunStepStatus @default(queued)
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  inputJsonRedacted Json?
+  outputJsonRedacted Json?
+  errorMessage      String?
+  createdAt         DateTime           @default(now())
+
+  run RecipeRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, index])
+  @@map("recipe_run_steps")
+}
+
+model RecipeRunArtifact {
+  id         String              @id @default(cuid())
+  runId      String
+  kind       RecipeRunArtifactKind
+  name       String
+  mimeType   String?
+  contentText String?
+  assetId    String?
+  sizeBytes  Int?
+  createdAt  DateTime            @default(now())
+
+  run RecipeRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@map("recipe_run_artifacts")
+}
+
+model RecipeRunCost {
+  id              String           @id @default(cuid())
+  runId           String
+  provider        RecipeCostProvider
+  mode            SkillMode
+  inputTokens     Int              @default(0)
+  outputTokens    Int              @default(0)
+  estimatedCostUsd Decimal?        @db.Decimal(10, 4)
+  notes           String?
+  createdAt       DateTime         @default(now())
+
+  run RecipeRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("recipe_run_costs")
 }

@@ -106,11 +106,6 @@ export function PostEditorMultiDestinationLayout({
                 setFormData={(updater) => state.form.setFormData((prev) => updater(prev))}
                 firstCommentOpen={state.form.firstCommentOpen}
                 setFirstCommentOpen={state.form.setFirstCommentOpen}
-                campaigns={state.form.campaigns}
-                isLoadingCampaigns={state.form.isLoadingCampaigns}
-                selectedCampaign={state.form.selectedCampaign}
-                setSelectedCampaign={(campaignId) => state.form.setSelectedCampaign(campaignId)}
-                selectedCampaignPaused={Boolean(state.form.selectedCampaignPaused)}
                 onOpenAssetPicker={() => {
                   state.ui.setAssetPickerTarget('destination');
                   state.ui.setShowAssetPicker(true);

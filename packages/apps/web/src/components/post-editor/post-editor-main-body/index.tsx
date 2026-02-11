@@ -14,7 +14,6 @@ import { ContentTypeSelector } from './components/content-type-selector';
 import { DestinationsPicker } from './components/destinations-picker';
 import { MediaSection } from './components/media-section';
 import { CaptionAndFirstComment } from './components/caption-and-first-comment';
-import { CampaignSelect } from './components/campaign-select';
 
 export function PostEditorMainBody({
   mode,
@@ -27,11 +26,6 @@ export function PostEditorMainBody({
   setFormData,
   firstCommentOpen,
   setFirstCommentOpen,
-  campaigns,
-  isLoadingCampaigns,
-  selectedCampaign,
-  setSelectedCampaign,
-  selectedCampaignPaused,
   onOpenAssetPicker,
   platformOptions,
   selectedPlatformAccountIds,
@@ -144,15 +138,6 @@ export function PostEditorMainBody({
         onFirstCommentChange={(value) => setFormData((s) => ({ ...s, firstComment: value }))}
         brandId={mode === 'create' ? selectedBrand?.id : post?.brand?.id}
         disabled={disabled}
-      />
-
-      <CampaignSelect
-        campaigns={campaigns}
-        isLoadingCampaigns={isLoadingCampaigns}
-        disabled={disabled}
-        selectedCampaign={selectedCampaign}
-        onSelectCampaign={(v) => setSelectedCampaign(v)}
-        selectedCampaignPaused={selectedCampaignPaused}
       />
     </div>
   );

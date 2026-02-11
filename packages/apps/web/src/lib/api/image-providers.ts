@@ -1,5 +1,5 @@
 import { http } from '@/lib/api';
-import type { ImageProvider } from '@/types/campaign-wizard';
+import type { ImageProvider } from '@/types/image-providers';
 
 export interface ImageProviderPricing {
   standard: number;

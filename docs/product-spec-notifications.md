@@ -50,7 +50,7 @@ Key patterns we adopt:
 
 2. As a content manager, I want to be notified when my approval is requested or a request is approved/rejected, so I can keep content moving.
 
-3. As a collaborator, I want to be notified when I am mentioned or a comment is added on a post/campaign I follow, so I can respond quickly.
+3. As a collaborator, I want to be notified when I am mentioned or a comment is added on a post I follow, so I can respond quickly.
 
 4. As an account admin, I want to be notified when a social account disconnects or its token is expiring, so I can restore connectivity.
 
@@ -128,7 +128,7 @@ model Notification {
   body        String?
   linkUrl     String?
   actorId     String?
-  resourceType String?            // 'post' | 'brand' | 'account' | 'campaign' | ...
+  resourceType String?            // 'post' | 'brand' | 'account' | ...
   resourceId  String?
   metadata    Json?
   dedupeKey   String?   @unique

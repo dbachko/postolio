@@ -48,13 +48,6 @@ export function PostPreviewCard({
   });
   const showMediaBadge = item.type !== 'placeholder';
 
-  const onOpenCampaign = useCallback(
-    (campaignId: string) => {
-      navigate(`/campaigns/${campaignId}`);
-    },
-    [navigate]
-  );
-
   const handleOpen = useCallback(() => {
     if (item.type === 'placeholder') {
       openSidebar('post-create', { params: getPlaceholderCreateParams(item) });
@@ -70,7 +63,6 @@ export function PostPreviewCard({
     }
 
     const params = new URLSearchParams();
-    if (item.campaignId) params.set('campaignId', item.campaignId);
     if (item.caption) params.set('caption', item.caption);
 
     const hashtags = extractHashtags(item);
@@ -106,7 +98,6 @@ export function PostPreviewCard({
         onOpen={handleOpen}
         hideDestinations={hideDestinations}
         socialAccountsById={socialAccountsById}
-        onOpenCampaign={onOpenCampaign}
       />
     </PostPreviewCardMenu>
   );

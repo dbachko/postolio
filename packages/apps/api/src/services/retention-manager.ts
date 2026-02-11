@@ -38,7 +38,6 @@ export class RetentionManager {
 
   async deleteBrandData(brandId: string): Promise<{ brandId: string; deletedContent: number }> {
     const contentDeleted = await prisma.content.deleteMany({ where: { brandId } });
-    await prisma.campaign.deleteMany({ where: { brandId } });
     await prisma.brand.deleteMany({ where: { id: brandId } });
     return { brandId, deletedContent: contentDeleted.count };
   }

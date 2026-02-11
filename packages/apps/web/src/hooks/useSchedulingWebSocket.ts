@@ -17,8 +17,6 @@ import { useWsHeartbeat } from './ws/useWsHeartbeat';
 export function useSchedulingWebSocket({
   enabled = true,
   onStatusUpdate,
-  onCampaignStatusUpdate,
-  onCampaignError,
   onConnectionChange,
   onError,
   maxReconnectAttempts = 5,
@@ -276,22 +274,6 @@ export function useSchedulingWebSocket({
             handleStatusUpdate(message as StatusUpdateEvent);
           }
 
-          if (message.type === 'campaign_status_update') {
-            console.log('Campaign status update received:', message.data);
-            if (onCampaignStatusUpdate && message.data) {
-              onCampaignStatusUpdate(
-                message.data as import('../types/websocket').CampaignStatusUpdateData
-              );
-            }
-          }
-
-          if (message.type === 'campaign_error') {
-            console.log('Campaign error received:', message.data);
-            if (onCampaignError && message.data) {
-              onCampaignError(message.data as import('../types/websocket').CampaignErrorData);
-            }
-          }
-
           // Notifications stream (user room)
           if (message.type === 'notification_created') {
             try {
@@ -443,8 +425,6 @@ export function useSchedulingWebSocket({
     selectedBrand,
     enabled,
     handleStatusUpdate,
-    onCampaignStatusUpdate,
-    onCampaignError,
     calculateReconnectDelay,
     maxReconnectAttempts,
     heartbeatInterval,

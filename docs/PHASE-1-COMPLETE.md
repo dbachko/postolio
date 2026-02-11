@@ -102,39 +102,38 @@ enum Platform {
 
 ## Files That Need Refactoring (Phase 2)
 
-Found **20 files** (excluding migrations) that reference Instagram-specific fields:
+Found **19 files** (excluding migrations) that reference Instagram-specific fields:
 
-### API Routes (8 files)
+### API Routes (7 files)
 
 1. `packages/apps/api/src/routes/brand-analysis-nested.ts`
 2. `packages/apps/api/src/routes/brand-analysis.ts`
 3. `packages/apps/api/src/routes/brands-instagram.ts` ⚠️ Entire file Instagram-specific
 4. `packages/apps/api/src/routes/brands.ts`
-5. `packages/apps/api/src/routes/campaign.ts`
-6. `packages/apps/api/src/routes/instagram-oauth.ts` ⚠️ Keep but deprecate
-7. `packages/apps/api/src/routes/instagram.ts` ⚠️ Entire file Instagram-specific
-8. `packages/apps/api/src/routes/rolling-content.ts`
+5. `packages/apps/api/src/routes/instagram-oauth.ts` ⚠️ Keep but deprecate
+6. `packages/apps/api/src/routes/instagram.ts` ⚠️ Entire file Instagram-specific
+7. `packages/apps/api/src/routes/rolling-content.ts`
 
 ### Services (6 files)
 
-9. `packages/apps/api/src/services/autopilot.ts`
-10. `packages/apps/api/src/services/content-operations/publishing.ts` ⚠️ Critical
-11. `packages/apps/api/src/services/instagram-best-time.ts` ⚠️ Platform-specific
-12. `packages/apps/api/src/services/instagram.ts` ⚠️ 1706 lines monolith
-13. `packages/apps/api/src/services/publisher-credentials.ts`
-14. `packages/apps/api/src/routes/internal-tokens.ts`
+8. `packages/apps/api/src/services/autopilot.ts`
+9. `packages/apps/api/src/services/content-operations/publishing.ts` ⚠️ Critical
+10. `packages/apps/api/src/services/instagram-best-time.ts` ⚠️ Platform-specific
+11. `packages/apps/api/src/services/instagram.ts` ⚠️ 1706 lines monolith
+12. `packages/apps/api/src/services/publisher-credentials.ts`
+13. `packages/apps/api/src/routes/internal-tokens.ts`
 
 ### Lambda Functions (4 files)
 
-15. `packages/infra/cdk/lib/lambdas/publishers/instagram/index.ts` ✅ OK, platform-specific
-16. `packages/services/brand-analysis-scheduler/src/index.ts`
-17. `packages/services/comments-ingestor/src/index.ts`
-18. `packages/services/status-sync/src/index.ts`
+14. `packages/infra/cdk/lib/lambdas/publishers/instagram/index.ts` ✅ OK, platform-specific
+15. `packages/services/brand-analysis-scheduler/src/index.ts`
+16. `packages/services/comments-ingestor/src/index.ts`
+17. `packages/services/status-sync/src/index.ts`
 
 ### Scripts (2 files)
 
-19. `packages/apps/api/scripts/seed-dev.ts` ✅ OK, test data
-20. `packages/libs/database/scripts/migrate-instagram-to-social-accounts.ts` ✅ OK, migration
+18. `packages/apps/api/scripts/seed-dev.ts` ✅ OK, test data
+19. `packages/libs/database/scripts/migrate-instagram-to-social-accounts.ts` ✅ OK, migration
 
 ---
 

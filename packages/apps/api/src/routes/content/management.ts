@@ -19,7 +19,6 @@ import {
 import { getDatabaseClient } from '../../config/database.js';
 import {
   validateRequestBody,
-  verifyBrandAndCampaign,
   resolveAssets,
   createContentInTransaction,
   handleScheduling,
@@ -54,8 +53,11 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send(validationResult.error);
         }
 
-        // Verify brand and campaign access (throws APIError on failure)
-        await verifyBrandAndCampaign(userId, body.brandId, body.campaignId);
+        // Verify user owns the brand
+        const authResult = await verifyBrandOwnership(userId, body.brandId);
+        if (!authResult.authorized) {
+          return reply.code(404).send({ error: authResult.error });
+        }
 
         const requestedTargetIds = Array.isArray((body as any).targetSocialAccountIds)
           ? (body as any).targetSocialAccountIds
@@ -217,7 +219,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const status = body.scheduledAt ? 'scheduled' : 'draft';
-        const resolvedCampaignId = body.campaignId || null;
         const hashtags = extractHashtagsFromCaption(body.caption);
 
         // Create content (single) or a content group (multi-destination)
@@ -229,7 +230,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               brandId: body.brandId,
               caption: body.caption,
               contentType: body.contentType,
-              campaignId: body.campaignId,
               scheduledAt: body.scheduledAt,
               shareToFeed: body.shareToFeed,
               firstComment: body.firstComment,
@@ -264,7 +264,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
                   hashtags,
                   status,
                   brandId: body.brandId,
-                  campaignId: resolvedCampaignId,
                   contentGroupId: group.id,
                   scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
                   contentType: body.contentType || 'post',
@@ -298,7 +297,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
                 hashtags: true,
                 status: true,
                 brandId: true,
-                campaignId: true,
                 contentGroupId: true,
                 targetSocialAccountId: true,
                 schedulingError: true,
@@ -388,7 +386,6 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             scheduledAt: true,
             brandId: true,
             generationParams: true,
-            campaignId: true,
             contentGroupId: true,
             targetSocialAccountId: true,
             schedulingError: true,
@@ -434,13 +431,13 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: authResult.error });
         }
 
-        // Get content with campaign info
         const content = await prisma.content.findFirst({
           where: { id: contentId },
-          include: {
-            campaign: {
-              select: { id: true, status: true },
-            },
+          select: {
+            id: true,
+            status: true,
+            brandId: true,
+            targetSocialAccountId: true,
           },
         });
 
@@ -468,61 +465,48 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        // Check if content belongs to a campaign in preview (draft) state
-        const isInDraftCampaign = content.campaign && content.campaign.status === 'preview';
-
-        // If scheduledAt is provided, create a schedule in AWS (unless in draft campaign)
+        // If scheduledAt is provided, create a schedule in AWS
         if (scheduledAt) {
-          if (isInDraftCampaign) {
-            request.log.info(
-              { contentId, campaignId: content.campaign?.id },
-              'Content belongs to preview campaign - skipping AWS scheduling'
-            );
-          } else {
-            if (content.targetSocialAccountId) {
-              const sa = await prisma.socialAccount.findFirst({
-                where: {
-                  id: content.targetSocialAccountId,
-                  brandId: content.brandId,
-                },
-                select: { platform: true, metadata: true },
+          if (content.targetSocialAccountId) {
+            const sa = await prisma.socialAccount.findFirst({
+              where: {
+                id: content.targetSocialAccountId,
+                brandId: content.brandId,
+              },
+              select: { platform: true, metadata: true },
+            });
+            if (!sa || isDisconnected(sa.metadata)) {
+              return reply.code(400).send({
+                error: 'invalid_target_social_account',
+                message: 'Target social account is not connected to this brand',
               });
-              if (!sa || isDisconnected(sa.metadata)) {
-                return reply.code(400).send({
-                  error: 'invalid_target_social_account',
-                  message: 'Target social account is not connected to this brand',
-                });
-              }
-              if (!supportsScheduling(String(sa.platform))) {
-                return reply.code(400).send({
-                  error: 'scheduling_not_supported',
-                  message: `Scheduling is not yet supported for ${String(sa.platform)}`,
-                });
-              }
             }
+            if (!supportsScheduling(String(sa.platform))) {
+              return reply.code(400).send({
+                error: 'scheduling_not_supported',
+                message: `Scheduling is not yet supported for ${String(sa.platform)}`,
+              });
+            }
+          }
 
-            try {
-              // Don't pass customTime - let scheduler-adapter read scheduledAt from database
-              // This avoids timezone conversion issues since DB stores UTC
-              const scheduleResult = await schedulerService.scheduleContent(contentId);
+          try {
+            // Don't pass customTime - let scheduler-adapter read scheduledAt from database
+            // This avoids timezone conversion issues since DB stores UTC
+            const scheduleResult = await schedulerService.scheduleContent(contentId);
 
-              if (!scheduleResult.success) {
-                request.log.error(
-                  { err: scheduleResult.error, contentId },
-                  'Failed to create AWS schedule'
-                );
-                // Note: We don't fail the request here as the content is already scheduled locally
-                // The scheduler adapter has fallback logic
-              } else {
-                request.log.info({ contentId }, 'Content scheduled successfully in AWS');
-              }
-            } catch (scheduleError) {
+            if (!scheduleResult.success) {
               request.log.error(
-                { err: scheduleError, contentId },
-                'Error calling scheduler service'
+                { err: scheduleResult.error, contentId },
+                'Failed to create AWS schedule'
               );
-              // Continue with local scheduling
+              // Note: We don't fail the request here as the content is already scheduled locally
+              // The scheduler adapter has fallback logic
+            } else {
+              request.log.info({ contentId }, 'Content scheduled successfully in AWS');
             }
+          } catch (scheduleError) {
+            request.log.error({ err: scheduleError, contentId }, 'Error calling scheduler service');
+            // Continue with local scheduling
           }
         }
 

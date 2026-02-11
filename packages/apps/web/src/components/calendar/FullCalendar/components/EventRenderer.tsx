@@ -66,11 +66,8 @@ function buildCardItem(resource: CalendarEvent['resource'], brandId: string): Ca
     const nowIso = new Date().toISOString();
 
     const placeholder: CalendarItem = {
-      id: String(record.id ?? resource.campaignId ?? nowIso),
+      id: String(record.id ?? nowIso),
       type: 'placeholder',
-      campaignId: toStringOrDefault(record.campaignId, resource.campaignId, 'none'),
-      campaignName: toStringOrDefault(record.campaignName, resource.campaignName, ''),
-      campaignColor: toNullableString(record.campaignColor ?? resource.campaignColor),
       scheduledAt: toStringOrDefault(record.scheduledAt, resource.scheduledAt, nowIso),
       status: 'placeholder',
       message: toStringOrDefault(record.message, '', ''),
@@ -113,9 +110,4 @@ function toStringOrDefault(value: unknown, fallback: unknown, defaultValue: stri
   if (typeof value === 'string' && value.length > 0) return value;
   if (typeof fallback === 'string' && fallback.length > 0) return fallback;
   return defaultValue;
-}
-
-function toNullableString(value: unknown): string | null {
-  if (typeof value === 'string') return value;
-  return null;
 }

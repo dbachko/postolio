@@ -30,15 +30,6 @@ vi.mock('../../services/redis.js', () => {
   };
 });
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // In-memory store to observe DB changes
 const dbState = {
   brands: [] as Array<{ id: string; userId: string; name: string; styleProfile?: unknown }>,
@@ -74,7 +65,6 @@ vi.mock('../../config/database.js', () => {
           hashtags: data.hashtags ?? [],
           status: data.status ?? 'draft',
           brandId: data.brandId,
-          campaignId: data.campaignId ?? null,
           scheduledAt: data.scheduledAt ?? null,
           createdAt: now,
           updatedAt: now,

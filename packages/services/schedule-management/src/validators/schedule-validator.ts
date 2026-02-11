@@ -13,7 +13,6 @@ export interface ValidationResult {
 export interface ScheduleRequest {
   contentId: string;
   brandId: string;
-  campaignId?: string;
   userId: string;
   platform: string;
   scheduledAt: string;
@@ -80,10 +79,6 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
   }
 
   // Validate optional fields
-  if (request.campaignId !== undefined && typeof request.campaignId !== 'string') {
-    errors.push('campaignId must be a string if provided');
-  }
-
   if (request.caption !== undefined && typeof request.caption !== 'string') {
     errors.push('caption must be a string if provided');
   }
@@ -208,10 +203,6 @@ export function validatePublishNowRequest(request: Record<string, unknown>): Val
   }
 
   // Validate optional fields
-  if (request.campaignId !== undefined && typeof request.campaignId !== 'string') {
-    errors.push('campaignId must be a string if provided');
-  }
-
   if (request.caption !== undefined && typeof request.caption !== 'string') {
     errors.push('caption must be a string if provided');
   }
@@ -283,35 +274,6 @@ export function validatePublishNowRequest(request: Record<string, unknown>): Val
       errors.push('mediaAssets must include at least one item for image content');
     } else if (hasInvalidMediaAssets) {
       errors.push('mediaAssets must contain valid asset objects with non-empty keys');
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}
-
-/**
- * Validate campaign request
- */
-export function validateCampaignRequest(request: Record<string, unknown>): ValidationResult {
-  const errors: string[] = [];
-
-  if (!request.campaignId || typeof request.campaignId !== 'string') {
-    errors.push('campaignId is required and must be a string');
-  }
-
-  if (!request.brandId || typeof request.brandId !== 'string') {
-    errors.push('brandId is required and must be a string');
-  }
-
-  if (!request.status || typeof request.status !== 'string') {
-    errors.push('status is required and must be a string');
-  } else {
-    const validStatuses = ['active', 'paused', 'completed', 'failed'];
-    if (!validStatuses.includes((request.status as string).toLowerCase())) {
-      errors.push(`status must be one of: ${validStatuses.join(', ')}`);
     }
   }
 

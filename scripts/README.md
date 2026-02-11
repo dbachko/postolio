@@ -81,7 +81,7 @@ The `get-app-urls.sh` script retrieves URLs and resource information from your d
 The script displays:
 
 - **Application URLs**: Frontend (CloudFront), Backend API (ALB)
-- **Useful Endpoints**: Auth, Brands, Campaigns, Instagram OAuth
+- **Useful Endpoints**: Auth, Brands, Instagram OAuth
 - **AWS Resources**: Database, Redis, ECR, VPC, S3
 - **Stack Status**: Current deployment status of all stacks
 
@@ -105,7 +105,6 @@ Environment: dev
 Auth Login:         https://postolio.example/api/auth/login
 Auth Register:      https://postolio.example/api/auth/register
 Brands:             https://postolio.example/api/brands/list
-Campaigns:          https://postolio.example/api/campaign/list
 Instagram OAuth:    https://postolio.example/api/auth/instagram/authorize
 
 🔧 AWS RESOURCES

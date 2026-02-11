@@ -36,11 +36,6 @@ export function canDragScheduledContent(content: Content | null, isPast: boolean
   const status =
     typeof (content as any)?.status === 'string' ? String((content as any).status).trim() : '';
   if (status === 'published') return false;
-  const campaignStatus =
-    typeof (content as any)?.campaignStatus === 'string'
-      ? String((content as any).campaignStatus).trim()
-      : '';
-  if (campaignStatus === 'paused') return false;
   return true;
 }
 

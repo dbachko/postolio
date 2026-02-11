@@ -157,8 +157,8 @@ describe('TimezoneService', () => {
       expect(formatInTimeZone(utcSchedule, 'UTC', 'HH:mm')).toBe('09:00');
     });
 
-    it('should handle campaign spanning DST transition', () => {
-      // Campaign from March 1 to March 31, 2025
+    it('should handle a date range spanning DST transition', () => {
+      // Date range from March 1 to March 31, 2025
       // DST starts March 9, 2025 in US (2 AM -> 3 AM)
 
       // Schedule for before DST (March 8)

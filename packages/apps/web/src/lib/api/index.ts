@@ -1,7 +1,6 @@
 import { createHttp, createHttpMethods } from '@/lib/http/http';
 import { AuthClient, SessionClient } from './auth-client';
 import { BrandClient } from './brand-client';
-import { CampaignClient } from './campaign-client';
 import { ContentClient } from './content-client';
 import { NotificationsClient } from './notifications-client';
 import { AnalyticsClient } from './analytics-client';
@@ -10,6 +9,9 @@ import { DMAutomationClient } from './dm-automation-client';
 import { SavedRepliesClient } from './saved-replies-client';
 import { SnippetsClient } from './snippets-client';
 import { PublishingQueuesClient } from './publishing-queues-client';
+import { RecipesClient } from './recipes-client';
+import { SkillsClient } from './skills-client';
+import { RunsClient } from './runs-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -17,7 +19,6 @@ const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHt
 export const auth = new AuthClient(http);
 export const session = new SessionClient(http);
 export const brand = new BrandClient(http);
-export const campaign = new CampaignClient(http);
 export const content = new ContentClient(http);
 export const notifications = new NotificationsClient(http);
 export const onboarding = new OnboardingClient(http);
@@ -26,6 +27,9 @@ export const dmAutomation = new DMAutomationClient(http);
 export const savedReplies = new SavedRepliesClient(http);
 export const snippets = new SnippetsClient(http);
 export const publishingQueues = new PublishingQueuesClient(http);
+export const recipes = new RecipesClient(http);
+export const skills = new SkillsClient(http);
+export const runs = new RunsClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 
@@ -39,9 +43,6 @@ export type {
   SecuritySummary,
   LoginHistoryItem,
   LoginHistoryResponse,
-  CampaignConfig,
-  CampaignPreview,
-  Campaign,
   Notification,
   NotificationPreference,
   DMAutomationRule,

@@ -27,33 +27,6 @@ vi.mock('../services/schedule-service', () => {
   return { ScheduleService: MockScheduleService };
 });
 
-vi.mock('../services/campaign-service', () => {
-  class MockCampaignService {
-    createCampaign = vi.fn();
-    createCampaignRecord = vi.fn();
-    getCampaign = vi.fn();
-    listCampaigns = vi.fn();
-    updateCampaign = vi.fn();
-    updateCampaignStatus = vi.fn();
-    deleteCampaign = vi.fn();
-    healthCheck = vi.fn();
-  }
-
-  return { CampaignService: MockCampaignService };
-});
-
-vi.mock('@postolio/aws', () => ({
-  createServiceLogger: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    operationStart: vi.fn(),
-    operationSuccess: vi.fn(),
-    operationFailure: vi.fn(),
-  })),
-}));
-
 describe('HttpHandler', () => {
   let httpHandler: HttpHandler;
   let mockScheduleService: {
@@ -508,16 +481,6 @@ describe('HttpHandler', () => {
           Authorization: 'Bearer test-jwt-token',
         },
       };
-
-      const serviceError = new Error('Campaign validation failed') as Error & {
-        code: string;
-        retryable: boolean;
-      };
-      serviceError.name = 'ServiceError';
-      serviceError.code = 'CAMPAIGN_VALIDATION_FAILED';
-      serviceError.retryable = false;
-
-      mockScheduleService.createSchedule.mockRejectedValue(serviceError);
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 

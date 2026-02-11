@@ -30,15 +30,6 @@ vi.mock('../../services/redis.js', () => {
   };
 });
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 const dbState = {
   brands: [] as Array<{ id: string; userId: string; preferences?: unknown }>,
   imageGenerationLogs: [] as Array<any>,

@@ -10,7 +10,6 @@ export interface GenerationOptions {
   preferredProvider?: ImageProvider;
   enableFallback?: boolean;
   brandId: string;
-  campaignId?: string;
   contentId?: string;
 }
 
@@ -76,7 +75,6 @@ export class ImageGenerationOrchestrator {
     contentLogger.info('[Orchestrator] Starting image generation', {
       brand: brandName,
       provider: preferredProvider,
-      campaignId: options.campaignId,
     });
 
     try {
@@ -203,7 +201,6 @@ export class ImageGenerationOrchestrator {
     const asset = await importImageBuffer(buffer, {
       contentId,
       brandId: options.brandId,
-      campaignId: options.campaignId ?? null,
       source: provider,
       originalPrompt,
       generatedAt: new Date(),
@@ -226,7 +223,6 @@ export class ImageGenerationOrchestrator {
       await prisma.imageGenerationLog.create({
         data: {
           brandId: options.brandId,
-          campaignId: options.campaignId,
           contentId: options.contentId,
           provider: result.provider,
           prompt: prompt.substring(0, 1000), // Truncate to reasonable length

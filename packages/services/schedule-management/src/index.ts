@@ -8,7 +8,6 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { HttpHandler } from './handlers/http-handler';
-import { CampaignEventHandler, type EventBridgeEvent } from './handlers/campaign-event-handler';
 import { createErrorResponse } from './utils/response-utils';
 import { initSentry, captureException } from '@postolio/observability';
 
@@ -20,31 +19,19 @@ initSentry({
 
 // Initialize handlers
 const httpHandler = new HttpHandler();
-const campaignEventHandler = new CampaignEventHandler();
 
 /**
  * Main Lambda handler - Route dispatcher
  */
 export const handler = async (
-  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent
-): Promise<APIGatewayProxyResult | void> => {
+  event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResult> => {
   logger.info('Lambda invocation started', {
     requestId: process.env.AWS_REQUEST_ID,
     eventType: determineEventType(event),
   });
 
   try {
-    // Check if this is an EventBridge event
-    if (isEventBridgeEvent(event)) {
-      logger.info('Routing to campaign event handler', {
-        source: event.source,
-        detailType: event['detail-type'],
-      });
-
-      await campaignEventHandler.handle(event as EventBridgeEvent);
-      return; // EventBridge events don't need HTTP responses
-    }
-
     // Handle HTTP events (API Gateway / Function URL)
     logger.info('Routing to HTTP handler', {
       method: getMethod(event as APIGatewayProxyEvent | APIGatewayProxyEventV2),
@@ -66,11 +53,6 @@ export const handler = async (
       eventType: determineEventType(event),
     });
 
-    // For EventBridge events, re-throw to trigger DLQ
-    if (isEventBridgeEvent(event)) {
-      throw error;
-    }
-
     // For HTTP events, return error response
     return createErrorResponse(
       500,
@@ -81,29 +63,9 @@ export const handler = async (
 };
 
 /**
- * Determine if this is an EventBridge event
- */
-function isEventBridgeEvent(
-  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent
-): event is EventBridgeEvent {
-  return (
-    'source' in event &&
-    event.source === 'postolio.campaign' &&
-    'detail-type' in event &&
-    'detail' in event
-  );
-}
-
-/**
  * Determine the event type for logging
  */
-function determineEventType(
-  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent
-): string {
-  if (isEventBridgeEvent(event)) {
-    return 'EventBridge';
-  }
-
+function determineEventType(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
   if ('requestContext' in event && event.requestContext) {
     if ('http' in event.requestContext) {
       return 'Function URL';
@@ -155,18 +117,13 @@ export const healthCheck = async (): Promise<{
       },
     } as APIGatewayProxyEventV2);
 
-    // Check campaign event handler health
-    const campaignEventHealth = await campaignEventHandler.healthCheck();
-
-    const allHealthy = httpHealth.statusCode === 200 && campaignEventHealth.healthy;
+    const allHealthy = httpHealth.statusCode === 200;
 
     return {
       healthy: allHealthy,
       details: {
         httpHandler: httpHealth.statusCode === 200,
-        campaignEventHandler: campaignEventHealth.healthy,
         httpHealthDetails: httpHealth.statusCode === 200 ? 'OK' : httpHealth.body,
-        campaignEventDetails: campaignEventHealth.details,
       },
       timestamp: new Date().toISOString(),
     };

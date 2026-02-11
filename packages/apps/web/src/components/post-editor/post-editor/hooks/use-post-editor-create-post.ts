@@ -17,7 +17,6 @@ export function usePostEditorCreatePost(params: {
   brandTimezone: string;
   formData: PostEditorFormState;
   firstCommentOpen: boolean;
-  selectedCampaign: string | null;
   selectedPlatformAccountIds: string[];
   openSidebar: (type: string, params: Record<string, unknown>) => void;
   navigate: (to: string) => void;
@@ -30,7 +29,6 @@ export function usePostEditorCreatePost(params: {
     navigate,
     onRequestClose,
     openSidebar,
-    selectedCampaign,
     selectedBrand,
     selectedPlatformAccountIds,
   } = params;
@@ -59,7 +57,6 @@ export function usePostEditorCreatePost(params: {
         caption: isStory ? '' : formData.caption.trim(),
         assetIds: formData.carouselAssets.map((a) => a.id),
         contentType: formData.contentType,
-        campaignId: selectedCampaign || undefined,
         shareToFeed: formData.contentType === 'reel' ? formData.shareToFeed : undefined,
         firstComment:
           isStory || !firstCommentOpen ? undefined : (formData.firstComment || '').trim(),
@@ -160,19 +157,14 @@ export function usePostEditorCreatePost(params: {
       queryClient.invalidateQueries({ queryKey: ['drafts'] });
 
       const isScheduled = mode === 'schedule';
-      const hasCampaign = !!selectedCampaign;
 
       let message = 'Post created successfully!';
       if (mode === 'queue') {
         message = 'Added to queue';
       } else if (mode === 'now') {
         message = 'Publishing started';
-      } else if (isScheduled && hasCampaign) {
-        message = 'Scheduling started and added to campaign';
       } else if (isScheduled) {
         message = 'Scheduling started';
-      } else if (hasCampaign) {
-        message = 'Post created and added to campaign!';
       }
 
       if (mode === 'queue') {

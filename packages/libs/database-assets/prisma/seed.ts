@@ -85,7 +85,7 @@ async function main() {
 
   async function getOrCreateFolder(
     name: string,
-    folderType: 'general' | 'campaign_pool' | 'brand_assets',
+    folderType: 'general' | 'brand_assets',
     color?: string
   ) {
     const existing = await prisma.assetFolder.findFirst({ where: { brandId, name } });

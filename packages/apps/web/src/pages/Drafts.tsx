@@ -29,7 +29,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import type { Asset } from '@/features/assets/api/client';
 import { content as contentApi, type Content } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useBrandStore } from '@/stores/brandStore';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
@@ -210,20 +209,6 @@ function DraftCard({
                   ? `Scheduled ${formatShortDateTime(draft.scheduledAt)}`
                   : `Edited ${formatShortDateTime(draft.updatedAt || draft.createdAt)}`}
               </span>
-              {draft.campaignName && (
-                <span className="inline-flex items-center gap-1">
-                  <span
-                    className={cn(
-                      'h-2 w-2 rounded-full border',
-                      !draft.campaignColor && 'bg-muted'
-                    )}
-                    style={
-                      draft.campaignColor ? { backgroundColor: draft.campaignColor } : undefined
-                    }
-                  />
-                  <span className="max-w-[200px] truncate">{draft.campaignName}</span>
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -268,8 +253,7 @@ export default function Drafts() {
       .filter((draft) => {
         if (!normalizedSearch) return true;
         const caption = (draft.caption || '').toLowerCase();
-        const campaignName = (draft.campaignName || '').toLowerCase();
-        return caption.includes(normalizedSearch) || campaignName.includes(normalizedSearch);
+        return caption.includes(normalizedSearch);
       });
 
     const multiplier = sortDirection === 'asc' ? 1 : -1;
@@ -322,7 +306,7 @@ export default function Drafts() {
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search drafts by caption or campaign"
+              placeholder="Search drafts by caption"
               className="pl-9"
             />
           </div>

@@ -7,7 +7,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Building2, Plus, Settings, Sparkles } from 'lucide-react';
+import { Building2, Plus, Settings } from 'lucide-react';
 
 import type { NavigationItem } from '@/components/app-shell/nav-config';
 
@@ -34,7 +34,7 @@ export function AppHeaderSearchDialog({
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         id={inputId}
-        placeholder="Search features, campaigns, analytics..."
+        placeholder="Search features, content, analytics..."
         value={searchQuery}
         onValueChange={onSearchQueryChange}
       />
@@ -63,10 +63,6 @@ export function AppHeaderSearchDialog({
           <CommandItem onSelect={() => onSelectPath('/posts/create')}>
             <Plus className="mr-3 h-4 w-4" aria-hidden="true" />
             Create New Post
-          </CommandItem>
-          <CommandItem onSelect={() => onSelectPath('/campaigns/create')}>
-            <Sparkles className="mr-3 h-4 w-4" aria-hidden="true" />
-            Create New Campaign
           </CommandItem>
           <CommandItem onSelect={() => onSelectPath('/brands')}>
             <Building2 className="mr-3 h-4 w-4" aria-hidden="true" />

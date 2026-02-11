@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { brand as brandApi, campaign as campaignApi, content as contentApi } from '@/lib/api';
+import { brand as brandApi, content as contentApi, httpGet } from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { usePostDetail } from '@/hooks/usePostDetail';
 import { getEnabledPlatforms, type Platform } from '@/lib/platform-config';
@@ -325,7 +325,7 @@ export function usePostEditorData(params: { id?: string; selectedBrandId: string
 
   const limitsQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead'],
-    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    queryFn: async () => httpGet('/api/account/limits/schedule-ahead'),
     staleTime: 60 * 1000,
   });
   const limits = limitsQuery.data?.data as ScheduleAheadLimits | undefined;

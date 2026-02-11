@@ -57,8 +57,8 @@ The web app consumes a RESTful API via domain-scoped clients backed by a shared 
 
 - HTTP adapter: `src/lib/http/http.ts`
   - Adds `X-Timezone`, handles CSRF (`/api/csrf-token`), includes credentials, and retries on 401 via the AuthInterceptor.
-- Domain clients: `src/lib/api/{auth-client,brand-client,campaign-client,content-client}.ts`
-  - Import via `import { auth, brand, campaign, content } from '@/lib/api'`.
+- Domain clients: `src/lib/api/{auth-client,brand-client,content-client}.ts`
+  - Import via `import { auth, brand, content } from '@/lib/api'`.
   - For simple one-offs, use `httpGet/httpPost/httpPut/httpDelete` from the same barrel.
 
 ### Key REST Endpoints (selected)
@@ -81,17 +81,6 @@ The web app consumes a RESTful API via domain-scoped clients backed by a shared 
     - `GET /api/brands/:brandId/analysis/profiles` — list profiles
     - `GET /api/brands/:brandId/analysis/diff/:a/:b` — diff two profiles
   - Calendar: `GET /api/brands/:brandId/calendar/:yyyymm`
-
-- Campaigns
-  - `GET /api/campaigns?brandId=` — list campaigns
-  - `POST /api/campaigns` — create
-  - `GET|PUT|DELETE /api/campaigns/:id` — detail/update/delete
-  - `POST /api/campaigns/:id/start` — start
-  - `POST /api/campaigns/:id/fill-window` — generate window
-  - Drafts: `GET|POST /api/campaigns/drafts`
-  - Strategy & goal: `POST /api/campaigns/{strategy,analyze-goal}`
-  - Analytics: `/api/analytics/campaigns/:id{,/metrics,/recommendations,/roi}`
-  - Brand analytics summary: `/api/analytics/brands/:brandId/summary`
 
 - Content
   - `POST /api/content` — create manual content

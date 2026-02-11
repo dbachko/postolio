@@ -33,15 +33,6 @@ vi.mock('../../services/redis.js', () => {
   };
 });
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // Mock dependencies
 vi.mock('../../config/database.js', () => {
   const mockClient = {
@@ -302,12 +293,10 @@ describe('Social Platform Routes', () => {
         shareToFeed: null,
         thumbOffset: null,
         mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
-        campaignId: null,
         brand: {
           id: 'brand-123',
           userId: 'user-123',
         },
-        campaign: null,
       });
 
       const socialAccount = {
@@ -372,8 +361,6 @@ describe('Social Platform Routes', () => {
         id: 'content-123',
         brandId: 'brand-123',
         brand: { id: 'brand-123', userId: 'user-123' },
-        campaignId: null,
-        campaign: null,
       });
 
       mockPrisma.socialAccount.findUnique.mockResolvedValue(null);
@@ -403,8 +390,6 @@ describe('Social Platform Routes', () => {
         thumbOffset: null,
         mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
         brand: { id: 'brand-123', userId: 'user-123' },
-        campaignId: null,
-        campaign: null,
       });
 
       const socialAccount = {
@@ -434,41 +419,6 @@ describe('Social Platform Routes', () => {
       expect(response.statusCode).toBe(500);
       const payload = JSON.parse(response.payload);
       expect(payload.error).toContain('Rate limit exceeded');
-    });
-
-    it('should block publishing when campaign is paused', async () => {
-      mockPrisma.content.findUnique.mockResolvedValue({
-        id: 'content-123',
-        brandId: 'brand-123',
-        caption: 'Test post',
-        hashtags: ['test', 'instagram'],
-        status: 'scheduled',
-        contentType: 'post',
-        shareToFeed: null,
-        thumbOffset: null,
-        mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
-        campaignId: 'campaign-123',
-        brand: {
-          id: 'brand-123',
-          userId: 'user-123',
-        },
-        campaign: {
-          id: 'campaign-123',
-          status: 'paused',
-        },
-      });
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/social/instagram/publish/content-123',
-        headers: {
-          authorization: authHeader,
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-      const payload = JSON.parse(response.payload);
-      expect(payload.error).toContain('campaign_not_active');
     });
   });
 

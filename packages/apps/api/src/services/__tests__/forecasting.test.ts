@@ -8,9 +8,6 @@ vi.mock('../../config/database.js', () => {
     contentPublication: {
       findMany: vi.fn(),
     },
-    campaign: {
-      findUnique: vi.fn(),
-    },
   } as any;
   return {
     getDatabaseUrl: vi.fn(() => 'postgresql://test:test@localhost:5432/test?schema=public'),
@@ -254,59 +251,6 @@ describe('ForecastingService', () => {
 
       expect(result.forecasts.reach).toHaveProperty('expectedReach');
       expect(result.forecasts.reach.expectedReach).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Campaign Performance Prediction', () => {
-    it('should predict campaign performance based on historical data', async () => {
-      const mockPublications = createTimeSeriesData(30, 'stable');
-      const mockCampaign = {
-        id: 'campaign-123',
-        brandId: mockBrandId,
-        postsPerWeek: 3,
-        durationWeeks: 4,
-        totalPosts: 12,
-      };
-
-      vi.mocked(mockPrisma.contentPublication.findMany).mockResolvedValue(mockPublications);
-      vi.mocked(mockPrisma.campaign.findUnique).mockResolvedValue(mockCampaign as any);
-
-      const result = await engine.predictCampaignPerformance('campaign-123', mockBrandId);
-
-      expect(result).toHaveProperty('campaignId', 'campaign-123');
-      expect(result).toHaveProperty('estimatedPerformance');
-      expect(result.estimatedPerformance).toHaveProperty('predictedEngagement');
-      expect(result.estimatedPerformance).toHaveProperty('predictedReach');
-      expect(result.estimatedPerformance).toHaveProperty('predictedEngagementRate');
-      expect(result.estimatedPerformance).toHaveProperty('totalPosts');
-    });
-
-    it('should throw error for non-existent campaign', async () => {
-      vi.mocked(mockPrisma.campaign.findUnique).mockResolvedValue(null);
-
-      await expect(
-        engine.predictCampaignPerformance('non-existent', mockBrandId)
-      ).rejects.toThrow();
-    });
-
-    it('should include confidence level in campaign prediction', async () => {
-      const mockPublications = createTimeSeriesData(30, 'stable');
-      const mockCampaign = {
-        id: 'campaign-123',
-        brandId: mockBrandId,
-        postsPerWeek: 3,
-        durationWeeks: 4,
-        totalPosts: 12,
-      };
-
-      vi.mocked(mockPrisma.contentPublication.findMany).mockResolvedValue(mockPublications);
-      vi.mocked(mockPrisma.campaign.findUnique).mockResolvedValue(mockCampaign as any);
-
-      const result = await engine.predictCampaignPerformance('campaign-123', mockBrandId);
-
-      expect(result.estimatedPerformance).toHaveProperty('confidence');
-      expect(result.estimatedPerformance.confidence).toBeGreaterThanOrEqual(0);
-      expect(result.estimatedPerformance.confidence).toBeLessThanOrEqual(100);
     });
   });
 

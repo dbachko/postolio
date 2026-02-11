@@ -457,7 +457,6 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           where: { id },
           include: {
             folder: true,
-            campaignAssets: true,
           },
         });
 
@@ -511,7 +510,6 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           },
           include: {
             folder: true,
-            campaignAssets: true,
           },
         });
 

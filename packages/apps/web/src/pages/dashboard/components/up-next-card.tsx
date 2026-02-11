@@ -58,12 +58,10 @@ export function UpNextCard({
         ) : upcomingPosts.length === 0 ? (
           <div className="space-y-3">
             <p className="text-muted-foreground text-sm">
-              Nothing scheduled yet. Start a campaign or schedule a post to stay consistent.
+              Nothing scheduled yet. Create a post or schedule one from your drafts to stay
+              consistent.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <Link to="/campaigns/create">Start Campaign</Link>
-              </Button>
               <Button variant="outline" onClick={onCreatePost}>
                 Create Post
               </Button>

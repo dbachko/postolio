@@ -5,6 +5,7 @@
     "setup:ai-localhost": "bash scripts/setup-ai-localhost.sh",
     "build": "turbo build",
     "dev": "turbo dev --parallel",
+    "dev:db": "docker compose up -d",
     "dev:api": "pnpm --filter api run build:deps && pnpm --filter api dev",
     "dev:web": "pnpm --filter @postolio/web^... run build && pnpm --filter @postolio/web dev",
     "dev:ingestor": "pnpm --filter @postolio/analytics-ingestor build && INGESTOR_LOOP_MS=60000 pnpm --filter @postolio/analytics-ingestor start",

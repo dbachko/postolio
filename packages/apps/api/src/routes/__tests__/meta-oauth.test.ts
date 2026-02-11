@@ -10,15 +10,6 @@ vi.mock('../../plugins/csrf-auto-protect.js', () => ({
   default: (async () => {}) as any,
 }));
 
-// Avoid starting real BullMQ workers during tests.
-vi.mock('../../services/regeneration-queue.js', () => ({
-  regenerationService: {
-    startRegeneration: vi.fn(),
-    getJobProgress: vi.fn(),
-    cancelJob: vi.fn(),
-  },
-}));
-
 // Minimal in-memory Redis mock with TTL support (enough for Meta OAuth sessions).
 vi.mock('../../services/redis.js', () => {
   const store = new Map<string, { value: string; expiresAt?: number }>();

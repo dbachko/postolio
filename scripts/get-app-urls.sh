@@ -104,7 +104,6 @@ if [[ "$API_STATUS" != "NOT_FOUND" ]] && [[ -n "$BACKEND_URL" || -n "$ALB_DNS" ]
     echo "Auth Login:         $BASE_URL/api/auth/login"
     echo "Auth Register:      $BASE_URL/api/auth/register"
     echo "Brands:             $BASE_URL/api/brands/list"
-    echo "Campaigns:          $BASE_URL/api/campaign/list"
     echo "Instagram OAuth:    $BASE_URL/api/auth/instagram/authorize"
 else
     echo "API not deployed yet"

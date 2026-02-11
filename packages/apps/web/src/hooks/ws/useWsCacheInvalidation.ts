@@ -86,14 +86,6 @@ export function useWsCacheInvalidation(
       // Coalesce multiple WS events into a single invalidation pass to avoid UI flicker.
       scheduleInvalidations(queryKeys);
 
-      // Invalidate campaign query if metadata provides campaignId
-      if (event.type === 'status_update' && 'contentId' in event.data) {
-        const metadata = (event.data as any).metadata as { campaignId?: string } | undefined;
-        if (metadata?.campaignId) {
-          scheduleInvalidations([['campaign', metadata.campaignId]]);
-        }
-      }
-
       // Optimistic cache update for content status
       const statusEvents: Array<{
         contentId: string;

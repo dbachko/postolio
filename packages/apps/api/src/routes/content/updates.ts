@@ -67,15 +67,12 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Get full content with campaign info
+      // Get full content
       const content = await prisma.content.findFirst({
         where: { id: contentId },
         include: {
           brand: {
             select: { userId: true, id: true },
-          },
-          campaign: {
-            select: { id: true, status: true },
           },
           publishingQueueItem: {
             select: { id: true, queueId: true, laneKey: true },
@@ -346,16 +343,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         'Updating content with data'
       );
 
-      // Check if content belongs to a campaign in preview (draft) state
-      // If so, only update local database, don't schedule in AWS until campaign is started
-      const isInDraftCampaign = content.campaign && content.campaign.status === 'preview';
-
-      if (isInDraftCampaign && scheduledAt !== undefined) {
-        console.log(
-          `Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`
-        );
-      }
-
       // Handle AWS scheduling operations FIRST before updating local DB
       // This prevents race conditions where local DB has new time but AWS doesn't
       const originalScheduledTime = content.scheduledAt?.toISOString();
@@ -363,29 +350,13 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const requestedScheduledAt =
         (updateData.scheduledAt as Date | null | undefined) ?? content.scheduledAt ?? null;
 
-      const isPausedCampaign = content.campaign && content.campaign.status === 'paused';
-      if (
-        schedulingSupported &&
-        isPausedCampaign &&
-        scheduledAt !== undefined &&
-        originalScheduledTime !== newScheduledTime
-      ) {
-        return reply.code(409).send({
-          success: false,
-          code: 'CAMPAIGN_PAUSED',
-          error: 'Campaign is paused. Unpause the campaign to reschedule posts.',
-          data: null,
-        });
-      }
-
-      // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state
-      // Skip AWS operations if content belongs to a draft campaign
+      // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state.
       let scheduledInAwsBeforeUpdate = false;
       let newScheduleFailed = false;
       let newScheduleError: string | undefined;
       let planLimitHit = false;
       let planLimitMessage: string | undefined;
-      if (schedulingSupported && !isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
+      if (schedulingSupported && !originalScheduledTime && newScheduledTime) {
         try {
           // Ensure firstComment is persisted before creating the AWS schedule
           // so the scheduler and publisher receive the latest text.
@@ -432,12 +403,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Check if this is a reschedule operation (time changed)
-      // Skip AWS operations if content belongs to a draft campaign
+      // Check if this is a reschedule operation (time changed).
       let needsNewSchedule = false;
       if (
         schedulingSupported &&
-        !isInDraftCampaign &&
         originalScheduledTime &&
         newScheduledTime &&
         originalScheduledTime !== newScheduledTime
@@ -552,7 +521,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           updatedAt: true,
           brandId: true,
           contentType: true,
-          campaignId: true,
           contentGroupId: true,
           targetSocialAccountId: true,
           schedulingError: true,
@@ -581,13 +549,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       // Handle scheduling changes with AWS ContentScheduler
-      // Skip AWS operations if content belongs to a draft campaign
-      if (
-        schedulingSupported &&
-        scheduledAt !== undefined &&
-        !isInDraftCampaign &&
-        !scheduledInAwsBeforeUpdate
-      ) {
+      if (schedulingSupported && scheduledAt !== undefined && !scheduledInAwsBeforeUpdate) {
         const originalScheduledTime = content.scheduledAt?.toISOString();
         const newScheduledTime = updatedContent.scheduledAt?.toISOString();
 
@@ -684,11 +646,6 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         }
         // Note: Reschedule logic moved earlier in the flow to prevent race conditions
         // AWS operations now happen BEFORE local DB updates
-      } else if (scheduledAt !== undefined && isInDraftCampaign) {
-        request.log.info(
-          { contentId, campaignId: content.campaign?.id },
-          'Skipping AWS scheduling operations for draft campaign content'
-        );
       }
 
       // If the post is scheduled and its content changed (caption/media/etc), sync the AWS schedule payload.
@@ -702,13 +659,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         originalScheduledTime && newScheduledTime && originalScheduledTime !== newScheduledTime
       );
 
-      if (
-        schedulingSupported &&
-        !isInDraftCampaign &&
-        updatedContent.scheduledAt &&
-        contentChanged &&
-        !timeChanged
-      ) {
+      if (schedulingSupported && updatedContent.scheduledAt && contentChanged && !timeChanged) {
         try {
           const syncResult = await schedulerService.updateScheduledContent(contentId);
           if (!syncResult.success) {

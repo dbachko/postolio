@@ -6,10 +6,6 @@ interface BrandParams {
   brandId: string;
 }
 
-interface CampaignParams {
-  campaignId: string;
-}
-
 interface ForecastQuery {
   days?: string;
   historical?: string;
@@ -59,33 +55,6 @@ const forecastingRoutes: FastifyPluginAsync = async function (fastify) {
         });
       } catch (error: unknown) {
         fastify.log.error({ err: error }, 'Error generating forecast');
-        throw error;
-      }
-    }
-  );
-
-  /**
-   * GET /api/forecasting/campaign/:campaignId
-   * Predict campaign performance
-   */
-  fastify.get<{ Params: CampaignParams }>(
-    '/campaign/:campaignId',
-    { preHandler: fastify.authenticate },
-    async function (request, reply) {
-      try {
-        if (!ensureAuth(request, reply)) return;
-
-        const { campaignId } = request.params;
-
-        // Generate campaign forecast (service is responsible for ownership checks)
-        const prediction = await forecastingService.predictCampaignPerformance(campaignId);
-
-        return reply.send({
-          success: true,
-          data: prediction,
-        });
-      } catch (error: unknown) {
-        fastify.log.error({ err: error }, 'Error predicting campaign performance');
         throw error;
       }
     }

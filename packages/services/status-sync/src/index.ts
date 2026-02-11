@@ -41,7 +41,6 @@ interface EventDetail {
   attemptNumber?: number;
   reason?: string;
   status?: string;
-  campaignId?: string;
   updates?: { scheduledAt?: string };
 }
 

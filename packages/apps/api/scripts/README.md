@@ -6,14 +6,13 @@ This directory contains utility scripts for seeding and managing development dat
 
 ### `seed-dev.ts` - Development Database Seeding
 
-Seeds the database with a complete test user, brand, campaigns, and content for development.
+Seeds the database with a complete test user, brand, social account connection data, and content for development.
 
 **Updated Features:**
 
 - ✅ Creates Instagram account connection data for brands
 - ✅ Creates Facebook Page connection data for brands
 - ✅ Generates realistic Instagram profile metadata
-- ✅ Creates varied campaigns with different statuses
 - ✅ Generates content across all content statuses
 
 **Usage:**
@@ -61,16 +60,7 @@ pnpm --filter=api tsx scripts/seed-dev.ts \
      - `preferences.primarySocialAccountIds.instagram`
      - `preferences.primarySocialAccountIds.facebook`
 
-3. **7 Demo Campaigns** (all statuses):
-   - Onboarding Preview (preview)
-   - Launch Momentum (active)
-   - Evergreen Education (paused)
-   - Winter Seasonal (completed)
-   - Thought Leadership Sprint (creating)
-   - Experimental Ideas (failed)
-   - Batch Processing Queue (processing)
-
-4. **Content Posts** (varied statuses):
+3. **Content Posts** (varied statuses):
    - Published posts with analytics
    - Scheduled posts
    - Draft posts
@@ -206,7 +196,6 @@ pnpm --filter=api tsx scripts/generate-brand-analysis.ts \
 Now you have a fully seeded brand with:
 
 - ✅ Instagram connection
-- ✅ Campaigns and content
 - ✅ Brand analysis with visual styles
 
 ---

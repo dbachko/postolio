@@ -94,7 +94,6 @@ class SchedulerService {
     success: boolean;
     scheduleId?: string;
     brandId?: string;
-    campaignId?: string;
     error?: string;
   }> {
     return schedulerAdapter.publishNow(contentId, userId);

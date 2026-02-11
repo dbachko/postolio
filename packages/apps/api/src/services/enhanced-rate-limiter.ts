@@ -59,12 +59,6 @@ export const RateLimitConfigs = {
     message: 'Content generation limit reached. Please try again later.',
     keyPrefix: 'rl:content-gen',
   },
-  campaignCreation: {
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 20,
-    message: 'Campaign creation limit reached. Please try again later.',
-    keyPrefix: 'rl:campaign-create',
-  },
   instagramPublish: {
     windowMs: 60 * 60 * 1000, // 1 hour
     maxRequests: 30,
@@ -245,8 +239,6 @@ export const enhancedRateLimiters = {
   magicLink: () => EnhancedRateLimiter.createLimiter(RateLimitConfigs.magicLink),
   contentGeneration: () =>
     EnhancedRateLimiter.createTieredLimiter(RateLimitConfigs.contentGeneration),
-  campaignCreation: () =>
-    EnhancedRateLimiter.createTieredLimiter(RateLimitConfigs.campaignCreation),
   instagramPublish: () =>
     EnhancedRateLimiter.createTieredLimiter(RateLimitConfigs.instagramPublish),
   general: () => EnhancedRateLimiter.createLimiter(RateLimitConfigs.general),

@@ -402,7 +402,7 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
           <div class="next-steps">
             <div class="next-steps-title">You're all set! Next steps:</div>
             <ul class="next-steps-list">
-              <li class="next-step">Create your first campaign</li>
+              <li class="next-step">Create your first post</li>
               <li class="next-step">Generate AI-powered content</li>
               <li class="next-step">Schedule your posts</li>
               <li class="next-step">Track your performance</li>

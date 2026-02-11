@@ -36,9 +36,9 @@ Configure via environment variables:
 
 ### Advanced Stabilization (Core vs Seasonal/Trending)
 
-The orchestrator classifies recent posts and separates the stable Core profile from transient overlays to avoid feedback loops from seasonal campaigns and AI-generated outputs.
+The orchestrator classifies recent posts and separates the stable Core profile from transient overlays to avoid feedback loops from seasonal spikes and AI-generated outputs.
 
-- Generated/Campaign exclusion: posts marked with `generated: true`, `generated_by`, `origin: 'postolio'` or `campaignId` are excluded from Core computations.
+- Generated exclusion: posts marked with `generated: true`, `generated_by`, `origin: 'postolio'` are excluded from Core computations.
 - Seasonal detection: heuristics on captions/hashtags (e.g., `#halloween`, `blackfriday`, `#bfcm`, `#christmas`, `#pride`) build a `SEASONAL` overlay with TTL.
 - Trending window: a 14-day `TRENDING` overlay with topics only.
 - Core palette gating: if a proposed core palette diverges from the previous palette but a seasonal overlay exists, the change is suppressed and the seasonal palette is placed in the overlay instead.

@@ -23,7 +23,7 @@ It is intended for future developers and agents working on onboarding, demo expe
 4. Choosing **Demo Mode**:
    - Calls `POST /api/onboarding/demo`.
    - Creates (or reuses) a **demo brand** and **demo Instagram social account**.
-   - Seeds campaigns, posts, analytics, and demo images.
+   - Seeds posts, analytics, and demo images.
    - Redirects the user into the main app in Demo Mode.
 5. In Demo Mode:
    - A top banner is shown across the app.
@@ -122,15 +122,12 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
 
 `seedDemoWorkspace` is **per‑brand idempotent**:
 
-- It checks both `campaign` and `content` counts for the brand:
+- It checks `content` count for the brand:
 
   ```ts
-  const [campaignCount, contentCount] = await Promise.all([
-    prisma.campaign.count({ where: { brandId } }),
-    prisma.content.count({ where: { brandId } }),
-  ]);
+  const contentCount = await prisma.content.count({ where: { brandId } });
 
-  if (campaignCount > 0 || contentCount > 0) {
+  if (contentCount > 0) {
     return;
   }
   ```
@@ -138,17 +135,9 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
 - If either is non‑zero, **no further seeding occurs**.
 - This allows multiple calls to `/api/onboarding/demo` without duplicating data.
 
-### Seeded campaigns and posts
+### Seeded posts
 
 For `variantId: 'default'`, `seedDemoWorkspace` seeds:
-
-- **Campaigns**
-  - `Demo Launch Campaign` (`status: 'active'`):
-    - Daily cadence, multiple posting times, promotional themes.
-    - `config.demo = true`.
-  - `Evergreen Education` (`status: 'preview'`):
-    - Every‑2‑days cadence, educational themes.
-    - `config.demo = true`.
 
 - **Posts**
   - 2 published posts in the recent past (launch).
@@ -156,7 +145,6 @@ For `variantId: 'default'`, `seedDemoWorkspace` seeds:
   - 2 drafts for evergreen education.
   - Each post:
     - Uses `generationParams.isDemo = true`.
-    - Is tied to one of the seeded campaigns.
     - Gets a demo image (see below).
 
 ---

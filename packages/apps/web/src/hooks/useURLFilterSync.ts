@@ -18,7 +18,6 @@ const haveSameMembers = <T extends string>(a: readonly T[], b: readonly T[]): bo
 export function useURLFilterSync() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const campaigns = useCalendarFilterStore((state) => state.campaigns);
   const statuses = useCalendarFilterStore((state) => state.statuses);
   const searchQuery = useCalendarFilterStore((state) => state.searchQuery);
 
@@ -36,17 +35,12 @@ export function useURLFilterSync() {
     const urlFilters = decodeFiltersFromURL(searchParams);
     const store = useCalendarFilterStore.getState();
     const currentState = {
-      campaigns: store.campaigns,
       statuses: store.statuses,
       searchQuery: store.searchQuery,
     };
 
     if (!areFiltersEqual(urlFilters, currentState)) {
       isUpdatingFromURL.current = true;
-
-      if (!haveSameMembers(urlFilters.campaigns, currentState.campaigns)) {
-        store.setCampaigns(urlFilters.campaigns);
-      }
 
       if (!haveSameMembers(urlFilters.statuses, currentState.statuses)) {
         store.setStatuses(urlFilters.statuses);
@@ -68,12 +62,11 @@ export function useURLFilterSync() {
     isUpdatingFromStore.current = true;
     const currentParams = new URLSearchParams(window.location.search);
 
-    ['campaigns', 'statuses', 'types', 'dateStart', 'dateEnd', 'search'].forEach((key) =>
+    ['statuses', 'types', 'dateStart', 'dateEnd', 'search'].forEach((key) =>
       currentParams.delete(key)
     );
 
     const currentState = {
-      campaigns,
       statuses,
       searchQuery,
     };
@@ -87,7 +80,7 @@ export function useURLFilterSync() {
     if (newSearch !== currentSearch) {
       navigate(`?${newSearch}`, { replace: true });
     }
-  }, [campaigns, statuses, searchQuery, navigate]);
+  }, [statuses, searchQuery, navigate]);
 }
 
 export function useNavigateWithFilters() {
@@ -95,16 +88,12 @@ export function useNavigateWithFilters() {
 
   return (
     filters: Partial<{
-      campaigns: string[];
       statuses: string[];
       searchQuery: string;
     }>
   ) => {
     const params = new URLSearchParams();
 
-    if (filters.campaigns?.length) {
-      params.set('campaigns', filters.campaigns.join(','));
-    }
     if (filters.statuses?.length) {
       params.set('statuses', filters.statuses.join(','));
     }

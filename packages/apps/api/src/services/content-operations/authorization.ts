@@ -4,7 +4,7 @@
  */
 
 import { getDatabaseClient } from '../../config/database.js';
-import { assertBrandOwnership, assertCampaignAccess } from '../ownership.js';
+import { assertBrandOwnership } from '../ownership.js';
 
 const prisma = getDatabaseClient();
 
@@ -19,8 +19,6 @@ export interface ContentAuthResult extends AuthorizationResult {
     contentId: string;
     brandId: string;
     status: string;
-    campaignId: string | null;
-    campaignStatus?: string;
   };
 }
 
@@ -44,9 +42,6 @@ export async function verifyContentOwnership(
       brand: {
         select: { userId: true, id: true },
       },
-      campaign: {
-        select: { id: true, status: true },
-      },
     },
   });
 
@@ -63,8 +58,6 @@ export async function verifyContentOwnership(
       contentId: content.id,
       brandId: content.brand.id,
       status: content.status,
-      campaignId: content.campaignId,
-      campaignStatus: content.campaign?.status,
     },
   };
 }
@@ -93,36 +86,6 @@ export async function verifyBrandOwnership(
       return {
         authorized: false,
         error: 'Brand not found',
-      };
-    }
-
-    throw error;
-  }
-}
-
-/**
- * Verify that a user has access to a specific campaign through brand ownership
- */
-export async function verifyCampaignAccess(
-  userId: string,
-  campaignId: string
-): Promise<AuthorizationResult> {
-  try {
-    const campaign = await assertCampaignAccess(userId, campaignId);
-
-    return {
-      authorized: true,
-      data: {
-        campaignId: campaign.id,
-        brandId: campaign.brandId,
-        status: campaign.status,
-      },
-    };
-  } catch (error: any) {
-    if (error && typeof error === 'object' && (error as any).code === 'CAMPAIGN_NOT_FOUND') {
-      return {
-        authorized: false,
-        error: 'Campaign not found or does not belong to this brand',
       };
     }
 

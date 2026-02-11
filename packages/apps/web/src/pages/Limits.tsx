@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle, Clock, Gauge, Sparkles } from 'lucide-react';
-import { campaign as campaignApi, httpGet } from '@/lib/api';
+import { httpGet } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 export default function Limits() {
   const limitsQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead'],
-    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    queryFn: async () => httpGet('/api/account/limits/schedule-ahead'),
     staleTime: 60 * 1000,
   });
 
@@ -198,10 +198,9 @@ export default function Limits() {
           <div>
             <div className="font-medium">How does the rolling window work?</div>
             <p className="text-muted-foreground">
-              Active campaigns try to keep upcoming slots filled. When capacity frees up (because a
-              scheduled post is published or you delete one), our background job notices within
-              about 30 minutes and generates the next post into the next available slot based on
-              your campaign schedule. Starting a campaign also triggers an immediate top‑up.
+              Your scheduling queue tries to keep upcoming slots filled. When capacity frees up
+              (because a scheduled post is published or you delete one), our background job notices
+              within about 30 minutes and fills the next available slot.
             </p>
           </div>
           <div>

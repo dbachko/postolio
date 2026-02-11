@@ -40,7 +40,7 @@ const foldersRoutes: FastifyPluginAsync = async (fastify) => {
       name: string;
       parentId?: string;
       color?: string;
-      folderType?: 'general' | 'campaign_pool' | 'brand_assets';
+      folderType?: 'general' | 'brand_assets';
     };
 
     try {

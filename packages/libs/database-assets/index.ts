@@ -23,7 +23,6 @@ export { PrismaClient as AssetsPrismaClient, Prisma } from './assets-client/inde
 export type {
   Asset,
   AssetFolder,
-  CampaignAsset,
   AssetType,
   ProcessingStatus,
   FolderType,

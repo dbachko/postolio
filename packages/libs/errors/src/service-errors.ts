@@ -67,15 +67,9 @@ export class ServiceError extends Error {
  * Common error codes and factories
  */
 export const ErrorCodes = {
-  // Campaign errors
-  CAMPAIGN_NOT_FOUND: 'CAMPAIGN_NOT_FOUND',
-  CAMPAIGN_INACTIVE: 'CAMPAIGN_INACTIVE',
-  CAMPAIGN_CONSISTENCY_FAILED: 'CAMPAIGN_CONSISTENCY_FAILED',
-
   // Content errors
   CONTENT_NOT_FOUND: 'CONTENT_NOT_FOUND',
   CONTENT_INVALID: 'CONTENT_INVALID',
-  CONTENT_NO_CAMPAIGN: 'CONTENT_NO_CAMPAIGN',
 
   // Schedule errors
   SCHEDULE_NOT_FOUND: 'SCHEDULE_NOT_FOUND',
@@ -106,46 +100,6 @@ export const ErrorCodes = {
  * Error factory functions
  */
 export class ErrorFactory {
-  /**
-   * Campaign not found error
-   */
-  static campaignNotFound(campaignId: string): ServiceError {
-    return new ServiceError({
-      code: ErrorCodes.CAMPAIGN_NOT_FOUND,
-      message: `Campaign not found: ${campaignId}`,
-      details: { campaignId },
-      retryable: false,
-      userMessage: 'The requested campaign could not be found.',
-    });
-  }
-
-  /**
-   * Campaign inactive error
-   */
-  static campaignInactive(campaignId: string, status: string): ServiceError {
-    return new ServiceError({
-      code: ErrorCodes.CAMPAIGN_INACTIVE,
-      message: `Campaign is not active: ${campaignId} (status: ${status})`,
-      details: { campaignId, status },
-      retryable: false,
-      userMessage: `Cannot perform operation - campaign is ${status.toLowerCase()}.`,
-    });
-  }
-
-  /**
-   * Content not associated with campaign error
-   */
-  static contentNoCampaign(contentId: string): ServiceError {
-    return new ServiceError({
-      code: ErrorCodes.CONTENT_NO_CAMPAIGN,
-      message: `Content is not associated with a campaign: ${contentId}`,
-      details: { contentId },
-      retryable: false,
-      userMessage:
-        'This operation requires the content to be associated with a campaign before scheduling.',
-    });
-  }
-
   /**
    * Validation error
    */

@@ -5,8 +5,6 @@ export interface ContentGenerationRequest {
   count: number;
   theme?: string | undefined;
   style?: string | undefined;
-  // Optional: link generation to a specific campaign so we can include context
-  campaignId?: string | undefined;
   // Optional: specify image provider (falls back to brand or system default)
   imageProvider?: ImageProvider | undefined;
 }

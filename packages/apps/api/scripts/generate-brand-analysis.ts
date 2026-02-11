@@ -144,7 +144,7 @@ const CONTENT_TOPICS = [
   'brand values',
   'community highlights',
   'innovation updates',
-  'seasonal campaigns',
+  'seasonal content',
   'user-generated content',
   'expert interviews',
 ];
@@ -288,7 +288,7 @@ function generateRandomBrandAnalysis(brandId: string, version: number) {
         contentTypes: pickMultiple(
           [
             'More behind-the-scenes content',
-            'User-generated content campaigns',
+            'User-generated content',
             'Educational carousel posts',
             'Story highlights optimization',
             'Interactive polls and Q&As',

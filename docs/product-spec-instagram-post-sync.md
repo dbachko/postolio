@@ -312,7 +312,6 @@ model Content {
 
   // Source tracking
   generationParams   Json?          // {source: 'instagram_import'}
-  campaignId         String?        // null for imported posts
 
   brand              Brand          @relation(...)
 }

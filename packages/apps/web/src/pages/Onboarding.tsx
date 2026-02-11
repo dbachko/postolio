@@ -205,8 +205,8 @@ export function OnboardingPage() {
               <CardHeader>
                 <CardTitle>Preparing your demo workspace…</CardTitle>
                 <CardDescription>
-                  We&apos;re generating a sample brand with campaigns and posts so you can explore
-                  Postolio without connecting real accounts. This usually takes just a few seconds.
+                  We&apos;re generating a sample brand and posts so you can explore Postolio without
+                  connecting real accounts. This usually takes just a few seconds.
                 </CardDescription>
               </CardHeader>
               <CardContent>

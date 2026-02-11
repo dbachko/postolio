@@ -38,18 +38,18 @@ describe('errorHandler', () => {
     expect(body.correlationId).toBeDefined();
   });
 
-  it('preserves campaign domain codes like CAMPAIGN_INVALID_DATES', async () => {
+  it('preserves domain-specific error codes', async () => {
     const app = buildApp();
 
-    app.get('/test-campaign-invalid-dates', async () => {
-      throw new APIError('End date must be after start date', 'CAMPAIGN_INVALID_DATES', 400, {
-        campaignId: 'camp-123',
+    app.get('/test-content-invalid-schedule', async () => {
+      throw new APIError('Scheduled time must be in the future', 'CONTENT_INVALID_SCHEDULE', 400, {
+        contentId: 'content-123',
       });
     });
 
     const res = await app.inject({
       method: 'GET',
-      url: '/test-campaign-invalid-dates',
+      url: '/test-content-invalid-schedule',
     });
 
     expect(res.statusCode).toBe(400);
@@ -59,8 +59,8 @@ describe('errorHandler', () => {
       details?: Record<string, unknown>;
     };
 
-    expect(body.code).toBe('CAMPAIGN_INVALID_DATES');
-    expect(body.error).toBe('End date must be after start date');
-    expect(body.details).toMatchObject({ campaignId: 'camp-123' });
+    expect(body.code).toBe('CONTENT_INVALID_SCHEDULE');
+    expect(body.error).toBe('Scheduled time must be in the future');
+    expect(body.details).toMatchObject({ contentId: 'content-123' });
   });
 });

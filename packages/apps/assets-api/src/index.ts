@@ -9,7 +9,6 @@ import type { FastifyJWT } from '@fastify/jwt';
 import { prismaAssets } from '@postolio/database-assets';
 import assetsRoutes from './routes/assets.js';
 import foldersRoutes from './routes/folders.js';
-import campaignAssetsRoutes from './routes/campaign-assets.js';
 import healthRoutes from './routes/health.js';
 import { logger as sharedLogger } from '@postolio/logger';
 
@@ -173,7 +172,6 @@ export function buildFastify() {
   server.register(healthRoutes);
   server.register(assetsRoutes, { prefix: '/assets-api/v1' });
   server.register(foldersRoutes, { prefix: '/assets-api/v1' });
-  server.register(campaignAssetsRoutes, { prefix: '/assets-api/v1' });
 
   // Graceful shutdown
   const closeGracefully = async (signal: string) => {

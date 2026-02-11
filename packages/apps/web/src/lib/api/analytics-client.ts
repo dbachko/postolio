@@ -18,22 +18,6 @@ export class AnalyticsClient {
     });
   }
 
-  getCampaignAggregates(campaignId: string) {
-    return this.request(`/api/analytics/campaigns/${campaignId}`);
-  }
-
-  getCampaignMetrics(campaignId: string) {
-    return this.request(`/api/analytics/campaigns/${campaignId}/metrics`);
-  }
-
-  getCampaignRecommendations(campaignId: string) {
-    return this.request(`/api/analytics/campaigns/${campaignId}/recommendations`);
-  }
-
-  getCampaignROI(campaignId: string) {
-    return this.request(`/api/analytics/campaigns/${campaignId}/roi`);
-  }
-
   getBrandSummary(brandId: string, period: '7d' | '30d' | '90d' = '30d') {
     const qs = new URLSearchParams({ period }).toString();
     return this.request(`/api/analytics/brands/${brandId}/summary?${qs}`);

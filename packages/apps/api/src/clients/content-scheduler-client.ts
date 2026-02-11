@@ -50,7 +50,6 @@ const MediaAssetSchema = z.object({
 const CreateScheduleInputSchema = z.object({
   contentId: z.string(),
   brandId: z.string(),
-  campaignId: z.string().optional(), // Optional campaign ID for validation
   userId: z.string(), // Required for ownership validation and token retrieval
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(), // Changed from scheduledTime to scheduledAt

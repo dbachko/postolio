@@ -6,7 +6,6 @@ import { formatInUserTimezone } from '@/lib/timezone';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 import { getMediaBadgeType } from '@/utils/media-type';
 import { MediaTypeBadge } from '@/components/media-type-badge';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DashboardPostCard } from '@/components/dashboard/dashboard-post-card';
 
@@ -68,7 +67,6 @@ export function DashboardPostPreviewCard({
         <span className="text-sm font-medium">
           {timestampLabel} {formatInUserTimezone(timestamp, 'EEE, MMM d • h:mm a', brandTimezone)}
         </span>
-        {post.campaignName ? <Badge variant="secondary">{post.campaignName}</Badge> : null}
         {extraBadges}
       </div>
       <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">

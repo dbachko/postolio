@@ -27,7 +27,6 @@ export function getScheduleBlockerMessage(params: {
   validationOk: boolean;
   validationError: string | null;
   hasScheduleTime: boolean;
-  pausedCampaign: boolean;
   hasSelectedPlatforms: boolean;
   schedulingSupported: boolean;
 }): string | null {
@@ -37,7 +36,6 @@ export function getScheduleBlockerMessage(params: {
     validationOk,
     validationError,
     hasScheduleTime,
-    pausedCampaign,
     hasSelectedPlatforms,
     schedulingSupported,
   } = params;
@@ -46,9 +44,6 @@ export function getScheduleBlockerMessage(params: {
   }
   if (!schedulingSupported) {
     return 'Scheduling is not available for one or more selected destinations. Save as a draft instead.';
-  }
-  if (pausedCampaign) {
-    return 'This campaign is paused. Resume it before scheduling new posts.';
   }
   if (atCapacity) return limitMessage || 'You have reached your scheduling limit.';
   if (!validationOk) return validationError || 'Please fix validation errors before continuing.';

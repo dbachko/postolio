@@ -104,12 +104,12 @@ Establish secure, scalable OAuth token management and standardized inter-service
 
 ## Service Boundaries
 
-| Service       | Responsibility                                 | Database           | Communication          |
-| ------------- | ---------------------------------------------- | ------------------ | ---------------------- |
-| Main App      | User management, content generation, campaigns | PostgreSQL         | REST API + EventBridge |
-| Token Service | OAuth token storage, refresh, encryption       | DynamoDB + KMS     | Internal REST API      |
-| Scheduler     | Schedule management, EventBridge rules         | DynamoDB (sharded) | EventBridge + API      |
-| Publisher     | Platform API integration, content publishing   | DynamoDB (state)   | SQS + EventBridge      |
+| Service       | Responsibility                                  | Database           | Communication          |
+| ------------- | ----------------------------------------------- | ------------------ | ---------------------- |
+| Main App      | User management, content generation, scheduling | PostgreSQL         | REST API + EventBridge |
+| Token Service | OAuth token storage, refresh, encryption        | DynamoDB + KMS     | Internal REST API      |
+| Scheduler     | Schedule management, EventBridge rules          | DynamoDB (sharded) | EventBridge + API      |
+| Publisher     | Platform API integration, content publishing    | DynamoDB (state)   | SQS + EventBridge      |
 
 ## Success Metrics
 

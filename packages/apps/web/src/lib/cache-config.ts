@@ -30,7 +30,7 @@ export const CACHE_TIMES = {
 
   /**
    * Medium-term data (5 minutes)
-   * Use for: Analytics, campaign data, calendars
+   * Use for: Analytics, calendars
    */
   MEDIUM: 5 * 60_000,
 

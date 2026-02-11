@@ -9,9 +9,7 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { ScheduleService } from '../services/schedule-service';
-import { CampaignService, CampaignRequest } from '../services/campaign-service';
 import {
-  validateCampaignRequest,
   validatePublishNowRequest,
   validateScheduleRequest,
   validateScheduleUpdateRequest,
@@ -27,11 +25,9 @@ const metrics = new Metrics({
 
 export class HttpHandler {
   private scheduleService: ScheduleService;
-  private campaignService: CampaignService;
 
   constructor() {
     this.scheduleService = new ScheduleService();
-    this.campaignService = new CampaignService();
   }
 
   /**
@@ -82,8 +78,6 @@ export class HttpHandler {
       // Route requests to appropriate handlers
       if (path.startsWith('/schedules')) {
         return await this.handleScheduleRoutes(event, method, path, authenticatedUserId!);
-      } else if (path.startsWith('/campaigns')) {
-        return await this.handleCampaignRoutes(event, method, path);
       } else if (path === '/health') {
         return await this.handleHealthCheck();
       } else {
@@ -148,53 +142,6 @@ export class HttpHandler {
 
       default:
         return createErrorResponse(405, 'Method not allowed', undefined, 'METHOD_NOT_ALLOWED');
-    }
-  }
-
-  /**
-   * Handle campaign-related routes
-   */
-  private async handleCampaignRoutes(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
-    method: string,
-    path: string
-  ): Promise<APIGatewayProxyResult> {
-    const pathSegments = path.split('/').filter(Boolean);
-
-    switch (method) {
-      case 'POST':
-        if (pathSegments.length === 1) {
-          // POST /campaigns - create new campaign
-          return await this.createCampaign(event);
-        }
-        return createErrorResponse(404, 'Route not found');
-
-      case 'GET':
-        if (pathSegments.length === 1) {
-          // GET /campaigns - list campaigns
-          return await this.listCampaigns(event);
-        } else if (pathSegments.length === 2) {
-          // GET /campaigns/{id} - get specific campaign
-          return await this.getCampaign(pathSegments[1]);
-        }
-        return createErrorResponse(404, 'Route not found');
-
-      case 'PUT':
-        if (pathSegments.length === 2) {
-          // PUT /campaigns/{id} - update campaign
-          return await this.updateCampaign(event, pathSegments[1]);
-        }
-        return createErrorResponse(404, 'Route not found');
-
-      case 'DELETE':
-        if (pathSegments.length === 2) {
-          // DELETE /campaigns/{id} - delete campaign
-          return await this.deleteCampaign(pathSegments[1]);
-        }
-        return createErrorResponse(404, 'Route not found');
-
-      default:
-        return createErrorResponse(405, 'Method not allowed');
     }
   }
 
@@ -505,166 +452,6 @@ export class HttpHandler {
     } catch (error) {
       logger.error('Failed to delete schedule', { error, scheduleId });
       return createErrorResponse(500, 'Failed to delete schedule');
-    }
-  }
-
-  /**
-   * Create a new campaign
-   */
-  private async createCampaign(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
-  ): Promise<APIGatewayProxyResult> {
-    try {
-      const body = this.getBody(event);
-      const campaignRequest = JSON.parse(body);
-
-      // Validate the request
-      const validation = validateCampaignRequest(campaignRequest);
-      if (!validation.valid) {
-        return createErrorResponse(400, validation.errors.join(', '));
-      }
-
-      // CRITICAL: Verify user owns the brand before creating campaign
-      const brandId = campaignRequest.brandId;
-      if (!brandId) {
-        return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
-      }
-
-      // Type assertion after validation
-      const typedRequest = campaignRequest as CampaignRequest;
-      const result = await this.campaignService.createCampaign(typedRequest);
-
-      if (result.success) {
-        metrics.addMetric('CampaignCreated', MetricUnit.Count, 1);
-        return createSuccessResponse(201, result.campaign);
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to create campaign');
-      }
-    } catch (error) {
-      logger.error('Failed to create campaign', { error });
-      return createErrorResponse(500, 'Failed to create campaign');
-    }
-  }
-
-  /**
-   * List campaigns
-   */
-  private async listCampaigns(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
-  ): Promise<APIGatewayProxyResult> {
-    try {
-      const queryParams = this.getQueryParams(event);
-
-      const result = await this.campaignService.listCampaigns(queryParams);
-
-      if (result.success) {
-        return createSuccessResponse(200, {
-          campaigns: result.campaigns,
-          pagination: result.pagination,
-        });
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to list campaigns');
-      }
-    } catch (error) {
-      logger.error('Failed to list campaigns', { error });
-      return createErrorResponse(500, 'Failed to list campaigns');
-    }
-  }
-
-  /**
-   * Get a specific campaign
-   */
-  private async getCampaign(campaignId: string): Promise<APIGatewayProxyResult> {
-    try {
-      const result = await this.campaignService.getCampaign(campaignId);
-
-      if (result.success && result.campaign) {
-        // CRITICAL: Verify user owns the brand associated with this campaign
-        const brandId = result.campaign.brandId;
-        if (!brandId) {
-          logger.error('Campaign missing brandId', { campaignId });
-          return createErrorResponse(500, 'Campaign data is invalid');
-        }
-
-        return createSuccessResponse(200, result.campaign);
-      } else if (result.success && !result.campaign) {
-        return createErrorResponse(404, 'Campaign not found');
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to get campaign');
-      }
-    } catch (error) {
-      logger.error('Failed to get campaign', { error, campaignId });
-      return createErrorResponse(500, 'Failed to get campaign');
-    }
-  }
-
-  /**
-   * Update a campaign
-   */
-  private async updateCampaign(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
-    campaignId: string
-  ): Promise<APIGatewayProxyResult> {
-    try {
-      // CRITICAL: First get the campaign to verify ownership
-      const existingCampaign = await this.campaignService.getCampaign(campaignId);
-
-      if (!existingCampaign.success || !existingCampaign.campaign) {
-        return createErrorResponse(404, 'Campaign not found');
-      }
-
-      const brandId = existingCampaign.campaign.brandId;
-      if (!brandId) {
-        logger.error('Campaign missing brandId', { campaignId });
-        return createErrorResponse(500, 'Campaign data is invalid');
-      }
-
-      const body = this.getBody(event);
-      const updateRequest = JSON.parse(body);
-
-      const result = await this.campaignService.updateCampaign(campaignId, updateRequest);
-
-      if (result.success) {
-        metrics.addMetric('CampaignUpdated', MetricUnit.Count, 1);
-        return createSuccessResponse(200, result.campaign);
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to update campaign');
-      }
-    } catch (error) {
-      logger.error('Failed to update campaign', { error, campaignId });
-      return createErrorResponse(500, 'Failed to update campaign');
-    }
-  }
-
-  /**
-   * Delete a campaign
-   */
-  private async deleteCampaign(campaignId: string): Promise<APIGatewayProxyResult> {
-    try {
-      // CRITICAL: First get the campaign to verify ownership
-      const existingCampaign = await this.campaignService.getCampaign(campaignId);
-
-      if (!existingCampaign.success || !existingCampaign.campaign) {
-        return createErrorResponse(404, 'Campaign not found');
-      }
-
-      const brandId = existingCampaign.campaign.brandId;
-      if (!brandId) {
-        logger.error('Campaign missing brandId', { campaignId });
-        return createErrorResponse(500, 'Campaign data is invalid');
-      }
-
-      const result = await this.campaignService.deleteCampaign(campaignId);
-
-      if (result.success) {
-        metrics.addMetric('CampaignDeleted', MetricUnit.Count, 1);
-        return createSuccessResponse(204, null);
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to delete campaign');
-      }
-    } catch (error) {
-      logger.error('Failed to delete campaign', { error, campaignId });
-      return createErrorResponse(500, 'Failed to delete campaign');
     }
   }
 

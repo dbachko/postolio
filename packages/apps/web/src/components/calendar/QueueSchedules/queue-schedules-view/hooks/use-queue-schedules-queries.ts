@@ -1,11 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import {
-  campaign as campaignApi,
-  publishingQueues as publishingQueuesApi,
-  type Content,
-} from '@/lib/api';
+import { publishingQueues as publishingQueuesApi, type Content, httpGet } from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import { getDefaultQueueId } from '@/components/publishing-queues/queue-utils';
@@ -176,7 +172,7 @@ export function useQueueSchedulesQueries({
 
   const scheduleAheadLimitQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead'],
-    queryFn: () => campaignApi.getScheduleAheadLimit(),
+    queryFn: async () => httpGet('/api/account/limits/schedule-ahead'),
     staleTime: 60 * 1000,
   });
   const scheduleAheadLimits = (scheduleAheadLimitQuery.data as any)?.data as

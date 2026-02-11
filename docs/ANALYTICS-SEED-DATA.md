@@ -31,7 +31,7 @@ Password: Test123!@#
 
 - **50 Total Published Posts** across 90 days
   - **38 Historical Posts**: Spanning last 90 days for time-series analytics
-  - **12 Campaign Posts**: From various campaign states
+  - **12 Recent Posts**: A mix of content to exercise sorting and charts
 
 ### Publication Metrics
 

@@ -22,56 +22,18 @@ The goal is:
 
 ## Ownership & Authentication
 
-| Code                      | Status | Message                                         | Details                  | Emitted From                                                     |
-| ------------------------- | ------ | ----------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `BRAND_NOT_FOUND`         | 404    | `Brand not found or access denied`              | `{ brandId }`            | `services/ownership.assertBrandOwnership`                        |
-| `CAMPAIGN_NOT_FOUND`      | 404    | `Campaign not found or access denied`           | `{ campaignId, userId }` | `services/ownership.assertCampaignAccess`, `services/campaign.*` |
-| `INSTAGRAM_NOT_CONNECTED` | 400    | `Instagram not connected for this brand`        | `{ brandId }`            | `services/ownership.assertInstagramConnected`                    |
-| `INSTAGRAM_DISCONNECTED`  | 400    | `Instagram account disconnected for this brand` | `{ brandId }`            | `services/ownership.assertInstagramConnected`                    |
-| `USER_ALREADY_EXISTS`     | 409    | `User already exists`                           | `{ email }`              | `services/auth.AuthService.register`                             |
+| Code                      | Status | Message                                         | Details       | Emitted From                                  |
+| ------------------------- | ------ | ----------------------------------------------- | ------------- | --------------------------------------------- |
+| `BRAND_NOT_FOUND`         | 404    | `Brand not found or access denied`              | `{ brandId }` | `services/ownership.assertBrandOwnership`     |
+| `INSTAGRAM_NOT_CONNECTED` | 400    | `Instagram not connected for this brand`        | `{ brandId }` | `services/ownership.assertInstagramConnected` |
+| `INSTAGRAM_DISCONNECTED`  | 400    | `Instagram account disconnected for this brand` | `{ brandId }` | `services/ownership.assertInstagramConnected` |
+| `USER_ALREADY_EXISTS`     | 409    | `User already exists`                           | `{ email }`   | `services/auth.AuthService.register`          |
 
 Notes:
 
-- All routes that rely on brand/campaign ownership should prefer:
+- All routes that rely on brand ownership should prefer:
   - `assertBrandOwnership(userId, brandId)`
-  - `assertCampaignAccess(userId, campaignId)`
   - and rethrow any resulting `APIError`.
-
----
-
-## Campaign Domain Errors
-
-These represent domain-level invariants enforced by `services/campaign.ts`.
-
-| Code                                | Status | Message (summary)                                             | Typical Details                                          |
-| ----------------------------------- | ------ | ------------------------------------------------------------- | -------------------------------------------------------- |
-| `CAMPAIGN_INVALID_DATES`            | 400    | Start/end ordering invalid or start in the past               | `{ brandId?, campaignId?, userId? }`                     |
-| `CAMPAIGN_START_IN_PAST`            | 400    | Start date is before today in brand timezone                  | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_INVALID_FREQUENCY`        | 400    | Frequency must be `daily`, `every2days`, or `3weekly`         | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_INVALID_POSTING_TIME`     | 400    | Posting time must be `HH:MM` (24h)                            | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_INVALID_NAME`             | 400    | Name is empty                                                 | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_INVALID_THEMES`           | 400    | Empty or invalid themes list                                  | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_INVALID_STATE`            | 400    | Operation not allowed in current status                       | `{ campaignId, userId, status }`                         |
-| `CAMPAIGN_INVALID_STATUS`           | 400    | Invalid status transition (e.g., `draft → paused`)            | `{ campaignId, userId, currentStatus, attemptedStatus }` |
-| `CAMPAIGN_CONFIG_INCOMPLETE`        | 400    | Config missing duration/frequency/postingTime for start       | `{ campaignId }`                                         |
-| `CAMPAIGN_NO_PREVIEW`               | 400    | No preview posts exist when starting a campaign               | `{ campaignId }`                                         |
-| `CAMPAIGN_PREVIEW_NO_CONTENT`       | 400    | Preview generation produced no posts                          | `{ campaignId }`                                         |
-| `CAMPAIGN_EMPTY_PREVIEW_CAPTION`    | 400    | Attempted to save preview content with an empty caption       | `{ campaignId }`                                         |
-| `CAMPAIGN_PREVIEW_FAILED`           | 500    | Unexpected failure during preview generation                  | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_UPDATE_VALIDATION_FAILED` | 400    | Field editability rules violated for update-with-regeneration | `{ campaignId, userId, errors[] }`                       |
-| `CAMPAIGN_REGEN_NO_CONTENT`         | 400    | Regeneration requested but no content exists to regenerate    | `{ campaignId }`                                         |
-| `CAMPAIGN_REGEN_FAILED`             | 500    | Failed to start content regeneration                          | `{ campaignId, userId }`                                 |
-| `CAMPAIGN_REGEN_JOB_NOT_FOUND`      | 404    | Regeneration job not found or already completed               | `{ jobId, userId }`                                      |
-| `CAMPAIGN_REGEN_PROGRESS_FAILED`    | 500    | Failed to fetch regeneration job progress                     | `{ jobId, userId }`                                      |
-| `CAMPAIGN_REGEN_CANCEL_FAILED`      | 500    | Failed to cancel a regeneration job                           | `{ jobId, userId }`                                      |
-
-Usage guidelines:
-
-- Route handlers for campaign operations (`configure`, `preview`, `start`, `update`, `fill-window`, regeneration) should:
-  - Call `campaignService.*` methods.
-  - Log `request.log.error({ err: error }, 'context message')`.
-  - Rethrow (`throw error`) and let the middleware map `APIError` to HTTP.
-- Avoid inspecting `error.message` for campaign error routing; use `code` in clients if needed.
 
 ---
 
@@ -177,9 +139,9 @@ type ApiErrorPayload = {
   correlationId?: string;
 };
 
-async function updateCampaign(id: string, payload: unknown) {
-  const res = await fetch(`/api/campaigns/${id}`, {
-    method: 'PUT',
+async function updateBrand(brandId: string, payload: unknown) {
+  const res = await fetch(`/api/brands/${brandId}`, {
+    method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -192,18 +154,8 @@ async function updateCampaign(id: string, payload: unknown) {
 
   switch (body.code) {
     case 'BRAND_NOT_FOUND':
-    case 'CAMPAIGN_NOT_FOUND':
       // Show 404-style UX
-      throw new Error('This campaign no longer exists or you lost access.');
-
-    case 'CAMPAIGN_INVALID_DATES':
-      // Use details for form-level validation feedback
-      throw new Error('Please check the start and end dates.');
-
-    case 'CAMPAIGN_UPDATE_VALIDATION_FAILED':
-      // details.errors[] contains field-level messages from the service
-      console.warn('Field editability violated', body.details);
-      throw new Error('Unable to update campaign in its current state.');
+      throw new Error('This brand no longer exists or you lost access.');
 
     case 'DM_RULE_NOT_FOUND':
       throw new Error('Automation rule was removed. Refresh and try again.');
@@ -225,5 +177,5 @@ Key recommendations:
 - Always read `code` first; do not parse `error` strings.
 - Use `details` (when present) to:
   - Attach errors to specific form fields.
-  - Decide which ids to refetch (e.g., `brandId`, `campaignId`, `ruleId`).
+  - Decide which ids to refetch (e.g., `brandId`, `contentId`, `ruleId`).
 - Log `correlationId` alongside `code` when reporting issues to make server-side tracing easy.

@@ -103,8 +103,6 @@ describe('publishContent (connector integration)', () => {
         id: 'brand-123',
         userId: 'user-123',
       },
-      campaignId: null,
-      campaign: null,
     });
 
     (resolvePrimarySocialAccount as any).mockResolvedValue({
@@ -149,44 +147,5 @@ describe('publishContent (connector integration)', () => {
         }),
       })
     );
-  });
-
-  it('should not publish content when campaign is paused', async () => {
-    mockPrisma.content.findUnique.mockResolvedValue({
-      id: 'content-123',
-      brandId: 'brand-123',
-      caption: 'Test caption',
-      hashtags: ['test'],
-      contentType: 'post',
-      shareToFeed: null,
-      thumbOffset: null,
-      mediaAssets: [{ assetId: 'asset-1', displayOrder: 0 }],
-      brand: {
-        id: 'brand-123',
-        userId: 'user-123',
-      },
-      campaignId: 'campaign-123',
-      campaign: {
-        id: 'campaign-123',
-        status: 'paused',
-      },
-    });
-
-    (resolvePrimarySocialAccount as any).mockResolvedValue({
-      id: 'social-account-123',
-      brandId: 'brand-123',
-      platform: 'instagram',
-      externalAccountId: 'ig-account-123',
-      externalPageId: 'fb-page-123',
-      username: 'testuser',
-      displayName: null,
-      metadata: {},
-    });
-
-    const result = await publishContent('content-123', 'instagram');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/cannot publish content for a paused campaign/i);
-    expect(mockPrisma.contentPublication.create).not.toHaveBeenCalled();
   });
 });

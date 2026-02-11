@@ -4,16 +4,12 @@ export function applyFilters(
   items: CalendarDataItem[],
   filters: CalendarFilters
 ): CalendarDataItem[] {
-  const { campaigns, statuses, searchQuery } = filters;
+  const { statuses, searchQuery } = filters;
 
   return items.filter((item) => {
     // Queue slots are structural calendar affordances; content filters should never hide them.
     if (isQueueSlotPlaceholder(item)) {
       return true;
-    }
-
-    if (campaigns.length > 0 && !matchesCampaign(item, campaigns)) {
-      return false;
     }
 
     if (statuses.length > 0 && !matchesStatus(item, statuses)) {
@@ -31,16 +27,6 @@ export function applyFilters(
 function isQueueSlotPlaceholder(item: CalendarDataItem): boolean {
   if (item.type !== 'placeholder') return false;
   return item.message === 'Queue slot';
-}
-
-function matchesCampaign(item: CalendarDataItem, campaigns: string[]): boolean {
-  const campaignId = ('campaignId' in item && item.campaignId) || null;
-
-  if (campaigns.includes('none')) {
-    if (!campaignId) return true;
-  }
-
-  return Boolean(campaignId && campaigns.includes(campaignId));
 }
 
 function matchesStatus(item: CalendarDataItem, statuses: string[]): boolean {
@@ -69,12 +55,10 @@ function matchesSearchQuery(item: CalendarDataItem, query: string): boolean {
   if (hashtags && hashtags.toLowerCase().includes(normalized)) {
     return true;
   }
-
-  const campaignName = getStringField(item, 'campaignName');
-  return Boolean(campaignName && campaignName.includes(normalized));
+  return false;
 }
 
-function getStringField(item: CalendarDataItem, key: 'caption' | 'campaignName'): string {
+function getStringField(item: CalendarDataItem, key: 'caption'): string {
   const source = asRecord(item);
   const value = source[key];
 

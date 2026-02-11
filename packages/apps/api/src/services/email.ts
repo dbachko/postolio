@@ -612,7 +612,7 @@ If you didn't request this email, you can safely ignore it.
           <li>🤖 Generate AI-powered content that matches your brand</li>
           <li>📅 Schedule posts for optimal engagement</li>
           <li>📊 Track analytics and grow your audience</li>
-          <li>🚀 Run automated campaigns with Autopilot</li>
+          <li>🚀 Automate your scheduling with Autopilot</li>
         </ul>
         
         <p>Ready to get started? Create your first brand and let's grow your Instagram presence together!</p>

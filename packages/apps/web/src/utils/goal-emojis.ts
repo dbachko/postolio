@@ -1,4 +1,4 @@
-// Maps common campaign goal keywords to a representative emoji.
+// Maps common goal keywords to a representative emoji.
 // Keep simple and resilient to phrasing variations; default to 🎯.
 // Note: We deliberately avoid Tailwind or styles here; just return a string.
 

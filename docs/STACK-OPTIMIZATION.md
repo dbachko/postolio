@@ -25,14 +25,14 @@ This document outlines the optimization of Postolio's deployment architecture fr
 
 ### New Logical Stack Organization
 
-| Stack          | Services                                                              | Purpose                                   |
-| -------------- | --------------------------------------------------------------------- | ----------------------------------------- |
-| **Foundation** | ECR Registry, Shared Infrastructure                                   | Base infrastructure for all services      |
-| **Auth**       | token-service                                                         | Authentication and OAuth token management |
-| **Scheduling** | schedule-management, schedule-cleanup, status-sync                    | Content scheduling and lifecycle          |
-| **Publishing** | publisher, retry-handler, dlq-processor, campaign-event-dlq-processor | Content publishing and error handling     |
-| **API**        | Backend API (ECS)                                                     | Main application backend                  |
-| **Web**        | Frontend (React)                                                      | User interface                            |
+| Stack          | Services                                           | Purpose                                   |
+| -------------- | -------------------------------------------------- | ----------------------------------------- |
+| **Foundation** | ECR Registry, Shared Infrastructure                | Base infrastructure for all services      |
+| **Auth**       | token-service                                      | Authentication and OAuth token management |
+| **Scheduling** | schedule-management, schedule-cleanup, status-sync | Content scheduling and lifecycle          |
+| **Publishing** | publisher, retry-handler, dlq-processor            | Content publishing and error handling     |
+| **API**        | Backend API (ECS)                                  | Main application backend                  |
+| **Web**        | Frontend (React)                                   | User interface                            |
 
 ### Key Improvements
 
@@ -77,7 +77,7 @@ Web Stack ← (depends on API)
 
 #### Publishing Stack
 
-- **Services**: publisher, retry-handler, dlq-processor, campaign-event-dlq-processor
+- **Services**: publisher, retry-handler, dlq-processor
 - **Rationale**: Content publishing pipeline and error handling
 - **Resources**: SQS queues, Lambda Functions, EventBridge rules
 

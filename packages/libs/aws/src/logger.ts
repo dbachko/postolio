@@ -16,7 +16,6 @@ export interface ErrorContext extends LogContext {
   operation?: string;
   userId?: string;
   brandId?: string;
-  campaignId?: string;
   contentId?: string;
   scheduleId?: string;
 }
@@ -70,7 +69,6 @@ export class ServiceLogger {
       operation: context.operation,
       userId: context.userId,
       brandId: context.brandId,
-      campaignId: context.campaignId,
       contentId: context.contentId,
       scheduleId: context.scheduleId,
       error: {
@@ -310,29 +308,13 @@ export function logEventBridgeError(
 }
 
 /**
- * Log campaign-related errors with campaign context
- */
-export function logCampaignError(
-  logger: ServiceLogger,
-  operation: string,
-  error: any,
-  context: LogContext & { campaignId: string; brandId?: string }
-): void {
-  logger.error(`Campaign operation failed: ${operation}`, {
-    operation: `campaign.${operation}`,
-    error,
-    ...context,
-  });
-}
-
-/**
  * Log content-related errors with content context
  */
 export function logContentError(
   logger: ServiceLogger,
   operation: string,
   error: any,
-  context: LogContext & { contentId: string; brandId?: string; campaignId?: string }
+  context: LogContext & { contentId: string; brandId?: string }
 ): void {
   logger.error(`Content operation failed: ${operation}`, {
     operation: `content.${operation}`,

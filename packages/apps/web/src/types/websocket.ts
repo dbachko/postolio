@@ -34,42 +34,6 @@ export interface StatusUpdateData {
   timestamp: string;
 }
 
-export interface CampaignStatusUpdateData {
-  campaignId: string;
-  brandId: string;
-  oldStatus: CampaignStatus;
-  newStatus: CampaignStatus;
-  errorMessage?: string | null;
-  previewGenerated?: boolean;
-  isRunning: boolean;
-  metadata?: {
-    completedSteps?: string[];
-    totalSteps?: number;
-    estimatedTimeRemaining?: number;
-    lastActivity?: string;
-  };
-  timestamp: string;
-}
-
-export interface CampaignErrorData {
-  campaignId: string;
-  brandId: string;
-  errorType: 'validation' | 'generation' | 'scheduling' | 'network' | 'system';
-  errorMessage: string;
-  errorCode?: string;
-  retryable: boolean;
-  timestamp: string;
-}
-
-export type CampaignStatus =
-  | 'draft'
-  | 'preview'
-  | 'creating'
-  | 'active'
-  | 'paused'
-  | 'completed'
-  | 'failed';
-
 export interface WebSocketMessage {
   type:
     | 'authenticated' // Cookie-based auth confirmation from server
@@ -80,22 +44,17 @@ export interface WebSocketMessage {
     | 'subscribed'
     | 'status_update'
     | 'batch_status_update'
-    | 'campaign_status_update'
-    | 'campaign_error'
     | 'notification_created'
     | 'unread_count'
     | 'dm_message'
     | 'dm_conversation_update';
   room?: string;
   brandId?: string;
-  campaignId?: string;
   rooms?: string[];
   error?: string;
   data?:
     | StatusUpdateData
     | StatusUpdateData[]
-    | CampaignStatusUpdateData
-    | CampaignErrorData
     | NotificationCreatedData
     | UnreadCountData
     | DMMessageData
@@ -152,8 +111,6 @@ export interface DMConversationUpdateData {
 export interface UseSchedulingWebSocketOptions {
   enabled?: boolean;
   onStatusUpdate?: (event: StatusUpdateEvent) => void;
-  onCampaignStatusUpdate?: (data: CampaignStatusUpdateData) => void;
-  onCampaignError?: (data: CampaignErrorData) => void;
   onConnectionChange?: (status: ConnectionStatus) => void;
   onError?: (error: WebSocketError) => void;
   reconnectInterval?: number | ((lastAttemptNumber: number) => number); // Support function for exponential backoff

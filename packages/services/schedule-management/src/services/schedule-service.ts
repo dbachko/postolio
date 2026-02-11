@@ -42,11 +42,6 @@ import {
   UpdateScheduleCommand,
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import {
-  getCampaignById,
-  canCampaignSchedule,
-  getCampaignScheduleBlockReason,
-} from '@postolio/aws';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from '../config';
 
@@ -92,7 +87,6 @@ async function getSchedulerEventBusTargetConfig() {
 export interface ScheduleRequest {
   contentId: string;
   brandId: string;
-  campaignId?: string;
   userId: string;
   platform: string;
   scheduledAt: string;
@@ -122,7 +116,6 @@ export interface Schedule {
   contentId: string;
   brandId: string;
   userId: string;
-  campaignId?: string;
   status: string;
   scheduledAt: string;
   // Keys for Brand GSI
@@ -174,25 +167,11 @@ export class ScheduleService {
     logger.info('Creating schedule', {
       contentId: request.contentId,
       brandId: request.brandId,
-      campaignId: request.campaignId,
       scheduledAt: request.scheduledAt,
     });
 
     try {
-      // 1. Validate campaign if specified
-      if (request.campaignId) {
-        // Validate directly by campaignId; contentId has no schedule yet at creation time
-        const campaign = await getCampaignById(request.campaignId);
-        if (!canCampaignSchedule(campaign)) {
-          const blockReason = getCampaignScheduleBlockReason(campaign);
-          return {
-            success: false,
-            error: blockReason || 'Campaign does not allow scheduling',
-          };
-        }
-      }
-
-      // 2. Generate schedule ID and create DynamoDB record
+      // 1. Generate schedule ID and create DynamoDB record
       // RELIABILITY: Use idempotency token to prevent duplicate schedules on retry
       const scheduleId = randomUUID();
       const idempotencyToken = request.idempotencyToken || randomUUID();
@@ -205,7 +184,6 @@ export class ScheduleService {
         contentId: request.contentId,
         brandId: request.brandId,
         userId: request.userId,
-        campaignId: request.campaignId,
         status: SCHEDULE_STATUS.SCHEDULED,
         scheduledAt: request.scheduledAt,
         // Brand GSI keys for brand-based listing
@@ -317,7 +295,6 @@ export class ScheduleService {
                 scheduleId,
                 contentId: request.contentId,
                 brandId: request.brandId,
-                campaignId: request.campaignId,
                 userId: request.userId,
               }),
               EventBridgeParameters: {
@@ -424,7 +401,6 @@ export class ScheduleService {
         {
           contentId: request.contentId,
           brandId: request.brandId,
-          campaignId: request.campaignId,
           platform: request.platform,
         }
       );
@@ -448,23 +424,10 @@ export class ScheduleService {
     logger.info('Publishing now', {
       contentId: request.contentId,
       brandId: request.brandId,
-      campaignId: request.campaignId,
       platform: request.platform,
     });
 
     try {
-      // Validate campaign if specified
-      if (request.campaignId) {
-        const campaign = await getCampaignById(request.campaignId);
-        if (!canCampaignSchedule(campaign)) {
-          const blockReason = getCampaignScheduleBlockReason(campaign);
-          return {
-            success: false,
-            error: blockReason || 'Campaign does not allow publishing',
-          };
-        }
-      }
-
       const now = new Date().toISOString();
       const scheduledAt = now;
       const ttl = Math.floor((Date.now() + 30 * 24 * 60 * 60 * 1000) / 1000);
@@ -490,7 +453,6 @@ export class ScheduleService {
         contentId: request.contentId,
         brandId: request.brandId,
         userId: request.userId,
-        campaignId: request.campaignId,
         status: SCHEDULE_STATUS.SCHEDULED,
         scheduledAt,
         gsi1pk: `BRAND#${request.brandId}`,
@@ -622,7 +584,6 @@ export class ScheduleService {
                   scheduleId: next.scheduleId,
                   contentId: request.contentId,
                   brandId: request.brandId,
-                  campaignId: request.campaignId,
                   userId: request.userId,
                 }),
                 EventBusName: process.env.EVENT_BUS_NAME || 'default',
@@ -662,7 +623,6 @@ export class ScheduleService {
         {
           contentId: request.contentId,
           brandId: request.brandId,
-          campaignId: request.campaignId,
           platform: request.platform,
         }
       );
@@ -809,21 +769,6 @@ export class ScheduleService {
 
       const existingSchedule = getResult.schedule;
 
-      // Validate campaign if being updated
-      if (updateRequest.campaignId || existingSchedule.campaignId) {
-        const campaignIdToValidate = updateRequest.campaignId || existingSchedule.campaignId;
-        if (campaignIdToValidate) {
-          const campaign = await getCampaignById(campaignIdToValidate);
-          if (!canCampaignSchedule(campaign)) {
-            const blockReason = getCampaignScheduleBlockReason(campaign);
-            return {
-              success: false,
-              error: blockReason || 'Campaign does not allow scheduling updates',
-            };
-          }
-        }
-      }
-
       // Build update expression
       const updateExpressions: string[] = [];
       const removeExpressions: string[] = [];
@@ -867,7 +812,6 @@ export class ScheduleService {
                   scheduleId,
                   contentId: existingSchedule.contentId,
                   brandId: existingSchedule.brandId,
-                  campaignId: updateRequest.campaignId || existingSchedule.campaignId,
                   userId: userIdForTarget,
                 }),
                 EventBridgeParameters: {
@@ -893,7 +837,6 @@ export class ScheduleService {
                     scheduleId,
                     contentId: existingSchedule.contentId,
                     brandId: existingSchedule.brandId,
-                    campaignId: updateRequest.campaignId || existingSchedule.campaignId,
                     userId: userIdForTarget,
                   }),
                   EventBridgeParameters: {
@@ -933,7 +876,6 @@ export class ScheduleService {
                   scheduleId,
                   contentId: existingSchedule.contentId,
                   brandId: existingSchedule.brandId,
-                  campaignId: updateRequest.campaignId || existingSchedule.campaignId,
                   userId: updateRequest.userId,
                 }),
                 EventBridgeParameters: {
@@ -1151,7 +1093,6 @@ export class ScheduleService {
                 scheduleId: schedule.scheduleId,
                 contentId: schedule.contentId,
                 brandId: schedule.brandId,
-                campaignId: schedule.campaignId,
                 status: schedule.status,
                 scheduledAt: schedule.scheduledAt,
                 platform: schedule.platform,
@@ -1187,7 +1128,6 @@ export class ScheduleService {
     partialData?: {
       contentId?: string;
       brandId?: string;
-      campaignId?: string;
       platform?: string;
     }
   ): Promise<void> {
@@ -1204,7 +1144,6 @@ export class ScheduleService {
                 error: errorMessage,
                 contentId: partialData?.contentId,
                 brandId: partialData?.brandId,
-                campaignId: partialData?.campaignId,
                 platform: partialData?.platform,
                 timestamp: new Date().toISOString(),
               }),

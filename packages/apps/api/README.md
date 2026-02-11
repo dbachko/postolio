@@ -34,7 +34,7 @@ If you encounter an error like `Cannot find module '@postolio/aws/dist/index.cjs
 
 ## Seeding Local Data
 
-Use the development seeder to create a user, a brand, rich demo posts, and multiple sample campaigns for local testing.
+Use the development seeder to create a user, a brand, social account connection data, and demo posts for local testing.
 
 - Prerequisites:
   - Postgres and Redis running locally. Start with: `docker compose up -d postgres redis`
@@ -53,15 +53,11 @@ Use the development seeder to create a user, a brand, rich demo posts, and multi
   - `pnpm --filter @postolio/api seed:dev -- --email=demo+local@example.com --password=Test123!@# --name="Local Demo" --brand="Local Demo Brand" --posts=8`
 
 - What it creates:
-  - One user (re-used on subsequent runs if email exists)
+  - One user (existing user with the same email is deleted and re-created for idempotency)
   - One brand linked to that user
-  - Two social accounts for the brand (Instagram + Facebook Page) and sets `preferences.primarySocialAccountIds` for both
-  - Multiple campaigns covering all statuses (`creating`, `preview`, `active`, `paused`, `completed`, `failed`, `processing`) with varied configs:
-    - Frequencies: `daily`, `every2days`, `3weekly`
-    - Posting time styles: single `postingTime` and multi `postingTimes`
-    - Themes, styles, goals, optional seasonality assist, and colors
-  - Campaign content covering all post statuses (`draft`, `scheduled`, `published`, `failed`, `skipped`) with past and future dates
-  - Brand-level content (not tied to a campaign): preserves the previous `--posts` drafts/scheduled mix, plus a few `published`/`failed`/`skipped` examples
+  - One Instagram social account for the brand
+  - A default publishing queue with a few weekly slots
+  - Content posts covering the main statuses (`draft`, `scheduled`, `published`) with past and future dates
 
 - After seeding:
   - Start API: `pnpm --filter @postolio/api dev`

@@ -61,8 +61,6 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
                 caption: content.caption,
                 status: 'draft',
                 brandId,
-
-                campaignId: null,
                 generationParams: JSON.parse(
                   JSON.stringify({
                     theme,

@@ -138,11 +138,10 @@ export class EventEmitter {
   async emitScheduleFailed(params: {
     contentId: string;
     brandId?: string;
-    campaignId?: string | null;
     operation: 'create' | 'update' | 'delete';
     error: string;
   }): Promise<void> {
-    const { contentId, brandId, campaignId, operation, error } = params;
+    const { contentId, brandId, operation, error } = params;
 
     try {
       const result = await this.eventBridge.putEvents({
@@ -153,7 +152,6 @@ export class EventEmitter {
             Detail: JSON.stringify({
               contentId,
               brandId,
-              campaignId,
               operation,
               error,
               timestamp: new Date().toISOString(),
@@ -167,13 +165,12 @@ export class EventEmitter {
         result,
         'Schedule failure event emitted',
         'Failed to emit schedule failure event',
-        { contentId, brandId, campaignId, operation }
+        { contentId, brandId, operation }
       );
     } catch (emitError) {
       this.logger.error('Error emitting schedule failure event', {
         contentId,
         brandId,
-        campaignId,
         operation,
         ...formatError(emitError),
       });
@@ -299,147 +296,6 @@ export class EventEmitter {
       );
     } catch (error) {
       this.logger.error('Error emitting content scheduling failed event', {
-        contentId,
-        brandId,
-        ...formatError(error),
-      });
-    }
-  }
-
-  /**
-   * Emit campaign status changed event for microservices
-   */
-  async emitCampaignStatusChanged(
-    campaignId: string,
-    brandId: string,
-    oldStatus: string,
-    newStatus: string,
-    triggeredBy?: {
-      userId?: string;
-      operation?: string;
-    }
-  ): Promise<void> {
-    try {
-      const result = await this.eventBridge.putEvents({
-        Entries: [
-          {
-            Source: 'postolio.campaign',
-            DetailType: 'campaign.status.changed',
-            Detail: JSON.stringify({
-              campaignId,
-              brandId,
-              oldStatus,
-              newStatus,
-              triggeredBy,
-              timestamp: new Date().toISOString(),
-            }),
-            EventBusName: process.env.EVENT_BUS_NAME || 'default',
-          },
-        ],
-      });
-
-      this.logPutEventsResult(
-        result,
-        'Campaign status event emitted',
-        'Failed to emit campaign status changed event',
-        { campaignId, brandId, oldStatus, newStatus }
-      );
-    } catch (error) {
-      // Log error but don't fail the request - this is non-blocking
-      this.logger.error('Error emitting campaign status changed event', {
-        campaignId,
-        brandId,
-        ...formatError(error),
-      });
-    }
-  }
-
-  /**
-   * Emit campaign created event for microservices
-   */
-  async emitCampaignCreated(
-    campaignId: string,
-    brandId: string,
-    status: string,
-    triggeredBy?: {
-      userId?: string;
-      operation?: string;
-    }
-  ): Promise<void> {
-    try {
-      const result = await this.eventBridge.putEvents({
-        Entries: [
-          {
-            Source: 'postolio.campaign',
-            DetailType: 'campaign.created',
-            Detail: JSON.stringify({
-              campaignId,
-              brandId,
-              status,
-              triggeredBy,
-              timestamp: new Date().toISOString(),
-            }),
-            EventBusName: process.env.EVENT_BUS_NAME || 'default',
-          },
-        ],
-      });
-
-      this.logPutEventsResult(
-        result,
-        'Campaign created event emitted',
-        'Failed to emit campaign created event',
-        { campaignId, brandId, status }
-      );
-    } catch (error) {
-      // Log error but don't fail the request - this is non-blocking
-      this.logger.error('Error emitting campaign created event', {
-        campaignId,
-        brandId,
-        ...formatError(error),
-      });
-    }
-  }
-
-  /**
-   * Emit content-campaign association event for tracking validation coverage
-   */
-  async emitCampaignContentAssociated(
-    campaignId: string,
-    contentId: string,
-    brandId: string,
-    triggeredBy?: {
-      userId?: string;
-      operation?: string;
-    }
-  ): Promise<void> {
-    try {
-      const result = await this.eventBridge.putEvents({
-        Entries: [
-          {
-            Source: 'postolio.campaign',
-            DetailType: 'campaign.content.associated',
-            Detail: JSON.stringify({
-              campaignId,
-              contentId,
-              brandId,
-              triggeredBy,
-              timestamp: new Date().toISOString(),
-            }),
-            EventBusName: process.env.EVENT_BUS_NAME || 'default',
-          },
-        ],
-      });
-
-      this.logPutEventsResult(
-        result,
-        'Campaign content association event emitted',
-        'Failed to emit campaign content association event',
-        { campaignId, contentId, brandId }
-      );
-    } catch (error) {
-      // Log error but don't fail the request - this is non-blocking
-      this.logger.error('Error emitting campaign content association event', {
-        campaignId,
         contentId,
         brandId,
         ...formatError(error),

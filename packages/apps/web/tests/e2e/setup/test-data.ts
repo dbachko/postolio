@@ -52,21 +52,6 @@ export async function setupTestData() {
       data: contentItems,
     });
 
-    // Create test campaign
-    await prisma.campaign.create({
-      data: {
-        name: 'Test Campaign',
-        brandId: brand.id,
-        status: 'active',
-        priority: 5,
-        config: {
-          frequency: 'daily',
-          themes: ['lifestyle'],
-          duration: 7,
-        },
-      },
-    });
-
     console.log('Test data setup complete');
     return { user, brand };
   } catch (error) {

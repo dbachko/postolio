@@ -9,7 +9,6 @@ import { formatError } from '../utils/logging.js';
 export interface AssetUploadMetadata {
   contentId: string;
   brandId: string;
-  campaignId?: string | null;
   uploadedBy?: string;
   source?: string;
   originalPrompt?: string;
@@ -85,10 +84,6 @@ function deriveAssetTags(metadata: AssetUploadMetadata): string[] | undefined {
     metadata.tags.forEach((tag) => {
       if (tag) collected.add(tag);
     });
-  }
-
-  if (metadata.campaignId) {
-    collected.add(`campaign:${metadata.campaignId}`);
   }
 
   if (normalizedSource) {
