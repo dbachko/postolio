@@ -34,6 +34,18 @@ type ImageAnalyticsResponse = {
   }>;
 };
 
+type ContentSeriesSummary = {
+  id: string;
+  key: string | null;
+  name: string;
+  description: string | null;
+  color: string | null;
+  kind: 'batch' | 'rolling';
+  status: 'active' | 'paused' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+};
+
 export class BrandClient {
   constructor(private request: HttpRequest) {}
 
@@ -532,5 +544,14 @@ export class BrandClient {
 
   getInstagramBestTimeStatus(brandId: string) {
     return this.request(`/api/brands/${encodeURIComponent(brandId)}/instagram/best-time/status`);
+  }
+
+  getContentSeries(
+    brandId: string
+  ): Promise<{ success: true; data: { series: ContentSeriesSummary[] } }> {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/content-series`) as Promise<{
+      success: true;
+      data: { series: ContentSeriesSummary[] };
+    }>;
   }
 }

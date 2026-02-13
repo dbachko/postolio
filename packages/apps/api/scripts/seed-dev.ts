@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { ensureDatabaseSchema } from '../src/config/database-setup.js';
 import { getDatabaseClient } from '../src/config/database.js';
+import { ensureAiCreditsWalletInitialized } from '../src/services/ai-credits.js';
 
 const envCandidates = [
   path.resolve(process.cwd(), '.env'),
@@ -114,6 +115,7 @@ async function main() {
       },
     },
   });
+  await ensureAiCreditsWalletInitialized({ brandId: brand.id });
 
   const instagramAccount = await prisma.socialAccount.create({
     data: {

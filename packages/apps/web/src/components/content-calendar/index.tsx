@@ -26,9 +26,13 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
       return mergedContent;
     }
     const allowed = new Set(selectedSocialAccountIds);
-    return mergedContent.filter(
-      (item) => item.targetSocialAccountId && allowed.has(item.targetSocialAccountId)
-    );
+    // If the user has scoped to specific destinations, keep destination-targeted posts that match,
+    // but also keep "unassigned" drafts (targetSocialAccountId=null) so runs that create drafts
+    // still appear in the calendar.
+    return mergedContent.filter((item) => {
+      if (!item.targetSocialAccountId) return true;
+      return allowed.has(item.targetSocialAccountId);
+    });
   }, [mergedContent, selectedSocialAccountIds]);
 
   const calendarDisabled = useMemo(() => {

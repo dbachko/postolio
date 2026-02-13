@@ -7,8 +7,12 @@
 
 import { FastifyPluginAsync } from 'fastify';
 
+import { getDatabaseClient } from '../../config/database.js';
+import { contentSeriesRollingService } from '../../services/content-series-rolling.js';
 import { schedulerService } from '../../services/scheduler.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
+
+const prisma = getDatabaseClient();
 
 const publishNowRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/content/:contentId/publish-now
@@ -31,6 +35,24 @@ const publishNowRoutes: FastifyPluginAsync = async (fastify) => {
           success: false,
           error: result.error || 'Failed to publish now',
         });
+      }
+
+      // Best effort: if this post belongs to a rolling-enabled series, enqueue refresh.
+      try {
+        if (typeof (prisma as any).content?.findFirst === 'function') {
+          const content = await prisma.content.findFirst({
+            where: { id: contentId },
+            select: { contentSeriesId: true },
+          });
+          if (content?.contentSeriesId) {
+            await contentSeriesRollingService.refresh(content.contentSeriesId);
+          }
+        }
+      } catch (error) {
+        request.log.warn(
+          { err: error, contentId },
+          'Failed to trigger rolling refresh after publish-now'
+        );
       }
 
       return reply.send({

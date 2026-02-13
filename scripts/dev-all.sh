@@ -85,6 +85,48 @@ wait_for_http_endpoint() {
   return 1
 }
 
+wait_for_compose_service_health() {
+  local service="$1"
+  local max_attempts="${2:-60}"
+  local sleep_seconds="${3:-1}"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "docker is not installed; skipping readiness check for ${service}"
+    return 0
+  fi
+
+  local container_id=""
+  container_id="$(docker compose -p "${COMPOSE_PROJECT_NAME}" ps -q "${service}" 2>/dev/null || true)"
+  if [[ -z "${container_id}" ]]; then
+    echo "Unable to resolve container id for service '${service}' (project ${COMPOSE_PROJECT_NAME})"
+    return 1
+  fi
+
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    local status=""
+    status="$(
+      docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+        "${container_id}" 2>/dev/null || true
+    )"
+
+    if [[ "${status}" == "healthy" ]]; then
+      echo "Service '${service}' is healthy."
+      return 0
+    fi
+
+    if [[ "${status}" == "exited" || "${status}" == "dead" ]]; then
+      echo "Service '${service}' is not running (status=${status})."
+      return 1
+    fi
+
+    echo "Waiting for service '${service}' health (status=${status:-unknown}) (attempt ${attempt}/${max_attempts})..."
+    sleep "${sleep_seconds}"
+  done
+
+  echo "Timed out waiting for service '${service}' to become healthy."
+  return 1
+}
+
 derive_origin_from_url() {
   local input="$1"
   if [[ "$input" =~ ^https?://[^/]+ ]]; then
@@ -129,6 +171,11 @@ start_assets_api_service() {
 
 echo "Restarting local infrastructure (COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME})..."
 "$ROOT_DIR/scripts/restart-dev-stack.sh"
+
+echo "Waiting for local infrastructure readiness..."
+wait_for_compose_service_health postgres 60 1
+wait_for_compose_service_health postgres_assets 60 1
+wait_for_compose_service_health redis 60 1
 
 if [[ "${SKIP_ASSETS_DB_RESET:-0}" != "1" ]]; then
   if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then

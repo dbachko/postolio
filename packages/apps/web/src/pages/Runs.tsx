@@ -49,7 +49,7 @@ export function Runs() {
       <div className="flex flex-col items-center justify-center py-16">
         <AppEmptyState
           variant="minimal"
-          title="Select a brand to view runs"
+          title="Select a brand to view history"
           description="Choose which brand you want to inspect."
           actions={[{ label: 'Choose Brand', to: '/brands' }]}
         />
@@ -60,17 +60,19 @@ export function Runs() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-foreground text-2xl font-semibold">Runs</h1>
-        <p className="text-muted-foreground text-sm">Execution history for {selectedBrand.name}.</p>
+        <h1 className="text-foreground text-2xl font-semibold">History</h1>
+        <p className="text-muted-foreground text-sm">
+          Generation history for {selectedBrand.name}.
+        </p>
       </div>
 
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground text-base">Recent runs</CardTitle>
+          <CardTitle className="text-foreground text-base">Recent generations</CardTitle>
         </CardHeader>
         <CardContent>
           {empty ? (
-            <div className="text-muted-foreground text-sm">No runs yet.</div>
+            <div className="text-muted-foreground text-sm">No generations yet.</div>
           ) : (
             <Table>
               <TableHeader>

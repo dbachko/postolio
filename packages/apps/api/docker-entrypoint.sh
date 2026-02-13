@@ -61,5 +61,14 @@ fi
 # Return to API app directory
 cd /app/packages/apps/api
 
+# Sync curated recipe catalog so new/updated/retired curated recipes are
+# consistently rolled out for all brands during deploy/startup.
+if [ "${SKIP_CURATED_RECIPES_SYNC:-}" = "1" ]; then
+  echo "Skipping curated recipe sync (SKIP_CURATED_RECIPES_SYNC=1)"
+else
+  echo "Syncing curated recipes catalog..."
+  node dist/scripts/sync-curated-recipes.js
+fi
+
 # Execute main command (CMD)
 exec "$@"

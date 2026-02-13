@@ -5,6 +5,7 @@ import {
   FileEdit,
   FileText,
   Images,
+  Layers,
   MessageSquare,
   PlayCircle,
   Send,
@@ -112,10 +113,17 @@ export const auxNavItems: NavigationItem[] = [
     matchType: 'exact',
   },
   {
-    label: 'Runs',
+    label: 'Series',
+    path: '/series',
+    icon: Layers,
+    description: 'Generated post groups',
+    matchType: 'startsWith',
+  },
+  {
+    label: 'History',
     path: '/runs',
     icon: PlayCircle,
-    description: 'Execution history',
+    description: 'Generation history',
     matchType: 'startsWith',
   },
 ];

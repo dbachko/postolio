@@ -9,7 +9,10 @@ export interface PostDetailData {
   scheduledAt?: string | null;
   postedAt?: string | null;
   contentGroupId?: string | null;
+  contentSeriesId?: string | null;
   targetSocialAccountId?: string | null;
+  recipeRunId?: string | null;
+  generatedByRecipe?: { id: string; slug: string; name: string } | null;
   brandId?: string;
   brand: { id: string; name: string };
   mediaAssets?: Array<{

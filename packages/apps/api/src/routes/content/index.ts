@@ -14,6 +14,7 @@ import updatesRoutes from './updates.js';
 import imagesRoutes from './images.js';
 import mediaRoutes from './media.js';
 import limitsRoutes from './limits.js';
+import seriesRoutes from './series.js';
 
 const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Register all content sub-routes
@@ -45,6 +46,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Subscription limits
   await fastify.register(limitsRoutes);
+
+  // Content series (recipe runs / rolling pipelines)
+  await fastify.register(seriesRoutes);
 };
 
 export default contentRoutes;

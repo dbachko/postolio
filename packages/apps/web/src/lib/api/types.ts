@@ -25,6 +25,13 @@ export interface Content {
   id: string;
   caption: string;
   contentGroupId?: string | null;
+  contentSeriesId?: string | null;
+  contentSeriesName?: string | null;
+  contentSeriesColor?: string | null;
+  contentSeriesKind?: 'batch' | 'rolling' | null;
+  contentSeriesStatus?: 'active' | 'paused' | 'archived' | null;
+  recipeRunId?: string | null;
+  generatedByRecipe?: { id: string; slug: string; name: string } | null;
   targetSocialAccountId?: string | null;
   primaryAssetId?: string | null;
   contentType?: string | null;

@@ -10,7 +10,7 @@ export interface PlaceholderItem {
 
 export type CalendarDataItem = CalendarContentItem | (PlaceholderItem & { type: 'placeholder' });
 
-export type CalendarFilters = Pick<CalendarFilterState, 'statuses' | 'searchQuery'>;
+export type CalendarFilters = Pick<CalendarFilterState, 'series' | 'statuses' | 'searchQuery'>;
 
 export interface CalendarEventResource {
   type: CalendarDataItem['type'];

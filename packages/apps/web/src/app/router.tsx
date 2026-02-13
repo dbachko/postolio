@@ -37,6 +37,8 @@ import { Recipes } from '@/pages/Recipes';
 import { Skills } from '@/pages/Skills';
 import { Runs } from '@/pages/Runs';
 import { RunDetail } from '@/pages/RunDetail';
+import { Series } from '@/pages/Series';
+import { SeriesDetail } from '@/pages/SeriesDetail';
 
 import { ProtectedRoute, OnboardingGuard } from './guards';
 import { LazyLoadingFallback } from './lazy-loading-fallback';
@@ -211,6 +213,16 @@ export const router = createBrowserRouter([
   {
     path: '/runs/:runId',
     element: appShell(<RunDetail />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/series',
+    element: appShell(<Series />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/series/:contentSeriesId',
+    element: appShell(<SeriesDetail />),
     errorElement: <RouteError />,
   },
   {

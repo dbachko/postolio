@@ -9,8 +9,10 @@ import type { PostCardDragMeta } from '../drag-meta';
 import { POST_PREVIEW_WIDE_MIN_WIDTH_PX } from '../constants';
 import type { PostStatus } from '../types';
 import { DestinationIndicator } from './destination-indicator';
+import { GenerationIndicator } from './generation-indicator';
 import { OptimisticIndicator } from './optimistic-indicator';
 import { PreviewImage } from './preview-image';
+import { SeriesIndicator } from './series-indicator';
 import { StatusBadge } from './status-badge';
 
 type PostPreviewCardContentProps = {
@@ -62,6 +64,8 @@ export function PostPreviewCardContent({
     if (item.type === 'placeholder') return null;
     return (
       <div className="flex items-center gap-1">
+        <SeriesIndicator item={item} />
+        <GenerationIndicator item={item} />
         <DestinationIndicator
           item={item}
           hideDestinations={hideDestinations}

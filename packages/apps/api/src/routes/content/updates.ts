@@ -522,7 +522,14 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           brandId: true,
           contentType: true,
           contentGroupId: true,
+          contentSeriesId: true,
           targetSocialAccountId: true,
+          recipeRunId: true,
+          recipeRun: {
+            select: {
+              recipeTemplate: { select: { id: true, slug: true, name: true } },
+            },
+          },
           schedulingError: true,
           generationParams: true,
           shareToFeed: true,
@@ -769,7 +776,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Build CDN URL from S3 key and map to public response format
-      const contentWithUrl = buildContentResponse(updatedContent);
+      const contentWithUrl = buildContentResponse({
+        ...(updatedContent as any),
+        generatedByRecipe: (updatedContent as any).recipeRun?.recipeTemplate ?? null,
+      });
 
       // Best-effort: notify other clients to refresh calendars/content when schedule/time changes.
       try {

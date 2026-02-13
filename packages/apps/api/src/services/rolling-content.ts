@@ -34,6 +34,32 @@ const DEFAULT_CONFIG: RollingGenerationConfig = {
 class RollingContentService {
   private isProcessing = new Set<string>();
 
+  private async ensureRollingSeries(brandId: string) {
+    // Stable container so rolling-generated posts are grouped in the calendar.
+    return await prisma.contentSeries.upsert({
+      where: { brandId_key: { brandId, key: 'rolling_generation' } },
+      update: {
+        name: 'Rolling Pipeline',
+        kind: 'rolling',
+        status: 'active',
+        generatorJson: { source: 'rolling_generation' },
+        rollingConfigJson: DEFAULT_CONFIG as any,
+      },
+      create: {
+        brandId,
+        key: 'rolling_generation',
+        name: 'Rolling Pipeline',
+        description: 'System-managed rolling content pipeline.',
+        color: null,
+        kind: 'rolling',
+        status: 'active',
+        generatorJson: { source: 'rolling_generation' },
+        rollingConfigJson: DEFAULT_CONFIG as any,
+      },
+      select: { id: true },
+    });
+  }
+
   /**
    * Trigger rolling content generation after a post is published
    */
@@ -213,6 +239,7 @@ class RollingContentService {
       }
 
       // Save and schedule the generated content
+      const rollingSeries = await this.ensureRollingSeries(brandId);
       for (const content of generatedContent) {
         // Save to database
         const savedContent = await prisma.content.create({
@@ -220,6 +247,7 @@ class RollingContentService {
             caption: content.caption,
             hashtags: extractHashtagsFromCaption(content.caption),
             brandId,
+            contentSeriesId: rollingSeries.id,
             status: 'scheduled', // Auto-schedule rolling content
             generationParams: {
               source: 'rolling_generation',

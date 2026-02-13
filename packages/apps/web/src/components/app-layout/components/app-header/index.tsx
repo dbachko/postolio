@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 
@@ -12,6 +12,13 @@ import {
 } from '@/components/app-shell/nav-config';
 import { getSectionNavItems } from '@/components/app-shell/section-nav';
 import { Button } from '@/components/ui/button';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 
 import { AppHeaderSearchDialog } from '../app-header-search-dialog';
 import { CreateActionsMenu } from './components/create-actions-menu';
@@ -115,6 +122,34 @@ export function AppHeader() {
     };
   }, [pageMeta, pageMetaOverride]);
 
+  const headerBreadcrumbs = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/skills' || path.startsWith('/skills/')) {
+      return [{ label: 'Recipes', to: '/recipes' }, { label: 'Skills' }];
+    }
+    if (path === '/runs') {
+      return [{ label: 'Recipes', to: '/recipes' }, { label: 'History' }];
+    }
+    if (path.startsWith('/runs/')) {
+      return [
+        { label: 'Recipes', to: '/recipes' },
+        { label: 'History', to: '/runs' },
+        { label: 'Generation' },
+      ];
+    }
+    if (path === '/series') {
+      return [{ label: 'Recipes', to: '/recipes' }, { label: 'Series' }];
+    }
+    if (path.startsWith('/series/')) {
+      return [
+        { label: 'Recipes', to: '/recipes' },
+        { label: 'Series', to: '/series' },
+        { label: 'Details' },
+      ];
+    }
+    return null;
+  }, [location.pathname]);
+
   return (
     <>
       <header className="bg-card sticky top-0 z-40 border-b">
@@ -130,14 +165,38 @@ export function AppHeader() {
             </Link>
 
             <div className="hidden min-w-0 flex-col md:flex">
-              <h1 className="text-foreground truncate text-sm font-semibold">
-                {effectivePageMeta.title}
-              </h1>
-              {effectivePageMeta.description && (
+              {headerBreadcrumbs ? (
+                <Breadcrumb>
+                  <BreadcrumbList className="text-foreground gap-1 text-sm font-semibold">
+                    {headerBreadcrumbs.map((item, index) => (
+                      <Fragment key={`${item.label}-${index}`}>
+                        {index > 0 ? <BreadcrumbSeparator /> : null}
+                        <BreadcrumbItem>
+                          {item.to ? (
+                            <BreadcrumbLink
+                              asChild
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <Link to={item.to}>{item.label}</Link>
+                            </BreadcrumbLink>
+                          ) : (
+                            <span className="text-foreground">{item.label}</span>
+                          )}
+                        </BreadcrumbItem>
+                      </Fragment>
+                    ))}
+                  </BreadcrumbList>
+                </Breadcrumb>
+              ) : (
+                <h1 className="text-foreground truncate text-sm font-semibold">
+                  {effectivePageMeta.title}
+                </h1>
+              )}
+              {effectivePageMeta.description ? (
                 <p className="text-muted-foreground truncate text-xs">
                   {effectivePageMeta.description}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
 

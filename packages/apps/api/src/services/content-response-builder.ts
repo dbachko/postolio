@@ -24,7 +24,10 @@ export interface ContentWithMetadata extends ContentBase {
   postedAt?: Date | null;
   brandId?: string;
   contentGroupId?: string | null;
+  contentSeriesId?: string | null;
   targetSocialAccountId?: string | null;
+  recipeRunId?: string | null;
+  generatedByRecipe?: { id: string; slug: string; name: string } | null;
   schedulingError?: string | null;
   generationParams?: unknown;
   contentType?: string | null;
@@ -53,7 +56,10 @@ export interface ContentResponse {
   postedAt?: Date | null;
   brandId?: string;
   contentGroupId?: string | null;
+  contentSeriesId?: string | null;
   targetSocialAccountId?: string | null;
+  recipeRunId?: string | null;
+  generatedByRecipe?: { id: string; slug: string; name: string } | null;
   schedulingError?: string | null;
   generationParams?: unknown;
   contentType?: string | null;
@@ -107,8 +113,17 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   if (content.contentGroupId !== undefined) {
     response.contentGroupId = content.contentGroupId;
   }
+  if (content.contentSeriesId !== undefined) {
+    response.contentSeriesId = content.contentSeriesId;
+  }
   if (content.targetSocialAccountId !== undefined) {
     response.targetSocialAccountId = content.targetSocialAccountId;
+  }
+  if (content.recipeRunId !== undefined) {
+    response.recipeRunId = content.recipeRunId;
+  }
+  if (content.generatedByRecipe !== undefined) {
+    response.generatedByRecipe = content.generatedByRecipe;
   }
   if (content.schedulingError !== undefined) {
     response.schedulingError = content.schedulingError;

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Filter, Search, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useCalendarFilterStore, type ContentStatus } from '@/stores/calendarFilterStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -7,18 +8,52 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { STATUS_OPTIONS } from '../utils';
 import { getPostStatusTextClass } from '@/utils/post-status-colors';
+import { brand as brandApi } from '@/lib/api';
 
-export function ContentFiltersBar() {
+type ContentFiltersBarProps = {
+  brandId: string;
+};
+
+export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const series = useCalendarFilterStore((s) => s.series);
   const statuses = useCalendarFilterStore((s) => s.statuses);
   const searchQuery = useCalendarFilterStore((s) => s.searchQuery);
-  const setStatuses = useCalendarFilterStore((s) => s.setStatuses);
+  const setSeries = useCalendarFilterStore((s) => s.setSeries);
   const setSearchQuery = useCalendarFilterStore((s) => s.setSearchQuery);
   const clearAll = useCalendarFilterStore((s) => s.clearAll);
   const toggleStatus = useCalendarFilterStore((s) => s.toggleStatus);
 
-  const hasAnyActiveFilters = statuses.length > 0 || !!searchQuery;
-  const activeFilterCount = (statuses.length > 0 ? 1 : 0) + (searchQuery ? 1 : 0);
+  const seriesQuery = useQuery({
+    queryKey: ['content-series', brandId],
+    enabled: Boolean(brandId),
+    queryFn: () => brandApi.getContentSeries(brandId),
+    staleTime: 60_000,
+  });
+
+  const seriesOptions = useMemo(() => {
+    const list = seriesQuery.data?.data?.series ?? [];
+    return [
+      { id: 'none', name: 'No series', color: 'hsl(var(--muted-foreground))' as const },
+      ...list.map((s: any) => ({
+        id: String(s.id),
+        name: String(s.name || 'Series'),
+        color: typeof s.color === 'string' && s.color.trim().length > 0 ? s.color.trim() : null,
+      })),
+    ];
+  }, [seriesQuery.data]);
+  const seriesNameById = useMemo(
+    () => new Map(seriesOptions.map((option) => [option.id, option.name] as const)),
+    [seriesOptions]
+  );
+  const statusLabelById = useMemo(
+    () => new Map(STATUS_OPTIONS.map((option) => [option.value, option.label] as const)),
+    []
+  );
+
+  const hasAnyActiveFilters = series.length > 0 || statuses.length > 0 || !!searchQuery;
+  const activeFilterCount =
+    (series.length > 0 ? 1 : 0) + (statuses.length > 0 ? 1 : 0) + (searchQuery ? 1 : 0);
   const isFiltersActive = isOpen || hasAnyActiveFilters;
   const statusIcon: Record<ContentStatus, React.ComponentType<{ className?: string }>> = {
     draft: Clock,
@@ -26,6 +61,21 @@ export function ContentFiltersBar() {
     published: CheckCircle2,
     failed: AlertTriangle,
     skipped: AlertTriangle,
+  };
+
+  const toggleSeries = (seriesId: string) => {
+    const clean = seriesId.trim();
+    if (!clean) return;
+    const next = series.includes(clean) ? series.filter((s) => s !== clean) : [...series, clean];
+    setSeries(next);
+  };
+
+  const seriesColorById = (id: string): string => {
+    if (id === 'none') return 'hsl(var(--muted-foreground))';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    const hue = hash % 360;
+    return `hsl(${hue} 68% 48%)`;
   };
 
   return (
@@ -70,7 +120,7 @@ export function ContentFiltersBar() {
                   onClick={clearAll}
                   disabled={!hasAnyActiveFilters}
                 >
-                  Reset Filters
+                  Clear all
                 </Button>
                 <Button
                   variant="ghost"
@@ -84,22 +134,54 @@ export function ContentFiltersBar() {
               </div>
             </div>
 
+            {hasAnyActiveFilters ? (
+              <div className="bg-background mb-4 rounded-lg border p-3">
+                <div className="mb-2 text-sm font-semibold">Applied filters</div>
+                <div className="flex flex-wrap gap-2">
+                  {searchQuery ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => setSearchQuery('')}
+                    >
+                      Search: {searchQuery}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  {series.map((seriesId) => (
+                    <Button
+                      key={`series-${seriesId}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => toggleSeries(seriesId)}
+                    >
+                      {seriesNameById.get(seriesId) || seriesId}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                  {statuses.map((status) => (
+                    <Button
+                      key={`status-${status}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => toggleStatus(status)}
+                    >
+                      {statusLabelById.get(status) || status}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="bg-background rounded-lg border p-4 lg:col-span-2">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Search</div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary hover:text-primary h-auto px-0 py-0 text-sm font-medium hover:bg-transparent"
-                    disabled={!searchQuery}
-                    onClick={() => setSearchQuery('')}
-                  >
-                    Clear
-                  </Button>
-                </div>
-
                 <div className="relative">
                   <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                   <Input
@@ -123,18 +205,58 @@ export function ContentFiltersBar() {
               </div>
 
               <div className="bg-background rounded-lg border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Post status</div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary hover:text-primary h-auto px-0 py-0 text-sm font-medium hover:bg-transparent"
-                    disabled={statuses.length === 0}
-                    onClick={() => setStatuses([])}
-                  >
-                    Unselect all
-                  </Button>
+                <div className="mb-3 text-sm font-semibold">
+                  Series
+                  {series.length > 0 ? (
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      ({series.length})
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="max-h-[17rem] space-y-1 overflow-auto pr-1">
+                  {seriesOptions.map((option) => {
+                    const checked = series.includes(option.id);
+                    const id = `calendar-filter-series-${option.id}`;
+                    const seriesColor =
+                      typeof option.color === 'string' && option.color.trim().length > 0
+                        ? option.color
+                        : seriesColorById(option.id);
+                    return (
+                      <label
+                        key={option.id}
+                        htmlFor={id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1"
+                      >
+                        <Checkbox
+                          id={id}
+                          checked={checked}
+                          onCheckedChange={() => toggleSeries(option.id)}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span
+                          className={cn(
+                            'border-border inline-flex h-3 w-3 shrink-0 rounded-full border',
+                            checked ? 'opacity-100' : 'opacity-40'
+                          )}
+                          style={{ backgroundColor: seriesColor }}
+                          aria-hidden="true"
+                        />
+                        <span className="text-sm">{option.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-background rounded-lg border p-4">
+                <div className="mb-3 text-sm font-semibold">
+                  Post status
+                  {statuses.length > 0 ? (
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      ({statuses.length})
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="space-y-1">

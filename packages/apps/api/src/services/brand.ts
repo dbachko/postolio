@@ -5,6 +5,7 @@ import { isDemoBrand } from '../utils/demo-brand.js';
 import { instagramService } from './instagram.js';
 import { buildAnalysisAssetMetadata } from './brand-analysis-assets.js';
 import { importImageFromExternalUrl } from './assets-media.js';
+import { ensureAiCreditsWalletInitialized } from './ai-credits.js';
 
 const prisma = getDatabaseClient();
 const eventBridge = new EventBridge({});
@@ -47,27 +48,34 @@ export async function createBrand(userId: string, body: CreateBrandBody) {
     throw new BrandValidationError('Brand name must be less than 100 characters');
   }
 
-  const brand = await prisma.brand.create({
-    data: {
-      name: name.trim(),
-      description: description?.trim() || null,
-      userId,
-      ...(countryCode
-        ? {
-            countryCode:
-              typeof countryCode === 'string' && countryCode.length === 2
-                ? countryCode.toUpperCase()
-                : null,
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      createdAt: true,
-      countryCode: true,
-    },
+  const brand = await prisma.$transaction(async (tx) => {
+    const created = await tx.brand.create({
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        userId,
+        ...(countryCode
+          ? {
+              countryCode:
+                typeof countryCode === 'string' && countryCode.length === 2
+                  ? countryCode.toUpperCase()
+                  : null,
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        createdAt: true,
+        countryCode: true,
+      },
+    });
+
+    // Temporary policy: each newly created brand starts with default credits.
+    await ensureAiCreditsWalletInitialized({ brandId: created.id, tx });
+
+    return created;
   });
 
   // After a real brand is created, remove any demo brands for this user so

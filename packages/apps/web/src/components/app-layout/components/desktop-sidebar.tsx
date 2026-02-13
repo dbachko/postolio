@@ -43,7 +43,6 @@ export function DesktopSidebar() {
         onNavigate={(path) => navigate(path)}
         onLogout={handleLogout}
       />
-      <div className="pointer-events-none fixed inset-0 z-40 bg-transparent transition-colors duration-300 ease-out group-hover:bg-black/25" />
     </div>
   );
 }

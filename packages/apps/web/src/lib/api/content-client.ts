@@ -234,6 +234,47 @@ export class ContentClient {
     return this.request(`/api/posts/${postId}`);
   }
 
+  getSeries(contentSeriesId: string) {
+    return this.request(`/api/content/series/${encodeURIComponent(contentSeriesId)}`);
+  }
+
+  updateSeries(
+    contentSeriesId: string,
+    body: {
+      name?: string;
+      description?: string | null;
+      color?: string | null;
+      status?: string;
+      rolling?: {
+        enabled?: boolean;
+        minQueueDays?: number;
+        targetQueueDays?: number;
+        maxQueueDays?: number;
+        batchSize?: number;
+      };
+    }
+  ) {
+    return this.request(`/api/content/series/${encodeURIComponent(contentSeriesId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  getSeriesRollingStatus(contentSeriesId: string) {
+    return this.request(
+      `/api/content/series/${encodeURIComponent(contentSeriesId)}/rolling/status`
+    );
+  }
+
+  refreshSeriesRolling(contentSeriesId: string) {
+    return this.request(
+      `/api/content/series/${encodeURIComponent(contentSeriesId)}/rolling/refresh`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
   getPostInsights(postId: string) {
     return this.request(`/api/posts/${postId}/insights`);
   }

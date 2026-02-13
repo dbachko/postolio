@@ -3,7 +3,16 @@ import { z } from 'zod';
 
 import { validateBody, validateQuery, validateParams } from '../middleware/validation.js';
 import { assertBrandOwnership } from '../services/ownership.js';
-import { createRun, getRun, listRuns, cancelRun } from '../services/recipe-runs/runs-service.js';
+import {
+  cancelRun,
+  createRun,
+  estimateRunCost,
+  getRun,
+  getRunCredits,
+  grantRunCredits,
+  listRuns,
+  markRunEnqueueFailed,
+} from '../services/recipe-runs/runs-service.js';
 import { enqueueRecipeRun } from '../services/recipe-runs/queue.js';
 
 const ListRunsQuerySchema = z.object({
@@ -24,6 +33,21 @@ const CreateRunBodySchema = z.object({
   recipeVersionId: z.string().min(1),
   trigger: z.enum(['manual', 'schedule', 'api', 'chat']).default('manual'),
   input: z.unknown().optional().default({}),
+});
+
+const EstimateRunBodySchema = z.object({
+  brandId: z.string().min(1),
+  recipeVersionId: z.string().min(1),
+  input: z.unknown().optional().default({}),
+});
+
+const CreditsQuerySchema = z.object({
+  brandId: z.string().min(1),
+});
+
+const TopUpCreditsBodySchema = z.object({
+  brandId: z.string().min(1),
+  credits: z.number().int().positive().max(100000).default(1000),
 });
 
 const RunIdParamsSchema = z.object({
@@ -54,7 +78,7 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
 
       await assertBrandOwnership(userId, body.brandId);
 
-      const { runId, status } = await createRun({
+      const { runId, status, costEstimate } = await createRun({
         brandId: body.brandId,
         userId,
         recipeVersionId: body.recipeVersionId,
@@ -62,14 +86,77 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
         input: body.input,
       });
 
-      // Best-effort enqueue. If the queue is unavailable, the run stays queued.
       try {
         await enqueueRecipeRun(runId);
       } catch (error) {
-        request.log.warn({ err: error, runId }, 'Failed to enqueue recipe run');
+        const message = error instanceof Error ? error.message : 'Unknown enqueue error';
+        await markRunEnqueueFailed({ runId, internalError: message });
+        request.log.error({ err: error, runId }, 'Failed to enqueue recipe run');
+        return reply.code(503).send({
+          error: 'Run could not be started. Please retry.',
+          code: 'RUN_ENQUEUE_FAILED',
+          runId,
+        });
       }
 
-      return reply.code(201).send({ runId, status });
+      return reply.code(201).send({ runId, status, costEstimate });
+    }
+  );
+
+  fastify.post<{ Body: z.infer<typeof EstimateRunBodySchema> }>(
+    '/estimate',
+    { preHandler: [fastify.authenticate, validateBody(EstimateRunBodySchema)] },
+    async (request, reply) => {
+      const userId = request.user!.id;
+      const body = request.body;
+
+      await assertBrandOwnership(userId, body.brandId);
+      const estimate = await estimateRunCost({
+        brandId: body.brandId,
+        recipeVersionId: body.recipeVersionId,
+        input: body.input,
+      });
+
+      return reply.send({
+        estimate: {
+          cadenceCount: estimate.estimate.cadenceCount,
+          stepCounts: estimate.estimate.stepCounts,
+          billableCounts: estimate.estimate.billableCounts,
+          estimatedCredits: estimate.estimate.estimatedCredits,
+          estimatedUsd: estimate.estimate.estimatedUsd,
+        },
+        managedSkillIds: estimate.managedSkillIds,
+        balanceCredits: estimate.balanceCredits,
+        shortfallCredits: estimate.shortfallCredits,
+        enforcementEnabled: estimate.enforcementEnabled,
+      });
+    }
+  );
+
+  fastify.get<{ Querystring: z.infer<typeof CreditsQuerySchema> }>(
+    '/credits',
+    { preHandler: [fastify.authenticate, validateQuery(CreditsQuerySchema)] },
+    async (request, reply) => {
+      const userId = request.user!.id;
+      const { brandId } = request.query;
+      await assertBrandOwnership(userId, brandId);
+      const credits = await getRunCredits(brandId);
+      return reply.send({ credits });
+    }
+  );
+
+  fastify.post<{ Body: z.infer<typeof TopUpCreditsBodySchema> }>(
+    '/credits/top-up',
+    { preHandler: [fastify.authenticate, validateBody(TopUpCreditsBodySchema)] },
+    async (request, reply) => {
+      const userId = request.user!.id;
+      const body = request.body;
+      await assertBrandOwnership(userId, body.brandId);
+      const topUp = await grantRunCredits({
+        brandId: body.brandId,
+        credits: body.credits,
+      });
+      return reply.send({ topUp });
     }
   );
 

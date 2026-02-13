@@ -59,6 +59,46 @@ export type RunCost = {
   createdAt: string;
 };
 
+export type RunCostSummary = {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalEstimatedCostUsd: string | null;
+  managedCreditsSpent: number;
+};
+
+export type RunCreditsSummary = {
+  balanceCredits: number;
+  totalGrantedCredits: number;
+  totalDebitedCredits: number;
+  enforcementEnabled: boolean;
+};
+
+export type RunEstimate = {
+  estimate: {
+    cadenceCount: number;
+    stepCounts: {
+      llmCalls: number;
+      webFetchCalls: number;
+      imageCalls: number;
+      videoCalls: number;
+      audioCalls: number;
+    };
+    billableCounts: {
+      llmCalls: number;
+      webFetchCalls: number;
+      imageCalls: number;
+      videoCalls: number;
+      audioCalls: number;
+    };
+    estimatedCredits: number;
+    estimatedUsd: string;
+  };
+  managedSkillIds: string[];
+  balanceCredits: number;
+  shortfallCredits: number;
+  enforcementEnabled: boolean;
+};
+
 export type RunDetailResponse = {
   run: {
     id: string;
@@ -77,6 +117,7 @@ export type RunDetailResponse = {
   steps: RunStep[];
   artifacts: RunArtifact[];
   costs: RunCost[];
+  costSummary: RunCostSummary;
 };
 
 export class RunsClient {
@@ -98,7 +139,38 @@ export class RunsClient {
     return this.request('/api/runs', {
       method: 'POST',
       body: JSON.stringify(body),
-    }) as Promise<{ runId: string; status: RunStatus }>;
+    }) as Promise<{
+      runId: string;
+      status: RunStatus;
+      costEstimate?: {
+        estimatedCredits: number;
+        estimatedUsd: string;
+        shortfallCredits: number;
+        balanceCredits: number;
+        enforcementEnabled: boolean;
+      };
+    }>;
+  }
+
+  estimateRun(body: { brandId: string; recipeVersionId: string; input?: unknown }) {
+    return this.request('/api/runs/estimate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }) as Promise<RunEstimate>;
+  }
+
+  getCredits(brandId: string) {
+    const qp = new URLSearchParams({ brandId });
+    return this.request(`/api/runs/credits?${qp.toString()}`) as Promise<{
+      credits: RunCreditsSummary;
+    }>;
+  }
+
+  topUpCredits(body: { brandId: string; credits: number }) {
+    return this.request('/api/runs/credits/top-up', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }) as Promise<{ topUp: { balanceCredits: number; grantedCredits: number } }>;
   }
 
   getRun(runId: string) {

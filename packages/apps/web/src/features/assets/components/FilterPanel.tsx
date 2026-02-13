@@ -42,6 +42,11 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
     filters.aspectRatios.length > 0 ||
     filters.orientationTypes.length > 0 ||
     filters.minWidth !== undefined ||
+    filters.maxWidth !== undefined ||
+    filters.minHeight !== undefined ||
+    filters.maxHeight !== undefined ||
+    filters.uploadedAfter !== undefined ||
+    filters.uploadedBefore !== undefined ||
     filters.usageStatuses.length > 0;
 
   const activeFilterCount =
@@ -54,6 +59,16 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
     (filters.uploadedAfter !== undefined ? 1 : 0) +
     (filters.uploadedBefore !== undefined ? 1 : 0) +
     filters.usageStatuses.length;
+
+  const orientationLabel: Record<'portrait' | 'landscape' | 'square', string> = {
+    portrait: 'Portrait',
+    landscape: 'Landscape',
+    square: 'Square',
+  };
+  const usageLabel: Record<'used' | 'unused', string> = {
+    used: 'Used in posts',
+    unused: 'Unused',
+  };
 
   return (
     <div className="relative">
@@ -78,22 +93,181 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
 
           {/* Filter Panel */}
           <div className="bg-background absolute top-12 right-0 z-50 w-96 rounded-lg border p-4 shadow-lg">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold">Filter Assets</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-                className="h-6 w-6 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="font-semibold">Filter Assets</h3>
+                <p className="text-muted-foreground text-sm">
+                  Narrow results by visual properties.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onReset}
+                  disabled={!hasActiveFilters}
+                >
+                  Clear all
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsOpen(false)}
+                  className="h-6 w-6 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+
+            {hasActiveFilters ? (
+              <div className="mb-4 rounded-lg border p-3">
+                <div className="mb-2 text-sm font-semibold">Applied filters</div>
+                <div className="flex flex-wrap gap-2">
+                  {filters.aspectRatios.map((ratio) => (
+                    <Button
+                      key={`chip-ratio-${ratio}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() =>
+                        onChange({
+                          ...filters,
+                          aspectRatios: filters.aspectRatios.filter((item) => item !== ratio),
+                        })
+                      }
+                    >
+                      Ratio: {ratio}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                  {filters.orientationTypes.map((orientation) => (
+                    <Button
+                      key={`chip-orientation-${orientation}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() =>
+                        onChange({
+                          ...filters,
+                          orientationTypes: filters.orientationTypes.filter(
+                            (item) => item !== orientation
+                          ),
+                        })
+                      }
+                    >
+                      {orientationLabel[orientation]}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                  {filters.usageStatuses.map((usage) => (
+                    <Button
+                      key={`chip-usage-${usage}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() =>
+                        onChange({
+                          ...filters,
+                          usageStatuses: filters.usageStatuses.filter((item) => item !== usage),
+                        })
+                      }
+                    >
+                      {usageLabel[usage]}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                  {filters.minWidth !== undefined ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, minWidth: undefined })}
+                    >
+                      Min width: {filters.minWidth}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  {filters.maxWidth !== undefined ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, maxWidth: undefined })}
+                    >
+                      Max width: {filters.maxWidth}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  {filters.minHeight !== undefined ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, minHeight: undefined })}
+                    >
+                      Min height: {filters.minHeight}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  {filters.maxHeight !== undefined ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, maxHeight: undefined })}
+                    >
+                      Max height: {filters.maxHeight}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  {filters.uploadedAfter ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, uploadedAfter: undefined })}
+                    >
+                      Uploaded after: {filters.uploadedAfter}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  {filters.uploadedBefore ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, uploadedBefore: undefined })}
+                    >
+                      Uploaded before: {filters.uploadedBefore}
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-6">
               {/* Aspect Ratio Filter - PRIORITY */}
               <div>
-                <Label className="mb-2 block text-sm font-medium">Aspect Ratio</Label>
+                <Label className="mb-2 block text-sm font-medium">
+                  Aspect Ratio
+                  {filters.aspectRatios.length > 0 ? (
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      ({filters.aspectRatios.length})
+                    </span>
+                  ) : null}
+                </Label>
                 <MultiSelect
                   options={ASPECT_RATIOS.map((ratio) => ({
                     label: `${ratio.label} - ${ratio.description}`,
@@ -112,7 +286,14 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
 
               {/* Orientation Filter */}
               <div>
-                <Label className="mb-2 block text-sm font-medium">Orientation</Label>
+                <Label className="mb-2 block text-sm font-medium">
+                  Orientation
+                  {filters.orientationTypes.length > 0 ? (
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      ({filters.orientationTypes.length})
+                    </span>
+                  ) : null}
+                </Label>
                 <MultiSelect
                   options={[
                     { label: 'Portrait', value: 'portrait' },
@@ -132,7 +313,14 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
 
               {/* Usage Status Filter */}
               <div>
-                <Label className="mb-2 block text-sm font-medium">Usage Status</Label>
+                <Label className="mb-2 block text-sm font-medium">
+                  Usage Status
+                  {filters.usageStatuses.length > 0 ? (
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      ({filters.usageStatuses.length})
+                    </span>
+                  ) : null}
+                </Label>
                 <MultiSelect
                   options={[
                     { label: 'Unused', value: 'unused' },
@@ -150,24 +338,14 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
               </div>
             </div>
 
-            {/* Reset Button */}
             <div className="mt-6 flex gap-2 border-t pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onReset}
-                className="flex-1"
-                disabled={!hasActiveFilters}
-              >
-                Reset Filters
-              </Button>
               <Button
                 variant="default"
                 size="sm"
                 onClick={() => setIsOpen(false)}
                 className="flex-1"
               >
-                Apply
+                Done
               </Button>
             </div>
           </div>

@@ -4,12 +4,16 @@ export function applyFilters(
   items: CalendarDataItem[],
   filters: CalendarFilters
 ): CalendarDataItem[] {
-  const { statuses, searchQuery } = filters;
+  const { series, statuses, searchQuery } = filters;
 
   return items.filter((item) => {
     // Queue slots are structural calendar affordances; content filters should never hide them.
     if (isQueueSlotPlaceholder(item)) {
       return true;
+    }
+
+    if (series.length > 0 && !matchesSeries(item, series)) {
+      return false;
     }
 
     if (statuses.length > 0 && !matchesStatus(item, statuses)) {
@@ -41,6 +45,26 @@ function matchesStatus(item: CalendarDataItem, statuses: string[]): boolean {
   }
 
   return statuses.includes(status);
+}
+
+function matchesSeries(item: CalendarDataItem, series: string[]): boolean {
+  if (item.type === 'placeholder') {
+    return false;
+  }
+
+  const raw = asRecord(item).contentSeriesId;
+  const contentSeriesId = typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
+
+  // Special filter value: "none" = items with no series attached.
+  if (series.includes('none')) {
+    if (!contentSeriesId) return true;
+  }
+
+  if (!contentSeriesId) {
+    return false;
+  }
+
+  return series.includes(contentSeriesId);
 }
 
 function matchesSearchQuery(item: CalendarDataItem, query: string): boolean {

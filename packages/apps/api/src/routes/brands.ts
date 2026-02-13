@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { getRedisClient } from '../services/redis.js';
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { getDatabaseClient } from '../config/database.js';
+import { contentSeriesRollingService } from '../services/content-series-rolling.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import {
   BrandNotFoundError,
@@ -214,6 +215,15 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           content = await prisma.content.findMany({
             where: whereWithPublications,
             include: {
+              contentSeries: {
+                select: { id: true, key: true, name: true, color: true, kind: true, status: true },
+              },
+              recipeRun: {
+                select: {
+                  id: true,
+                  recipeTemplate: { select: { id: true, slug: true, name: true } },
+                },
+              },
               publications: { select: { platform: true, permalink: true, publishedAt: true } },
               publishingQueueItem: { select: { id: true } },
               mediaAssets: {
@@ -232,6 +242,22 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             content = await prisma.content.findMany({
               where: whereWithoutPublications,
               include: {
+                contentSeries: {
+                  select: {
+                    id: true,
+                    key: true,
+                    name: true,
+                    color: true,
+                    kind: true,
+                    status: true,
+                  },
+                },
+                recipeRun: {
+                  select: {
+                    id: true,
+                    recipeTemplate: { select: { id: true, slug: true, name: true } },
+                  },
+                },
                 publishingQueueItem: { select: { id: true } },
                 mediaAssets: {
                   select: { assetId: true, displayOrder: true },
@@ -250,7 +276,16 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        const placeholders: any[] = [];
+        const placeholders = await contentSeriesRollingService
+          .getBrandPlaceholders({
+            brandId,
+            monthStart,
+            monthEnd,
+          })
+          .catch((error) => {
+            request.log.warn({ err: error, brandId }, 'Failed to build rolling placeholders');
+            return [];
+          });
 
         // Map to response format with CDN URLs
         const contentWithUrls = content.map((item) => {
@@ -278,6 +313,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             updatedAt: item.updatedAt,
             brandId: item.brandId,
             contentGroupId: (item as any).contentGroupId ?? null,
+            contentSeriesId: (item as any).contentSeriesId ?? null,
+            contentSeriesName: (item as any).contentSeries?.name ?? null,
+            contentSeriesColor: (item as any).contentSeries?.color ?? null,
+            contentSeriesKind: (item as any).contentSeries?.kind ?? null,
+            contentSeriesStatus: (item as any).contentSeries?.status ?? null,
+            recipeRunId: (item as any).recipeRunId ?? (item as any).recipeRun?.id ?? null,
+            generatedByRecipe: (item as any).recipeRun?.recipeTemplate ?? null,
             targetSocialAccountId: (item as any).targetSocialAccountId ?? null,
             contentType: item.contentType,
             shareToFeed: (item as any).shareToFeed ?? null,
@@ -298,6 +340,41 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         request.log.error({ err: error }, 'Calendar content error');
         return reply.code(500).send({ error: 'Failed to retrieve calendar content' });
+      }
+    }
+  );
+
+  // Brand content series (recipe series / rolling pipelines)
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/content-series',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id: brandId } = request.params;
+
+        await assertBrandOwnership(userId, brandId);
+
+        const series = await prisma.contentSeries.findMany({
+          where: { brandId },
+          select: {
+            id: true,
+            key: true,
+            name: true,
+            description: true,
+            color: true,
+            kind: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        return reply.send({ success: true, data: { series } });
+      } catch (error) {
+        request.log.error({ err: error }, 'Content series list error');
+        return reply.code(500).send({ error: 'Failed to retrieve content series' });
       }
     }
   );

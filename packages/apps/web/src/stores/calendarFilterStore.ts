@@ -5,10 +5,12 @@ export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'sk
 
 export interface CalendarFilterState {
   // Filter values
+  series: string[];
   statuses: ContentStatus[];
   searchQuery: string;
 
   // Actions
+  setSeries: (series: string[]) => void;
   setStatuses: (statuses: ContentStatus[]) => void;
   toggleStatus: (status: ContentStatus) => void;
   setSearchQuery: (query: string) => void;
@@ -20,6 +22,7 @@ export interface CalendarFilterState {
 }
 
 const initialState = {
+  series: [],
   statuses: [],
   searchQuery: '',
 };
@@ -28,6 +31,15 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
   persist(
     (set, get) => ({
       ...initialState,
+
+      setSeries: (series) => {
+        const prev = get().series;
+        if (haveSameMembers(prev, series)) return;
+        try {
+          if (isDebugFiltersEnabled()) console.debug('[filters] setSeries', { prev, next: series });
+        } catch {}
+        set({ series });
+      },
 
       setStatuses: (statuses) => {
         const prev = get().statuses;
@@ -67,12 +79,13 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
 
       hasActiveFilters: () => {
         const state = get();
-        return state.statuses.length > 0 || state.searchQuery.length > 0;
+        return state.series.length > 0 || state.statuses.length > 0 || state.searchQuery.length > 0;
       },
 
       getActiveFilterCount: () => {
         const state = get();
         let count = 0;
+        if (state.series.length > 0) count++;
         if (state.statuses.length > 0) count++;
         if (state.searchQuery.length > 0) count++;
         return count;
@@ -81,6 +94,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
     {
       name: 'calendar-filters',
       partialize: (state) => ({
+        series: state.series,
         statuses: state.statuses,
         searchQuery: state.searchQuery,
       }),
@@ -88,6 +102,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
         const safe = (persistedState as Partial<CalendarFilterState>) || {};
         return {
           ...currentState,
+          series: Array.isArray(safe.series) ? safe.series : currentState.series,
           statuses: Array.isArray(safe.statuses) ? safe.statuses : currentState.statuses,
           searchQuery: typeof safe.searchQuery === 'string' ? safe.searchQuery : '',
         };

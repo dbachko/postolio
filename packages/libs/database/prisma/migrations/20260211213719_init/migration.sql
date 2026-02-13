@@ -1,5 +1,8 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "public";
+-- CreateEnum
+CREATE TYPE "ContentSeriesKind" AS ENUM ('batch', 'rolling');
+
+-- CreateEnum
+CREATE TYPE "ContentSeriesStatus" AS ENUM ('active', 'paused', 'archived');
 
 -- CreateEnum
 CREATE TYPE "ContentStatus" AS ENUM ('draft', 'scheduled', 'published', 'failed', 'skipped', 'unavailable');
@@ -50,7 +53,7 @@ CREATE TYPE "RecipeRunTrigger" AS ENUM ('manual', 'schedule', 'api', 'chat');
 CREATE TYPE "RecipeRunStatus" AS ENUM ('queued', 'running', 'success', 'failed', 'canceled');
 
 -- CreateEnum
-CREATE TYPE "RecipeRunStepType" AS ENUM ('llm', 'skill_call', 'transform', 'export');
+CREATE TYPE "RecipeRunStepType" AS ENUM ('llm', 'skill_call', 'transform', 'content_create', 'export');
 
 -- CreateEnum
 CREATE TYPE "RecipeRunStepStatus" AS ENUM ('queued', 'running', 'success', 'failed', 'skipped');
@@ -60,6 +63,9 @@ CREATE TYPE "RecipeRunArtifactKind" AS ENUM ('markdown', 'text', 'json', 'asset'
 
 -- CreateEnum
 CREATE TYPE "RecipeCostProvider" AS ENUM ('openai', 'anthropic', 'replicate', 'internal', 'unknown');
+
+-- CreateEnum
+CREATE TYPE "AICreditLedgerEntryType" AS ENUM ('grant', 'debit', 'refund', 'adjustment');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -127,6 +133,24 @@ CREATE TABLE "content_groups" (
 );
 
 -- CreateTable
+CREATE TABLE "content_series" (
+    "id" TEXT NOT NULL,
+    "brandId" TEXT NOT NULL,
+    "key" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "color" TEXT,
+    "kind" "ContentSeriesKind" NOT NULL DEFAULT 'batch',
+    "status" "ContentSeriesStatus" NOT NULL DEFAULT 'active',
+    "generatorJson" JSONB,
+    "rollingConfigJson" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "content_series_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "content" (
     "id" TEXT NOT NULL,
     "caption" TEXT NOT NULL,
@@ -139,6 +163,8 @@ CREATE TABLE "content" (
     "generationParams" JSONB,
     "brandId" TEXT NOT NULL,
     "contentGroupId" TEXT,
+    "contentSeriesId" TEXT,
+    "recipeRunId" TEXT,
     "targetSocialAccountId" TEXT,
     "schedulingError" TEXT,
     "contentType" TEXT NOT NULL DEFAULT 'post',
@@ -668,6 +694,7 @@ CREATE TABLE "recipe_runs" (
     "brandId" TEXT NOT NULL,
     "recipeTemplateId" TEXT NOT NULL,
     "recipeTemplateVersionId" TEXT NOT NULL,
+    "contentSeriesId" TEXT,
     "trigger" "RecipeRunTrigger" NOT NULL,
     "status" "RecipeRunStatus" NOT NULL DEFAULT 'queued',
     "inputJson" JSONB NOT NULL,
@@ -731,6 +758,36 @@ CREATE TABLE "recipe_run_costs" (
     CONSTRAINT "recipe_run_costs_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "brand_ai_credit_wallets" (
+    "brandId" TEXT NOT NULL,
+    "balanceCredits" INTEGER NOT NULL DEFAULT 0,
+    "totalGrantedCredits" INTEGER NOT NULL DEFAULT 0,
+    "totalDebitedCredits" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "brand_ai_credit_wallets_pkey" PRIMARY KEY ("brandId")
+);
+
+-- CreateTable
+CREATE TABLE "ai_credit_ledger_entries" (
+    "id" TEXT NOT NULL,
+    "brandId" TEXT NOT NULL,
+    "runId" TEXT,
+    "type" "AICreditLedgerEntryType" NOT NULL,
+    "deltaCredits" INTEGER NOT NULL,
+    "amountUsd" DECIMAL(10,4),
+    "inputTokens" INTEGER NOT NULL DEFAULT 0,
+    "outputTokens" INTEGER NOT NULL DEFAULT 0,
+    "provider" "RecipeCostProvider" NOT NULL DEFAULT 'unknown',
+    "mode" "SkillMode" NOT NULL DEFAULT 'managed',
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ai_credit_ledger_entries_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
@@ -762,6 +819,15 @@ CREATE INDEX "brands_createdAt_idx" ON "brands"("createdAt");
 CREATE INDEX "content_groups_brandId_idx" ON "content_groups"("brandId");
 
 -- CreateIndex
+CREATE INDEX "content_series_brandId_status_idx" ON "content_series"("brandId", "status");
+
+-- CreateIndex
+CREATE INDEX "content_series_brandId_kind_idx" ON "content_series"("brandId", "kind");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "content_series_brandId_key_key" ON "content_series"("brandId", "key");
+
+-- CreateIndex
 CREATE INDEX "content_brandId_status_idx" ON "content"("brandId", "status");
 
 -- CreateIndex
@@ -772,6 +838,12 @@ CREATE INDEX "content_brandId_status_scheduledAt_idx" ON "content"("brandId", "s
 
 -- CreateIndex
 CREATE INDEX "content_contentGroupId_idx" ON "content"("contentGroupId");
+
+-- CreateIndex
+CREATE INDEX "content_contentSeriesId_idx" ON "content"("contentSeriesId");
+
+-- CreateIndex
+CREATE INDEX "content_recipeRunId_idx" ON "content"("recipeRunId");
 
 -- CreateIndex
 CREATE INDEX "content_media_assets_contentId_idx" ON "content_media_assets"("contentId");
@@ -978,10 +1050,16 @@ CREATE UNIQUE INDEX "skill_installations_brandId_skillDefinitionId_key" ON "skil
 CREATE INDEX "encrypted_secrets_brandId_kind_idx" ON "encrypted_secrets"("brandId", "kind");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "encrypted_secrets_brandId_kind_name_key" ON "encrypted_secrets"("brandId", "kind", "name");
+
+-- CreateIndex
 CREATE INDEX "recipe_runs_brandId_createdAt_idx" ON "recipe_runs"("brandId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "recipe_runs_brandId_status_idx" ON "recipe_runs"("brandId", "status");
+
+-- CreateIndex
+CREATE INDEX "recipe_runs_contentSeriesId_idx" ON "recipe_runs"("contentSeriesId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "recipe_run_steps_runId_index_key" ON "recipe_run_steps"("runId", "index");
@@ -992,6 +1070,12 @@ CREATE INDEX "recipe_run_artifacts_runId_createdAt_idx" ON "recipe_run_artifacts
 -- CreateIndex
 CREATE INDEX "recipe_run_costs_runId_idx" ON "recipe_run_costs"("runId");
 
+-- CreateIndex
+CREATE INDEX "ai_credit_ledger_entries_brandId_createdAt_idx" ON "ai_credit_ledger_entries"("brandId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ai_credit_ledger_entries_runId_idx" ON "ai_credit_ledger_entries"("runId");
+
 -- AddForeignKey
 ALTER TABLE "brands" ADD CONSTRAINT "brands_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -999,10 +1083,19 @@ ALTER TABLE "brands" ADD CONSTRAINT "brands_userId_fkey" FOREIGN KEY ("userId") 
 ALTER TABLE "content_groups" ADD CONSTRAINT "content_groups_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "content_series" ADD CONSTRAINT "content_series_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "content" ADD CONSTRAINT "content_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "content" ADD CONSTRAINT "content_contentGroupId_fkey" FOREIGN KEY ("contentGroupId") REFERENCES "content_groups"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content" ADD CONSTRAINT "content_contentSeriesId_fkey" FOREIGN KEY ("contentSeriesId") REFERENCES "content_series"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content" ADD CONSTRAINT "content_recipeRunId_fkey" FOREIGN KEY ("recipeRunId") REFERENCES "recipe_runs"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "content" ADD CONSTRAINT "content_targetSocialAccountId_fkey" FOREIGN KEY ("targetSocialAccountId") REFERENCES "social_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -1137,6 +1230,9 @@ ALTER TABLE "recipe_runs" ADD CONSTRAINT "recipe_runs_recipeTemplateId_fkey" FOR
 ALTER TABLE "recipe_runs" ADD CONSTRAINT "recipe_runs_recipeTemplateVersionId_fkey" FOREIGN KEY ("recipeTemplateVersionId") REFERENCES "recipe_template_versions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "recipe_runs" ADD CONSTRAINT "recipe_runs_contentSeriesId_fkey" FOREIGN KEY ("contentSeriesId") REFERENCES "content_series"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "recipe_runs" ADD CONSTRAINT "recipe_runs_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1148,3 +1244,11 @@ ALTER TABLE "recipe_run_artifacts" ADD CONSTRAINT "recipe_run_artifacts_runId_fk
 -- AddForeignKey
 ALTER TABLE "recipe_run_costs" ADD CONSTRAINT "recipe_run_costs_runId_fkey" FOREIGN KEY ("runId") REFERENCES "recipe_runs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
+ALTER TABLE "brand_ai_credit_wallets" ADD CONSTRAINT "brand_ai_credit_wallets_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ai_credit_ledger_entries" ADD CONSTRAINT "ai_credit_ledger_entries_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ai_credit_ledger_entries" ADD CONSTRAINT "ai_credit_ledger_entries_runId_fkey" FOREIGN KEY ("runId") REFERENCES "recipe_runs"("id") ON DELETE SET NULL ON UPDATE CASCADE;

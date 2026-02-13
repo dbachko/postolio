@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -32,6 +32,26 @@ function artifactTitle(a: RunArtifact): string {
   return a.name;
 }
 
+function parseCreatedContent(artifacts: RunArtifact[]): null | {
+  contentSeriesId: string | null;
+  contentIds: string[];
+} {
+  const a = artifacts.find((x) => x.kind === 'json' && x.name === 'created_content.json');
+  if (!a?.contentText) return null;
+  try {
+    const parsed = JSON.parse(a.contentText) as any;
+    const contentSeriesId =
+      typeof parsed?.contentSeriesId === 'string' ? parsed.contentSeriesId : null;
+    const contentIds = Array.isArray(parsed?.contentIds)
+      ? parsed.contentIds.filter((id: any) => typeof id === 'string')
+      : [];
+    if (!contentSeriesId && contentIds.length === 0) return null;
+    return { contentSeriesId, contentIds };
+  } catch {
+    return null;
+  }
+}
+
 function stepDuration(step: RunStep): string | null {
   if (!step.startedAt || !step.finishedAt) return null;
   const ms = new Date(step.finishedAt).getTime() - new Date(step.startedAt).getTime();
@@ -59,12 +79,12 @@ export function RunDetail() {
   const cancelMutation = useMutation({
     mutationFn: async () => await runsApi.cancelRun(runId!),
     onSuccess: async () => {
-      toast.success('Run canceled');
+      toast.success('Generation canceled');
       await queryClient.invalidateQueries({ queryKey: ['run', runId] });
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to cancel run');
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel generation');
     },
   });
 
@@ -83,8 +103,28 @@ export function RunDetail() {
     return groups;
   }, [data?.artifacts]);
 
+  const createdContent = useMemo(
+    () => parseCreatedContent(data?.artifacts ?? []),
+    [data?.artifacts]
+  );
+  const didInvalidateCalendarRef = useRef(false);
+
+  useEffect(() => {
+    if (didInvalidateCalendarRef.current) return;
+    if (!data) return;
+    if (data.run.status !== 'success') return;
+    if (!createdContent) return;
+
+    didInvalidateCalendarRef.current = true;
+    // Refresh calendar + series list so created posts appear immediately without waiting for staleTime.
+    queryClient.invalidateQueries({ queryKey: ['calendar', data.run.brandId] }).catch(() => {});
+    queryClient
+      .invalidateQueries({ queryKey: ['content-series', data.run.brandId] })
+      .catch(() => {});
+  }, [createdContent, data, queryClient]);
+
   if (!runId) {
-    return <div className="text-muted-foreground text-sm">Missing run id.</div>;
+    return <div className="text-muted-foreground text-sm">Missing generation id.</div>;
   }
 
   if (!data && runQuery.isLoading) {
@@ -94,7 +134,7 @@ export function RunDetail() {
   if (!data) {
     return (
       <div className="space-y-3">
-        <div className="text-muted-foreground text-sm">Run not found.</div>
+        <div className="text-muted-foreground text-sm">Generation not found.</div>
         <Button variant="outline" onClick={() => navigate('/runs')}>
           Back
         </Button>
@@ -107,11 +147,13 @@ export function RunDetail() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-foreground text-2xl font-semibold">{data.recipe?.name || 'Run'}</h1>
+            <h1 className="text-foreground text-2xl font-semibold">
+              {data.recipe?.name || 'Generation'}
+            </h1>
             <Badge variant={status ? statusBadgeVariant(status) : 'outline'}>{status}</Badge>
           </div>
           <div className="text-muted-foreground text-sm">
-            Run ID: <span className="font-mono">{data.run.id}</span>
+            Generation ID: <span className="font-mono">{data.run.id}</span>
           </div>
           {data.run.errorMessage ? (
             <div className="text-destructive text-sm">{data.run.errorMessage}</div>
@@ -143,6 +185,52 @@ export function RunDetail() {
         </TabsList>
 
         <TabsContent value="output" className="space-y-4">
+          {createdContent ? (
+            <Card className="bg-card border-border">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-foreground text-base">Created content</CardTitle>
+                <div className="text-muted-foreground text-xs">
+                  Series: <span className="font-mono">{createdContent.contentSeriesId || '—'}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {createdContent.contentIds.length === 0 ? (
+                  <div className="text-muted-foreground text-sm">No content ids recorded.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {createdContent.contentIds.map((id) => (
+                      <Button
+                        key={id}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/posts/${id}`)}
+                      >
+                        {id.slice(0, 8)}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-end gap-2">
+                  {createdContent.contentSeriesId ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/series/${createdContent.contentSeriesId}`)}
+                    >
+                      Open series
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" size="sm" onClick={() => navigate('/content')}>
+                    Open calendar
+                  </Button>
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  Tip: open the calendar and filter by the series to see the full schedule.
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {data.artifacts.length === 0 ? (
             <div className="text-muted-foreground text-sm">No artifacts yet.</div>
           ) : (
@@ -226,7 +314,7 @@ export function RunDetail() {
         <TabsContent value="inputs" className="space-y-3">
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-foreground text-base">Run inputs</CardTitle>
+              <CardTitle className="text-foreground text-base">Inputs</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="bg-muted text-foreground overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
@@ -237,6 +325,18 @@ export function RunDetail() {
         </TabsContent>
 
         <TabsContent value="cost" className="space-y-3">
+          <Card className="bg-card border-border">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-foreground text-sm">Cost summary</CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground space-y-1 text-sm">
+              <div>Total input tokens: {data.costSummary?.totalInputTokens ?? 0}</div>
+              <div>Total output tokens: {data.costSummary?.totalOutputTokens ?? 0}</div>
+              <div>Total estimated cost: {data.costSummary?.totalEstimatedCostUsd || '—'}</div>
+              <div>Managed credits spent: {data.costSummary?.managedCreditsSpent ?? 0}</div>
+            </CardContent>
+          </Card>
+
           {data.costs.length === 0 ? (
             <div className="text-muted-foreground text-sm">No cost data yet.</div>
           ) : (

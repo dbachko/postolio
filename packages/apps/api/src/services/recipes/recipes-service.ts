@@ -1,7 +1,5 @@
-import { Prisma } from '@postolio/database';
 import { prisma } from '../../config/database.js';
-import { slugify, withRandomSuffix } from '../../utils/slug.js';
-import { RecipeConfigSchema, type RecipeConfig } from './config-schema.js';
+import { normalizeInputFields, normalizeSkillRequirements } from './config-schema.js';
 import { ensureCuratedRecipesSeeded } from './seed.js';
 
 export type ListRecipesParams = {
@@ -9,22 +7,19 @@ export type ListRecipesParams = {
   q?: string;
   category?: 'get_started' | 'content' | 'growth' | 'social' | 'other';
   status?: 'draft' | 'published' | 'archived';
-  includeCurated?: boolean;
 };
 
 export async function listRecipes(params: ListRecipesParams) {
-  const { brandId, q, category, status, includeCurated = true } = params;
+  const { q, category, status } = params;
 
   await ensureCuratedRecipesSeeded();
 
   const where: any = {
-    AND: [
-      {
-        OR: [{ brandId }, ...(includeCurated ? [{ brandId: null, isCurated: true }] : [])],
-      },
-    ],
+    AND: [{ brandId: null, isCurated: true }],
   };
 
+  // Archived recipes should not appear in the default browse experience.
+  if (!status) where.AND.push({ status: { not: 'archived' } });
   if (status) where.AND.push({ status });
   if (category) where.AND.push({ category });
   if (q) {
@@ -61,165 +56,48 @@ export async function listRecipes(params: ListRecipesParams) {
     publishedVersion: t.versions[0]
       ? { id: t.versions[0].id, version: t.versions[0].version, createdAt: t.versions[0].createdAt }
       : null,
+    summary: (() => {
+      const cfg = t.versions[0]?.configJson;
+      if (!cfg || typeof cfg !== 'object') return null;
+      const summary = (cfg as any).summary;
+      if (!summary || typeof summary !== 'object') return null;
+      return {
+        produces: typeof (summary as any).produces === 'string' ? (summary as any).produces : null,
+        postsCount:
+          typeof (summary as any).postsCount === 'number' ? (summary as any).postsCount : null,
+        cadence: typeof (summary as any).cadence === 'string' ? (summary as any).cadence : null,
+      };
+    })(),
+    skillRequirements: (() => {
+      const cfg = t.versions[0]?.configJson;
+      if (!cfg || typeof cfg !== 'object') return [];
+      return normalizeSkillRequirements((cfg as any).skills_required);
+    })(),
+    skillsRequired: (() => {
+      const cfg = t.versions[0]?.configJson;
+      if (!cfg || typeof cfg !== 'object') return [];
+      return normalizeSkillRequirements((cfg as any).skills_required)
+        .filter((s) => !s.optional)
+        .map((s) => s.id);
+    })(),
+    inputSchema: (() => {
+      const cfg = t.versions[0]?.configJson;
+      if (!cfg || typeof cfg !== 'object') return { fields: [] };
+      const inputs = normalizeInputFields((cfg as any).inputs);
+      return { fields: inputs.fields };
+    })(),
     inputs: (() => {
       const cfg = t.versions[0]?.configJson;
       if (!cfg || typeof cfg !== 'object') return { required: [], optional: [] };
-      const inputs = (cfg as any).inputs;
-      const required = Array.isArray(inputs?.required)
-        ? inputs.required.filter((s: any) => typeof s === 'string')
-        : [];
-      const optional = Array.isArray(inputs?.optional)
-        ? inputs.optional.filter((s: any) => typeof s === 'string')
-        : [];
-      return { required, optional };
+      const inputs = normalizeInputFields((cfg as any).inputs);
+      return { required: inputs.required, optional: inputs.optional };
+    })(),
+    cadence: (() => {
+      const cfg = t.versions[0]?.configJson;
+      if (!cfg || typeof cfg !== 'object') return null;
+      const cadence = (cfg as any).cadence;
+      if (!cadence || typeof cadence !== 'object') return null;
+      return cadence;
     })(),
   }));
-}
-
-export type CreateRecipeParams = {
-  brandId: string;
-  userId: string;
-  slug?: string;
-  name: string;
-  description?: string;
-  category: 'get_started' | 'content' | 'growth' | 'social' | 'other';
-  config: unknown;
-  publish: boolean;
-};
-
-export async function createRecipe(params: CreateRecipeParams) {
-  const { brandId, userId, name, description, category, publish } = params;
-
-  const validatedConfig = RecipeConfigSchema.parse(params.config) as RecipeConfig;
-  const configJson = JSON.parse(JSON.stringify(validatedConfig)) as Prisma.InputJsonValue;
-
-  const baseSlug = slugify(params.slug || name);
-
-  const existing = await prisma.recipeTemplate.findFirst({
-    where: { brandId, slug: baseSlug },
-    select: { id: true },
-  });
-
-  const finalSlug = existing ? withRandomSuffix(baseSlug) : baseSlug;
-
-  const res = await prisma.$transaction(async (tx) => {
-    const template = await tx.recipeTemplate.create({
-      data: {
-        brandId,
-        slug: finalSlug,
-        name,
-        description: description || null,
-        category,
-        isCurated: false,
-        status: publish ? 'published' : 'draft',
-        createdByUserId: userId,
-      },
-    });
-
-    const version = await tx.recipeTemplateVersion.create({
-      data: {
-        recipeTemplateId: template.id,
-        version: 1,
-        configJson,
-        isPublished: publish,
-        createdByUserId: userId,
-      },
-    });
-
-    return { template, version };
-  });
-
-  return {
-    recipeId: res.template.id,
-    versionId: res.version.id,
-    status: res.template.status,
-  };
-}
-
-export type CreateRecipeVersionParams = {
-  recipeId: string;
-  userId: string;
-  config: unknown;
-  changelog?: string;
-  publish: boolean;
-};
-
-export async function createRecipeVersion(params: CreateRecipeVersionParams) {
-  const { recipeId, userId, changelog, publish } = params;
-  const validatedConfig = RecipeConfigSchema.parse(params.config) as RecipeConfig;
-  const configJson = JSON.parse(JSON.stringify(validatedConfig)) as Prisma.InputJsonValue;
-
-  return await prisma.$transaction(async (tx) => {
-    const latest = await tx.recipeTemplateVersion.findFirst({
-      where: { recipeTemplateId: recipeId },
-      orderBy: { version: 'desc' },
-      select: { version: true },
-    });
-    const nextVersion = (latest?.version || 0) + 1;
-
-    if (publish) {
-      await tx.recipeTemplateVersion.updateMany({
-        where: { recipeTemplateId: recipeId },
-        data: { isPublished: false },
-      });
-    }
-
-    const version = await tx.recipeTemplateVersion.create({
-      data: {
-        recipeTemplateId: recipeId,
-        version: nextVersion,
-        configJson,
-        changelog: changelog || null,
-        isPublished: publish,
-        createdByUserId: userId,
-      },
-    });
-
-    if (publish) {
-      await tx.recipeTemplate.update({
-        where: { id: recipeId },
-        data: { status: 'published' },
-      });
-    }
-
-    return { versionId: version.id, version: version.version, isPublished: version.isPublished };
-  });
-}
-
-export async function publishLatestRecipeVersion(recipeId: string) {
-  return await prisma.$transaction(async (tx) => {
-    const latest = await tx.recipeTemplateVersion.findFirst({
-      where: { recipeTemplateId: recipeId },
-      orderBy: { version: 'desc' },
-      select: { id: true },
-    });
-    if (!latest) return null;
-
-    await tx.recipeTemplateVersion.updateMany({
-      where: { recipeTemplateId: recipeId },
-      data: { isPublished: false },
-    });
-
-    const updated = await tx.recipeTemplateVersion.update({
-      where: { id: latest.id },
-      data: { isPublished: true },
-      select: { id: true, version: true },
-    });
-
-    await tx.recipeTemplate.update({
-      where: { id: recipeId },
-      data: { status: 'published' },
-      select: { id: true },
-    });
-
-    return updated;
-  });
-}
-
-export async function archiveRecipe(recipeId: string) {
-  return await prisma.recipeTemplate.update({
-    where: { id: recipeId },
-    data: { status: 'archived' },
-    select: { id: true, status: true },
-  });
 }

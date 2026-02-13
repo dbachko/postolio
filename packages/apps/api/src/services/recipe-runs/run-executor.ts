@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { Prisma } from '@postolio/database';
 import { prisma } from '../../config/database.js';
 import {
   RecipeConfigSchema,
@@ -8,12 +8,20 @@ import {
 import { redactSensitive } from './redaction.js';
 import { interpolateTemplateString, interpolateUnknown } from './template.js';
 import { evalWhen } from './when.js';
-import { webFetch } from './skills/web-fetch.js';
-import { getDefaultOpenAIModel, getOpenAIClient } from '../openai-client.js';
-import { decryptSecret } from '../skills/secret-crypto.js';
+import { executeSkillCall } from './skills/index.js';
+import { resolveOpenAIForSkill } from './skills/runtime.js';
+import {
+  estimateOpenAiTextCostUsd,
+  getEstimatedCreditsForSkillCall,
+  getEstimatedUsdForSkillCall,
+  recordManagedUsageDebit,
+  usdToCredits,
+} from '../ai-credits.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { TimezoneService } from '../timezone.js';
+import { formatInTimeZone } from 'date-fns-tz';
 
 type RunState = Record<string, unknown>;
 
@@ -27,6 +35,137 @@ function truncateText(value: string, maxLen = 32_000): string {
   const v = String(value ?? '');
   if (v.length <= maxLen) return v;
   return `${v.slice(0, maxLen)}…`;
+}
+
+function isYmd(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
+function addDaysToYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map((n) => Number.parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function extractHashtagsFromCaption(caption: string): string[] {
+  const matches = String(caption || '').match(/#[a-zA-Z0-9_]+/g) || [];
+  // De-dupe while preserving order
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of matches) {
+    const h = raw.replace(/^#/, '').trim();
+    if (!h) continue;
+    if (seen.has(h)) continue;
+    seen.add(h);
+    out.push(h);
+  }
+  return out;
+}
+
+function stripMarkdownCodeFence(input: string): string {
+  const raw = String(input || '').trim();
+  if (!raw.startsWith('```')) return raw;
+
+  // Common LLM behavior: wrap JSON in ```json ... ``` fences.
+  // Only strip when the fence is at the beginning to avoid mangling legitimate content.
+  const firstNewline = raw.indexOf('\n');
+  if (firstNewline < 0) return raw;
+  const withoutHeader = raw.slice(firstNewline + 1);
+  const fenceEnd = withoutHeader.lastIndexOf('```');
+  if (fenceEnd < 0) return raw;
+  return withoutHeader.slice(0, fenceEnd).trim();
+}
+
+function extractJsonArraySubstring(input: string): string | null {
+  const raw = String(input || '');
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start < 0 || end < 0 || end <= start) return null;
+  return raw.slice(start, end + 1).trim();
+}
+
+function parsePostsJsonCandidate(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') {
+    const maybePosts = (value as any).posts;
+    if (Array.isArray(maybePosts)) return maybePosts;
+  }
+  if (typeof value !== 'string') return [];
+
+  const raw = value.trim();
+  if (!raw) return [];
+
+  const candidates = Array.from(
+    new Set(
+      [
+        raw,
+        stripMarkdownCodeFence(raw),
+        extractJsonArraySubstring(raw),
+        extractJsonArraySubstring(stripMarkdownCodeFence(raw)),
+      ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+    )
+  );
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object') {
+        const maybePosts = (parsed as any).posts;
+        if (Array.isArray(maybePosts)) return maybePosts;
+      }
+    } catch {
+      // keep trying other candidates
+    }
+  }
+
+  return [];
+}
+
+function parseJsonArrayCandidate(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') {
+    const maybeItems = (value as any).items;
+    if (Array.isArray(maybeItems)) return maybeItems;
+    const maybePosts = (value as any).posts;
+    if (Array.isArray(maybePosts)) return maybePosts;
+  }
+  if (typeof value !== 'string') return [];
+
+  const raw = value.trim();
+  if (!raw) return [];
+
+  const candidates = Array.from(
+    new Set(
+      [
+        raw,
+        stripMarkdownCodeFence(raw),
+        extractJsonArraySubstring(raw),
+        extractJsonArraySubstring(stripMarkdownCodeFence(raw)),
+      ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+    )
+  );
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object') {
+        const maybeItems = (parsed as any).items;
+        if (Array.isArray(maybeItems)) return maybeItems;
+        const maybePosts = (parsed as any).posts;
+        if (Array.isArray(maybePosts)) return maybePosts;
+      }
+    } catch {
+      // keep trying other candidates
+    }
+  }
+
+  return [];
 }
 
 async function loadPromptTemplate(relativePath: string): Promise<string> {
@@ -46,77 +185,15 @@ async function loadPromptTemplate(relativePath: string): Promise<string> {
   return await fs.readFile(fullPath, 'utf8');
 }
 
-async function resolveOpenAIForBrand(
-  brandId: string
-): Promise<
-  | { mode: 'managed'; client: OpenAI; model: string }
-  | { mode: 'byok'; client: OpenAI; model: string }
-> {
-  const installation = await prisma.skillInstallation.findUnique({
-    where: {
-      brandId_skillDefinitionId: { brandId, skillDefinitionId: 'openai_text' },
-    },
-    select: { enabled: true, mode: true, secretId: true, configJson: true },
-  });
-
-  if (installation && !installation.enabled) {
-    throw new Error('openai_text skill is disabled for this brand');
-  }
-
-  const defaultModel = getDefaultOpenAIModel();
-
-  const configuredModel =
-    installation?.configJson && typeof installation.configJson === 'object'
-      ? ((installation.configJson as any).defaultModel as unknown)
-      : undefined;
-  const model =
-    typeof configuredModel === 'string' && configuredModel.trim().length > 0
-      ? configuredModel.trim()
-      : defaultModel;
-
-  if (installation?.mode === 'byok') {
-    if (!installation.secretId) {
-      throw new Error('openai_text is BYOK but no secret is configured');
-    }
-
-    const secret = await prisma.encryptedSecret.findUnique({
-      where: { id: installation.secretId },
-      select: { ciphertext: true, iv: true, tag: true, keyVersion: true },
-    });
-    if (!secret) {
-      throw new Error('Configured BYOK secret was not found');
-    }
-
-    const apiKey = decryptSecret({
-      ciphertext: Buffer.from(secret.ciphertext),
-      iv: Buffer.from(secret.iv),
-      tag: Buffer.from(secret.tag),
-      keyVersion: secret.keyVersion,
-    });
-
-    return { mode: 'byok', client: new OpenAI({ apiKey }), model };
-  }
-
-  const managed = getOpenAIClient();
-  if (!managed) {
-    throw new Error('OPENAI_API_KEY is not configured (managed mode unavailable)');
-  }
-
-  return { mode: 'managed', client: managed, model };
+function isStructuredOutputStep(step: unknown): step is { structured_output: any } {
+  return Boolean(step && typeof step === 'object' && (step as any).structured_output);
 }
 
-async function assertSkillEnabled(
-  brandId: string,
-  skillId: string
-): Promise<{ configJson: unknown }> {
-  const installation = await prisma.skillInstallation.findUnique({
-    where: { brandId_skillDefinitionId: { brandId, skillDefinitionId: skillId } },
-    select: { enabled: true, configJson: true },
-  });
-  if (!installation || !installation.enabled) {
-    throw new Error(`Skill is not enabled for this brand: ${skillId}`);
-  }
-  return { configJson: installation.configJson };
+function toPersistedStepType(
+  step: RecipeStep
+): 'llm' | 'skill_call' | 'transform' | 'content_create' | 'export' {
+  if (step.type === 'foreach') return 'transform';
+  return step.type;
 }
 
 async function ensureRunSteps(runId: string, steps: RecipeStep[]) {
@@ -124,7 +201,7 @@ async function ensureRunSteps(runId: string, steps: RecipeStep[]) {
     data: steps.map((s, index) => ({
       runId,
       index,
-      type: s.type,
+      type: toPersistedStepType(s),
       name: s.name,
       status: 'queued',
     })),
@@ -175,12 +252,19 @@ async function createArtifact(params: {
 }
 
 async function addCost(params: {
+  brandId: string;
   runId: string;
   mode: 'managed' | 'byok';
   inputTokens?: number | null;
   outputTokens?: number | null;
   model?: string | null;
 }) {
+  const estimatedUsd = estimateOpenAiTextCostUsd({
+    model: params.model,
+    inputTokens: params.inputTokens,
+    outputTokens: params.outputTokens,
+  });
+
   await prisma.recipeRunCost.create({
     data: {
       runId: params.runId,
@@ -188,33 +272,82 @@ async function addCost(params: {
       mode: params.mode,
       inputTokens: params.inputTokens ?? 0,
       outputTokens: params.outputTokens ?? 0,
-      estimatedCostUsd: null,
+      estimatedCostUsd: estimatedUsd > 0 ? new Prisma.Decimal(estimatedUsd.toFixed(4)) : null,
       notes: params.model ? `model=${params.model}` : null,
     },
   });
+
+  if (params.mode === 'managed' && estimatedUsd > 0) {
+    await recordManagedUsageDebit({
+      brandId: params.brandId,
+      runId: params.runId,
+      credits: usdToCredits(estimatedUsd),
+      amountUsd: estimatedUsd,
+      inputTokens: params.inputTokens,
+      outputTokens: params.outputTokens,
+      provider: 'openai',
+      note: params.model ? `model=${params.model}` : null,
+    });
+  }
 }
 
-async function execSkillCall(params: {
-  brandId: string;
-  skill: string;
-  input: unknown;
-}): Promise<unknown> {
-  if (params.skill === 'web_fetch') {
-    const { configJson } = await assertSkillEnabled(params.brandId, 'web_fetch');
-    const maxBytesCandidate =
-      configJson && typeof configJson === 'object' ? (configJson as any).maxBytes : undefined;
-    const maxBytes = typeof maxBytesCandidate === 'number' ? maxBytesCandidate : undefined;
-
-    const url = params.input && typeof params.input === 'object' ? (params.input as any).url : null;
-    if (!url || typeof url !== 'string') {
-      throw new Error('web_fetch requires input.url');
-    }
-
-    const res = await webFetch({ url }, { maxBytes });
-    return res.text;
+function toRecipeCostProvider(
+  provider: string
+): 'openai' | 'anthropic' | 'replicate' | 'internal' | 'unknown' {
+  switch ((provider || '').trim().toLowerCase()) {
+    case 'openai':
+      return 'openai';
+    case 'anthropic':
+      return 'anthropic';
+    case 'replicate':
+      return 'replicate';
+    case 'internal':
+      return 'internal';
+    default:
+      return 'unknown';
   }
+}
 
-  throw new Error(`Unknown skill: ${params.skill}`);
+async function addSkillCallCost(params: {
+  brandId: string;
+  runId: string;
+  skillId: string;
+  mode: 'managed' | 'byok';
+  provider: string;
+  model?: string | null;
+}) {
+  const estimatedCredits = getEstimatedCreditsForSkillCall(params.skillId);
+  const estimatedUsd = getEstimatedUsdForSkillCall(params.skillId);
+  const provider = toRecipeCostProvider(params.provider);
+
+  await prisma.recipeRunCost.create({
+    data: {
+      runId: params.runId,
+      provider,
+      mode: params.mode,
+      inputTokens: 0,
+      outputTokens: 0,
+      estimatedCostUsd: estimatedUsd > 0 ? new Prisma.Decimal(estimatedUsd.toFixed(4)) : null,
+      notes: params.model
+        ? `skill=${params.skillId};model=${params.model}`
+        : `skill=${params.skillId}`,
+    },
+  });
+
+  if (params.mode === 'managed' && estimatedCredits > 0 && estimatedUsd > 0) {
+    await recordManagedUsageDebit({
+      brandId: params.brandId,
+      runId: params.runId,
+      credits: estimatedCredits,
+      amountUsd: estimatedUsd,
+      inputTokens: 0,
+      outputTokens: 0,
+      provider,
+      note: params.model
+        ? `skill=${params.skillId};model=${params.model}`
+        : `skill=${params.skillId}`,
+    });
+  }
 }
 
 async function execLlmStep(params: {
@@ -224,9 +357,11 @@ async function execLlmStep(params: {
   step: Extract<RecipeStep, { type: 'llm' }>;
   state: RunState;
   resolvedInput: unknown;
-}): Promise<string> {
+}): Promise<unknown> {
   const preset = params.config.model_preset;
-  const temperature = typeof preset?.temperature === 'number' ? preset.temperature : 0.7;
+  const structured = isStructuredOutputStep(params.step);
+  const temperature =
+    typeof preset?.temperature === 'number' ? preset.temperature : structured ? 0 : 0.7;
 
   const resolvedPrompt =
     params.step.prompt_template != null
@@ -242,19 +377,46 @@ async function execLlmStep(params: {
 
   const prompt = interpolateTemplateString(resolvedPrompt, promptContext);
 
-  const openai = await resolveOpenAIForBrand(params.brandId);
-  const model = preset?.model?.trim() || openai.model;
+  const openai = await resolveOpenAIForSkill(params.brandId, 'text_generation');
+  const model = preset?.model?.trim() || openai.defaultModel;
+
+  const responseFormat = (() => {
+    if (!structured) return undefined;
+    const spec = (params.step as any).structured_output || null;
+    if (!spec || typeof spec !== 'object') return undefined;
+
+    const schema = (spec as any).schema;
+    if (!schema) return undefined;
+
+    const nameRaw = (spec as any).name;
+    const name =
+      typeof nameRaw === 'string' && nameRaw.trim().length > 0
+        ? nameRaw.trim()
+        : `recipe_${params.runId}_step_${String((params.step as any).name || 'output').replace(/\s+/g, '_')}`;
+    const strict = typeof (spec as any).strict === 'boolean' ? (spec as any).strict : true;
+
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name,
+        strict,
+        schema,
+      },
+    };
+  })();
 
   const completion = await openai.client.chat.completions.create({
     model,
     temperature,
     messages: [{ role: 'user', content: prompt }],
+    ...(responseFormat ? ({ response_format: responseFormat } as any) : {}),
   });
 
   const text = completion.choices?.[0]?.message?.content ?? '';
 
   const usage: any = (completion as any).usage || {};
   await addCost({
+    brandId: params.brandId,
     runId: params.runId,
     mode: openai.mode,
     inputTokens: typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : null,
@@ -262,7 +424,450 @@ async function execLlmStep(params: {
     model,
   });
 
+  if (responseFormat) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('Structured output was requested but the model did not return valid JSON');
+    }
+  }
+
   return text;
+}
+
+type ExecuteStepContext = {
+  runId: string;
+  runBrandId: string;
+  runContentSeriesId: string | null;
+  runInputJson: Record<string, unknown>;
+  recipeTemplateId: string;
+  recipeTemplateVersionId: string;
+  recipeTemplateName: string;
+  config: RecipeConfig;
+};
+
+function resolveStepInput(step: RecipeStep, state: RunState): unknown {
+  if (step.type === 'export') return null;
+  if (step.type === 'foreach') return interpolateUnknown((step as any).items, state);
+  return interpolateUnknown((step as any).input, state);
+}
+
+async function executeRuntimeStep(params: {
+  ctx: ExecuteStepContext;
+  step: RecipeStep;
+  state: RunState;
+  defaultOutputKey: string;
+}): Promise<unknown> {
+  const { ctx, step, state, defaultOutputKey } = params;
+  const resolvedInput = resolveStepInput(step, state);
+
+  if (step.type === 'transform') {
+    const out = interpolateUnknown(step.input || {}, state);
+    if (step.output_key) {
+      state[step.output_key] = out as any;
+      return out;
+    }
+    if (out && typeof out === 'object' && !Array.isArray(out)) {
+      Object.assign(state, out as any);
+      return out;
+    }
+    return out;
+  }
+
+  if (step.type === 'skill_call') {
+    const res = await executeSkillCall({
+      brandId: ctx.runBrandId,
+      skillId: step.skill,
+      input: resolvedInput,
+    });
+    await addSkillCallCost({
+      brandId: ctx.runBrandId,
+      runId: ctx.runId,
+      skillId: step.skill,
+      mode: res.mode,
+      provider: res.provider,
+      model: res.model || null,
+    });
+    const key = step.output_key || defaultOutputKey;
+    state[key] = res.output as any;
+    return res.output;
+  }
+
+  if (step.type === 'llm') {
+    const llmOutput = await execLlmStep({
+      runId: ctx.runId,
+      brandId: ctx.runBrandId,
+      config: ctx.config,
+      step,
+      state,
+      resolvedInput,
+    });
+    const key = step.output_key || defaultOutputKey;
+    state[key] = llmOutput as any;
+
+    if (step.artifact) {
+      const artifact = step.artifact;
+      const resolved = artifact.content
+        ? interpolateTemplateString(artifact.content, state)
+        : llmOutput;
+      const content = typeof resolved === 'string' ? resolved : JSON.stringify(resolved);
+      if (artifact.kind === 'asset') {
+        await createArtifact({
+          runId: ctx.runId,
+          kind: 'asset',
+          name: artifact.name,
+          mimeType: artifact.mime_type || null,
+          assetId: content || null,
+        });
+      } else {
+        await createArtifact({
+          runId: ctx.runId,
+          kind: artifact.kind,
+          name: artifact.name,
+          mimeType: artifact.mime_type || null,
+          contentText: content || '',
+        });
+      }
+    }
+
+    return llmOutput;
+  }
+
+  if (step.type === 'export') {
+    for (const artifact of step.artifacts) {
+      const content = artifact.content ? interpolateTemplateString(artifact.content, state) : '';
+      if (artifact.kind === 'asset') {
+        await createArtifact({
+          runId: ctx.runId,
+          kind: 'asset',
+          name: artifact.name,
+          mimeType: artifact.mime_type || null,
+          assetId: content || null,
+        });
+      } else {
+        await createArtifact({
+          runId: ctx.runId,
+          kind: artifact.kind,
+          name: artifact.name,
+          mimeType: artifact.mime_type || null,
+          contentText: content,
+        });
+      }
+    }
+    return {
+      artifacts: step.artifacts.map((a: (typeof step.artifacts)[number]) => ({
+        kind: a.kind,
+        name: a.name,
+      })),
+    };
+  }
+
+  if (step.type === 'content_create') {
+    const input = resolvedInput && typeof resolvedInput === 'object' ? (resolvedInput as any) : {};
+    const brandTimezone = await TimezoneService.getBrandTimezone(ctx.runBrandId);
+    const defaultRollingConfig = {
+      enabled: false,
+      minQueueDays: 3,
+      targetQueueDays: 7,
+      maxQueueDays: 14,
+      batchSize: 3,
+    };
+
+    const strategy = typeof input.strategy === 'string' ? input.strategy : 'after_last_scheduled';
+    const postingTime =
+      typeof input.posting_time === 'string' && /^\d{2}:\d{2}$/.test(input.posting_time)
+        ? input.posting_time
+        : '09:00';
+    const maxPosts =
+      typeof input.max_posts === 'number'
+        ? Math.max(1, Math.floor(input.max_posts))
+        : typeof input.max_posts === 'string'
+          ? Math.max(1, Number.parseInt(input.max_posts, 10) || Number.NaN)
+          : null;
+    const existingSeriesId =
+      typeof input.content_series_id === 'string' && input.content_series_id.trim().length > 0
+        ? input.content_series_id.trim()
+        : typeof input.contentSeriesId === 'string' && input.contentSeriesId.trim().length > 0
+          ? input.contentSeriesId.trim()
+          : ctx.runContentSeriesId && ctx.runContentSeriesId.trim().length > 0
+            ? ctx.runContentSeriesId.trim()
+            : null;
+
+    let startDateYmd: string;
+    if (strategy === 'start_date' && isYmd(input.start_date)) {
+      startDateYmd = input.start_date.trim();
+    } else {
+      const nowUtc = now();
+      const last = existingSeriesId
+        ? await prisma.content.findFirst({
+            where: {
+              brandId: ctx.runBrandId,
+              contentSeriesId: existingSeriesId,
+              scheduledAt: { not: null },
+            },
+            orderBy: { scheduledAt: 'desc' },
+            select: { scheduledAt: true },
+          })
+        : await prisma.content.findFirst({
+            where: { brandId: ctx.runBrandId, scheduledAt: { gte: nowUtc } },
+            orderBy: { scheduledAt: 'desc' },
+            select: { scheduledAt: true },
+          });
+
+      const baseYmd = last?.scheduledAt
+        ? formatInTimeZone(last.scheduledAt, brandTimezone, 'yyyy-MM-dd')
+        : formatInTimeZone(nowUtc, brandTimezone, 'yyyy-MM-dd');
+      startDateYmd = addDaysToYmd(baseYmd, 1);
+    }
+
+    const seriesName =
+      typeof input.series_name === 'string' && input.series_name.trim().length
+        ? input.series_name.trim()
+        : `${ctx.recipeTemplateName} · ${formatInTimeZone(now(), brandTimezone, 'yyyy-MM-dd')}`;
+    const seriesDescription =
+      typeof input.series_description === 'string' && input.series_description.trim().length
+        ? input.series_description.trim()
+        : null;
+    const seriesColor =
+      typeof input.series_color === 'string' && input.series_color.trim().length
+        ? input.series_color.trim()
+        : null;
+
+    const targetSocialAccountId =
+      typeof input.target_social_account_id === 'string' &&
+      input.target_social_account_id.trim().length > 0
+        ? input.target_social_account_id.trim()
+        : typeof input.targetSocialAccountId === 'string' &&
+            input.targetSocialAccountId.trim().length > 0
+          ? input.targetSocialAccountId.trim()
+          : null;
+
+    const postsCandidate = input.posts ?? input.posts_json ?? input.postsJson ?? null;
+    const parsedPosts: any[] = parsePostsJsonCandidate(postsCandidate);
+    const posts = Number.isFinite(maxPosts as number)
+      ? parsedPosts.slice(0, maxPosts as number)
+      : parsedPosts;
+
+    if (!posts.length) {
+      throw new Error('content_create requires posts (array) or posts_json (JSON array string)');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (targetSocialAccountId) {
+        const destination = await tx.socialAccount.findFirst({
+          where: {
+            id: targetSocialAccountId,
+            brandId: ctx.runBrandId,
+          },
+          select: { id: true },
+        });
+        if (!destination) {
+          throw new Error('target_social_account_id is invalid for this brand');
+        }
+      }
+
+      const series = existingSeriesId
+        ? await tx.contentSeries.findFirst({
+            where: { id: existingSeriesId, brandId: ctx.runBrandId },
+            select: { id: true, name: true },
+          })
+        : await tx.contentSeries.create({
+            data: {
+              brandId: ctx.runBrandId,
+              name: seriesName,
+              description: seriesDescription,
+              color: seriesColor,
+              kind: 'batch',
+              status: 'active',
+              generatorJson: {
+                source: 'recipe',
+                recipeTemplateId: ctx.recipeTemplateId,
+                recipeTemplateVersionId: ctx.recipeTemplateVersionId,
+                inputJson: ctx.runInputJson as any,
+                createdFromRunId: ctx.runId,
+              } as any,
+              rollingConfigJson: defaultRollingConfig as any,
+            },
+            select: { id: true, name: true },
+          });
+
+      if (!series) {
+        throw new Error('content_create could not resolve target content series');
+      }
+
+      await tx.recipeRun.update({
+        where: { id: ctx.runId },
+        data: { contentSeriesId: series.id },
+        select: { id: true },
+      });
+
+      const contentIds: string[] = [];
+      const skippedScheduleDates: string[] = [];
+      for (let i = 0; i < posts.length; i++) {
+        const p = posts[i] && typeof posts[i] === 'object' ? (posts[i] as any) : {};
+        const caption = typeof p.caption === 'string' ? p.caption : '';
+        if (!caption.trim()) continue;
+
+        const hashtags =
+          Array.isArray(p.hashtags) && p.hashtags.every((h: any) => typeof h === 'string')
+            ? (p.hashtags as string[])
+                .map((h) => String(h).replace(/^#/, '').trim())
+                .filter(Boolean)
+            : extractHashtagsFromCaption(caption);
+
+        const ymd = addDaysToYmd(startDateYmd, i);
+        const scheduledAt = TimezoneService.createDateInBrandTimezone(
+          ymd,
+          postingTime,
+          brandTimezone
+        );
+        const duplicateAtTime = await tx.content.findFirst({
+          where: { contentSeriesId: series.id, scheduledAt },
+          select: { id: true },
+        });
+        if (duplicateAtTime) {
+          skippedScheduleDates.push(scheduledAt.toISOString());
+          continue;
+        }
+
+        const created = await tx.content.create({
+          data: {
+            brandId: ctx.runBrandId,
+            contentSeriesId: series.id,
+            recipeRunId: ctx.runId,
+            ...(targetSocialAccountId ? { targetSocialAccountId } : {}),
+            caption: caption.trim(),
+            hashtags,
+            status: 'draft',
+            scheduledAt,
+            generationParams: {
+              source: 'recipe_run',
+              runId: ctx.runId,
+              recipeTemplateId: ctx.recipeTemplateId,
+              recipeTemplateVersionId: ctx.recipeTemplateVersionId,
+            },
+          },
+          select: { id: true },
+        });
+        contentIds.push(created.id);
+
+        const assetIdsCandidate =
+          (Array.isArray(p.asset_ids) ? p.asset_ids : null) ??
+          (Array.isArray(p.assetIds) ? p.assetIds : null) ??
+          (typeof p.asset_id === 'string' ? [p.asset_id] : null) ??
+          (typeof p.assetId === 'string' ? [p.assetId] : null);
+        const assetIds = Array.isArray(assetIdsCandidate)
+          ? assetIdsCandidate
+              .filter((id: any) => typeof id === 'string')
+              .map((id: string) => id.trim())
+              .filter(Boolean)
+          : [];
+
+        if (assetIds.length > 0) {
+          await tx.contentMediaAsset.createMany({
+            data: assetIds.map((assetId, idx) => ({
+              contentId: created.id,
+              displayOrder: idx,
+              assetId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return {
+        contentSeriesId: series.id,
+        contentSeriesName: series.name,
+        contentIds,
+        skippedScheduleDates,
+      };
+    });
+
+    const createdJson = JSON.stringify(
+      {
+        contentSeriesId: result.contentSeriesId,
+        contentIds: result.contentIds,
+        skippedScheduleDates: result.skippedScheduleDates,
+      },
+      null,
+      2
+    );
+
+    await createArtifact({
+      runId: ctx.runId,
+      kind: 'json',
+      name: 'created_content.json',
+      mimeType: 'application/json',
+      contentText: createdJson,
+    });
+
+    const key = step.output_key || defaultOutputKey;
+    state[key] = createdJson;
+    return {
+      ...result,
+      createdCount: result.contentIds.length,
+      skippedCount: result.skippedScheduleDates.length,
+    };
+  }
+
+  if (step.type === 'foreach') {
+    const rawItems = resolvedInput;
+    const items = Array.isArray(rawItems) ? rawItems : parseJsonArrayCandidate(rawItems);
+    if (!Array.isArray(rawItems) && items.length === 0) {
+      throw new Error('foreach requires items to resolve to an array');
+    }
+
+    const itemKey = step.item_key?.trim() || 'item';
+    const indexKey = step.index_key?.trim() || 'item_index';
+    const hadPrevItem = Object.prototype.hasOwnProperty.call(state, itemKey);
+    const hadPrevIndex = Object.prototype.hasOwnProperty.call(state, indexKey);
+    const prevItem = state[itemKey];
+    const prevIndex = state[indexKey];
+    const iterationOutputs: Array<Record<string, unknown>> = [];
+
+    try {
+      for (let i = 0; i < items.length; i++) {
+        state[itemKey] = items[i] as any;
+        state[indexKey] = i;
+
+        const iterOutput: Record<string, unknown> = { index: i };
+
+        for (let childIndex = 0; childIndex < step.do.length; childIndex++) {
+          const childStep = step.do[childIndex] as RecipeStep;
+          if (!evalWhen(childStep.when, state)) continue;
+
+          const childOutput = await executeRuntimeStep({
+            ctx,
+            step: childStep,
+            state,
+            defaultOutputKey: `${defaultOutputKey}_i${i}_s${childIndex}`,
+          });
+
+          const childOutputKey = (childStep as any).output_key as string | undefined;
+          if (typeof childOutputKey === 'string' && childOutputKey.trim().length > 0) {
+            iterOutput[childOutputKey.trim()] = state[childOutputKey.trim()];
+          } else {
+            iterOutput[`step_${childIndex}`] = childOutput;
+          }
+        }
+
+        iterationOutputs.push(iterOutput);
+      }
+    } finally {
+      if (hadPrevItem) state[itemKey] = prevItem;
+      else delete state[itemKey];
+      if (hadPrevIndex) state[indexKey] = prevIndex;
+      else delete state[indexKey];
+    }
+
+    if (step.output_key) {
+      state[step.output_key] = iterationOutputs as any;
+    }
+
+    return { iterations: items.length };
+  }
+
+  return null;
 }
 
 export async function executeRecipeRun(runId: string): Promise<{ runId: string; status: string }> {
@@ -271,7 +876,16 @@ export async function executeRecipeRun(runId: string): Promise<{ runId: string; 
     include: {
       recipeTemplateVersion: {
         include: {
-          recipeTemplate: { select: { id: true, brandId: true, isCurated: true, status: true } },
+          recipeTemplate: {
+            select: {
+              id: true,
+              brandId: true,
+              isCurated: true,
+              status: true,
+              name: true,
+              slug: true,
+            },
+          },
         },
       },
     },
@@ -330,8 +944,7 @@ export async function executeRecipeRun(runId: string): Promise<{ runId: string; 
         continue;
       }
 
-      const resolvedInput =
-        step.type === 'export' ? null : interpolateUnknown((step as any).input, state);
+      const resolvedInput = resolveStepInput(step, state);
 
       await updateStep({
         runId,
@@ -343,89 +956,24 @@ export async function executeRecipeRun(runId: string): Promise<{ runId: string; 
         },
       });
 
-      let output: unknown = null;
-
-      if (step.type === 'transform') {
-        const out = interpolateUnknown(step.input || {}, state);
-        if (step.output_key) {
-          state[step.output_key] = out as any;
-          output = out;
-        } else if (out && typeof out === 'object' && !Array.isArray(out)) {
-          Object.assign(state, out as any);
-          output = out;
-        } else {
-          output = out;
-        }
-      } else if (step.type === 'skill_call') {
-        const res = await execSkillCall({
-          brandId: run.brandId,
-          skill: step.skill,
-          input: resolvedInput,
-        });
-        const key = step.output_key || `step_${index}_output`;
-        state[key] = res as any;
-        output = res;
-      } else if (step.type === 'llm') {
-        const text = await execLlmStep({
+      const output = await executeRuntimeStep({
+        ctx: {
           runId,
-          brandId: run.brandId,
+          runBrandId: run.brandId,
+          runContentSeriesId: run.contentSeriesId || null,
+          runInputJson:
+            run.inputJson && typeof run.inputJson === 'object'
+              ? (run.inputJson as Record<string, unknown>)
+              : {},
+          recipeTemplateId: run.recipeTemplateId,
+          recipeTemplateVersionId: run.recipeTemplateVersionId,
+          recipeTemplateName: run.recipeTemplateVersion.recipeTemplate.name,
           config,
-          step,
-          state,
-          resolvedInput,
-        });
-        const key = step.output_key || `step_${index}_output`;
-        state[key] = text;
-        output = text;
-
-        if (step.artifact) {
-          const artifact = step.artifact;
-          const content = artifact.content
-            ? interpolateTemplateString(artifact.content, state)
-            : text;
-          if (artifact.kind === 'asset') {
-            await createArtifact({
-              runId,
-              kind: 'asset',
-              name: artifact.name,
-              mimeType: artifact.mime_type || null,
-              assetId: content || null,
-            });
-          } else {
-            await createArtifact({
-              runId,
-              kind: artifact.kind,
-              name: artifact.name,
-              mimeType: artifact.mime_type || null,
-              contentText: content || '',
-            });
-          }
-        }
-      } else if (step.type === 'export') {
-        for (const artifact of step.artifacts) {
-          const content = artifact.content
-            ? interpolateTemplateString(artifact.content, state)
-            : '';
-          if (artifact.kind === 'asset') {
-            await createArtifact({
-              runId,
-              kind: 'asset',
-              name: artifact.name,
-              mimeType: artifact.mime_type || null,
-              assetId: content || null,
-            });
-          } else {
-            await createArtifact({
-              runId,
-              kind: artifact.kind,
-              name: artifact.name,
-              mimeType: artifact.mime_type || null,
-              contentText: content,
-            });
-          }
-        }
-        output = { artifacts: step.artifacts.map((a) => ({ kind: a.kind, name: a.name })) };
-      }
+        },
+        step,
+        state,
+        defaultOutputKey: `step_${index}_output`,
+      });
 
       await updateStep({
         runId,

@@ -48,6 +48,15 @@ export function interpolateTemplateString(template: string, ctx: Record<string, 
 
 export function interpolateUnknown(value: unknown, ctx: Record<string, unknown>): unknown {
   if (typeof value === 'string') {
+    // If the entire string is a single template expression, preserve the underlying type.
+    // This lets recipes pass structured values between steps without JSON string parsing.
+    //
+    // Example:
+    //   { posts: '{{plan.posts}}' } -> posts becomes an array, not a string.
+    const m = value.match(/^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/);
+    if (m) {
+      return getPathValue(ctx, m[1]);
+    }
     return interpolateTemplateString(value, ctx);
   }
 

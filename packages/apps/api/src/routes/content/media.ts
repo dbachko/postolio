@@ -76,7 +76,14 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           postedAt: true,
           brandId: true,
           contentGroupId: true,
+          contentSeriesId: true,
           targetSocialAccountId: true,
+          recipeRunId: true,
+          recipeRun: {
+            select: {
+              recipeTemplate: { select: { id: true, slug: true, name: true } },
+            },
+          },
           schedulingError: true,
           generationParams: true,
           contentType: true,
@@ -113,7 +120,10 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const response = buildContentResponse(updatedContent);
+      const response = buildContentResponse({
+        ...(updatedContent as any),
+        generatedByRecipe: (updatedContent as any).recipeRun?.recipeTemplate ?? null,
+      });
       return reply.send({ content: response });
     } catch (error) {
       request.log.error({ err: error, contentId, assetId }, 'Failed to attach asset to content');
@@ -237,7 +247,14 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
           postedAt: true,
           brandId: true,
           contentGroupId: true,
+          contentSeriesId: true,
           targetSocialAccountId: true,
+          recipeRunId: true,
+          recipeRun: {
+            select: {
+              recipeTemplate: { select: { id: true, slug: true, name: true } },
+            },
+          },
           schedulingError: true,
           generationParams: true,
           contentType: true,
@@ -274,7 +291,10 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const response = buildContentResponse(updatedContent);
+      const response = buildContentResponse({
+        ...(updatedContent as any),
+        generatedByRecipe: (updatedContent as any).recipeRun?.recipeTemplate ?? null,
+      });
       return reply.send({ content: response });
     } catch (error) {
       request.log.error({ err: error, contentId, assetIds }, 'Failed to update content media');

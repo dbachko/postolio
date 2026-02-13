@@ -387,7 +387,14 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             brandId: true,
             generationParams: true,
             contentGroupId: true,
+            contentSeriesId: true,
             targetSocialAccountId: true,
+            recipeRunId: true,
+            recipeRun: {
+              select: {
+                recipeTemplate: { select: { id: true, slug: true, name: true } },
+              },
+            },
             schedulingError: true,
             mediaAssets: {
               select: { assetId: true, displayOrder: true },
@@ -405,7 +412,12 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         // Build CDN URLs from S3 keys and map to public response format
-        const contentWithUrls = buildContentListResponse(draftContent);
+        const contentWithUrls = buildContentListResponse(
+          draftContent.map((c: any) => ({
+            ...c,
+            generatedByRecipe: c.recipeRun?.recipeTemplate ?? null,
+          }))
+        );
 
         return { content: contentWithUrls };
       } catch (error) {

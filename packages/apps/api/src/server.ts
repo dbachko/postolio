@@ -69,6 +69,10 @@ import { backgroundJobs } from './services/background-jobs.js';
 import assetsProxyRoutes from './routes/assets-proxy.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { initSentry, captureException } from '@postolio/observability';
+import {
+  ensureCuratedRecipesSeeded,
+  getCuratedRecipeCatalogInfo,
+} from './services/recipes/seed.js';
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -464,6 +468,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     try {
       app.log.info('🚀 Initializing database schema...');
       await ensureDatabaseSchema({ generateClient: false });
+
+      const curatedCatalog = getCuratedRecipeCatalogInfo();
+      const curatedSync = await ensureCuratedRecipesSeeded();
+      app.log.info(
+        {
+          catalogVersion: curatedCatalog.catalogVersion,
+          catalogHash: curatedCatalog.catalogHash.slice(0, 12),
+          catalogSize: curatedCatalog.catalogSize,
+          skipped: curatedSync.skipped,
+          createdTemplates: curatedSync.createdTemplates,
+          updatedTemplates: curatedSync.updatedTemplates,
+          archivedTemplates: curatedSync.archivedTemplates,
+          createdVersions: curatedSync.createdVersions,
+          unchangedVersions: curatedSync.unchangedVersions,
+        },
+        '✅ Curated recipe catalog sync complete'
+      );
 
       // Background services now managed by EventBridge
       // Services are triggered by AWS Lambda/EventBridge, not started here

@@ -100,6 +100,9 @@ model Brand {
   dmConversations         DMConversation[]
   dmAutomationEvents      DMAutomationEvent[]
   contentGroups           ContentGroup[]
+  contentSeries           ContentSeries[]
+  aiCreditWallet          BrandAiCreditWallet?
+  aiCreditLedgerEntries   AICreditLedgerEntry[]
 
   @@index([userId])
   @@index([createdAt])
@@ -126,6 +129,44 @@ model ContentGroup {
   @@map("content_groups")
 }
 
+enum ContentSeriesKind {
+  batch
+  rolling
+}
+
+enum ContentSeriesStatus {
+  active
+  paused
+  archived
+}
+
+model ContentSeries {
+  id                String              @id @default(cuid())
+  brandId            String
+  // Optional stable key for system-managed series (ex: rolling pipeline). User series should leave this null.
+  key               String?
+  name              String
+  description       String?
+  // Visual identification: hex color code for calendar/timeline display
+  color             String?
+  kind              ContentSeriesKind   @default(batch)
+  status            ContentSeriesStatus @default(active)
+  // For rolling series: where generation comes from (ex: recipe version + base inputs)
+  generatorJson     Json?
+  rollingConfigJson Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  brand    Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contents Content[]
+  recipeRuns RecipeRun[]
+
+  @@unique([brandId, key])
+  @@index([brandId, status])
+  @@index([brandId, kind])
+  @@map("content_series")
+}
+
 model Content {
   id                    String               @id @default(cuid())
   caption               String
@@ -138,6 +179,8 @@ model Content {
   generationParams      Json?
   brandId               String
   contentGroupId        String?
+  contentSeriesId       String?
+  recipeRunId           String?
   targetSocialAccountId String?
   schedulingError       String?
   contentType           String               @default("post") // 'post' | 'reel' | 'story'
@@ -149,6 +192,8 @@ model Content {
   firstCommentError     String? // Error message if comment failed
   brand                 Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
   contentGroup          ContentGroup?        @relation(fields: [contentGroupId], references: [id], onDelete: SetNull)
+  contentSeries         ContentSeries?       @relation(fields: [contentSeriesId], references: [id], onDelete: SetNull)
+  recipeRun             RecipeRun?           @relation(fields: [recipeRunId], references: [id], onDelete: SetNull)
   targetSocialAccount   SocialAccount?       @relation(fields: [targetSocialAccountId], references: [id])
   mediaAssets           ContentMediaAsset[]
   publications          ContentPublication[]
@@ -158,6 +203,8 @@ model Content {
   @@index([scheduledAt])
   @@index([brandId, status, scheduledAt])
   @@index([contentGroupId])
+  @@index([contentSeriesId])
+  @@index([recipeRunId])
   // Ensure idempotent imports from Instagram per brand
   @@map("content")
 }
@@ -957,6 +1004,7 @@ model EncryptedSecret {
   createdByUser     User?              @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   skillInstallations SkillInstallation[]
 
+  @@unique([brandId, kind, name])
   @@index([brandId, kind])
   @@map("encrypted_secrets")
 }
@@ -980,6 +1028,7 @@ enum RecipeRunStepType {
   llm
   skill_call
   transform
+  content_create
   export
 }
 
@@ -1011,6 +1060,7 @@ model RecipeRun {
   brandId                 String
   recipeTemplateId        String
   recipeTemplateVersionId String
+  contentSeriesId         String?
   trigger                RecipeRunTrigger
   status                 RecipeRunStatus @default(queued)
   inputJson              Json
@@ -1026,13 +1076,17 @@ model RecipeRun {
   brand                 Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
   recipeTemplate        RecipeTemplate       @relation(fields: [recipeTemplateId], references: [id], onDelete: Cascade)
   recipeTemplateVersion RecipeTemplateVersion @relation(fields: [recipeTemplateVersionId], references: [id], onDelete: Cascade)
+  contentSeries         ContentSeries?       @relation(fields: [contentSeriesId], references: [id], onDelete: SetNull)
   createdByUser         User?                @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   steps                 RecipeRunStep[]
   artifacts             RecipeRunArtifact[]
   costs                 RecipeRunCost[]
+  contents              Content[]
+  aiCreditLedgerEntries AICreditLedgerEntry[]
 
   @@index([brandId, createdAt])
   @@index([brandId, status])
+  @@index([contentSeriesId])
   @@map("recipe_runs")
 }
 
@@ -1088,4 +1142,46 @@ model RecipeRunCost {
 
   @@index([runId])
   @@map("recipe_run_costs")
+}
+
+enum AICreditLedgerEntryType {
+  grant
+  debit
+  refund
+  adjustment
+}
+
+model BrandAiCreditWallet {
+  brandId             String   @id
+  balanceCredits      Int      @default(0)
+  totalGrantedCredits Int      @default(0)
+  totalDebitedCredits Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@map("brand_ai_credit_wallets")
+}
+
+model AICreditLedgerEntry {
+  id            String                  @id @default(cuid())
+  brandId       String
+  runId         String?
+  type          AICreditLedgerEntryType
+  deltaCredits  Int
+  amountUsd     Decimal?                @db.Decimal(10, 4)
+  inputTokens   Int                     @default(0)
+  outputTokens  Int                     @default(0)
+  provider      RecipeCostProvider      @default(unknown)
+  mode          SkillMode               @default(managed)
+  note          String?
+  createdAt     DateTime                @default(now())
+
+  brand Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  run   RecipeRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([brandId, createdAt])
+  @@index([runId])
+  @@map("ai_credit_ledger_entries")
 }

@@ -8,30 +8,66 @@ import {
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { type SortDirection, type SortField } from './asset-utils';
+import { cn } from '@/lib/utils';
 
-interface SortControlsProps {
-  field: SortField;
+type SortOption<TField extends string> = {
+  value: TField;
+  label: string;
+};
+
+interface SortControlsProps<TField extends string = SortField> {
+  field: TField;
   direction: SortDirection;
-  onFieldChange: (field: SortField) => void;
+  onFieldChange: (field: TField) => void;
   onDirectionToggle: () => void;
+  options?: Array<SortOption<TField>>;
+  placeholder?: string;
+  triggerWidthClassName?: string;
 }
 
-export function SortControls({
+const DEFAULT_ASSET_SORT_OPTIONS: Array<SortOption<SortField>> = [
+  { value: 'created', label: 'Added date' },
+  { value: 'size', label: 'Size' },
+  { value: 'title', label: 'Title' },
+];
+
+const DEFAULT_TRIGGER_WIDTH_CLASS = 'sm:w-[200px]';
+
+function getOptions<TField extends string>(
+  options: Array<SortOption<TField>> | undefined
+): Array<SortOption<TField>> {
+  if (options && options.length > 0) return options;
+  return DEFAULT_ASSET_SORT_OPTIONS as unknown as Array<SortOption<TField>>;
+}
+
+export function SortControls<TField extends string = SortField>({
   field,
   direction,
   onFieldChange,
   onDirectionToggle,
-}: SortControlsProps) {
+  options,
+  placeholder = 'Sort assets',
+  triggerWidthClassName = DEFAULT_TRIGGER_WIDTH_CLASS,
+}: SortControlsProps<TField>) {
+  const sortOptions = getOptions(options);
+
   return (
     <div className="flex w-full items-center sm:w-auto">
-      <Select value={field} onValueChange={(v) => onFieldChange(v as SortField)}>
-        <SelectTrigger className="h-10 w-full rounded-r-none sm:w-[200px]">
-          <SelectValue placeholder="Sort assets" />
+      <Select value={field} onValueChange={(v) => onFieldChange(v as TField)}>
+        <SelectTrigger
+          className={cn(
+            'h-10 w-full rounded-r-none [&>span]:pr-1 [&>svg]:ml-1',
+            triggerWidthClassName
+          )}
+        >
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="created">Added date</SelectItem>
-          <SelectItem value="size">Size</SelectItem>
-          <SelectItem value="title">Title</SelectItem>
+          {sortOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <Button

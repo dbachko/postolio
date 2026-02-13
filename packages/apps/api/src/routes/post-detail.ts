@@ -53,12 +53,20 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           updatedAt: true,
           brandId: true,
           contentGroupId: true,
+          contentSeriesId: true,
+          recipeRunId: true,
           schedulingError: true,
           firstComment: true,
           firstCommentStatus: true,
           firstCommentPostedAt: true,
           firstCommentError: true,
           targetSocialAccountId: true,
+          recipeRun: {
+            select: {
+              id: true,
+              recipeTemplate: { select: { id: true, slug: true, name: true } },
+            },
+          },
           mediaAssets: {
             select: { assetId: true, displayOrder: true },
             orderBy: { displayOrder: 'asc' },
@@ -89,6 +97,15 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         status: post.status,
         brandId: post.brandId,
         contentGroupId: post.contentGroupId,
+        contentSeriesId: (post as any).contentSeriesId ?? null,
+        recipeRunId: (() => {
+          const direct = (post as any).recipeRunId ?? null;
+          if (typeof direct === 'string' && direct.trim()) return direct.trim();
+          const gp = post.generationParams as any;
+          const derived = typeof gp?.runId === 'string' ? gp.runId : null;
+          return typeof derived === 'string' && derived.trim() ? derived.trim() : null;
+        })(),
+        generatedByRecipe: (post as any).recipeRun?.recipeTemplate ?? null,
         targetSocialAccountId: post.targetSocialAccountId,
         scheduledAt: post.scheduledAt,
         postedAt: post.postedAt,

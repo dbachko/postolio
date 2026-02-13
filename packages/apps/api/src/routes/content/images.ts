@@ -79,6 +79,13 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
             updatedAt: true,
             brandId: true,
+            contentSeriesId: true,
+            recipeRunId: true,
+            recipeRun: {
+              select: {
+                recipeTemplate: { select: { id: true, slug: true, name: true } },
+              },
+            },
             schedulingError: true,
             hashtags: true,
             contentType: true,
@@ -98,7 +105,10 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Content not found after linking asset' });
         }
 
-        const contentWithUrl = buildContentResponse(updatedContent);
+        const contentWithUrl = buildContentResponse({
+          ...(updatedContent as any),
+          generatedByRecipe: (updatedContent as any).recipeRun?.recipeTemplate ?? null,
+        });
 
         return reply.send({
           success: true,

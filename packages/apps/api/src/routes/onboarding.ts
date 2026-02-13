@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { seedDemoWorkspace, type DemoVariantId } from '../services/demo-seed.js';
+import { ensureAiCreditsWalletInitialized } from '../services/ai-credits.js';
 import { isDemoBrand } from '../utils/demo-brand.js';
 
 const prisma = getDatabaseClient();
@@ -198,6 +199,7 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
               },
             },
           });
+          await ensureAiCreditsWalletInitialized({ brandId: demoBrand.id });
         }
 
         if (!demoBrand) {

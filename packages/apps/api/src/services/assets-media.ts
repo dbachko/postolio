@@ -52,9 +52,28 @@ export async function importImageFromExternalUrl(
     brandId: metadata.brandId,
     uploadedBy: metadata.uploadedBy || 'system',
     sourceUrl: imageUrl,
-    fileName: deriveFileName(imageUrl, metadata.contentId),
+    fileName: deriveFileName(imageUrl, metadata.contentId, 'jpg'),
     mimeType: 'image/jpeg', // Default hint; assets-api will detect actual
     fileType: 'image',
+    title: metadata.originalPrompt,
+    tags: deriveAssetTags(metadata),
+    folderId: metadata.folderId || undefined,
+    publishedAt: metadata.publishedAt?.toISOString(),
+  });
+}
+
+export async function importVideoFromExternalUrl(
+  videoUrl: string,
+  metadata: AssetUploadMetadata
+): Promise<AssetRecord> {
+  const client = getAssetsClient();
+  return client.importFromUrl({
+    brandId: metadata.brandId,
+    uploadedBy: metadata.uploadedBy || 'system',
+    sourceUrl: videoUrl,
+    fileName: deriveFileName(videoUrl, metadata.contentId, 'mp4'),
+    mimeType: 'video/mp4',
+    fileType: 'video',
     title: metadata.originalPrompt,
     tags: deriveAssetTags(metadata),
     folderId: metadata.folderId || undefined,
@@ -218,18 +237,18 @@ async function optimizeImage(buffer: Buffer): Promise<Buffer> {
   }
 }
 
-function deriveFileName(imageUrl: string, fallbackId: string): string {
+function deriveFileName(sourceUrl: string, fallbackId: string, fallbackExt: string): string {
   try {
-    const url = new URL(imageUrl);
+    const url = new URL(sourceUrl);
     const name = url.pathname.split('/').pop();
     if (!name) {
-      return `${fallbackId}.jpg`;
+      return `${fallbackId}.${fallbackExt}`;
     }
-    if (/\.jpe?g$/i.test(name)) {
+    if (/\.[a-z0-9]{2,5}$/i.test(name)) {
       return name;
     }
-    return `${name}.jpg`;
+    return `${name}.${fallbackExt}`;
   } catch {
-    return `${fallbackId}.jpg`;
+    return `${fallbackId}.${fallbackExt}`;
   }
 }

@@ -26,4 +26,16 @@ describe('recipe run template helpers', () => {
     const out = interpolateUnknown({ a: '{{input.brief}}', b: ['x', '{{input.brief}}'] }, ctx);
     expect(out).toEqual({ a: 'Hello', b: ['x', 'Hello'] });
   });
+
+  it('preserves non-string types for full expression templates', () => {
+    const ctx = { plan: { posts: [{ caption: 'A' }, { caption: 'B' }], count: 2 } } as any;
+
+    expect(interpolateUnknown('{{plan.count}}', ctx)).toBe(2);
+    expect(interpolateUnknown({ posts: '{{plan.posts}}' }, ctx)).toEqual({
+      posts: [{ caption: 'A' }, { caption: 'B' }],
+    });
+
+    // Mixed strings still stringify.
+    expect(interpolateUnknown('count={{plan.count}}', ctx)).toBe('count=2');
+  });
 });
