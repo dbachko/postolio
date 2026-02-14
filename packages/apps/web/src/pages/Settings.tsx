@@ -41,6 +41,11 @@ export function Settings() {
   }, [location.hash, activeTab, location.pathname, location.search, navigate]);
 
   const handleTabChange = (value: string) => {
+    if (value === 'billing') {
+      navigate('/settings/billing');
+      return;
+    }
+
     const params = new URLSearchParams(location.search);
     params.set('tab', value);
     navigate(
@@ -52,12 +57,13 @@ export function Settings() {
   return (
     <div className="w-full">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="timezone">Timezone</TabsTrigger>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="billing">Billing</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timezone">

@@ -12,6 +12,7 @@ import { PublishingQueuesClient } from './publishing-queues-client';
 import { RecipesClient } from './recipes-client';
 import { SkillsClient } from './skills-client';
 import { RunsClient } from './runs-client';
+import { BillingClient } from './billing-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -30,6 +31,7 @@ export const publishingQueues = new PublishingQueuesClient(http);
 export const recipes = new RecipesClient(http);
 export const skills = new SkillsClient(http);
 export const runs = new RunsClient(http);
+export const billing = new BillingClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 
@@ -69,3 +71,4 @@ export type {
 } from './types';
 
 export type { SnippetQueryParams } from './snippets-client';
+export type { BillingSubscription, BillingInvoice, CreditPack } from './billing-client';

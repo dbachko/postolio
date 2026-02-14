@@ -1,0 +1,60 @@
+# Worktree Plus Configuration
+version: "1.0"
+
+# Default settings for worktrees
+defaults:
+  # Base directory for worktrees (relative to repository root)
+  base_dir: ../worktrees
+
+# Hooks that run after creating a worktree
+hooks:
+  post_create:
+    # Root env files.
+    - type: copy
+      from: .env
+      to: .env
+    - type: copy
+      from: .env.local
+      to: .env.local
+    - type: copy
+      from: .env.development
+      to: .env.development
+    - type: copy
+      from: .env.production
+      to: .env.production
+
+    # App/service env files.
+    - type: copy
+      from: packages/apps/api/.env
+      to: packages/apps/api/.env
+    - type: copy
+      from: packages/apps/api/.env.local
+      to: packages/apps/api/.env.local
+    - type: copy
+      from: packages/apps/assets-api/.env
+      to: packages/apps/assets-api/.env
+    - type: copy
+      from: packages/apps/assets-api/.env.local
+      to: packages/apps/assets-api/.env.local
+    - type: copy
+      from: packages/apps/web/.env
+      to: packages/apps/web/.env
+    - type: copy
+      from: packages/apps/web/.env.local
+      to: packages/apps/web/.env.local
+    - type: copy
+      from: packages/apps/web/.env.development
+      to: packages/apps/web/.env.development
+
+    # Optional local HTTPS certs used by API dev server (if present).
+    - type: copy
+      from: certs/
+      to: certs/
+
+    # Always install dependencies after worktree creation.
+    - type: command
+      command: pnpm install
+
+    # Quick visibility after worktree creation.
+    - type: command
+      command: wtp list

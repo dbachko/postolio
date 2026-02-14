@@ -58,6 +58,8 @@ import publishingQueuesRoutes from './routes/publishing-queues.js';
 import recipesRoutes from './routes/recipes.js';
 import skillsRoutes from './routes/skills.js';
 import runsRoutes from './routes/runs.js';
+import billingRoutes from './routes/billing.js';
+import stripeWebhookRoutes from './routes/webhooks/stripe.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import type { Redis } from 'ioredis';
@@ -332,6 +334,8 @@ export function buildFastify(): FastifyInstance {
   app.register(recipesRoutes, { prefix: '/api/recipes' });
   app.register(skillsRoutes, { prefix: '/api/skills' });
   app.register(runsRoutes, { prefix: '/api/runs' });
+  app.register(billingRoutes, { prefix: '/api/billing' });
+  app.register(stripeWebhookRoutes, { prefix: '/api' });
 
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload

@@ -6,6 +6,7 @@ This directory contains essential production scripts for deploying and managing 
 
 - **`deploy-stack.sh`** - Local CDK stack deployment with environment variable mapping
 - **`get-app-urls.sh`** - Utility to retrieve deployed application URLs and resource information
+- **`setup-stripe-billing.sh`** - Idempotent Stripe bootstrap for products/prices/portal/webhook
 - **`README.md`** - This documentation file
 
 ---

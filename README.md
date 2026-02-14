@@ -88,6 +88,14 @@ To run a specific application (e.g., only the frontend):
 # The "..." syntax tells Turborepo to also run the dev script for all dependencies of "web"
 pnpm dev --filter=@postolio/web...
 
+#### Stripe billing setup
+
+If you are working on pricing, checkout, invoices, or credit top-ups, complete Stripe setup first:
+
+- `docs/STRIPE-BILLING-SETUP.md`
+
+It documents account registration, where to find each Stripe key/price ID, required env variables, and webhook setup.
+
 #### API dev quick start (after a clean checkout or cache purge)
 
 If you recently cleared build artifacts (e.g., deleted `dist/` folders or ran a clean), build the API’s workspace dependencies once so their `dist` outputs exist for the watcher:

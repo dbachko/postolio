@@ -55,6 +55,8 @@ const CSRF_SKIP_PATHS = [
 
   // External webhooks
   '/api/webhook',
+  '/api/webhooks/stripe',
+  '/webhooks/stripe',
 ];
 
 const csrfAutoProtectPlugin: FastifyPluginAsync = async (fastify) => {

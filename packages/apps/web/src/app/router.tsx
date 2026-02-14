@@ -24,6 +24,8 @@ import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
 import { TermsOfService } from '@/pages/TermsOfService';
 import { DataDeletion } from '@/pages/DataDeletion';
 import { DataDeletionVerify } from '@/pages/DataDeletionVerify';
+import Pricing from '@/pages/Pricing';
+import Billing from '@/pages/Billing';
 import AccountRecover from '@/pages/AccountRecover';
 import UiKitchenSink from '@/pages/UiKitchenSink';
 import { MagicLinkVerify } from '@/pages/MagicLinkVerify';
@@ -90,6 +92,7 @@ export const router = createBrowserRouter([
   { path: '/password/reset', element: <PasswordReset />, errorElement: <RouteError /> },
   { path: '/privacy-policy', element: <PrivacyPolicy />, errorElement: <RouteError /> },
   { path: '/terms-of-service', element: <TermsOfService />, errorElement: <RouteError /> },
+  { path: '/pricing', element: <Pricing />, errorElement: <RouteError /> },
   { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
   { path: '/account/recover', element: <AccountRecover />, errorElement: <RouteError /> },
   {
@@ -280,6 +283,16 @@ export const router = createBrowserRouter([
   {
     path: '/settings',
     element: appShell(<Settings />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/billing',
+    element: appShell(<Billing />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/billing/upgrade',
+    element: appShell(<Pricing />),
     errorElement: <RouteError />,
   },
   {

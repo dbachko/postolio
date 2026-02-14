@@ -2,10 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle, Clock, Gauge, Sparkles } from 'lucide-react';
 import { httpGet } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import UpgradePrompt from '@/components/billing/UpgradePrompt';
 
 export default function Limits() {
+  const user = useAuthStore((state) => state.user);
   const limitsQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead'],
     queryFn: async () => httpGet('/api/account/limits/schedule-ahead'),
@@ -33,6 +36,7 @@ export default function Limits() {
           totalFuture: number;
         }>
       | undefined) || [];
+  const effectiveTier = limits?.tier || user?.subscriptionTier || 'free';
 
   return (
     <div className="space-y-6">
@@ -45,7 +49,7 @@ export default function Limits() {
               Postolio is currently in <span className="font-medium">Alpha</span>. We’re shaping the
               product and testing reliability at small scale. During this phase, we enforce a few
               conservative limits to ensure stability for everyone. Paid plans with higher limits
-              and advanced features are coming soon.
+              and advanced features are available via the billing flow.
             </p>
           </div>
         </div>
@@ -157,37 +161,32 @@ export default function Limits() {
         </CardContent>
       </Card>
 
-      {/* Plans Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Coming Soon: Paid Plans</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-muted-foreground">
-            We’re planning a simple set of tiers so you can choose what fits your workflow. Final
-            details may change, but here’s our current direction:
-          </p>
-          <ul className="list-disc space-y-1 pl-6 text-sm">
-            <li>
-              <span className="font-medium">Free</span>: Great for trying Postolio. Reasonable
-              scheduling capacity and fair-use API limits.
-            </li>
-            <li>
-              <span className="font-medium">Pro</span>: Higher schedule-ahead capacity, faster AI
-              generation allotments, and premium workflow features.
-            </li>
-            <li>
-              <span className="font-medium">Enterprise</span>: Custom limits, SSO/SAML, SLAs, and
-              priority support.
-            </li>
-          </ul>
-          <div className="pt-2">
-            <Button asChild>
-              <Link to="/settings">Notify me when plans launch</Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Upgrade / Plan CTA */}
+      {effectiveTier === 'free' ? (
+        <UpgradePrompt
+          title="Upgrade to Pro"
+          description="Unlock higher scheduling capacity, faster workflows, and billing controls."
+          ctaLabel="View pricing"
+          to="/pricing"
+        />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Current Paid Plan</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-muted-foreground">
+              Your account is currently on <span className="font-medium">{effectiveTier}</span>.
+              Manage payment methods and invoices in billing settings.
+            </p>
+            <div className="pt-1">
+              <Button asChild>
+                <Link to="/settings/billing">Manage billing</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* FAQ */}
       <Card>
@@ -208,15 +207,15 @@ export default function Limits() {
             <p className="text-muted-foreground">
               Free up at least one slot by deleting a future post you no longer need, or wait for a
               scheduled post to publish. Once a slot opens, the rolling window backfills
-              automatically. Manual scheduling is also enforced per brand; if you try to schedule a
-              post beyond your tier, you’ll be prompted to reduce future posts or upgrade.
+              automatically. Manual scheduling is also enforced per brand; if you try to schedule
+              beyond your tier, you’ll be prompted to reduce future posts or upgrade.
             </p>
           </div>
           <div>
             <div className="font-medium">Why am I seeing a schedule limit banner?</div>
             <p className="text-muted-foreground">
               You’ve reached your current schedule-ahead capacity. You can remove or publish some
-              future posts to free up space, or upgrade once paid plans are available.
+              future posts to free up space, or upgrade on the pricing page.
             </p>
           </div>
           <div>

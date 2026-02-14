@@ -60,6 +60,7 @@ model User {
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   notificationState       UserNotificationState?
+  billingCustomer         BillingCustomer?
   // Inbox & Replies
   savedReplies            SavedReply[]
   snippets                Snippet[]
@@ -103,6 +104,7 @@ model Brand {
   contentSeries           ContentSeries[]
   aiCreditWallet          BrandAiCreditWallet?
   aiCreditLedgerEntries   AICreditLedgerEntry[]
+  billingPayments         BillingPayment[]
 
   @@index([userId])
   @@index([createdAt])
@@ -422,6 +424,173 @@ model ContentPublication {
   @@index([platform, externalPostId])
   @@index([contentId, platform])
   @@map("content_publications")
+}
+
+// ===========================
+// Payment & Billing Models
+// ===========================
+
+model BillingCustomer {
+  id               String                @id @default(cuid())
+  userId           String                @unique
+  stripeCustomerId String                @unique
+  email            String
+  currency         String                @default("usd")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions    BillingSubscription[]
+  paymentMethods   BillingPaymentMethod[]
+  invoices         BillingInvoice[]
+  payments         BillingPayment[]
+
+  @@index([stripeCustomerId])
+  @@map("billing_customers")
+}
+
+model BillingProduct {
+  id              String        @id @default(cuid())
+  stripeProductId String        @unique
+  name            String
+  description     String?
+  active          Boolean       @default(true)
+  metadata        Json          @default("{}")
+  prices          BillingPrice[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("billing_products")
+}
+
+model BillingPrice {
+  id            String                @id @default(cuid())
+  productId     String
+  stripePriceId String                @unique
+  currency      String                @default("usd")
+  unitAmount    Int
+  interval      String?
+  intervalCount Int                   @default(1)
+  trialDays     Int?
+  active        Boolean               @default(true)
+  metadata      Json                  @default("{}")
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  product       BillingProduct        @relation(fields: [productId], references: [id])
+  subscriptions BillingSubscription[]
+
+  @@index([stripePriceId])
+  @@map("billing_prices")
+}
+
+model BillingSubscription {
+  id                   String         @id @default(cuid())
+  customerId           String
+  priceId              String
+  stripeSubscriptionId String         @unique
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean        @default(false)
+  canceledAt           DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  quantity             Int            @default(1)
+  metadata             Json           @default("{}")
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  customer             BillingCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  price                BillingPrice   @relation(fields: [priceId], references: [id])
+  invoices             BillingInvoice[]
+
+  @@index([customerId])
+  @@index([stripeSubscriptionId])
+  @@index([status])
+  @@map("billing_subscriptions")
+}
+
+model BillingPaymentMethod {
+  id                    String         @id @default(cuid())
+  customerId            String
+  stripePaymentMethodId String         @unique
+  type                  String
+  cardBrand             String?
+  cardLastFour          String?
+  cardExpMonth          Int?
+  cardExpYear           Int?
+  isDefault             Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  customer              BillingCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("billing_payment_methods")
+}
+
+model BillingInvoice {
+  id               String               @id @default(cuid())
+  customerId       String
+  subscriptionId   String?
+  stripeInvoiceId  String               @unique
+  number           String?
+  status           String
+  currency         String
+  total            Int
+  amountPaid       Int                  @default(0)
+  amountDue        Int
+  paidAt           DateTime?
+  invoicePdfUrl    String?
+  hostedInvoiceUrl String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  customer         BillingCustomer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subscription     BillingSubscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([customerId])
+  @@index([stripeInvoiceId])
+  @@index([status])
+  @@map("billing_invoices")
+}
+
+model BillingPayment {
+  id                   String          @id @default(cuid())
+  customerId           String
+  brandId              String?
+  stripePaymentIntentId String         @unique
+  stripeChargeId       String?         @unique
+  idempotencyKey       String?         @unique
+  amount               Int
+  currency             String
+  status               String
+  failureCode          String?
+  failureMessage       String?
+  creditsGranted       Int?
+  metadata             Json            @default("{}")
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  customer             BillingCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  brand                Brand?          @relation(fields: [brandId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([status])
+  @@index([brandId])
+  @@map("billing_payments")
+}
+
+model BillingWebhookEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  payload       Json
+  status        String   @default("pending")
+  errorMessage  String?
+  attempts      Int      @default(0)
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([stripeEventId])
+  @@index([type])
+  @@index([status])
+  @@map("billing_webhook_events")
 }
 
 model MetricSample {
