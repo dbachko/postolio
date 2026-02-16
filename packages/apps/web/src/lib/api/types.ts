@@ -5,6 +5,9 @@ export interface User {
   email: string;
   name: string | null;
   subscriptionTier: string;
+  featureFlags?: {
+    multiDestination?: boolean;
+  };
   timezone?: string | null;
   timezoneAutoDetected?: boolean;
   theme?: 'system' | 'light' | 'dark';

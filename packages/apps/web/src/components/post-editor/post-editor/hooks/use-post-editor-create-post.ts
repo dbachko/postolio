@@ -18,6 +18,7 @@ export function usePostEditorCreatePost(params: {
   formData: PostEditorFormState;
   firstCommentOpen: boolean;
   selectedPlatformAccountIds: string[];
+  multiDestinationEnabled: boolean;
   openSidebar: (type: string, params: Record<string, unknown>) => void;
   navigate: (to: string) => void;
 }) {
@@ -26,6 +27,7 @@ export function usePostEditorCreatePost(params: {
     firstCommentOpen,
     formData,
     layout,
+    multiDestinationEnabled,
     navigate,
     onRequestClose,
     openSidebar,
@@ -61,7 +63,9 @@ export function usePostEditorCreatePost(params: {
         firstComment:
           isStory || !firstCommentOpen ? undefined : (formData.firstComment || '').trim(),
         scheduledAt: scheduledUtc ? scheduledUtc.toISOString() : undefined,
-        targetSocialAccountIds: selectedPlatformAccountIds,
+        targetSocialAccountIds: multiDestinationEnabled
+          ? selectedPlatformAccountIds
+          : selectedPlatformAccountIds.slice(0, 1),
       });
 
       if (mode !== 'queue' && mode !== 'now') {

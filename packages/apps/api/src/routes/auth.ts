@@ -14,6 +14,7 @@ import { isProductionEnv } from '../utils/env-mode.js';
 import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
 import { ensureDeviceId } from '../utils/device-id.js';
 import { signupsAllowedForEmail } from '../utils/access-control.js';
+import { getUserFeatureFlags } from '../utils/feature-flags.js';
 import { createRedisClient } from '../services/redis.js';
 import { AuthService } from '../services/auth.js';
 
@@ -109,7 +110,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(201).send({
-        user,
+        user: {
+          ...user,
+          featureFlags: getUserFeatureFlags({ userId: user.id, email: user.email }),
+        },
         message: 'Registration successful',
       });
     }
@@ -187,7 +191,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.send({
-        user,
+        user: {
+          ...user,
+          featureFlags: getUserFeatureFlags({ userId: user.id, email: user.email }),
+        },
         message: 'Login successful',
       });
     }
@@ -438,6 +445,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         uiPreferences: dbUser.uiPreferences,
         createdAt: dbUser.createdAt,
         updatedAt: dbUser.updatedAt,
+        featureFlags: getUserFeatureFlags({ userId: dbUser.id, email: dbUser.email }),
       };
       return { user };
     } catch (err) {

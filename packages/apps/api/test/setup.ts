@@ -16,6 +16,8 @@ process.env.JWT_SECRET =
   process.env.JWT_SECRET || 'test_jwt_secret_please_override_0123456789abcdef';
 process.env.ASSETS_API_BASE_URL = process.env.ASSETS_API_BASE_URL || 'http://localhost:9999';
 process.env.ASSETS_API_SERVICE_TOKEN = process.env.ASSETS_API_SERVICE_TOKEN || 'test-assets-token';
+process.env.FEATURE_MULTI_DESTINATION_ENABLED =
+  process.env.FEATURE_MULTI_DESTINATION_ENABLED || 'true';
 
 // Silence noisy logs during test runs
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';

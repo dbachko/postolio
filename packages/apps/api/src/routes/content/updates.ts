@@ -21,6 +21,7 @@ import {
 } from '@postolio/content-validation';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 import type { AssetRecord } from '@postolio/assets-client';
+import { isMultiDestinationEnabledForUser } from '../../utils/feature-flags.js';
 import { supportsScheduling, toValidationPlatform } from '../../utils/platform.js';
 
 const prisma = getDatabaseClient();
@@ -48,6 +49,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/:contentId', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = request.user!.id;
+      const multiDestinationEnabled = isMultiDestinationEnabledForUser({
+        userId,
+        email: request.user?.email,
+      });
 
       const contentId = request.params.contentId;
       const {
@@ -186,6 +191,18 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (normalizedTargetSocialAccountId !== undefined) {
+        if (
+          !multiDestinationEnabled &&
+          resolvedTargetSocialAccount &&
+          String(resolvedTargetSocialAccount.platform).toLowerCase() !== 'instagram'
+        ) {
+          return reply.code(403).send({
+            error: 'feature_disabled',
+            code: 'PLATFORM_NOT_ENABLED',
+            message: 'Only Instagram destinations are enabled for this account',
+          });
+        }
+
         updateData.targetSocialAccountId = normalizedTargetSocialAccountId
           ? resolvedTargetSocialAccount!.id
           : null;

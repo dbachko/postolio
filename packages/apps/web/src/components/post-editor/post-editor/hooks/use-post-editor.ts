@@ -2,8 +2,10 @@ import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useBrandStore } from '@/stores/brandStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 
 import type { PostEditorProps } from '../types';
 
@@ -28,10 +30,12 @@ export function usePostEditor(props: PostEditorProps) {
   const { openSidebar } = useRightSidebarRouter();
 
   const { timezone, getBrandTimezone } = useTimezone();
+  const user = useAuthStore((state) => state.user);
   const { selectedBrand } = useBrandStore();
   const selectedBrandId = selectedBrand?.id ?? null;
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
 
-  const data = usePostEditorData({ id, selectedBrandId });
+  const data = usePostEditorData({ id, selectedBrandId, multiDestinationEnabled });
 
   const brandTimezone = usePostEditorBrandTimezone({
     postBrandId: data.post?.brand?.id ?? null,
@@ -45,6 +49,7 @@ export function usePostEditor(props: PostEditorProps) {
   const destinations = usePostEditorDestinations({
     id,
     layout,
+    multiDestinationEnabled,
     isMultiDestinationGroup: data.isMultiDestinationGroup,
     platformPickerOptions: data.platformPickerOptions,
     socialAccountsData: data.socialAccountsQuery.data,
@@ -61,6 +66,7 @@ export function usePostEditor(props: PostEditorProps) {
     mediaAssetsById: data.mediaAssetsById,
     selectedTargetSocialAccountId: destinations.selectedTargetSocialAccountId,
     platformPickerOptions: data.platformPickerOptions,
+    multiDestinationEnabled,
     setSelectedPlatformAccountIds: destinations.setSelectedPlatformAccountIds,
     platformsInitializedRef: destinations.platformsInitializedRef,
     locationSearch: location.search,
@@ -97,6 +103,7 @@ export function usePostEditor(props: PostEditorProps) {
     formData: form.formData,
     firstCommentOpen: form.firstCommentOpen,
     selectedPlatformAccountIds: destinations.selectedPlatformAccountIds,
+    multiDestinationEnabled,
     openSidebar,
     navigate,
   });
@@ -193,6 +200,7 @@ export function usePostEditor(props: PostEditorProps) {
     openSidebar,
     navigate,
     handleSaveChanges: saveActions.handleSaveChanges,
+    multiDestinationEnabled,
   });
 
   const handleCloseSidebar = useCallback(() => {
@@ -221,6 +229,9 @@ export function usePostEditor(props: PostEditorProps) {
     location,
     openSidebar,
     brandTimezone,
+    flags: {
+      multiDestinationEnabled,
+    },
     data,
     ui,
     destinations,

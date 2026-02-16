@@ -8,11 +8,19 @@ import type { PostEditorLayout } from '../types';
 export function usePostEditorDestinations(params: {
   id?: string;
   layout: PostEditorLayout;
+  multiDestinationEnabled: boolean;
   isMultiDestinationGroup: boolean;
   platformPickerOptions: SocialAccountsPickerOption[];
   socialAccountsData: unknown;
 }) {
-  const { id, isMultiDestinationGroup, layout, platformPickerOptions, socialAccountsData } = params;
+  const {
+    id,
+    isMultiDestinationGroup,
+    layout,
+    multiDestinationEnabled,
+    platformPickerOptions,
+    socialAccountsData,
+  } = params;
 
   const isCreating = !id;
   const isCreateWithRail = isCreating;
@@ -35,9 +43,11 @@ export function usePostEditorDestinations(params: {
 
       const byId = new Set(platformPickerOptions.map((opt) => opt.id));
       const deduped = Array.from(new Set(next)).filter((nextId) => byId.has(nextId));
-      setSelectedPlatformAccountIds(deduped);
+      const normalized =
+        !multiDestinationEnabled && deduped.length > 1 ? [deduped[deduped.length - 1]!] : deduped;
+      setSelectedPlatformAccountIds(normalized);
     },
-    [platformPickerOptions]
+    [multiDestinationEnabled, platformPickerOptions]
   );
 
   const createSelectedDestinations = useMemo(() => {
@@ -55,12 +65,25 @@ export function usePostEditorDestinations(params: {
   const toggleCreateDestination = useCallback(
     (accountId: string) => {
       if (!accountId) return;
-      const next = selectedPlatformAccountIds.includes(accountId)
-        ? selectedPlatformAccountIds.filter((selectedId) => selectedId !== accountId)
-        : [...selectedPlatformAccountIds, accountId];
+
+      let next: string[];
+
+      if (!multiDestinationEnabled) {
+        // Single-destination mode behaves like radio buttons: clicking the
+        // currently selected destination should be a no-op instead of
+        // clearing the selection entirely.
+        if (selectedPlatformAccountIds.includes(accountId)) {
+          return;
+        }
+        next = [accountId];
+      } else {
+        next = selectedPlatformAccountIds.includes(accountId)
+          ? selectedPlatformAccountIds.filter((selectedId) => selectedId !== accountId)
+          : [...selectedPlatformAccountIds, accountId];
+      }
       handlePlatformAccountsChange(next);
     },
-    [handlePlatformAccountsChange, selectedPlatformAccountIds]
+    [handlePlatformAccountsChange, multiDestinationEnabled, selectedPlatformAccountIds]
   );
 
   const selectedTargetSocialAccountId = useMemo(() => {
@@ -125,7 +148,10 @@ export function usePostEditorDestinations(params: {
         .filter((value: string) => Boolean(value) && byId.has(value));
 
       if (filtered.length > 0) {
-        setSelectedPlatformAccountIds(Array.from(new Set(filtered)));
+        const normalized = Array.from(new Set(filtered));
+        setSelectedPlatformAccountIds(
+          !multiDestinationEnabled && normalized.length > 1 ? [normalized[0]!] : normalized
+        );
         platformsInitializedRef.current = true;
         return;
       }
@@ -137,7 +163,7 @@ export function usePostEditorDestinations(params: {
 
     setSelectedPlatformAccountIds(next);
     platformsInitializedRef.current = true;
-  }, [isCreating, platformPickerOptions, socialAccountsData]);
+  }, [isCreating, multiDestinationEnabled, platformPickerOptions, socialAccountsData]);
 
   return {
     createDestinationsPopoverOpen,
@@ -161,5 +187,6 @@ export function usePostEditorDestinations(params: {
     schedulingSupported,
     publishingSupported,
     hasSelectedPlatforms,
+    multiDestinationEnabled,
   };
 }

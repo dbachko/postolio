@@ -2,6 +2,8 @@ import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMediaBadgeType } from '@/utils/media-type';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { useAuthStore } from '@/stores/authStore';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 import { getPostCardCaptionMeta } from '@/components/post-preview-card/caption-meta';
 import { getPostCardDragMeta } from '@/components/post-preview-card/drag-meta';
 import type { PostPreviewCardProps } from './types';
@@ -28,10 +30,15 @@ export function PostPreviewCard({
 }: PostPreviewCardProps) {
   const navigate = useNavigate();
   const { openSidebar } = useRightSidebarRouter();
+  const user = useAuthStore((state) => state.user);
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
 
   const optimisticLabel = useMemo(() => getOptimisticLabel(item), [item]);
   const dragMeta = useMemo(() => getPostCardDragMeta(item), [item]);
-  const groupMeta = useMemo(() => getGroupMeta(item), [item]);
+  const groupMeta = useMemo(
+    () => (multiDestinationEnabled ? getGroupMeta(item) : null),
+    [item, multiDestinationEnabled]
+  );
   const { status, displayTime, statusTooltip } = useMemo(
     () => getStatusTimeInfo(item, timezone),
     [item, timezone]

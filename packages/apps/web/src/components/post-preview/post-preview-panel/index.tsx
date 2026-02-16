@@ -31,6 +31,7 @@ export function PostPreviewPanel({
   unstyled = false,
 }: PostPreviewPanelProps) {
   if (!open && layout === 'page') return null;
+  const showPanelHideButton = layout !== 'sidebar' && !unstyled;
 
   const previewTitle = (() => {
     if (items.length === 0) return 'No preview';
@@ -93,30 +94,34 @@ export function PostPreviewPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onOpenChange(false)}
-            aria-label="Hide preview"
-          >
-            <EyeOff className="h-4 w-4" />
-          </Button>
+          {showPanelHideButton ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onOpenChange(false)}
+              aria-label="Hide preview"
+            >
+              <EyeOff className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
   ) : (
     <div className="border-border flex h-12 items-center justify-between border-b px-4">
       <div className="text-foreground text-sm font-semibold">Preview</div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => onOpenChange(false)}
-        aria-label="Hide preview"
-      >
-        <EyeOff className="h-4 w-4" />
-      </Button>
+      {showPanelHideButton ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onOpenChange(false)}
+          aria-label="Hide preview"
+        >
+          <EyeOff className="h-4 w-4" />
+        </Button>
+      ) : null}
     </div>
   );
 

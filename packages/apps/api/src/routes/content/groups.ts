@@ -3,7 +3,7 @@
  * Multi-destination posts are represented as a ContentGroup with one Content row per destination.
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
 import { Prisma } from '@postolio/database';
 import { validateContentPayload } from '@postolio/content-validation';
 import type { AssetRecord } from '@postolio/assets-client';
@@ -18,6 +18,7 @@ import { schedulerService } from '../../services/scheduler.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
 import { haveUniformAspectRatio } from '../../utils/aspect-ratio.js';
+import { isMultiDestinationEnabledForUser } from '../../utils/feature-flags.js';
 import { supportsScheduling, toValidationPlatform } from '../../utils/platform.js';
 
 const prisma = getDatabaseClient();
@@ -42,6 +43,34 @@ function getProfilePictureUrl(metadata: unknown): string | null {
   return null;
 }
 
+type AuthenticatedRequest = FastifyRequest & {
+  user?: {
+    id?: string;
+    email?: string | null;
+  };
+};
+
+function sendMultiDestinationDisabled(reply: FastifyReply) {
+  return reply.code(403).send({
+    error: 'feature_disabled',
+    code: 'MULTI_DESTINATION_DISABLED',
+    message: 'Multiple destinations are not enabled for this account',
+  });
+}
+
+function ensureMultiDestinationEnabled(
+  request: AuthenticatedRequest,
+  reply: FastifyReply
+): boolean {
+  const enabled = isMultiDestinationEnabledForUser({
+    userId: request.user?.id,
+    email: request.user?.email,
+  });
+  if (enabled) return true;
+  void sendMultiDestinationDisabled(reply);
+  return false;
+}
+
 const groupsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/content/groups/:contentGroupId
   fastify.get<{ Params: { contentGroupId: string } }>(
@@ -49,6 +78,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {
@@ -212,6 +244,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { targetSocialAccountIds?: string[] };
   }>('/:contentId/destinations', { preHandler: fastify.authenticate }, async (request, reply) => {
     const userId = request.user!.id;
+    if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+      return;
+    }
     const { contentId } = request.params;
 
     if (!contentId || typeof contentId !== 'string') {
@@ -374,6 +409,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {
@@ -777,6 +815,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
       const body = request.body as any;
 
@@ -1033,6 +1074,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {
@@ -1159,6 +1203,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId, contentId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {
@@ -1282,6 +1329,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {
@@ -1529,6 +1579,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       const rawScheduledAt = (request.body as any)?.scheduledAt;
@@ -1700,6 +1753,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {
@@ -1791,6 +1847,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
+      if (!ensureMultiDestinationEnabled(request as AuthenticatedRequest, reply)) {
+        return;
+      }
       const { contentGroupId } = request.params;
 
       if (!contentGroupId || typeof contentGroupId !== 'string') {

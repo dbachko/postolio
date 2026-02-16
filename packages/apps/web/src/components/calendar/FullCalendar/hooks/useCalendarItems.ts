@@ -25,7 +25,8 @@ function deriveGroupStatus(items: Content[]): Content['status'] {
 
 export function useCalendarItems(
   content: Content[] | undefined,
-  placeholders: PlaceholderItem[] | undefined
+  placeholders: PlaceholderItem[] | undefined,
+  multiDestinationEnabled = true
 ): CalendarDataItem[] {
   return useMemo(() => {
     const seen = new Set<string>();
@@ -60,6 +61,13 @@ export function useCalendarItems(
     for (const [groupId, items] of groupBuckets.entries()) {
       if (items.length <= 1) {
         groupedContent.push({ ...items[0]!, type: 'content' });
+        continue;
+      }
+
+      if (!multiDestinationEnabled) {
+        for (const item of items) {
+          groupedContent.push({ ...item, type: 'content' });
+        }
         continue;
       }
 
@@ -134,5 +142,5 @@ export function useCalendarItems(
     }));
 
     return [...groupedContent, ...placeholderItems];
-  }, [content, placeholders]);
+  }, [content, multiDestinationEnabled, placeholders]);
 }

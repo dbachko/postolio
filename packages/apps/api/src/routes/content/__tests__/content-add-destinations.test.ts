@@ -293,4 +293,29 @@ describe('Single content destination adding', () => {
     expect(payload.added[0]?.targetSocialAccountId).toBe('sa-2');
     expect(typeof payload.added[0]?.contentId).toBe('string');
   });
+
+  it('returns 403 when multi-destination feature is disabled', async () => {
+    const previous = process.env.FEATURE_MULTI_DESTINATION_ENABLED;
+    process.env.FEATURE_MULTI_DESTINATION_ENABLED = 'false';
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/content/content-1/destinations',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          targetSocialAccountIds: ['sa-2'],
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const payload = JSON.parse(response.payload);
+      expect(payload?.code).toBe('MULTI_DESTINATION_DISABLED');
+    } finally {
+      process.env.FEATURE_MULTI_DESTINATION_ENABLED = previous;
+    }
+  });
 });

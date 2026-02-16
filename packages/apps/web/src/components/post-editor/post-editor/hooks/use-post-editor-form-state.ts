@@ -21,6 +21,7 @@ export function usePostEditorFormState(params: {
   mediaAssetsById: Record<string, any> | undefined;
   selectedTargetSocialAccountId: string | null;
   platformPickerOptions: SocialAccountsPickerOption[];
+  multiDestinationEnabled: boolean;
   setSelectedPlatformAccountIds: (ids: string[]) => void;
   platformsInitializedRef: MutableRefObject<boolean>;
   locationSearch: string;
@@ -32,6 +33,7 @@ export function usePostEditorFormState(params: {
     isMultiDestinationGroup,
     locationSearch,
     mediaAssetsById,
+    multiDestinationEnabled,
     platformPickerOptions,
     platformsInitializedRef,
     post,
@@ -305,8 +307,9 @@ export function usePostEditorFormState(params: {
       if (platformPickerOptions.length === 0) return;
       const allowed = new Set(platformPickerOptions.map((opt) => opt.id));
       const next = (normalizedTargetSocialAccountIds ?? []).filter((value) => allowed.has(value));
-      if (next.length > 0) {
-        setSelectedPlatformAccountIds(next);
+      const normalized = !multiDestinationEnabled && next.length > 1 ? [next[0]!] : next;
+      if (normalized.length > 0) {
+        setSelectedPlatformAccountIds(normalized);
         platformsInitializedRef.current = true;
       }
       prefillAppliedRef.current = { ...prefillAppliedRef.current, platforms: true };
@@ -323,6 +326,7 @@ export function usePostEditorFormState(params: {
     qScheduledAt,
     qTargetSocialAccountId,
     qTargetSocialAccountIds,
+    multiDestinationEnabled,
     platformsInitializedRef,
     setSelectedPlatformAccountIds,
   ]);

@@ -7,6 +7,8 @@ import type { Platform } from '@/lib/platform-config';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { useContentViewStore } from '@/stores/contentViewStore';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -73,6 +75,8 @@ function toSocialAccountOptions(raw: unknown): SocialAccountOption[] {
 
 export function ContentViewSelector({ brandId }: { brandId: string }) {
   const [open, setOpen] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
   const storeEntry = useContentViewStore((s) => s.selectedSocialAccountIdsByBrandId[brandId]);
   const setSelectedSocialAccountIds = useContentViewStore((s) => s.setSelectedSocialAccountIds);
 
@@ -100,7 +104,6 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
 
   useEffect(() => {
     if (!brandId) return;
-    if (selectedSocialAccountIds !== undefined) return;
     if (accountsQuery.isLoading) return;
 
     const defaultId =
@@ -108,10 +111,25 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
         ? primarySocialAccountId
         : options[0]?.id) ?? null;
 
+    if (!multiDestinationEnabled) {
+      const currentSingleId =
+        Array.isArray(selectedSocialAccountIds) && selectedSocialAccountIds.length === 1
+          ? selectedSocialAccountIds[0]
+          : null;
+      const nextSingleId = defaultId;
+      if (currentSingleId !== nextSingleId || selectedSocialAccountIds == null) {
+        setSelectedSocialAccountIds(brandId, nextSingleId ? [nextSingleId] : null);
+      }
+      return;
+    }
+
+    if (selectedSocialAccountIds !== undefined) return;
+
     setSelectedSocialAccountIds(brandId, defaultId ? [defaultId] : null);
   }, [
     accountsQuery.isLoading,
     brandId,
+    multiDestinationEnabled,
     options,
     primarySocialAccountId,
     selectedSocialAccountIds,
@@ -133,6 +151,10 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
       : selectedCount <= 1
         ? (selectedOption?.label ?? 'Select destinations')
         : `${selectedCount} destinations`;
+
+  if (!multiDestinationEnabled) {
+    return null;
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

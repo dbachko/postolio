@@ -25,6 +25,7 @@ import {
   type CreateManualContentBody,
   type ApproveContentBody,
 } from '../../utils/content-management.js';
+import { isMultiDestinationEnabledForUser } from '../../utils/feature-flags.js';
 import { resolvePrimarySocialAccount } from '../../services/social-account-resolver.js';
 import { validateContentPayload } from '@postolio/content-validation';
 import { extractHashtagsFromCaption } from '../../utils/hashtag-extractor.js';
@@ -65,6 +66,22 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               .map((v: string) => v.trim())
               .filter((v: string) => v.length > 0)
           : null;
+        const multiDestinationEnabled = isMultiDestinationEnabledForUser({
+          userId,
+          email: request.user?.email,
+        });
+
+        if (
+          !multiDestinationEnabled &&
+          Array.isArray(requestedTargetIds) &&
+          requestedTargetIds.length > 1
+        ) {
+          return reply.code(403).send({
+            error: 'feature_disabled',
+            code: 'MULTI_DESTINATION_DISABLED',
+            message: 'Multiple destinations are not enabled for this account',
+          });
+        }
 
         // Resolve destination social accounts:
         // - Prefer explicit targetSocialAccountIds (multi-destination)
@@ -80,6 +97,13 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         let resolvedDestinations: Array<{ id: string; platform: string; metadata: unknown }> = [];
         if (Array.isArray(destinationAccounts)) {
           const uniqueIds = Array.from(new Set(destinationAccounts));
+          if (!multiDestinationEnabled && uniqueIds.length > 1) {
+            return reply.code(403).send({
+              error: 'feature_disabled',
+              code: 'MULTI_DESTINATION_DISABLED',
+              message: 'Multiple destinations are not enabled for this account',
+            });
+          }
           if (uniqueIds.length > 0) {
             const accounts = await prisma.socialAccount.findMany({
               where: { brandId: body.brandId, id: { in: uniqueIds } },
@@ -119,6 +143,28 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             ];
           } else {
             resolvedDestinations = [];
+          }
+        }
+
+        if (!multiDestinationEnabled) {
+          if (resolvedDestinations.length > 1) {
+            return reply.code(403).send({
+              error: 'feature_disabled',
+              code: 'MULTI_DESTINATION_DISABLED',
+              message: 'Multiple destinations are not enabled for this account',
+            });
+          }
+
+          const nonInstagram = resolvedDestinations.filter(
+            (destination) => String(destination.platform).toLowerCase() !== 'instagram'
+          );
+          if (nonInstagram.length > 0) {
+            return reply.code(403).send({
+              error: 'feature_disabled',
+              code: 'PLATFORM_NOT_ENABLED',
+              message: 'Only Instagram destinations are enabled for this account',
+              details: nonInstagram.map((destination) => destination.id),
+            });
           }
         }
 

@@ -41,6 +41,7 @@ export function usePostEditorDestinationActions(params: {
   openSidebar: (type: string, params: Record<string, unknown>) => void;
   navigate: (to: string) => void;
   handleSaveChanges: () => Promise<boolean>;
+  multiDestinationEnabled: boolean;
 }) {
   const {
     addContentDestinationsAsync,
@@ -71,6 +72,7 @@ export function usePostEditorDestinationActions(params: {
     templateHasChanges,
     templateValidationError,
     templateValidationOk,
+    multiDestinationEnabled,
   } = params;
 
   const handleDestinationSwitch = useCallback(
@@ -176,6 +178,7 @@ export function usePostEditorDestinationActions(params: {
 
   const handleAddDestinationToGroup = useCallback(
     async (targetSocialAccountId: string) => {
+      if (!multiDestinationEnabled) return;
       if (!isMultiDestinationGroup || !contentGroupId) return;
       const normalized = (targetSocialAccountId || '').trim();
       if (!normalized || groupDestinationSocialAccountIds.has(normalized)) return;
@@ -265,11 +268,13 @@ export function usePostEditorDestinationActions(params: {
       templateHasChanges,
       templateValidationError,
       templateValidationOk,
+      multiDestinationEnabled,
     ]
   );
 
   const handleAddDestinationToSingle = useCallback(
     async (targetSocialAccountId: string) => {
+      if (!multiDestinationEnabled) return;
       if (!id || isMultiDestinationGroup) return;
       const normalized = (targetSocialAccountId || '').trim();
       if (!normalized) return;
@@ -331,6 +336,7 @@ export function usePostEditorDestinationActions(params: {
       isAddingContentDestination,
       isMultiDestinationGroup,
       isSaving,
+      multiDestinationEnabled,
       selectedTargetSocialAccountId,
     ]
   );

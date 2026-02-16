@@ -11,6 +11,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePostDetail } from '@/hooks/usePostDetail';
 import { usePageMeta } from '@/contexts/PageMetaContext';
+import { useAuthStore } from '@/stores/authStore';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 
 import type { PostInsights } from './types';
 import { PostDetailsCard } from './components/post-details-card';
@@ -26,6 +28,8 @@ export default function PostPage() {
   const queryClient = useQueryClient();
   const { timezone, getBrandTimezone } = useTimezone();
   const { setOverride: setPageMetaOverride } = usePageMeta();
+  const user = useAuthStore((state) => state.user);
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
 
   const isCreate = !postId;
   const resolvedPostId = postId || '';
@@ -44,17 +48,17 @@ export default function PostPage() {
 
   const contentGroupQuery = useQuery({
     queryKey: ['content-group', contentGroupId],
-    enabled: Boolean(contentGroupId),
+    enabled: Boolean(contentGroupId) && multiDestinationEnabled,
     queryFn: () => contentApi.getContentGroup(contentGroupId!),
     staleTime: 10000,
   });
 
   const isMultiDestinationGroup = useMemo(() => {
-    if (!contentGroupId) return false;
+    if (!contentGroupId || !multiDestinationEnabled) return false;
     const raw = contentGroupQuery.data as any;
     const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
     return destinations.length > 1;
-  }, [contentGroupId, contentGroupQuery.data]);
+  }, [contentGroupId, contentGroupQuery.data, multiDestinationEnabled]);
 
   useEffect(() => {
     if (isCreate) {

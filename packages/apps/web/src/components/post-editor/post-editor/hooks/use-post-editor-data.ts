@@ -53,8 +53,12 @@ type GroupDestinationPreviewData = {
 
 type ScheduleAheadLimits = { tier: string; maxAllowed: number; currentCount: number };
 
-export function usePostEditorData(params: { id?: string; selectedBrandId: string | null }) {
-  const { id, selectedBrandId } = params;
+export function usePostEditorData(params: {
+  id?: string;
+  selectedBrandId: string | null;
+  multiDestinationEnabled: boolean;
+}) {
+  const { id, selectedBrandId, multiDestinationEnabled } = params;
 
   const isCreating = !id;
   const { data: post, isLoading: isPostLoading } = usePostDetail(id);
@@ -70,7 +74,9 @@ export function usePostEditorData(params: { id?: string; selectedBrandId: string
   });
 
   const platformPickerOptions = useMemo((): SocialAccountsPickerOption[] => {
-    const enabledPlatforms = getEnabledPlatforms().map((p) => p.id);
+    const enabledPlatforms = multiDestinationEnabled
+      ? getEnabledPlatforms().map((p) => p.id)
+      : (['instagram'] as const);
     const enabledSet = new Set<Platform>(enabledPlatforms as Platform[]);
     const accounts = (socialAccountsQuery.data?.socialAccounts || [])
       .filter(
@@ -108,7 +114,7 @@ export function usePostEditorData(params: { id?: string; selectedBrandId: string
         disabled: false,
       } satisfies SocialAccountsPickerOption;
     });
-  }, [socialAccountsQuery.data?.socialAccounts]);
+  }, [multiDestinationEnabled, socialAccountsQuery.data?.socialAccounts]);
 
   const contentGroupId = useMemo(() => {
     const raw = (post as any)?.contentGroupId;
@@ -119,7 +125,7 @@ export function usePostEditorData(params: { id?: string; selectedBrandId: string
 
   const contentGroupQuery = useQuery({
     queryKey: ['content-group', contentGroupId],
-    enabled: Boolean(contentGroupId),
+    enabled: Boolean(contentGroupId) && multiDestinationEnabled,
     queryFn: () => contentApi.getContentGroup(contentGroupId!),
     staleTime: CACHE_TIMES.MEDIUM,
     gcTime: GC_TIMES.STANDARD,
@@ -165,7 +171,7 @@ export function usePostEditorData(params: { id?: string; selectedBrandId: string
   }, [contentGroupQuery.data]);
 
   const isMultiDestinationGroup = Boolean(
-    !isCreating && id && groupDestinations.length > 1 && contentGroupId
+    multiDestinationEnabled && !isCreating && id && groupDestinations.length > 1 && contentGroupId
   );
 
   const groupDestinationSocialAccountIds = useMemo(() => {

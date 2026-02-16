@@ -9,6 +9,7 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
+import { PostEditorPreviewRailToggle } from './post-editor-preview-rail-toggle';
 
 import type { PostEditorState } from '../hooks/use-post-editor';
 
@@ -55,14 +56,21 @@ export function PostEditorHeader({ state }: { state: PostEditorState }) {
       </div>
       <div className="flex items-center gap-2 whitespace-nowrap">
         {layout === 'sidebar' ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={state.handleCloseSidebar}
-            aria-label="Close sidebar"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <>
+            <PostEditorPreviewRailToggle
+              previewOpen={state.ui.previewOpen}
+              onToggle={() => state.ui.setPreviewOpen((open) => !open)}
+              size="icon"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={state.handleCloseSidebar}
+              aria-label="Close sidebar"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </>
         ) : null}
       </div>
     </div>

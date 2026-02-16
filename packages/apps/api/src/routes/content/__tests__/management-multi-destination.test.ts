@@ -298,4 +298,32 @@ describe('Multi-destination content groups', () => {
     expect(Array.isArray(deleted?.deleted?.contentIds)).toBe(true);
     expect(deleted.deleted.contentIds).toHaveLength(2);
   });
+
+  it('rejects multi-destination creation when feature flag is disabled', async () => {
+    const previous = process.env.FEATURE_MULTI_DESTINATION_ENABLED;
+    process.env.FEATURE_MULTI_DESTINATION_ENABLED = 'false';
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/content',
+        headers: {
+          authorization: authHeader,
+          'content-type': 'application/json',
+        },
+        payload: {
+          brandId: 'brand-1',
+          caption: 'Blocked',
+          assetIds: ['asset-1'],
+          targetSocialAccountIds: ['sa-1', 'sa-2'],
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const payload = JSON.parse(response.payload);
+      expect(payload?.code).toBe('MULTI_DESTINATION_DISABLED');
+    } finally {
+      process.env.FEATURE_MULTI_DESTINATION_ENABLED = previous;
+    }
+  });
 });

@@ -19,6 +19,8 @@ import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import type { Platform } from '@/lib/platform-config';
 import type { SocialAccountsById } from '@/types/social-accounts';
 import { formatSocialAccountLabel } from '@/lib/social-account-label';
+import { useAuthStore } from '@/stores/authStore';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 
 import { useCalendarBackgroundClick } from './hooks/use-calendar-background-click';
 import {
@@ -42,6 +44,8 @@ function FullCalendarImpl({
 }: FullCalendarProps) {
   const queryClient = useQueryClient();
   const { openSidebar } = useRightSidebarRouter();
+  const user = useAuthStore((state) => state.user);
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
 
   const [reschedule, setReschedule] = useState<RescheduleState>({ open: false, item: null });
   const [optimisticByContentId, setOptimisticByContentId] = useState<
@@ -103,7 +107,7 @@ function FullCalendarImpl({
     return [...optimisticOverrides, ...content, ...queueEstimatedContent];
   }, [content, effectiveSingleDestinationId, optimisticOverrides, queueEstimatedContent]);
 
-  const items = useCalendarItems(mergedContent, mergedPlaceholders);
+  const items = useCalendarItems(mergedContent, mergedPlaceholders, multiDestinationEnabled);
   const filters = useCalendarFilters();
   const events = useFilteredEvents(items, filters, tzRef.current);
 
