@@ -75,7 +75,12 @@ export function getDatabaseClient(): PrismaClient {
     }
 
     // Graceful shutdown handlers
+    let shutdownStarted = false;
     const gracefulShutdown = async () => {
+      if (shutdownStarted) {
+        return;
+      }
+      shutdownStarted = true;
       console.log('🔌 Disconnecting from database...');
       try {
         await prismaInstance?.$disconnect();

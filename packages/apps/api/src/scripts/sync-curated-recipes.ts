@@ -1,5 +1,6 @@
 import '../dotenv-init.js';
 import { prisma } from '../config/database.js';
+import { redisService } from '../services/redis.js';
 import {
   ensureCuratedRecipesSeeded,
   getCuratedRecipeCatalogInfo,
@@ -28,5 +29,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await Promise.allSettled([prisma.$disconnect(), redisService.disconnect()]);
   });
