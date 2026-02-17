@@ -311,6 +311,15 @@ if (assetLibraryStack) {
   assetLibraryStack.addDependency(foundationStack);
 }
 
+// Publishing and API consume assets SSM parameters written by Asset Library.
+// Ensure deploy ordering when stacks are selected together.
+if (publishingStackRef && assetLibraryStack) {
+  publishingStackRef.addDependency(assetLibraryStack);
+}
+if (apiStackRef && assetLibraryStack) {
+  apiStackRef.addDependency(assetLibraryStack);
+}
+
 // 8. Brand Analysis Stack - Profiles + Jobs + Lambda
 let brandAnalysisStack: BrandAnalysisStack | undefined;
 if (!onlyStack || isSelected('brand-analysis')) {

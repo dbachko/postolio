@@ -151,16 +151,17 @@ The `deploy-stack.sh` script allows you to deploy individual CDK stacks locally 
 
 ### Available Stacks
 
-| Stack            | Description                                                         | Dependencies                             |
-| ---------------- | ------------------------------------------------------------------- | ---------------------------------------- |
-| `foundation`     | ECR Registry, VPC, Database, Redis                                  | None                                     |
-| `auth`           | Token Service (OAuth, JWT)                                          | Foundation                               |
-| `scheduling`     | Schedule Management, Cleanup, Status Sync                           | Auth                                     |
-| `brand-analysis` | Brand Analysis (DynamoDB + Lambdas: service, projection, scheduler) | Foundation, Scheduling                   |
-| `publishing`     | Publisher, Retry Handler, DLQ Processors                            | Auth, Scheduling                         |
-| `api`            | Backend API (ECS Fargate)                                           | Foundation, Auth, Scheduling, Publishing |
-| `web`            | Frontend (S3 + CloudFront)                                          | API                                      |
-| `all`            | Deploy all stacks in order                                          | -                                        |
+| Stack            | Description                                                         | Dependencies                                            |
+| ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| `foundation`     | ECR Registry, VPC, Database, Redis                                  | None                                                    |
+| `auth`           | Token Service (OAuth, JWT)                                          | Foundation                                              |
+| `scheduling`     | Schedule Management, Cleanup, Status Sync                           | Auth                                                    |
+| `brand-analysis` | Brand Analysis (DynamoDB + Lambdas: service, projection, scheduler) | Foundation, Scheduling                                  |
+| `asset-library`  | Asset library API + CDN + processing                                | Foundation                                              |
+| `publishing`     | Publisher, Retry Handler, DLQ Processors                            | Auth, Scheduling, Asset Library                         |
+| `api`            | Backend API (ECS Fargate)                                           | Foundation, Auth, Scheduling, Asset Library, Publishing |
+| `web`            | Frontend (S3 + CloudFront)                                          | API                                                     |
+| `all`            | Deploy all stacks in order                                          | -                                                       |
 
 ### Options
 
@@ -358,6 +359,8 @@ Foundation
   Auth
     ↓
 Scheduling
+    ↓
+Asset Library
     ↓
 Publishing
     ↓

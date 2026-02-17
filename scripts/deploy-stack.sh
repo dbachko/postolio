@@ -360,7 +360,7 @@ fi
 # Deploy stack(s)
 if [[ "$STACK_NAME" == "all" ]]; then
     # Deploy all stacks in dependency order
-    STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "asset-library" "web")
+    STACKS=("foundation" "auth" "scheduling" "brand-analysis" "asset-library" "publishing" "api" "web")
     for stack in "${STACKS[@]}"; do
         deploy_stack "$stack"
         echo

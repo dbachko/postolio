@@ -196,7 +196,7 @@ jobs:
         id: matrix
         run: |
           STACKS=()
-          ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "asset-library" "analytics" "web")
+          ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "asset-library" "publishing" "api" "analytics" "web")
 
           # Manual runs from the UI: deploy all stacks by default (or a specific list if provided)
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -269,8 +269,30 @@ jobs:
 
             # If publishing changed -> api depends on it
             if printf '%s\n' "${STACKS[@]}" | grep -qx 'publishing'; then
+              add_unique "asset-library"
               add_unique "api"
             fi
+
+            # If asset-library changed -> publishing and api consume assets SSM parameters
+            if printf '%s\n' "${STACKS[@]}" | grep -qx 'asset-library'; then
+              add_unique "publishing"
+              add_unique "api"
+            fi
+
+            # If api changed -> ensure assets provider stack is present
+            if printf '%s\n' "${STACKS[@]}" | grep -qx 'api'; then
+              add_unique "asset-library"
+            fi
+
+            # Normalize to deterministic deploy order to avoid waiting on stacks
+            # that are included later in the matrix.
+            ORDERED_STACKS=()
+            for stack_name in "${ALL_STACKS[@]}"; do
+              if printf '%s\n' "${STACKS[@]}" | grep -qx "$stack_name"; then
+                ORDERED_STACKS+=("$stack_name")
+              fi
+            done
+            STACKS=("${ORDERED_STACKS[@]}")
           fi
 
           if [ ${#STACKS[@]} -eq 0 ]; then
@@ -478,10 +500,10 @@ jobs:
               DEPS=("Postolio-Foundation-$ENV" "Postolio-Scheduling-$ENV")
               ;;
             "publishing")
-              DEPS=("Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV")
+              DEPS=("Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV" "Postolio-AssetLibrary-$ENV")
               ;;
             "api")
-              DEPS=("Postolio-Foundation-$ENV" "Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV" "Postolio-Publishing-$ENV")
+              DEPS=("Postolio-Foundation-$ENV" "Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV" "Postolio-AssetLibrary-$ENV" "Postolio-Publishing-$ENV")
               ;;
             "asset-library")
               DEPS=("Postolio-Foundation-$ENV")
