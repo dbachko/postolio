@@ -455,25 +455,29 @@ export class ApiStack extends cdk.Stack {
 
     // ==================== Application Load Balanced Fargate Service ====================
     const useHttps = domainName && hostedZoneId;
+    const enableAlbAccessLogs = environment === 'prod';
 
-    // Create S3 bucket for ALB access logs (single definition used below)
-    const logBucket = new s3.Bucket(this, 'AlbAccessLogsBucket', {
-      bucketName: `postolio-alb-logs-${environment}-${this.account}`,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      lifecycleRules: [{ id: 'DeleteOldLogs', expiration: cdk.Duration.days(30) }],
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    let logBucket: s3.Bucket | undefined;
+    if (enableAlbAccessLogs) {
+      // Create S3 bucket for ALB access logs (single definition used below)
+      logBucket = new s3.Bucket(this, 'AlbAccessLogsBucket', {
+        bucketName: `postolio-alb-logs-${environment}-${this.account}`,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        enforceSSL: true,
+        lifecycleRules: [{ id: 'DeleteOldLogs', expiration: cdk.Duration.days(30) }],
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
 
-    NagSuppressions.addResourceSuppressions(logBucket, [
-      {
-        id: 'AwsSolutions-S1',
-        reason:
-          'ALB access log bucket should not have server access logging to avoid infinite recursion',
-      },
-    ]);
+      NagSuppressions.addResourceSuppressions(logBucket, [
+        {
+          id: 'AwsSolutions-S1',
+          reason:
+            'ALB access log bucket should not have server access logging to avoid infinite recursion',
+        },
+      ]);
+    }
 
     let hostedZone: route53.IHostedZone | undefined;
     if (useHttps && !useExternalDns && domainName) {
@@ -597,8 +601,10 @@ export class ApiStack extends cdk.Stack {
       }
     );
 
-    // Ensure ALB access logs are enabled
-    this.apiService.loadBalancer.logAccessLogs(logBucket, 'alb-logs');
+    // Enable ALB access logs in production only.
+    if (logBucket) {
+      this.apiService.loadBalancer.logAccessLogs(logBucket, 'alb-logs');
+    }
 
     this.loadBalancer = this.apiService.loadBalancer;
 
@@ -809,15 +815,25 @@ export class ApiStack extends cdk.Stack {
     ]);
 
     // Resource-specific suppressions for ALB and service security groups
+    const loadBalancerSuppressions = [
+      {
+        id: 'AwsSolutions-EC23',
+        reason:
+          'Public-facing ALB requires internet access on ports 80/443 for external API access',
+      },
+    ];
+
+    if (!enableAlbAccessLogs) {
+      loadBalancerSuppressions.push({
+        id: 'AwsSolutions-ELB2',
+        reason:
+          'ALB access logging is intentionally disabled in non-production environments to reduce log volume and storage costs.',
+      });
+    }
+
     NagSuppressions.addResourceSuppressions(
       this.loadBalancer,
-      [
-        {
-          id: 'AwsSolutions-EC23',
-          reason:
-            'Public-facing ALB requires internet access on ports 80/443 for external API access',
-        },
-      ],
+      loadBalancerSuppressions,
       true // Apply to child constructs
     );
 

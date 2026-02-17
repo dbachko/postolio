@@ -39,6 +39,8 @@ export class WebStack extends cdk.Stack {
       certificateArn,
     } = props;
     const prefix = `postolio-${environment}-web`;
+    const isProduction = environment === 'prod';
+    const enableCloudFrontAccessLogs = isProduction;
 
     // ==================== Shared Access Logs Archive ====================
     const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
@@ -51,11 +53,11 @@ export class WebStack extends cdk.Stack {
       lifecycleRules: [
         {
           id: 'expire-access-logs',
-          expiration: cdk.Duration.days(365),
+          expiration: cdk.Duration.days(isProduction ? 365 : 14),
         },
       ],
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environment !== 'prod',
+      removalPolicy: isProduction ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: !isProduction,
     });
 
     // ==================== S3 Bucket for Frontend ====================
@@ -74,11 +76,30 @@ export class WebStack extends cdk.Stack {
           noncurrentVersionExpiration: cdk.Duration.days(7),
         },
       ],
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environment !== 'prod',
+      removalPolicy: isProduction ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: !isProduction,
     });
 
     // ==================== CloudFront Logs Bucket ====================
+    const cloudFrontLogsLifecycleRules: s3.LifecycleRule[] = [
+      {
+        id: 'delete-old-logs',
+        expiration: cdk.Duration.days(isProduction ? 90 : 14),
+      },
+    ];
+
+    if (isProduction) {
+      cloudFrontLogsLifecycleRules.push({
+        id: 'transition-to-ia',
+        transitions: [
+          {
+            storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+            transitionAfter: cdk.Duration.days(30),
+          },
+        ],
+      });
+    }
+
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
       bucketName: `${prefix}-logs`,
       publicReadAccess: false,
@@ -86,25 +107,9 @@ export class WebStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       objectOwnership: s3.ObjectOwnership.OBJECT_WRITER,
-      serverAccessLogsBucket: accessLogsBucket,
-      serverAccessLogsPrefix: 'cloudfront/',
-      lifecycleRules: [
-        {
-          id: 'delete-old-logs',
-          expiration: cdk.Duration.days(90),
-        },
-        {
-          id: 'transition-to-ia',
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-          ],
-        },
-      ],
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environment !== 'prod',
+      lifecycleRules: cloudFrontLogsLifecycleRules,
+      removalPolicy: isProduction ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: !isProduction,
     });
 
     const originAccessControl = new cloudfront.S3OriginAccessControl(
@@ -305,14 +310,17 @@ export class WebStack extends cdk.Stack {
       defaultRootObject: 'index.html',
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
-      priceClass:
-        environment === 'prod'
-          ? cloudfront.PriceClass.PRICE_CLASS_ALL
-          : cloudfront.PriceClass.PRICE_CLASS_100,
+      priceClass: isProduction
+        ? cloudfront.PriceClass.PRICE_CLASS_ALL
+        : cloudfront.PriceClass.PRICE_CLASS_100,
       enableIpv6: true,
-      enableLogging: true,
-      logBucket: logsBucket,
-      logFilePrefix: 'cloudfront/',
+      enableLogging: enableCloudFrontAccessLogs,
+      ...(enableCloudFrontAccessLogs
+        ? {
+            logBucket: logsBucket,
+            logFilePrefix: 'cloudfront/',
+          }
+        : {}),
       defaultBehavior: {
         origin: s3Origin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -408,8 +416,6 @@ export class WebStack extends cdk.Stack {
 
     let distributionCertificate: acm.ICertificate | undefined;
     const distributionDomainNames: string[] = [];
-
-    const isProduction = environment === 'prod';
 
     if (domainName && hostedZone) {
       distributionCertificate = new acm.Certificate(this, 'Certificate', {
@@ -548,6 +554,14 @@ export class WebStack extends cdk.Stack {
       });
     }
 
+    if (!enableCloudFrontAccessLogs) {
+      distributionSuppressions.push({
+        id: 'AwsSolutions-CFR3',
+        reason:
+          'CloudFront access logging is intentionally disabled in non-production to reduce log volume and storage costs.',
+      });
+    }
+
     NagSuppressions.addResourceSuppressions(this.distribution, distributionSuppressions, true);
 
     NagSuppressions.addResourceSuppressions(
@@ -557,6 +571,18 @@ export class WebStack extends cdk.Stack {
           id: 'AwsSolutions-S1',
           reason:
             'Access logs bucket is the final destination for server logs and cannot log to itself',
+        },
+      ],
+      true
+    );
+
+    NagSuppressions.addResourceSuppressions(
+      logsBucket,
+      [
+        {
+          id: 'AwsSolutions-S1',
+          reason:
+            'CloudFront logs bucket is a terminal log destination and should not write recursive server access logs.',
         },
       ],
       true

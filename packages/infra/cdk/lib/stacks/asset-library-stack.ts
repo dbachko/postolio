@@ -66,6 +66,9 @@ export class AssetLibraryStack extends cdk.Stack {
       assetsCdnUseExternalDns,
     } = props;
     const prefix = `postolio-${environment}-assets`;
+    const isProduction = environment === 'prod';
+    const enableCloudFrontAccessLogs = isProduction;
+    const enableAlbAccessLogs = isProduction;
 
     // Initialized with SSM-based secret references (no cross-stack export imports)
 
@@ -302,6 +305,22 @@ export class AssetLibraryStack extends cdk.Stack {
     }
 
     // ==================== CloudFront Distribution ====================
+    const assetsCdnLogsBucket = new s3.Bucket(this, 'AssetsCdnLogsBucket', {
+      bucketName: `${prefix}-cdn-logs-${this.account}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.OBJECT_WRITER,
+      lifecycleRules: [
+        {
+          id: 'DeleteOldLogs',
+          expiration: cdk.Duration.days(isProduction ? 90 : 14),
+        },
+      ],
+      removalPolicy: isProduction ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: !isProduction,
+    });
+
     const distributionProps: cloudfront.DistributionProps = {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.assetsBucket),
@@ -310,11 +329,16 @@ export class AssetLibraryStack extends cdk.Stack {
         compress: true,
       },
       comment: `Assets CDN for ${environment} environment`,
-      enableLogging: true,
-      priceClass:
-        environment === 'prod'
-          ? cloudfront.PriceClass.PRICE_CLASS_ALL
-          : cloudfront.PriceClass.PRICE_CLASS_100,
+      enableLogging: enableCloudFrontAccessLogs,
+      ...(enableCloudFrontAccessLogs
+        ? {
+            logBucket: assetsCdnLogsBucket,
+            logFilePrefix: 'cloudfront/',
+          }
+        : {}),
+      priceClass: isProduction
+        ? cloudfront.PriceClass.PRICE_CLASS_ALL
+        : cloudfront.PriceClass.PRICE_CLASS_100,
       ...(normalizedAssetsCdnDomain && assetsCdnCertificate
         ? {
             domainNames: [normalizedAssetsCdnDomain],
@@ -709,28 +733,31 @@ export class AssetLibraryStack extends cdk.Stack {
     });
 
     // ==================== S3 Bucket for ALB Access Logs ====================
-    const albLogsBucket = new s3.Bucket(this, 'AssetsAlbAccessLogsBucket', {
-      bucketName: `${prefix}-alb-logs-${this.account}`,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          id: 'DeleteOldLogs',
-          expiration: cdk.Duration.days(30),
-        },
-      ],
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    let albLogsBucket: s3.Bucket | undefined;
+    if (enableAlbAccessLogs) {
+      albLogsBucket = new s3.Bucket(this, 'AssetsAlbAccessLogsBucket', {
+        bucketName: `${prefix}-alb-logs-${this.account}`,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        enforceSSL: true,
+        lifecycleRules: [
+          {
+            id: 'DeleteOldLogs',
+            expiration: cdk.Duration.days(30),
+          },
+        ],
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
 
-    NagSuppressions.addResourceSuppressions(albLogsBucket, [
-      {
-        id: 'AwsSolutions-S1',
-        reason:
-          'ALB access log bucket should not have server access logging to avoid infinite recursion',
-      },
-    ]);
+      NagSuppressions.addResourceSuppressions(albLogsBucket, [
+        {
+          id: 'AwsSolutions-S1',
+          reason:
+            'ALB access log bucket should not have server access logging to avoid infinite recursion',
+        },
+      ]);
+    }
 
     // ==================== Application Load Balanced Fargate Service ====================
     const assetsApiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
@@ -829,8 +856,10 @@ export class AssetLibraryStack extends cdk.Stack {
       description: 'Allow internal ECS services to reach Assets API ALB',
     });
 
-    // Enable ALB access logs
-    assetsApiService.loadBalancer.logAccessLogs(albLogsBucket, 'alb-logs');
+    // Enable ALB access logs in production only.
+    if (albLogsBucket) {
+      assetsApiService.loadBalancer.logAccessLogs(albLogsBucket, 'alb-logs');
+    }
 
     // Allow the service Security Group to reach the Assets database
     // This avoids attaching the Foundation ECS Security Group to the service,
@@ -873,7 +902,7 @@ export class AssetLibraryStack extends cdk.Stack {
     });
 
     // ==================== CDK Nag Suppressions ====================
-    NagSuppressions.addStackSuppressions(this, [
+    const stackSuppressions = [
       {
         id: 'AwsSolutions-RDS10',
         reason: 'Deletion protection disabled for non-prod environments for easier cleanup',
@@ -939,14 +968,26 @@ export class AssetLibraryStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-ELB2',
-        reason: 'ALB access logs enabled',
+        reason: enableAlbAccessLogs
+          ? 'ALB access logs enabled in production.'
+          : 'ALB access logs intentionally disabled in non-production to reduce log volume and storage costs.',
       },
       {
         id: 'AwsSolutions-EC23',
         reason:
           'Assets API ALB is internal-only; ingress restricted to shared ECS security group on port 80.',
       },
-    ]);
+    ];
+
+    if (!enableCloudFrontAccessLogs) {
+      stackSuppressions.push({
+        id: 'AwsSolutions-CFR3',
+        reason:
+          'CloudFront access logging is intentionally disabled in non-production to reduce log volume and storage costs.',
+      });
+    }
+
+    NagSuppressions.addStackSuppressions(this, stackSuppressions);
 
     // ==================== Stack Outputs ====================
     new cdk.CfnOutput(this, 'AssetsDatabaseEndpointOutput', {
