@@ -51,7 +51,7 @@ describe('Assets batch route', () => {
       return;
     });
 
-    const mod = await import('./assets.ts');
+    const mod = await import('./assets');
     const assetsRoutes = mod.default as (instance: FastifyInstance, opts: unknown) => unknown;
 
     await app.register(assetsRoutes, { prefix: '/assets-api/v1' });
