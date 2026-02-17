@@ -360,6 +360,7 @@ if (!onlyStack || isSelected('analytics')) {
 if (analyticsStackRef) {
   analyticsStackRef.addDependency(foundationStack);
   if (authStackRef) analyticsStackRef.addDependency(authStackRef);
+  if (apiStackRef) analyticsStackRef.addDependency(apiStackRef);
 }
 
 // API stack is intentionally decoupled from Brand Analysis; no dependency here.

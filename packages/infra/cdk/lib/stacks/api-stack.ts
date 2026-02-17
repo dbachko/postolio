@@ -121,13 +121,12 @@ export class ApiStack extends cdk.Stack {
       assetsServiceTokenSecretArn
     );
 
-    let frontendUrl: string | undefined;
-    try {
-      frontendUrl = ssm.StringParameter.valueForStringParameter(
-        this,
-        `/postolio/${environment}/web/url`
-      );
-    } catch (error) {
+    const frontendUrlParamName = `/postolio/${environment}/web/url`;
+    const frontendUrlLookup = ssm.StringParameter.valueFromLookup(this, frontendUrlParamName, '');
+    const hasFrontendUrl =
+      frontendUrlLookup.length > 0 && !frontendUrlLookup.startsWith('dummy-value-for-');
+    const frontendUrl = hasFrontendUrl ? frontendUrlLookup : undefined;
+    if (!hasFrontendUrl) {
       console.warn(
         `Frontend URL parameter not found for environment ${environment}. Continuing without setting FRONTEND_URL.`
       );

@@ -101,10 +101,23 @@ export class AnalyticsStack extends cdk.Stack {
 
     // ==================== ECS Cluster ====================
     // Reuse existing API cluster to inherit the correct VPC/subnet selection
-    const apiClusterName = ssm.StringParameter.valueForStringParameter(
+    const apiClusterNameParam = `/postolio/${environment}/api/cluster-name`;
+    const defaultApiClusterName = `postolio-${environment}-api-cluster`;
+    const apiClusterNameLookup = ssm.StringParameter.valueFromLookup(
       this,
-      `/postolio/${environment}/api/cluster-name`
+      apiClusterNameParam,
+      defaultApiClusterName
     );
+    const hasApiClusterName =
+      apiClusterNameLookup.length > 0 &&
+      !apiClusterNameLookup.startsWith('dummy-value-for-') &&
+      apiClusterNameLookup !== defaultApiClusterName;
+    const apiClusterName = hasApiClusterName ? apiClusterNameLookup : defaultApiClusterName;
+    if (!hasApiClusterName) {
+      cdk.Annotations.of(this).addWarning(
+        `SSM parameter ${apiClusterNameParam} not found. Falling back to deterministic cluster name ${defaultApiClusterName}.`
+      );
+    }
     this.ecsCluster = ecs.Cluster.fromClusterAttributes(this, 'EcsCluster', {
       clusterName: apiClusterName,
       vpc,
