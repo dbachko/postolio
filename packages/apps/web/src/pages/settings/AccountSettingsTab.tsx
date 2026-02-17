@@ -100,7 +100,7 @@ export default function AccountSettingsTab() {
                 </div>
               </div>
             </div>
-            <Link to="/security">
+            <Link to="/settings/security">
               <Button variant="default" className="whitespace-nowrap">
                 Open
               </Button>

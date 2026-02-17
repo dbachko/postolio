@@ -1,5 +1,18 @@
 import type { ComponentType, SVGProps } from 'react';
-import { Inbox, Send, Bookmark, Plug, CalendarClock } from 'lucide-react';
+import {
+  BarChart3,
+  Bell,
+  Bookmark,
+  CalendarClock,
+  CreditCard,
+  Inbox,
+  Palette,
+  Plug,
+  Send,
+  Shield,
+  SlidersHorizontal,
+  UserRound,
+} from 'lucide-react';
 import type { NavigationItem } from './nav-config';
 
 export interface SectionNavItem {
@@ -45,6 +58,51 @@ const socialAccountsSectionItems: SectionNavItem[] = [
   },
 ];
 
+const settingsSectionItems: SectionNavItem[] = [
+  {
+    label: 'General',
+    path: '/settings',
+    icon: SlidersHorizontal,
+    description: 'Timezone, calendar, and brand defaults',
+  },
+  {
+    label: 'Notifications',
+    path: '/settings/notifications',
+    icon: Bell,
+    description: 'Control alerts by channel and category',
+  },
+  {
+    label: 'Appearance',
+    path: '/settings/appearance',
+    icon: Palette,
+    description: 'Theme and display preferences',
+  },
+  {
+    label: 'Account',
+    path: '/settings/account',
+    icon: UserRound,
+    description: 'Account lifecycle and data controls',
+  },
+  {
+    label: 'Security',
+    path: '/settings/security',
+    icon: Shield,
+    description: 'Sessions and login activity',
+  },
+  {
+    label: 'Image Analytics',
+    path: '/settings/analytics',
+    icon: BarChart3,
+    description: 'AI image usage, performance, and costs',
+  },
+  {
+    label: 'Billing',
+    path: '/settings/billing',
+    icon: CreditCard,
+    description: 'Subscription, invoices, payment methods, and credits',
+  },
+];
+
 export function getSectionNavItems(section: NavigationItem | null): SectionNavItem[] {
   if (!section) return [];
 
@@ -54,6 +112,10 @@ export function getSectionNavItems(section: NavigationItem | null): SectionNavIt
 
   if (section.path === '/social-accounts') {
     return socialAccountsSectionItems;
+  }
+
+  if (section.path === '/settings') {
+    return settingsSectionItems;
   }
 
   return [];

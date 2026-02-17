@@ -339,6 +339,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
               onDirectionToggle={() =>
                 setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
               }
+              triggerWidthClassName="sm:w-auto"
             />
             <Button
               onClick={() => openSidebar('asset-upload', { id: brandId })}

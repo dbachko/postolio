@@ -7,6 +7,7 @@ import InvoiceHistory from '@/components/billing/InvoiceHistory';
 import CreditTopUp from '@/components/billing/CreditTopUp';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import SettingsLayout from './settings/SettingsLayout';
 
 export function Billing() {
   const queryClient = useQueryClient();
@@ -92,50 +93,45 @@ export function Billing() {
   const processingSubscription = cancelMutation.isPending || reactivateMutation.isPending;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Billing</h1>
-        <p className="text-muted-foreground">
-          Manage your subscription, invoices, payment method updates, and AI credit top-ups.
-        </p>
+    <SettingsLayout>
+      <div className="flex flex-col gap-6">
+        <CurrentPlan
+          tier={tier}
+          subscription={subscription}
+          processing={processingSubscription}
+          onCancel={async () => {
+            await cancelMutation.mutateAsync();
+          }}
+          onReactivate={async () => {
+            await reactivateMutation.mutateAsync();
+          }}
+        />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Manage billing in Stripe</CardTitle>
+            <CardDescription>
+              Update payment method, download invoices, and manage advanced billing preferences.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button disabled={portalMutation.isPending} onClick={() => portalMutation.mutate()}>
+              {portalMutation.isPending ? 'Opening portal...' : 'Open customer portal'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <CreditTopUp
+          brands={brands}
+          loading={topupMutation.isPending || brandsQuery.isLoading}
+          onPurchase={async (brandId, creditPack) => {
+            await topupMutation.mutateAsync({ brandId, creditPack });
+          }}
+        />
+
+        <InvoiceHistory invoices={invoices} />
       </div>
-
-      <CurrentPlan
-        tier={tier}
-        subscription={subscription}
-        processing={processingSubscription}
-        onCancel={async () => {
-          await cancelMutation.mutateAsync();
-        }}
-        onReactivate={async () => {
-          await reactivateMutation.mutateAsync();
-        }}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Manage billing in Stripe</CardTitle>
-          <CardDescription>
-            Update payment method, download invoices, and manage advanced billing preferences.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button disabled={portalMutation.isPending} onClick={() => portalMutation.mutate()}>
-            {portalMutation.isPending ? 'Opening portal...' : 'Open customer portal'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <CreditTopUp
-        brands={brands}
-        loading={topupMutation.isPending || brandsQuery.isLoading}
-        onPurchase={async (brandId, creditPack) => {
-          await topupMutation.mutateAsync({ brandId, creditPack });
-        }}
-      />
-
-      <InvoiceHistory invoices={invoices} />
-    </div>
+    </SettingsLayout>
   );
 }
 

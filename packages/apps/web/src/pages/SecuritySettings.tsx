@@ -2,12 +2,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SessionList } from '@/components/sessions/session-list';
 import { SecurityDashboard } from '@/components/security/security-dashboard';
 import { Shield, Smartphone } from 'lucide-react';
+import SettingsLayout from './settings/SettingsLayout';
 
 export function SecuritySettings() {
   return (
-    <div className="w-full">
+    <SettingsLayout>
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-2 md:w-[420px]">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             Overview
@@ -26,6 +27,6 @@ export function SecuritySettings() {
           <SessionList />
         </TabsContent>
       </Tabs>
-    </div>
+    </SettingsLayout>
   );
 }

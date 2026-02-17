@@ -326,7 +326,7 @@ export default function Drafts() {
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <div className="flex w-full items-center sm:w-auto">
               <Select value={sortField} onValueChange={(v) => setSortField(v as DraftSortField)}>
-                <SelectTrigger className="h-10 w-full rounded-r-none sm:w-[220px]">
+                <SelectTrigger className="h-10 w-full rounded-r-none sm:w-auto [&>span]:pr-2 [&>svg]:ml-2">
                   <SelectValue placeholder="Sort drafts" />
                 </SelectTrigger>
                 <SelectContent>

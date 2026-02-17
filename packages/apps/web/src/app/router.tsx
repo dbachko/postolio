@@ -312,6 +312,31 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
   },
   {
+    path: '/settings/account',
+    element: appShell(<Settings />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/notifications',
+    element: appShell(<Settings />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/appearance',
+    element: appShell(<Settings />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/analytics',
+    element: appShell(<Settings />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/security',
+    element: appShell(<SecuritySettings />),
+    errorElement: <RouteError />,
+  },
+  {
     path: '/settings/billing',
     element: appShell(<Billing />),
     errorElement: <RouteError />,
@@ -319,11 +344,6 @@ export const router = createBrowserRouter([
   {
     path: '/settings/billing/upgrade',
     element: appShell(<Pricing />),
-    errorElement: <RouteError />,
-  },
-  {
-    path: '/security',
-    element: appShell(<SecuritySettings />),
     errorElement: <RouteError />,
   },
   {

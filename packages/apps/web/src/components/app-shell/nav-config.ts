@@ -92,7 +92,7 @@ export const secondaryNavItems: NavigationItem[] = [
     path: '/settings',
     icon: Settings,
     description: 'Account & workspace settings',
-    matchType: 'exact',
+    matchType: 'startsWith',
   },
 ];
 

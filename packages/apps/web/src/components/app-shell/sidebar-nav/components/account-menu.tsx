@@ -91,7 +91,7 @@ export function AccountMenu({
           <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
           Manage Brands
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onNavigate('/security')}>
+        <DropdownMenuItem onClick={() => onNavigate('/settings/security')}>
           <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
           Security
         </DropdownMenuItem>

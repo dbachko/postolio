@@ -56,7 +56,7 @@ export function SortControls<TField extends string = SortField>({
       <Select value={field} onValueChange={(v) => onFieldChange(v as TField)}>
         <SelectTrigger
           className={cn(
-            'h-10 w-full rounded-r-none [&>span]:pr-1 [&>svg]:ml-1',
+            'h-10 w-full rounded-r-none [&>span]:pr-2 [&>svg]:ml-2',
             triggerWidthClassName
           )}
         >

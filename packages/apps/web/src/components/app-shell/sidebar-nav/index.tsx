@@ -64,11 +64,12 @@ export function SidebarNav({
   const renderItem = (item: NavigationItem) => {
     const children = getSectionNavItems(item);
     const hasChildren = children.length > 0;
-    const childrenActive = hasChildren
-      ? children.some(
-          (child) => currentPath === child.path || currentPath.startsWith(child.path + '/')
-        )
-      : false;
+    const activeChildPath = hasChildren
+      ? (children
+          .filter((child) => currentPath === child.path || currentPath.startsWith(child.path + '/'))
+          .sort((a, b) => b.path.length - a.path.length)[0]?.path ?? null)
+      : null;
+    const childrenActive = activeChildPath !== null;
     const active = isRouteActive(item, currentPath) || childrenActive;
 
     const forcedOpen =
@@ -146,8 +147,7 @@ export function SidebarNav({
           >
             <SidebarMenuSub>
               {children.map((child) => {
-                const childActive =
-                  currentPath === child.path || currentPath.startsWith(child.path + '/');
+                const childActive = activeChildPath === child.path;
                 return (
                   <SidebarMenuSubItem key={child.path}>
                     <SidebarMenuSubButton asChild isActive={childActive}>
