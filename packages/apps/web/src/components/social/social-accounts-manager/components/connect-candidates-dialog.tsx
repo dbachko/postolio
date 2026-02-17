@@ -21,6 +21,7 @@ type GroupedCandidates = {
 
 type ConnectCandidatesDialogProps = {
   open: boolean;
+  multiDestinationEnabled: boolean;
   brandName: string;
   onOpenChange: (open: boolean) => void;
   isLoading: boolean;
@@ -39,6 +40,7 @@ type ConnectCandidatesDialogProps = {
 
 export function ConnectCandidatesDialog({
   open,
+  multiDestinationEnabled,
   brandName,
   onOpenChange,
   isLoading,
@@ -63,8 +65,9 @@ export function ConnectCandidatesDialog({
         <DialogHeader>
           <DialogTitle>Select accounts to connect</DialogTitle>
           <DialogDescription>
-            Choose which Instagram accounts and Facebook Pages to attach to {brandName}. You can
-            connect multiple.
+            {multiDestinationEnabled
+              ? `Choose which Instagram accounts and Facebook Pages to attach to ${brandName}. You can connect multiple.`
+              : `Choose the Instagram account to attach to ${brandName}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -139,7 +142,7 @@ export function ConnectCandidatesDialog({
                 </div>
               )}
 
-              {groupedCandidates.facebook.length > 0 && (
+              {multiDestinationEnabled && groupedCandidates.facebook.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Facebook Pages</div>
                   <div className="space-y-2">

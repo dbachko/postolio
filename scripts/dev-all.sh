@@ -207,6 +207,9 @@ if [[ "${SKIP_DB_RESET:-0}" != "1" ]]; then
     echo "Resetting primary Postgres database via Prisma..."
     pnpm --filter @postolio/database exec -- prisma migrate reset --force --skip-seed --skip-generate
 
+    echo "Generating primary Prisma client..."
+    pnpm --filter @postolio/database run build
+
     echo "Seeding deterministic dev data (${DEV_SEED_EMAIL})..."
     pnpm --filter api seed:dev -- --email="${DEV_SEED_EMAIL}" --password="${DEV_SEED_PASSWORD}" --name="${DEV_SEED_NAME}" --brand="${DEV_SEED_BRAND}" --posts="${DEV_SEED_POSTS}"
   else

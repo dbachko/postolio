@@ -3,12 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { brand as brandApi, content as contentApi } from '@/lib/api';
 import type { Content } from '@/lib/api';
+import { isInboxEnabled } from '@/lib/feature-flags';
 import { useBrandStore } from '@/stores/brandStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import { useInstagramBestTime, useRefreshInstagramBestTime } from '@/hooks/useBestTime';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CommentsInboxItem } from './types';
 import { BestTimeCard } from './components/best-time-card';
@@ -20,8 +23,10 @@ import { UpNextCard } from './components/up-next-card';
 
 export function Dashboard() {
   const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore();
+  const user = useAuthStore((s) => s.user);
   const brandId = selectedBrand?.id;
   const { openSidebar } = useRightSidebarRouter();
+  const inboxEnabled = isInboxEnabled(user);
 
   const { data: brandsData, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],
@@ -64,7 +69,7 @@ export function Dashboard() {
         view: 'to_review',
         limit: 200,
       }),
-    enabled: Boolean(brandId),
+    enabled: Boolean(brandId) && inboxEnabled,
     staleTime: 10_000,
   });
 
@@ -122,6 +127,7 @@ export function Dashboard() {
   const draftPreviewAssetsQuery = useAssetsByIds(draftPreviewAssetIds);
 
   const commentsInboxItems = useMemo(() => {
+    if (!inboxEnabled) return [] as CommentsInboxItem[];
     const items = ((commentsInboxQuery.data as any)?.items || []) as Array<any>;
 
     const threads = items
@@ -137,7 +143,7 @@ export function Dashboard() {
       })) satisfies CommentsInboxItem[];
 
     return threads.sort((a, b) => (b.newCount || 0) - (a.newCount || 0));
-  }, [commentsInboxQuery.data]);
+  }, [commentsInboxQuery.data, inboxEnabled]);
 
   const newCommentsCount = useMemo(
     () => commentsInboxItems.reduce((sum, item) => sum + (item.newCount || 0), 0),
@@ -212,9 +218,15 @@ export function Dashboard() {
         needsAttentionCount={needsAttentionCount}
         newCommentsCount={newCommentsCount}
         commentsInboxPostsCount={commentsInboxItems.length}
+        inboxEnabled={inboxEnabled}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-6',
+          inboxEnabled ? 'md:grid-cols-2 xl:grid-cols-3' : 'md:grid-cols-2'
+        )}
+      >
         <NeedsAttentionCard
           isLoading={instagramStatusQuery.isLoading || contentHistoryQuery.isLoading}
           instagramDisconnected={instagramDisconnected}
@@ -225,11 +237,13 @@ export function Dashboard() {
           brandTimezone={brandTimezone}
         />
 
-        <CommentsCard
-          isLoading={commentsInboxQuery.isLoading}
-          items={commentsInboxItems}
-          brandTimezone={brandTimezone}
-        />
+        {inboxEnabled ? (
+          <CommentsCard
+            isLoading={commentsInboxQuery.isLoading}
+            items={commentsInboxItems}
+            brandTimezone={brandTimezone}
+          />
+        ) : null}
 
         <UpNextCard
           isLoading={contentHistoryQuery.isLoading}

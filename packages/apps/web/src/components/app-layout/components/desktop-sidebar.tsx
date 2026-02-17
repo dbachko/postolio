@@ -5,6 +5,7 @@ import { SidebarNav } from '@/components/app-shell/sidebar-nav';
 import { mainNavItems, secondaryNavItems } from '@/components/app-shell/nav-config';
 import { brand as brandApi } from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
+import { isInboxEnabled, isSnippetsEnabled } from '@/lib/feature-flags';
 import { useAuthStore } from '@/stores/authStore';
 import { useBrandStore } from '@/stores/brandStore';
 
@@ -30,10 +31,18 @@ export function DesktopSidebar() {
     navigate('/login');
   };
 
+  const inboxEnabled = isInboxEnabled(user);
+  const snippetsEnabled = isSnippetsEnabled(user);
+  const visibleMainItems = mainNavItems.filter((item) => {
+    if (!inboxEnabled && item.path === '/inbox') return false;
+    if (!snippetsEnabled && item.path === '/snippets') return false;
+    return true;
+  });
+
   return (
     <div className="group fixed inset-y-0 left-0 z-50 hidden md:block">
       <SidebarNav
-        mainItems={mainNavItems}
+        mainItems={visibleMainItems}
         secondaryItems={secondaryNavItems}
         currentPath={location.pathname}
         userEmail={user?.email ?? null}

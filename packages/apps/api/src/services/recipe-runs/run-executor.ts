@@ -22,6 +22,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { TimezoneService } from '../timezone.js';
 import { formatInTimeZone } from 'date-fns-tz';
+import { isMultiDestinationEnabledForUser } from '../../utils/feature-flags.js';
 
 type RunState = Record<string, unknown>;
 
@@ -443,6 +444,7 @@ type ExecuteStepContext = {
   recipeTemplateId: string;
   recipeTemplateVersionId: string;
   recipeTemplateName: string;
+  multiDestinationEnabled: boolean;
   config: RecipeConfig;
 };
 
@@ -659,10 +661,18 @@ async function executeRuntimeStep(params: {
             id: targetSocialAccountId,
             brandId: ctx.runBrandId,
           },
-          select: { id: true },
+          select: { id: true, platform: true },
         });
         if (!destination) {
           throw new Error('target_social_account_id is invalid for this brand');
+        }
+        if (
+          !ctx.multiDestinationEnabled &&
+          String(destination.platform || '')
+            .trim()
+            .toLowerCase() !== 'instagram'
+        ) {
+          throw new Error('Only Instagram destinations are enabled for this account');
         }
       }
 
@@ -874,6 +884,7 @@ export async function executeRecipeRun(runId: string): Promise<{ runId: string; 
   const run = await prisma.recipeRun.findUnique({
     where: { id: runId },
     include: {
+      createdByUser: { select: { email: true, id: true } },
       recipeTemplateVersion: {
         include: {
           recipeTemplate: {
@@ -920,6 +931,11 @@ export async function executeRecipeRun(runId: string): Promise<{ runId: string; 
   const state: RunState = {
     input: run.inputJson as any,
   };
+
+  const multiDestinationEnabled = isMultiDestinationEnabledForUser({
+    userId: run.createdByUserId ?? null,
+    email: run.createdByUser?.email ?? null,
+  });
 
   try {
     for (let index = 0; index < steps.length; index++) {
@@ -968,6 +984,7 @@ export async function executeRecipeRun(runId: string): Promise<{ runId: string; 
           recipeTemplateId: run.recipeTemplateId,
           recipeTemplateVersionId: run.recipeTemplateVersionId,
           recipeTemplateName: run.recipeTemplateVersion.recipeTemplate.name,
+          multiDestinationEnabled,
           config,
         },
         step,

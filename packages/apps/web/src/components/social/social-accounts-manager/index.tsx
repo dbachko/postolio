@@ -4,6 +4,8 @@ import { getPlatformConfig } from '@/lib/platform-config';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
+import { useAuthStore } from '@/stores/authStore';
 
 import { ConnectButtons } from './components/connect-buttons';
 import { ConnectCandidatesDialog } from './components/connect-candidates-dialog';
@@ -17,6 +19,7 @@ import type { ConnectedAccount, SocialAccountsManagerProps } from './types';
 export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccountsManagerProps) {
   const queryClient = useQueryClient();
   const { openSidebar } = useRightSidebarRouter();
+  const user = useAuthStore((s) => s.user);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectedAccount | null>(null);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
@@ -32,8 +35,16 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
     setOrderedConnectedIds,
   } = useSocialAccountsManagerAccounts({ brandId: brand.id });
 
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
+  const connectedInstagramCount = connectedAccounts.filter(
+    (account) => account.platform === 'instagram'
+  ).length;
+  const canConnectInstagram = multiDestinationEnabled || connectedInstagramCount === 0;
+  const canConnectFacebook = multiDestinationEnabled;
+
   const connect = useSocialAccountsManagerConnect({
     brandId: brand.id,
+    multiDestinationEnabled,
     queryClient,
     onAccountsChanged,
   });
@@ -66,27 +77,35 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
 
   const instagramPlatform = getPlatformConfig('instagram');
   const facebookPlatform = getPlatformConfig('facebook');
-  const connectActionLabel = connectedAccounts.length > 0 ? 'Add' : 'Connect';
+  const connectActionLabel =
+    connectedInstagramCount > 0 || (multiDestinationEnabled && connectedAccounts.length > 0)
+      ? 'Add'
+      : 'Connect';
 
-  const connectButtons = (
-    <ConnectButtons
-      actionLabel={connectActionLabel}
-      isConnecting={connect.isConnecting}
-      connectingIntent={connect.connectingIntent}
-      isPending={connect.startConnectMutation.isPending}
-      instagramColor={instagramPlatform.color}
-      facebookColor={facebookPlatform.color}
-      onConnectInstagram={() => connect.startConnectMutation.mutate('instagram')}
-      onConnectFacebook={() => connect.startConnectMutation.mutate('facebook')}
-    />
-  );
+  const connectButtons =
+    canConnectInstagram || canConnectFacebook ? (
+      <ConnectButtons
+        actionLabel={connectActionLabel}
+        isConnecting={connect.isConnecting}
+        connectingIntent={connect.connectingIntent}
+        isPending={connect.startConnectMutation.isPending}
+        instagramColor={instagramPlatform.color}
+        facebookColor={facebookPlatform.color}
+        showInstagram={canConnectInstagram}
+        showFacebook={canConnectFacebook}
+        onConnectInstagram={() => connect.startConnectMutation.mutate('instagram')}
+        onConnectFacebook={() => connect.startConnectMutation.mutate('facebook')}
+      />
+    ) : null;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Social accounts</CardTitle>
         <CardDescription>
-          Connect Instagram Business/Creator accounts and Facebook Pages to {brand.name}.
+          {multiDestinationEnabled
+            ? `Connect Instagram Business/Creator accounts and Facebook Pages to ${brand.name}.`
+            : `Connect an Instagram Business/Creator account to ${brand.name}.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -103,7 +122,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
             <Alert>
               <AlertDescription>No social accounts connected yet.</AlertDescription>
             </Alert>
-            <div className="flex justify-end">{connectButtons}</div>
+            {connectButtons ? <div className="flex justify-end">{connectButtons}</div> : null}
           </div>
         )}
 
@@ -111,6 +130,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
           <ConnectedAccountsSection
             connectButtons={connectButtons}
             connectedCount={connectedAccounts.length}
+            multiDestinationEnabled={multiDestinationEnabled}
             orderedAccounts={orderedAccounts}
             orderedConnectedIds={orderedConnectedIds}
             onReorder={(next) => {
@@ -132,6 +152,7 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
 
         <ConnectCandidatesDialog
           open={connect.connectDialogOpen}
+          multiDestinationEnabled={multiDestinationEnabled}
           brandName={brand.name}
           onOpenChange={(open) => {
             connect.setConnectDialogOpen(open);

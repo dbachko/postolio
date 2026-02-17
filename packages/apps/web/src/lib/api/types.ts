@@ -7,6 +7,8 @@ export interface User {
   subscriptionTier: string;
   featureFlags?: {
     multiDestination?: boolean;
+    inbox?: boolean;
+    snippets?: boolean;
   };
   timezone?: string | null;
   timezoneAutoDetected?: boolean;

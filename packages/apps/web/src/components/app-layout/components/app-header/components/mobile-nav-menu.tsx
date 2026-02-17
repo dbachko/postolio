@@ -8,13 +8,23 @@ import {
   secondaryNavItems,
   type NavigationItem,
 } from '@/components/app-shell/nav-config';
+import { isInboxEnabled, isSnippetsEnabled } from '@/lib/feature-flags';
+import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 export function MobileNavMenu() {
+  const user = useAuthStore((state) => state.user);
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const inboxEnabled = isInboxEnabled(user);
+  const snippetsEnabled = isSnippetsEnabled(user);
+  const visibleMainItems = mainNavItems.filter((item) => {
+    if (!inboxEnabled && item.path === '/inbox') return false;
+    if (!snippetsEnabled && item.path === '/snippets') return false;
+    return true;
+  });
 
   const isActiveRoute = useCallback(
     (item: NavigationItem) => {
@@ -62,7 +72,7 @@ export function MobileNavMenu() {
             <div className="p-4">
               <div className="mb-4">
                 <div className="space-y-1">
-                  {mainNavItems.map((item) => (
+                  {visibleMainItems.map((item) => (
                     <Link
                       key={item.path}
                       to={item.path}

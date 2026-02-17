@@ -8,6 +8,7 @@ import { redisService } from '../services/redis.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { getTokenService } from '../services/service-clients.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
+import { isMultiDestinationEnabledForUser } from '../utils/feature-flags.js';
 
 const prisma = getDatabaseClient();
 
@@ -114,6 +115,11 @@ function redactOauthSensitiveDetails(value: string): string {
 function truncate(value: string, maxLength: number) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength)}…`;
+}
+
+function isMetadataDisconnected(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  return (metadata as any).disconnected === true;
 }
 
 function captureOauthMessage(message: string, context: Record<string, unknown>) {
@@ -676,6 +682,57 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
             return reply.code(400).send({ error: 'invalid_candidate', candidateId: id });
           }
           selectedCandidates.push(candidate);
+        }
+
+        const multiDestinationEnabled = isMultiDestinationEnabledForUser({
+          userId: request.user.id,
+          email: (request as any)?.user?.email ?? null,
+        });
+
+        if (!multiDestinationEnabled) {
+          const nonInstagram = selectedCandidates.filter((c) => c.platform !== 'instagram');
+          if (nonInstagram.length > 0) {
+            return reply.code(403).send({
+              error: 'feature_disabled',
+              code: 'MULTI_DESTINATION_DISABLED',
+              message: 'Only Instagram destinations are enabled for this account',
+            });
+          }
+
+          if (selectedCandidates.length > 1) {
+            return reply.code(400).send({
+              error: 'too_many_destinations',
+              code: 'MULTI_DESTINATION_DISABLED',
+              message:
+                'Only one Instagram account can be connected when multi-destination is disabled',
+            });
+          }
+
+          const selectedInstagram = selectedCandidates[0] || null;
+          if (selectedInstagram) {
+            const existingInstagramAccounts = await prisma.socialAccount.findMany({
+              where: { brandId: session.brandId, platform: 'instagram' as any },
+              select: { id: true, externalAccountId: true, metadata: true },
+            });
+
+            const connectedInstagram = existingInstagramAccounts.filter(
+              (account) => !isMetadataDisconnected(account.metadata)
+            );
+
+            if (connectedInstagram.length > 0) {
+              const allowedExternalIds = new Set(
+                connectedInstagram.map((account) => account.externalAccountId)
+              );
+              if (!allowedExternalIds.has(selectedInstagram.externalAccountId)) {
+                return reply.code(403).send({
+                  error: 'feature_disabled',
+                  code: 'MULTI_DESTINATION_DISABLED',
+                  message:
+                    'Only one Instagram account can be connected when multi-destination is disabled',
+                });
+              }
+            }
+          }
         }
 
         // Prevent transferring accounts between brands (unique by platform+externalAccountId)

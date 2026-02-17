@@ -3,11 +3,31 @@
  * CRUD operations for managing reusable text snippets for social media captions
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
+import { isSnippetsEnabledForUser } from '../utils/feature-flags.js';
 
 const logger = baseLogger.child({ module: 'snippets-routes' });
+
+type AuthenticatedRequest = FastifyRequest & {
+  user?: {
+    id?: string;
+    email?: string | null;
+  };
+};
+
+async function requireSnippetsFeature(request: AuthenticatedRequest, reply: FastifyReply) {
+  const userId = request.user?.id ?? null;
+  const email = request.user?.email ?? null;
+  if (!isSnippetsEnabledForUser({ userId, email })) {
+    return reply.code(403).send({
+      error: 'feature_disabled',
+      code: 'SNIPPETS_DISABLED',
+      message: 'Snippets are not enabled for this account',
+    });
+  }
+}
 
 interface SnippetQueryParams {
   search?: string;
@@ -42,87 +62,91 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
     Params: { brandId: string };
     Querystring: SnippetQueryParams;
-  }>('/brands/:brandId/snippets', { preHandler: fastify.authenticate }, async (request, reply) => {
-    const { brandId } = request.params;
-    const { search, tags, category, limit = 100, offset = 0 } = request.query;
-    const userId = request.user!.id;
+  }>(
+    '/brands/:brandId/snippets',
+    { preHandler: [fastify.authenticate, requireSnippetsFeature] },
+    async (request, reply) => {
+      const { brandId } = request.params;
+      const { search, tags, category, limit = 100, offset = 0 } = request.query;
+      const userId = request.user!.id;
 
-    try {
-      // Verify brand ownership
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-      });
+      try {
+        // Verify brand ownership
+        const brand = await prisma.brand.findFirst({
+          where: { id: brandId, userId },
+        });
 
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      // Build filter conditions
-      const where: any = {
-        brandId,
-        isArchived: false,
-      };
-
-      // Search in title and content
-      if (search) {
-        where.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { content: { contains: search, mode: 'insensitive' } },
-        ];
-      }
-
-      // Filter by tags (must include all specified tags)
-      if (tags) {
-        const tagArray = tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean);
-        if (tagArray.length > 0) {
-          where.tags = { hasEvery: tagArray };
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
         }
+
+        // Build filter conditions
+        const where: any = {
+          brandId,
+          isArchived: false,
+        };
+
+        // Search in title and content
+        if (search) {
+          where.OR = [
+            { title: { contains: search, mode: 'insensitive' } },
+            { content: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        // Filter by tags (must include all specified tags)
+        if (tags) {
+          const tagArray = tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
+          if (tagArray.length > 0) {
+            where.tags = { hasEvery: tagArray };
+          }
+        }
+
+        // Filter by category
+        if (category) {
+          where.category = category;
+        }
+
+        const [snippets, total] = await Promise.all([
+          prisma.snippet.findMany({
+            where,
+            orderBy: [
+              { isFavorite: 'desc' }, // Favorites first
+              { lastUsedAt: 'desc' }, // Recently used
+              { createdAt: 'desc' }, // Then newest
+            ],
+            take: limit,
+            skip: offset,
+          }),
+          prisma.snippet.count({ where }),
+        ]);
+
+        logger.info('Fetched snippets', {
+          brandId,
+          userId,
+          count: snippets.length,
+          total,
+          filters: { search, tags, category },
+        });
+
+        return reply.send({
+          snippets,
+          total,
+          limit,
+          offset,
+        });
+      } catch (error) {
+        logger.error('Error fetching snippets', {
+          brandId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        return reply.code(500).send({ error: 'Failed to fetch snippets' });
       }
-
-      // Filter by category
-      if (category) {
-        where.category = category;
-      }
-
-      const [snippets, total] = await Promise.all([
-        prisma.snippet.findMany({
-          where,
-          orderBy: [
-            { isFavorite: 'desc' }, // Favorites first
-            { lastUsedAt: 'desc' }, // Recently used
-            { createdAt: 'desc' }, // Then newest
-          ],
-          take: limit,
-          skip: offset,
-        }),
-        prisma.snippet.count({ where }),
-      ]);
-
-      logger.info('Fetched snippets', {
-        brandId,
-        userId,
-        count: snippets.length,
-        total,
-        filters: { search, tags, category },
-      });
-
-      return reply.send({
-        snippets,
-        total,
-        limit,
-        offset,
-      });
-    } catch (error) {
-      logger.error('Error fetching snippets', {
-        brandId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return reply.code(500).send({ error: 'Failed to fetch snippets' });
     }
-  });
+  );
 
   /**
    * POST /api/brands/:brandId/snippets
@@ -131,78 +155,82 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { brandId: string };
     Body: CreateSnippetBody;
-  }>('/brands/:brandId/snippets', { preHandler: fastify.authenticate }, async (request, reply) => {
-    const { brandId } = request.params;
-    const { title, content, tags = [], category, isFavorite = false } = request.body;
-    const userId = request.user!.id;
+  }>(
+    '/brands/:brandId/snippets',
+    { preHandler: [fastify.authenticate, requireSnippetsFeature] },
+    async (request, reply) => {
+      const { brandId } = request.params;
+      const { title, content, tags = [], category, isFavorite = false } = request.body;
+      const userId = request.user!.id;
 
-    try {
-      // Verify brand ownership
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-      });
+      try {
+        // Verify brand ownership
+        const brand = await prisma.brand.findFirst({
+          where: { id: brandId, userId },
+        });
 
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
 
-      // Validation
-      if (!title?.trim()) {
-        return reply.code(400).send({ error: 'Title is required' });
-      }
+        // Validation
+        if (!title?.trim()) {
+          return reply.code(400).send({ error: 'Title is required' });
+        }
 
-      if (!content?.trim()) {
-        return reply.code(400).send({ error: 'Content is required' });
-      }
+        if (!content?.trim()) {
+          return reply.code(400).send({ error: 'Content is required' });
+        }
 
-      if (content.length > 2000) {
-        return reply.code(400).send({ error: 'Content must be 2000 characters or less' });
-      }
+        if (content.length > 2000) {
+          return reply.code(400).send({ error: 'Content must be 2000 characters or less' });
+        }
 
-      // Check for duplicate title
-      const existing = await prisma.snippet.findFirst({
-        where: {
-          brandId,
-          title: title.trim(),
-          isArchived: false,
-        },
-      });
+        // Check for duplicate title
+        const existing = await prisma.snippet.findFirst({
+          where: {
+            brandId,
+            title: title.trim(),
+            isArchived: false,
+          },
+        });
 
-      if (existing) {
-        return reply.code(409).send({ error: 'A snippet with this title already exists' });
-      }
+        if (existing) {
+          return reply.code(409).send({ error: 'A snippet with this title already exists' });
+        }
 
-      // Normalize tags to lowercase
-      const normalizedTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
+        // Normalize tags to lowercase
+        const normalizedTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
 
-      const snippet = await prisma.snippet.create({
-        data: {
+        const snippet = await prisma.snippet.create({
+          data: {
+            brandId,
+            userId,
+            title: title.trim(),
+            content: content.trim(),
+            tags: normalizedTags,
+            category: category?.trim() || null,
+            isFavorite,
+          },
+        });
+
+        logger.info('Created snippet', {
           brandId,
           userId,
-          title: title.trim(),
-          content: content.trim(),
-          tags: normalizedTags,
-          category: category?.trim() || null,
-          isFavorite,
-        },
-      });
+          snippetId: snippet.id,
+          title: snippet.title,
+        });
 
-      logger.info('Created snippet', {
-        brandId,
-        userId,
-        snippetId: snippet.id,
-        title: snippet.title,
-      });
-
-      return reply.code(201).send({ snippet });
-    } catch (error) {
-      logger.error('Error creating snippet', {
-        brandId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return reply.code(500).send({ error: 'Failed to create snippet' });
+        return reply.code(201).send({ snippet });
+      } catch (error) {
+        logger.error('Error creating snippet', {
+          brandId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        return reply.code(500).send({ error: 'Failed to create snippet' });
+      }
     }
-  });
+  );
 
   /**
    * PUT /api/brands/:brandId/snippets/:snippetId
@@ -213,7 +241,7 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
     Body: UpdateSnippetBody;
   }>(
     '/brands/:brandId/snippets/:snippetId',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireSnippetsFeature] },
     async (request, reply) => {
       const { brandId, snippetId } = request.params;
       const { title, content, tags, category, isFavorite, isArchived } = request.body;
@@ -297,7 +325,7 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { brandId: string; snippetId: string };
   }>(
     '/brands/:brandId/snippets/:snippetId/usage',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireSnippetsFeature] },
     async (request, reply) => {
       const { brandId, snippetId } = request.params;
       const userId = request.user!.id;
@@ -351,7 +379,7 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { brandId: string; snippetId: string };
   }>(
     '/brands/:brandId/snippets/:snippetId',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireSnippetsFeature] },
     async (request, reply) => {
       const { brandId, snippetId } = request.params;
       const userId = request.user!.id;

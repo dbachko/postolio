@@ -7,12 +7,14 @@ import { allowedMessageOrigins, startMetaOAuthPopup } from '../utils';
 
 type UseSocialAccountsManagerConnectParams = {
   brandId: string;
+  multiDestinationEnabled: boolean;
   queryClient: QueryClient;
   onAccountsChanged?: () => void;
 };
 
 export function useSocialAccountsManagerConnect({
   brandId,
+  multiDestinationEnabled,
   queryClient,
   onAccountsChanged,
 }: UseSocialAccountsManagerConnectParams) {
@@ -96,6 +98,10 @@ export function useSocialAccountsManagerConnect({
     return Array.isArray(data?.candidates) ? (data.candidates as MetaCandidate[]) : [];
   }, [candidatesQuery.data]);
 
+  const candidatesById = useMemo(() => {
+    return new Map(candidates.map((c) => [c.candidateId, c]));
+  }, [candidates]);
+
   const candidatesError = candidatesQuery.error as any;
   const isWaitingForCandidates =
     candidatesQuery.isError &&
@@ -116,12 +122,24 @@ export function useSocialAccountsManagerConnect({
     if (selectedCandidateIds.size > 0) return;
 
     const defaults = new Set<string>();
-    for (const c of candidates) {
-      if (connectIntent === 'instagram' && c.platform === 'instagram') defaults.add(c.candidateId);
-      if (connectIntent === 'facebook' && c.platform === 'facebook') defaults.add(c.candidateId);
+    if (!multiDestinationEnabled) {
+      const firstInstagram = candidates.find((c) => c.platform === 'instagram') || null;
+      if (firstInstagram) defaults.add(firstInstagram.candidateId);
+    } else {
+      for (const c of candidates) {
+        if (connectIntent === 'instagram' && c.platform === 'instagram')
+          defaults.add(c.candidateId);
+        if (connectIntent === 'facebook' && c.platform === 'facebook') defaults.add(c.candidateId);
+      }
     }
     setSelectedCandidateIds(defaults);
-  }, [connectDialogOpen, candidates, selectedCandidateIds.size, connectIntent]);
+  }, [
+    connectDialogOpen,
+    candidates,
+    selectedCandidateIds.size,
+    connectIntent,
+    multiDestinationEnabled,
+  ]);
 
   const finalizeConnectMutation = useMutation({
     mutationFn: async () => {
@@ -143,6 +161,15 @@ export function useSocialAccountsManagerConnect({
 
   const toggleCandidate = (candidateId: string, checked: boolean) => {
     setSelectedCandidateIds((prev) => {
+      const candidate = candidatesById.get(candidateId) || null;
+      if (!candidate) return prev;
+
+      if (!multiDestinationEnabled) {
+        if (candidate.platform !== 'instagram') return prev;
+        if (!checked) return prev;
+        return new Set([candidateId]);
+      }
+
       const next = new Set(prev);
       if (checked) next.add(candidateId);
       else next.delete(candidateId);

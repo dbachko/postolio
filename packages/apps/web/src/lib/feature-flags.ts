@@ -33,3 +33,33 @@ export function isMultiDestinationEnabled(user: User | null | undefined): boolea
   );
   return allowlistedEmails.includes(normalizedEmail);
 }
+
+export function isInboxEnabled(user: User | null | undefined): boolean {
+  const explicit = user?.featureFlags?.inbox;
+  if (typeof explicit === 'boolean') return explicit;
+
+  if (parseBoolean(import.meta.env.VITE_FEATURE_INBOX, false)) {
+    return true;
+  }
+
+  const normalizedEmail = typeof user?.email === 'string' ? user.email.trim().toLowerCase() : '';
+  if (!normalizedEmail) return false;
+
+  const allowlistedEmails = parseList(import.meta.env.VITE_FEATURE_INBOX_ALLOWLIST_EMAILS);
+  return allowlistedEmails.includes(normalizedEmail);
+}
+
+export function isSnippetsEnabled(user: User | null | undefined): boolean {
+  const explicit = user?.featureFlags?.snippets;
+  if (typeof explicit === 'boolean') return explicit;
+
+  if (parseBoolean(import.meta.env.VITE_FEATURE_SNIPPETS, false)) {
+    return true;
+  }
+
+  const normalizedEmail = typeof user?.email === 'string' ? user.email.trim().toLowerCase() : '';
+  if (!normalizedEmail) return false;
+
+  const allowlistedEmails = parseList(import.meta.env.VITE_FEATURE_SNIPPETS_ALLOWLIST_EMAILS);
+  return allowlistedEmails.includes(normalizedEmail);
+}

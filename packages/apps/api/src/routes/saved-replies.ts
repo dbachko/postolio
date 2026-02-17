@@ -3,11 +3,31 @@
  * CRUD operations for managing quick response templates
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
+import { isInboxEnabledForUser } from '../utils/feature-flags.js';
 
 const logger = baseLogger.child({ module: 'saved-replies-routes' });
+
+type AuthenticatedRequest = FastifyRequest & {
+  user?: {
+    id?: string;
+    email?: string | null;
+  };
+};
+
+async function requireInboxFeature(request: AuthenticatedRequest, reply: FastifyReply) {
+  const userId = request.user?.id ?? null;
+  const email = request.user?.email ?? null;
+  if (!isInboxEnabledForUser({ userId, email })) {
+    return reply.code(403).send({
+      error: 'feature_disabled',
+      code: 'INBOX_DISABLED',
+      message: 'Inbox is not enabled for this account',
+    });
+  }
+}
 
 const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -16,7 +36,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get<{ Params: { brandId: string } }>(
     '/brands/:brandId/saved-replies',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
@@ -62,7 +82,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { title: string; body: string; isDefault?: boolean };
   }>(
     '/brands/:brandId/saved-replies',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId } = request.params;
       const { title, body, isDefault = false } = request.body;
@@ -138,7 +158,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { title?: string; body?: string; isDefault?: boolean };
   }>(
     '/brands/:brandId/saved-replies/:replyId',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, replyId } = request.params;
       const { title, body, isDefault } = request.body;
@@ -208,7 +228,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.delete<{ Params: { brandId: string; replyId: string } }>(
     '/brands/:brandId/saved-replies/:replyId',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, replyId } = request.params;
       const userId = request.user!.id;

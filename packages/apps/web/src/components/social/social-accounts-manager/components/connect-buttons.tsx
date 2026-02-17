@@ -11,6 +11,8 @@ type ConnectButtonsProps = {
   isPending: boolean;
   instagramColor: string;
   facebookColor: string;
+  showInstagram?: boolean;
+  showFacebook?: boolean;
   onConnectInstagram: () => void;
   onConnectFacebook: () => void;
 };
@@ -22,6 +24,8 @@ export function ConnectButtons({
   isPending,
   instagramColor,
   facebookColor,
+  showInstagram = true,
+  showFacebook = true,
   onConnectInstagram,
   onConnectFacebook,
 }: ConnectButtonsProps) {
@@ -36,59 +40,63 @@ export function ConnectButtons({
           )}
           {actionLabel}
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="Connect Instagram accounts"
-              onClick={onConnectInstagram}
-              disabled={isPending || isConnecting}
-              className="hover:opacity-90"
-              style={{
-                backgroundColor: instagramColor,
-                backgroundImage:
-                  'linear-gradient(45deg, #feda75 0%, #fa7e1e 25%, #d62976 50%, #962fbf 75%, #4f5bd5 100%)',
-                borderColor: instagramColor,
-                color: 'white',
-              }}
-            >
-              {connectingIntent === 'instagram' && isConnecting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <InstagramIcon className="h-4 w-4" aria-hidden="true" />
-              )}
-              <span className="hidden sm:inline">Instagram</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Connect Instagram (Business/Creator)</TooltipContent>
-        </Tooltip>
+        {showInstagram ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Connect Instagram accounts"
+                onClick={onConnectInstagram}
+                disabled={isPending || isConnecting}
+                className="hover:opacity-90"
+                style={{
+                  backgroundColor: instagramColor,
+                  backgroundImage:
+                    'linear-gradient(45deg, #feda75 0%, #fa7e1e 25%, #d62976 50%, #962fbf 75%, #4f5bd5 100%)',
+                  borderColor: instagramColor,
+                  color: 'white',
+                }}
+              >
+                {connectingIntent === 'instagram' && isConnecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <InstagramIcon className="h-4 w-4" aria-hidden="true" />
+                )}
+                <span className="hidden sm:inline">Instagram</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Connect Instagram (Business/Creator)</TooltipContent>
+          </Tooltip>
+        ) : null}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="Connect Facebook Pages"
-              onClick={onConnectFacebook}
-              disabled={isPending || isConnecting}
-              className="hover:opacity-90"
-              style={{
-                backgroundColor: facebookColor,
-                borderColor: facebookColor,
-                color: 'white',
-              }}
-            >
-              {connectingIntent === 'facebook' && isConnecting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <FacebookIcon className="h-4 w-4" aria-hidden="true" />
-              )}
-              <span className="hidden sm:inline">Facebook</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Connect Facebook (Pages)</TooltipContent>
-        </Tooltip>
+        {showFacebook ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Connect Facebook Pages"
+                onClick={onConnectFacebook}
+                disabled={isPending || isConnecting}
+                className="hover:opacity-90"
+                style={{
+                  backgroundColor: facebookColor,
+                  borderColor: facebookColor,
+                  color: 'white',
+                }}
+              >
+                {connectingIntent === 'facebook' && isConnecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FacebookIcon className="h-4 w-4" aria-hidden="true" />
+                )}
+                <span className="hidden sm:inline">Facebook</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Connect Facebook (Pages)</TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
     </TooltipProvider>
   );

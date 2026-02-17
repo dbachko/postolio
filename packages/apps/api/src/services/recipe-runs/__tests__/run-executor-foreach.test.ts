@@ -1,5 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@postolio/database', () => ({
+  Prisma: {
+    Decimal: class Decimal {
+      constructor(private value: string) {
+        this.value = value;
+      }
+    },
+  },
+}));
+
+vi.mock('../skills/index.js', () => ({
+  executeSkillCall: vi.fn(async () => {
+    throw new Error('executeSkillCall should not be called in this test');
+  }),
+}));
+
 const state = {
   runStatus: 'queued',
   artifacts: [] as Array<{ name: string; contentText: string | null }>,

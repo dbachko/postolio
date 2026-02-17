@@ -42,7 +42,7 @@ import { RunDetail } from '@/pages/RunDetail';
 import { Series } from '@/pages/Series';
 import { SeriesDetail } from '@/pages/SeriesDetail';
 
-import { ProtectedRoute, OnboardingGuard } from './guards';
+import { ProtectedRoute, OnboardingGuard, InboxFeatureGuard, SnippetsFeatureGuard } from './guards';
 import { LazyLoadingFallback } from './lazy-loading-fallback';
 import { AppErrorFallback } from './error-fallbacks';
 import { Drafts, Inbox, Limits, PostPage, SavedReplies, Snippets } from './lazy-pages';
@@ -113,35 +113,59 @@ export const router = createBrowserRouter([
   { path: '/__tz', element: <TzRenderTest />, errorElement: <RouteError /> },
   {
     path: '/inbox',
-    element: appShell(<Inbox />, {
-      wrapErrorBoundary: true,
-      wrapSuspense: true,
-      suspenseMinHeight: '400px',
-    }),
+    element: (
+      <InboxFeatureGuard>
+        {appShell(<Inbox />, {
+          wrapErrorBoundary: true,
+          wrapSuspense: true,
+          suspenseMinHeight: '400px',
+        })}
+      </InboxFeatureGuard>
+    ),
     errorElement: <RouteError />,
   },
   {
     path: '/inbox/comments',
-    element: <Navigate to="/inbox" replace />,
+    element: (
+      <InboxFeatureGuard>
+        <Navigate to="/inbox" replace />
+      </InboxFeatureGuard>
+    ),
     errorElement: <RouteError />,
   },
-  { path: '/inbox/dms', element: <Navigate to="/inbox" replace />, errorElement: <RouteError /> },
+  {
+    path: '/inbox/dms',
+    element: (
+      <InboxFeatureGuard>
+        <Navigate to="/inbox" replace />
+      </InboxFeatureGuard>
+    ),
+    errorElement: <RouteError />,
+  },
   {
     path: '/inbox/saved-replies',
-    element: appShell(<SavedReplies />, {
-      wrapErrorBoundary: true,
-      wrapSuspense: true,
-      suspenseMinHeight: '400px',
-    }),
+    element: (
+      <InboxFeatureGuard>
+        {appShell(<SavedReplies />, {
+          wrapErrorBoundary: true,
+          wrapSuspense: true,
+          suspenseMinHeight: '400px',
+        })}
+      </InboxFeatureGuard>
+    ),
     errorElement: <RouteError />,
   },
   {
     path: '/snippets',
-    element: appShell(<Snippets />, {
-      wrapErrorBoundary: true,
-      wrapSuspense: true,
-      suspenseMinHeight: '400px',
-    }),
+    element: (
+      <SnippetsFeatureGuard>
+        {appShell(<Snippets />, {
+          wrapErrorBoundary: true,
+          wrapSuspense: true,
+          suspenseMinHeight: '400px',
+        })}
+      </SnippetsFeatureGuard>
+    ),
     errorElement: <RouteError />,
   },
   {
@@ -260,7 +284,9 @@ export const router = createBrowserRouter([
   },
   {
     path: '/dm-automation',
-    element: appShell(<DMAutomation />, { onboarding: false }),
+    element: (
+      <InboxFeatureGuard>{appShell(<DMAutomation />, { onboarding: false })}</InboxFeatureGuard>
+    ),
   },
   {
     path: '/posts/:postId',

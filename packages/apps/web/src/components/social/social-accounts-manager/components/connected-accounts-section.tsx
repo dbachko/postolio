@@ -9,6 +9,7 @@ import type { ConnectedAccount } from '../types';
 type ConnectedAccountsSectionProps = {
   connectButtons: ReactNode;
   connectedCount: number;
+  multiDestinationEnabled: boolean;
   orderedAccounts: ConnectedAccount[];
   orderedConnectedIds: string[];
   onReorder: (nextIds: string[]) => void;
@@ -37,6 +38,7 @@ function moveId(list: string[], activeId: string, overId: string): string[] {
 export function ConnectedAccountsSection({
   connectButtons,
   connectedCount,
+  multiDestinationEnabled,
   orderedAccounts,
   orderedConnectedIds,
   onReorder,
@@ -99,38 +101,52 @@ export function ConnectedAccountsSection({
       </DndContext>
 
       <div className="space-y-2">
-        <div className="text-sm font-medium">Defaults for new posts</div>
-        <div className="space-y-1">
-          <div className="text-muted-foreground text-xs">Destinations</div>
-          <SocialAccountsPicker
-            options={defaultPostSocialAccountOptions}
-            value={defaultPostSocialAccountIds}
-            onChange={onDefaultPostSocialAccountIdsChange}
-            disabled={isSavingDefaults}
-            addLabel="Add destination"
-            addTooltip="Add destination"
-            addButtonText="Add destination"
-            addButtonTextMode="always"
-            searchPlaceholder="Search accounts…"
-          />
-          {defaultPostSocialAccountIds.length === 0 ? (
+        {multiDestinationEnabled ? (
+          <>
+            <div className="text-sm font-medium">Defaults for new posts</div>
+            <div className="space-y-1">
+              <div className="text-muted-foreground text-xs">Destinations</div>
+              <SocialAccountsPicker
+                options={defaultPostSocialAccountOptions}
+                value={defaultPostSocialAccountIds}
+                onChange={onDefaultPostSocialAccountIdsChange}
+                disabled={isSavingDefaults}
+                addLabel="Add destination"
+                addTooltip="Add destination"
+                addButtonText="Add destination"
+                addButtonTextMode="always"
+                searchPlaceholder="Search accounts…"
+              />
+              {defaultPostSocialAccountIds.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  No defaults set — new posts will auto-select the top account.
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  These accounts will be pre-selected when you create a new post.
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-sm font-medium">Defaults for new posts</div>
             <p className="text-muted-foreground text-xs">
-              No defaults set — new posts will auto-select the top account.
+              Single-destination mode is enabled. New posts automatically target your Instagram
+              account.
             </p>
-          ) : (
-            <p className="text-muted-foreground text-xs">
-              These accounts will be pre-selected when you create a new post.
-            </p>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
-      <Alert variant="info">
-        <AlertDescription className="text-sm">
-          Tip: Default accounts are optional. When none are set, new posts auto-select the top
-          account.
-        </AlertDescription>
-      </Alert>
+      {multiDestinationEnabled ? (
+        <Alert variant="info">
+          <AlertDescription className="text-sm">
+            Tip: Default accounts are optional. When none are set, new posts auto-select the top
+            account.
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

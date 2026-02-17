@@ -33,6 +33,7 @@ import { skills as skillsApi } from '@/lib/api';
 import { brand as brandApi } from '@/lib/api';
 import type { RecipeCategory, RecipeInputField, RecipeSummary } from '@/lib/api/recipes-client';
 import type { SkillSummary } from '@/lib/api/skills-client';
+import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 import { formatSocialAccountLabel } from '@/lib/social-account-label';
 import { SocialAccountsPicker } from '@/components/social/social-accounts-picker';
 import type { SocialAccountsPickerOption } from '@/components/social/social-accounts-picker/types';
@@ -42,6 +43,7 @@ import AssetPicker from '@/features/assets/components/AssetPicker';
 import { SkillIcon } from '@/components/icons/skill-icons';
 import { SortControls } from '@/features/assets/components/SortControls';
 import type { SortDirection } from '@/features/assets/components/asset-utils';
+import { useAuthStore } from '@/stores/authStore';
 
 function toHumanLabel(raw: string): string {
   const s = String(raw || '').trim();
@@ -206,6 +208,8 @@ export function Recipes() {
   const { selectedBrand } = useBrandStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
 
   const [sortField, setSortField] = useState<RecipeSortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -240,7 +244,9 @@ export function Recipes() {
   });
 
   const destinationPickerOptions = useMemo((): SocialAccountsPickerOption[] => {
-    const enabledPlatforms = getEnabledPlatforms().map((p) => p.id);
+    const enabledPlatforms = multiDestinationEnabled
+      ? getEnabledPlatforms().map((p) => p.id)
+      : (['instagram'] as const);
     const enabledSet = new Set<Platform>(enabledPlatforms as Platform[]);
     const accounts = (connectedAccountsQuery.data?.socialAccounts || [])
       .filter(
@@ -278,7 +284,7 @@ export function Recipes() {
         disabled: false,
       } satisfies SocialAccountsPickerOption;
     });
-  }, [connectedAccountsQuery.data?.socialAccounts]);
+  }, [connectedAccountsQuery.data?.socialAccounts, multiDestinationEnabled]);
 
   const preferredDestinationId = useMemo(() => {
     const payload = connectedAccountsQuery.data as any;

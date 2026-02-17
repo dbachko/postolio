@@ -18,6 +18,8 @@ process.env.ASSETS_API_BASE_URL = process.env.ASSETS_API_BASE_URL || 'http://loc
 process.env.ASSETS_API_SERVICE_TOKEN = process.env.ASSETS_API_SERVICE_TOKEN || 'test-assets-token';
 process.env.FEATURE_MULTI_DESTINATION_ENABLED =
   process.env.FEATURE_MULTI_DESTINATION_ENABLED || 'true';
+process.env.FEATURE_INBOX_ENABLED = process.env.FEATURE_INBOX_ENABLED || 'true';
+process.env.FEATURE_SNIPPETS_ENABLED = process.env.FEATURE_SNIPPETS_ENABLED || 'true';
 
 // Silence noisy logs during test runs
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';

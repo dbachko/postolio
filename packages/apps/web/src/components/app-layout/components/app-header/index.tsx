@@ -6,6 +6,7 @@ import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { useAuthStore } from '@/stores/authStore';
 import { useBrandStore } from '@/stores/brandStore';
 import { usePageMeta } from '@/contexts/PageMetaContext';
+import { isInboxEnabled, isSnippetsEnabled } from '@/lib/feature-flags';
 import {
   allNavItems,
   isRouteActive as isRouteActiveForItem,
@@ -65,14 +66,28 @@ export function AppHeader() {
     [navigate]
   );
 
+  const inboxEnabled = isInboxEnabled(user);
+  const snippetsEnabled = isSnippetsEnabled(user);
+  const visibleNavItems = useMemo(
+    () =>
+      allNavItems.filter((item) => {
+        if (!inboxEnabled && (item.path === '/inbox' || item.path === '/dm-automation')) {
+          return false;
+        }
+        if (!snippetsEnabled && item.path === '/snippets') return false;
+        return true;
+      }),
+    [inboxEnabled, snippetsEnabled]
+  );
+
   const filteredItems = useMemo(
     () =>
-      allNavItems.filter(
+      visibleNavItems.filter(
         (item) =>
           item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.description?.toLowerCase().includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [searchQuery, visibleNavItems]
   );
 
   const pageMeta = useMemo(() => {
@@ -86,8 +101,8 @@ export function AppHeader() {
     }
 
     const matchedPrimary =
-      allNavItems.find((item) => isRouteActiveForItem(item, path)) ??
-      allNavItems.find((item) => path.startsWith(item.path + '/'));
+      visibleNavItems.find((item) => isRouteActiveForItem(item, path)) ??
+      visibleNavItems.find((item) => path.startsWith(item.path + '/'));
 
     if (matchedPrimary) {
       const sectionChildren = getSectionNavItems(matchedPrimary);
@@ -112,7 +127,7 @@ export function AppHeader() {
     const last = path.split('/').filter(Boolean).pop();
     const title = last ? last.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Page';
     return { title, description: undefined };
-  }, [location.pathname]);
+  }, [location.pathname, visibleNavItems]);
 
   const effectivePageMeta = useMemo(() => {
     if (!pageMetaOverride) return pageMeta;

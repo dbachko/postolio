@@ -1,9 +1,10 @@
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
 import { getRedisClient } from '../services/redis.js';
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { getDatabaseClient } from '../config/database.js';
 import { contentSeriesRollingService } from '../services/content-series-rolling.js';
 import { assertBrandOwnership } from '../services/ownership.js';
+import { isInboxEnabledForUser } from '../utils/feature-flags.js';
 import {
   BrandNotFoundError,
   BrandValidationError,
@@ -17,6 +18,25 @@ import {
 } from '../services/brand.js';
 
 const prisma = getDatabaseClient();
+
+type AuthenticatedRequest = FastifyRequest & {
+  user?: {
+    id?: string;
+    email?: string | null;
+  };
+};
+
+async function requireInboxFeature(request: AuthenticatedRequest, reply: FastifyReply) {
+  const userId = request.user?.id ?? null;
+  const email = request.user?.email ?? null;
+  if (!isInboxEnabledForUser({ userId, email })) {
+    return reply.code(403).send({
+      error: 'feature_disabled',
+      code: 'INBOX_DISABLED',
+      message: 'Inbox is not enabled for this account',
+    });
+  }
+}
 
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   // Create a new brand (RESTful: POST /)
@@ -389,282 +409,287 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       view?: 'to_review' | 'all';
       limit?: string;
     };
-  }>('/:id/inbox/items', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { id: brandId } = request.params;
+  }>(
+    '/:id/inbox/items',
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id: brandId } = request.params;
 
-      // Verify ownership
-      await assertBrandOwnership(userId, brandId);
+        // Verify ownership
+        await assertBrandOwnership(userId, brandId);
 
-      const parseList = (value: string | string[] | undefined | null): string[] => {
-        if (!value) return [];
-        const parts = Array.isArray(value) ? value : String(value).split(',');
-        return parts.map((v) => String(v || '').trim()).filter(Boolean);
-      };
+        const parseList = (value: string | string[] | undefined | null): string[] => {
+          if (!value) return [];
+          const parts = Array.isArray(value) ? value : String(value).split(',');
+          return parts.map((v) => String(v || '').trim()).filter(Boolean);
+        };
 
-      const socialAccountIds = parseList(request.query.socialAccountId);
-      const channelsRaw = parseList(request.query.channel);
-      const platformsRaw = parseList(request.query.platform);
-      const view = request.query.view === 'all' ? 'all' : 'to_review';
-      const limit = Math.max(
-        1,
-        Math.min(100, Number.parseInt(String(request.query.limit || 50), 10) || 50)
-      );
+        const socialAccountIds = parseList(request.query.socialAccountId);
+        const channelsRaw = parseList(request.query.channel);
+        const platformsRaw = parseList(request.query.platform);
+        const view = request.query.view === 'all' ? 'all' : 'to_review';
+        const limit = Math.max(
+          1,
+          Math.min(100, Number.parseInt(String(request.query.limit || 50), 10) || 50)
+        );
 
-      const normalizePlatform = (value: string): string => {
-        const v = String(value || '')
-          .trim()
-          .toLowerCase();
-        if (v === 'ig') return 'instagram';
-        if (v === 'fb') return 'facebook';
-        return v;
-      };
-      const platformAllowList = new Set([
-        'instagram',
-        'facebook',
-        'linkedin',
-        'x',
-        'youtube',
-        'tiktok',
-      ]);
-      const platformsNormalized = platformsRaw
-        .map(normalizePlatform)
-        .filter((p) => platformAllowList.has(p));
+        const normalizePlatform = (value: string): string => {
+          const v = String(value || '')
+            .trim()
+            .toLowerCase();
+          if (v === 'ig') return 'instagram';
+          if (v === 'fb') return 'facebook';
+          return v;
+        };
+        const platformAllowList = new Set([
+          'instagram',
+          'facebook',
+          'linkedin',
+          'x',
+          'youtube',
+          'tiktok',
+        ]);
+        const platformsNormalized = platformsRaw
+          .map(normalizePlatform)
+          .filter((p) => platformAllowList.has(p));
 
-      const channels = channelsRaw.length ? new Set(channelsRaw) : null;
-      const platforms = platformsNormalized.length ? new Set(platformsNormalized) : null;
+        const channels = channelsRaw.length ? new Set(channelsRaw) : null;
+        const platforms = platformsNormalized.length ? new Set(platformsNormalized) : null;
 
-      const items: any[] = [];
+        const items: any[] = [];
 
-      // -----------------------
-      // Comments (publication-centric)
-      // -----------------------
-      const includeComments =
-        (!channels && true) || (channels && (channels.has('comments') || channels.has('comment')));
-      const supportedCommentPlatforms = ['instagram', 'facebook'] as const;
-      const commentPlatforms = platforms
-        ? supportedCommentPlatforms.filter((p) => platforms.has(p))
-        : supportedCommentPlatforms;
+        // -----------------------
+        // Comments (publication-centric)
+        // -----------------------
+        const includeComments =
+          (!channels && true) ||
+          (channels && (channels.has('comments') || channels.has('comment')));
+        const supportedCommentPlatforms = ['instagram', 'facebook'] as const;
+        const commentPlatforms = platforms
+          ? supportedCommentPlatforms.filter((p) => platforms.has(p))
+          : supportedCommentPlatforms;
 
-      if (includeComments && commentPlatforms.length) {
-        const pubs = await prisma.contentPublication.findMany({
-          where: {
-            platform: { in: commentPlatforms as any },
-            socialAccount: { brandId, platform: { in: commentPlatforms as any } },
-            ...(socialAccountIds.length ? { socialAccountId: { in: socialAccountIds } } : {}),
-          },
-          orderBy: { publishedAt: 'desc' },
-          take: 200,
-          select: {
-            id: true,
-            platform: true,
-            socialAccountId: true,
-            permalink: true,
-            publishedAt: true,
-            metricsLatest: { select: { comments: true } },
-            content: {
-              select: {
-                id: true,
-                caption: true,
-                postedAt: true,
-                mediaAssets: {
-                  select: { assetId: true, displayOrder: true },
-                  orderBy: { displayOrder: 'asc' },
-                  take: 1,
+        if (includeComments && commentPlatforms.length) {
+          const pubs = await prisma.contentPublication.findMany({
+            where: {
+              platform: { in: commentPlatforms as any },
+              socialAccount: { brandId, platform: { in: commentPlatforms as any } },
+              ...(socialAccountIds.length ? { socialAccountId: { in: socialAccountIds } } : {}),
+            },
+            orderBy: { publishedAt: 'desc' },
+            take: 200,
+            select: {
+              id: true,
+              platform: true,
+              socialAccountId: true,
+              permalink: true,
+              publishedAt: true,
+              metricsLatest: { select: { comments: true } },
+              content: {
+                select: {
+                  id: true,
+                  caption: true,
+                  postedAt: true,
+                  mediaAssets: {
+                    select: { assetId: true, displayOrder: true },
+                    orderBy: { displayOrder: 'asc' },
+                    take: 1,
+                  },
                 },
               },
             },
-          },
-        });
+          });
 
-        const publicationIds = pubs.map((p) => p.id).filter(Boolean);
-        const grouped = publicationIds.length
-          ? await prisma.publicationComment.groupBy({
-              by: ['publicationId', 'status'],
-              where: { publicationId: { in: publicationIds } },
-              _count: { _all: true },
-            })
-          : [];
+          const publicationIds = pubs.map((p) => p.id).filter(Boolean);
+          const grouped = publicationIds.length
+            ? await prisma.publicationComment.groupBy({
+                by: ['publicationId', 'status'],
+                where: { publicationId: { in: publicationIds } },
+                _count: { _all: true },
+              })
+            : [];
 
-        const countsByPublicationId = new Map<
-          string,
-          { open: number; resolved: number; archived: number }
-        >();
-        for (const row of grouped) {
-          const entry = countsByPublicationId.get(row.publicationId) || {
-            open: 0,
-            resolved: 0,
-            archived: 0,
-          };
-          const status = String(row.status);
-          if (status === 'open') entry.open = row._count._all;
-          if (status === 'resolved') entry.resolved = row._count._all;
-          if (status === 'archived') entry.archived = row._count._all;
-          countsByPublicationId.set(row.publicationId, entry);
+          const countsByPublicationId = new Map<
+            string,
+            { open: number; resolved: number; archived: number }
+          >();
+          for (const row of grouped) {
+            const entry = countsByPublicationId.get(row.publicationId) || {
+              open: 0,
+              resolved: 0,
+              archived: 0,
+            };
+            const status = String(row.status);
+            if (status === 'open') entry.open = row._count._all;
+            if (status === 'resolved') entry.resolved = row._count._all;
+            if (status === 'archived') entry.archived = row._count._all;
+            countsByPublicationId.set(row.publicationId, entry);
+          }
+
+          const latestComments = publicationIds.length
+            ? await prisma.publicationComment.findMany({
+                where: {
+                  publicationId: { in: publicationIds },
+                  ...(view === 'to_review' ? { status: 'open' } : {}),
+                },
+                orderBy: [{ publicationId: 'asc' }, { createdAt: 'desc' }],
+                distinct: ['publicationId'],
+                select: {
+                  publicationId: true,
+                  text: true,
+                  authorUsername: true,
+                  createdAt: true,
+                },
+              })
+            : [];
+
+          const latestCommentByPublicationId = new Map(
+            latestComments.map((c) => [
+              c.publicationId,
+              {
+                text: c.text,
+                authorUsername: c.authorUsername,
+                createdAt: c.createdAt,
+              },
+            ])
+          );
+
+          for (const pub of pubs) {
+            const counts = countsByPublicationId.get(pub.id) || {
+              open: 0,
+              resolved: 0,
+              archived: 0,
+            };
+            const persistedTotal = counts.open + counts.resolved + counts.archived;
+            const metricsTotalRaw = pub.metricsLatest?.comments;
+            const metricsTotal =
+              typeof metricsTotalRaw === 'number' && Number.isFinite(metricsTotalRaw)
+                ? metricsTotalRaw
+                : 0;
+            const totalComments = Math.max(persistedTotal, metricsTotal);
+
+            // Inbox is engagement-driven; don't show posts with zero comment activity.
+            if (totalComments <= 0) continue;
+
+            // If we haven't ingested comment rows yet, treat the total as "to review" so the thread
+            // appears and selecting it can hydrate details via Graph.
+            const newCount = persistedTotal > 0 ? counts.open : totalComments;
+
+            if (view === 'to_review' && (!pub.content?.id || newCount <= 0)) continue;
+
+            const latest = latestCommentByPublicationId.get(pub.id) || null;
+            const lastActivityAt =
+              latest?.createdAt || pub.content?.postedAt || pub.publishedAt || null;
+
+            items.push({
+              type: 'comment_thread',
+              platform: pub.platform,
+              socialAccountId: pub.socialAccountId,
+              publicationId: pub.id,
+              postId: pub.content?.id || '',
+              caption: pub.content?.caption || null,
+              primaryAssetId: pub.content?.mediaAssets?.[0]?.assetId ?? null,
+              permalink: pub.permalink || null,
+              postedAt: pub.content?.postedAt || pub.publishedAt || null,
+              totalComments,
+              resolvedCount: counts.resolved,
+              newCount,
+              lastActivityAt,
+              previewText: latest?.text || null,
+              previewAuthorUsername: latest?.authorUsername || null,
+            });
+          }
         }
 
-        const latestComments = publicationIds.length
-          ? await prisma.publicationComment.findMany({
-              where: {
-                publicationId: { in: publicationIds },
-                ...(view === 'to_review' ? { status: 'open' } : {}),
-              },
-              orderBy: [{ publicationId: 'asc' }, { createdAt: 'desc' }],
-              distinct: ['publicationId'],
-              select: {
-                publicationId: true,
-                text: true,
-                authorUsername: true,
-                createdAt: true,
-              },
-            })
-          : [];
+        // -----------------------
+        // DMs (conversation-centric)
+        // -----------------------
+        const includeDMs =
+          (!channels && true) || (channels && (channels.has('dms') || channels.has('dm')));
+        if (includeDMs) {
+          const where: any = { brandId };
+          if (socialAccountIds.length) where.socialAccountId = { in: socialAccountIds };
+          if (view === 'to_review') where.state = 'active';
+          if (platforms) where.platform = { in: Array.from(platforms) } as any;
 
-        const latestCommentByPublicationId = new Map(
-          latestComments.map((c) => [
-            c.publicationId,
-            {
-              text: c.text,
-              authorUsername: c.authorUsername,
-              createdAt: c.createdAt,
+          const conversations = await prisma.dMConversation.findMany({
+            where,
+            orderBy: { lastMessageAt: 'desc' },
+            take: 200,
+            include: {
+              _count: { select: { messages: true } },
             },
-          ])
-        );
+          });
 
-        for (const pub of pubs) {
-          const counts = countsByPublicationId.get(pub.id) || {
-            open: 0,
-            resolved: 0,
-            archived: 0,
-          };
-          const persistedTotal = counts.open + counts.resolved + counts.archived;
-          const metricsTotalRaw = pub.metricsLatest?.comments;
-          const metricsTotal =
-            typeof metricsTotalRaw === 'number' && Number.isFinite(metricsTotalRaw)
-              ? metricsTotalRaw
+          const conversationIds = conversations.map((c) => c.id);
+          const lastMessages = conversationIds.length
+            ? await prisma.dMMessage.findMany({
+                where: { conversationId: { in: conversationIds } },
+                orderBy: [{ conversationId: 'asc' }, { createdAt: 'desc' }],
+                distinct: ['conversationId'],
+                select: {
+                  conversationId: true,
+                  messageText: true,
+                  direction: true,
+                  createdAt: true,
+                },
+              })
+            : [];
+
+          const lastMessageByConversationId = new Map(
+            lastMessages.map((m) => [
+              m.conversationId,
+              {
+                text: m.messageText,
+                direction: m.direction,
+                createdAt: m.createdAt,
+              },
+            ])
+          );
+
+          for (const conv of conversations) {
+            if (conv._count.messages <= 0) continue;
+            const last = lastMessageByConversationId.get(conv.id) || null;
+            if (view === 'to_review' && last?.direction !== 'inbound') continue;
+
+            items.push({
+              type: 'dm_conversation',
+              platform: conv.platform,
+              socialAccountId: conv.socialAccountId,
+              conversationId: conv.id,
+              state: conv.state,
+              participantUsername: conv.participantUsername,
+              lastMessageAt: conv.lastMessageAt,
+              lastMessageText: last?.text || null,
+              lastMessageDirection: last?.direction || null,
+              messageCount: conv._count.messages,
+            });
+          }
+        }
+
+        items.sort((a, b) => {
+          const ta = a.lastActivityAt
+            ? new Date(a.lastActivityAt).getTime()
+            : a.lastMessageAt
+              ? new Date(a.lastMessageAt).getTime()
               : 0;
-          const totalComments = Math.max(persistedTotal, metricsTotal);
-
-          // Inbox is engagement-driven; don't show posts with zero comment activity.
-          if (totalComments <= 0) continue;
-
-          // If we haven't ingested comment rows yet, treat the total as "to review" so the thread
-          // appears and selecting it can hydrate details via Graph.
-          const newCount = persistedTotal > 0 ? counts.open : totalComments;
-
-          if (view === 'to_review' && (!pub.content?.id || newCount <= 0)) continue;
-
-          const latest = latestCommentByPublicationId.get(pub.id) || null;
-          const lastActivityAt =
-            latest?.createdAt || pub.content?.postedAt || pub.publishedAt || null;
-
-          items.push({
-            type: 'comment_thread',
-            platform: pub.platform,
-            socialAccountId: pub.socialAccountId,
-            publicationId: pub.id,
-            postId: pub.content?.id || '',
-            caption: pub.content?.caption || null,
-            primaryAssetId: pub.content?.mediaAssets?.[0]?.assetId ?? null,
-            permalink: pub.permalink || null,
-            postedAt: pub.content?.postedAt || pub.publishedAt || null,
-            totalComments,
-            resolvedCount: counts.resolved,
-            newCount,
-            lastActivityAt,
-            previewText: latest?.text || null,
-            previewAuthorUsername: latest?.authorUsername || null,
-          });
-        }
-      }
-
-      // -----------------------
-      // DMs (conversation-centric)
-      // -----------------------
-      const includeDMs =
-        (!channels && true) || (channels && (channels.has('dms') || channels.has('dm')));
-      if (includeDMs) {
-        const where: any = { brandId };
-        if (socialAccountIds.length) where.socialAccountId = { in: socialAccountIds };
-        if (view === 'to_review') where.state = 'active';
-        if (platforms) where.platform = { in: Array.from(platforms) } as any;
-
-        const conversations = await prisma.dMConversation.findMany({
-          where,
-          orderBy: { lastMessageAt: 'desc' },
-          take: 200,
-          include: {
-            _count: { select: { messages: true } },
-          },
+          const tb = b.lastActivityAt
+            ? new Date(b.lastActivityAt).getTime()
+            : b.lastMessageAt
+              ? new Date(b.lastMessageAt).getTime()
+              : 0;
+          return tb - ta;
         });
 
-        const conversationIds = conversations.map((c) => c.id);
-        const lastMessages = conversationIds.length
-          ? await prisma.dMMessage.findMany({
-              where: { conversationId: { in: conversationIds } },
-              orderBy: [{ conversationId: 'asc' }, { createdAt: 'desc' }],
-              distinct: ['conversationId'],
-              select: {
-                conversationId: true,
-                messageText: true,
-                direction: true,
-                createdAt: true,
-              },
-            })
-          : [];
-
-        const lastMessageByConversationId = new Map(
-          lastMessages.map((m) => [
-            m.conversationId,
-            {
-              text: m.messageText,
-              direction: m.direction,
-              createdAt: m.createdAt,
-            },
-          ])
-        );
-
-        for (const conv of conversations) {
-          if (conv._count.messages <= 0) continue;
-          const last = lastMessageByConversationId.get(conv.id) || null;
-          if (view === 'to_review' && last?.direction !== 'inbound') continue;
-
-          items.push({
-            type: 'dm_conversation',
-            platform: conv.platform,
-            socialAccountId: conv.socialAccountId,
-            conversationId: conv.id,
-            state: conv.state,
-            participantUsername: conv.participantUsername,
-            lastMessageAt: conv.lastMessageAt,
-            lastMessageText: last?.text || null,
-            lastMessageDirection: last?.direction || null,
-            messageCount: conv._count.messages,
-          });
-        }
+        return reply.send({ items: items.slice(0, limit) });
+      } catch (error) {
+        request.log.error({ err: error }, 'Inbox items error');
+        return reply.code(500).send({ error: 'Failed to retrieve inbox items' });
       }
-
-      items.sort((a, b) => {
-        const ta = a.lastActivityAt
-          ? new Date(a.lastActivityAt).getTime()
-          : a.lastMessageAt
-            ? new Date(a.lastMessageAt).getTime()
-            : 0;
-        const tb = b.lastActivityAt
-          ? new Date(b.lastActivityAt).getTime()
-          : b.lastMessageAt
-            ? new Date(b.lastMessageAt).getTime()
-            : 0;
-        return tb - ta;
-      });
-
-      return reply.send({ items: items.slice(0, limit) });
-    } catch (error) {
-      request.log.error({ err: error }, 'Inbox items error');
-      return reply.code(500).send({ error: 'Failed to retrieve inbox items' });
     }
-  });
+  );
 
   // Enqueue/trigger background ingestion of comments for a brand
   fastify.post<{
@@ -675,83 +700,87 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       maxPosts?: string;
       perPostLimit?: string;
     };
-  }>('/:id/inbox/comments/ingest', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { id: brandId } = request.params;
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
-
-      const parseList = (value: string | string[] | undefined | null): string[] => {
-        if (!value) return [];
-        const parts = Array.isArray(value) ? value : String(value).split(',');
-        return parts.map((v) => String(v || '').trim()).filter(Boolean);
-      };
-
-      const socialAccountIds = parseList(request.query.socialAccountId);
-      const sync = String(request.query.sync || '').toLowerCase() === 'true';
-      const maxPosts = Math.max(
-        1,
-        Math.min(200, Number.parseInt(String(request.query.maxPosts || 50), 10) || 50)
-      );
-      const perPostLimit = Math.max(
-        1,
-        Math.min(200, Number.parseInt(String(request.query.perPostLimit || 100), 10) || 100)
-      );
-
-      if (sync) {
-        const { ingestBrandComments } = await import('../services/inbox-comments-ingestor.js');
-        const result = await ingestBrandComments(brandId, maxPosts, perPostLimit, {
-          socialAccountIds,
-        });
-        return reply.send({ success: true, enqueued: false, result });
-      }
-
-      // Throttle via Redis to avoid overloading the Graph API
-      const redis = getRedisClient();
-      const throttleKey = `ingest:brand:comments:${brandId}`;
-      let nextAllowed: string | null = null;
-      if (redis) {
-        const ttl = await redis.ttl(throttleKey);
-        if (ttl > 0) {
-          nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
-          return reply.code(429).send({
-            success: false,
-            error: 'Ingestion recently requested',
-            nextAllowed,
-          });
-        }
-        await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
-      }
-
-      // Run ingestion in the background (non-blocking)
-      let jobId: string | number | null = null;
+  }>(
+    '/:id/inbox/comments/ingest',
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
+    async (request, reply) => {
       try {
-        const job = await backgroundJobs.scheduleJob(JobType.INBOX_COMMENTS_INGEST, {
-          brandId,
-          socialAccountIds,
-          maxPosts,
-          perPostLimit,
-          triggeredBy: userId,
-        });
-        jobId = job.id;
-      } catch (e) {
-        // If we fail to enqueue the job, remove the throttle key so the user can retry immediately.
-        if (redis) {
-          try {
-            await redis.del(throttleKey);
-          } catch {}
-        }
-        throw e;
-      }
+        const userId = request.user!.id;
+        const { id: brandId } = request.params;
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
 
-      nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-      return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
-    } catch (error) {
-      request.log.error({ err: error }, 'Failed to enqueue comments ingestion');
-      return reply.code(500).send({ error: 'Failed to enqueue comments ingestion' });
+        const parseList = (value: string | string[] | undefined | null): string[] => {
+          if (!value) return [];
+          const parts = Array.isArray(value) ? value : String(value).split(',');
+          return parts.map((v) => String(v || '').trim()).filter(Boolean);
+        };
+
+        const socialAccountIds = parseList(request.query.socialAccountId);
+        const sync = String(request.query.sync || '').toLowerCase() === 'true';
+        const maxPosts = Math.max(
+          1,
+          Math.min(200, Number.parseInt(String(request.query.maxPosts || 50), 10) || 50)
+        );
+        const perPostLimit = Math.max(
+          1,
+          Math.min(200, Number.parseInt(String(request.query.perPostLimit || 100), 10) || 100)
+        );
+
+        if (sync) {
+          const { ingestBrandComments } = await import('../services/inbox-comments-ingestor.js');
+          const result = await ingestBrandComments(brandId, maxPosts, perPostLimit, {
+            socialAccountIds,
+          });
+          return reply.send({ success: true, enqueued: false, result });
+        }
+
+        // Throttle via Redis to avoid overloading the Graph API
+        const redis = getRedisClient();
+        const throttleKey = `ingest:brand:comments:${brandId}`;
+        let nextAllowed: string | null = null;
+        if (redis) {
+          const ttl = await redis.ttl(throttleKey);
+          if (ttl > 0) {
+            nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
+            return reply.code(429).send({
+              success: false,
+              error: 'Ingestion recently requested',
+              nextAllowed,
+            });
+          }
+          await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
+        }
+
+        // Run ingestion in the background (non-blocking)
+        let jobId: string | number | null = null;
+        try {
+          const job = await backgroundJobs.scheduleJob(JobType.INBOX_COMMENTS_INGEST, {
+            brandId,
+            socialAccountIds,
+            maxPosts,
+            perPostLimit,
+            triggeredBy: userId,
+          });
+          jobId = job.id;
+        } catch (e) {
+          // If we fail to enqueue the job, remove the throttle key so the user can retry immediately.
+          if (redis) {
+            try {
+              await redis.del(throttleKey);
+            } catch {}
+          }
+          throw e;
+        }
+
+        nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to enqueue comments ingestion');
+        return reply.code(500).send({ error: 'Failed to enqueue comments ingestion' });
+      }
     }
-  });
+  );
 
   // Enqueue/trigger background ingestion of DMs for a brand
   fastify.post<{
@@ -762,80 +791,84 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       maxThreads?: string;
       perThreadLimit?: string;
     };
-  }>('/:id/inbox/dms/ingest', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { id: brandId } = request.params;
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
-
-      const parseList = (value: string | string[] | undefined | null): string[] => {
-        if (!value) return [];
-        const parts = Array.isArray(value) ? value : String(value).split(',');
-        return parts.map((v) => String(v || '').trim()).filter(Boolean);
-      };
-
-      const socialAccountIds = parseList(request.query.socialAccountId);
-      const sync = String(request.query.sync || '').toLowerCase() === 'true';
-      const maxThreads = Math.max(
-        1,
-        Math.min(50, Number.parseInt(String(request.query.maxThreads || 25), 10) || 25)
-      );
-      const perThreadLimit = Math.max(
-        1,
-        Math.min(50, Number.parseInt(String(request.query.perThreadLimit || 30), 10) || 30)
-      );
-
-      if (sync) {
-        const { ingestBrandDMs } = await import('../services/inbox-dm-ingestor.js');
-        const result = await ingestBrandDMs(brandId, maxThreads, perThreadLimit, {
-          socialAccountIds,
-        });
-        return reply.send({ success: true, enqueued: false, result });
-      }
-
-      const redis = getRedisClient();
-      const throttleKey = `ingest:brand:dms:${brandId}`;
-      let nextAllowed: string | null = null;
-      if (redis) {
-        const ttl = await redis.ttl(throttleKey);
-        if (ttl > 0) {
-          nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
-          return reply.code(429).send({
-            success: false,
-            error: 'Ingestion recently requested',
-            nextAllowed,
-          });
-        }
-        await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
-      }
-
-      let jobId: string | number | null = null;
+  }>(
+    '/:id/inbox/dms/ingest',
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
+    async (request, reply) => {
       try {
-        const job = await backgroundJobs.scheduleJob(JobType.INBOX_DMS_INGEST, {
-          brandId,
-          socialAccountIds,
-          maxThreads,
-          perThreadLimit,
-          triggeredBy: userId,
-        });
-        jobId = job.id;
-      } catch (e) {
-        if (redis) {
-          try {
-            await redis.del(throttleKey);
-          } catch {}
-        }
-        throw e;
-      }
+        const userId = request.user!.id;
+        const { id: brandId } = request.params;
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
 
-      nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-      return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
-    } catch (error) {
-      request.log.error({ err: error }, 'Failed to enqueue DMs ingestion');
-      return reply.code(500).send({ error: 'Failed to enqueue DMs ingestion' });
+        const parseList = (value: string | string[] | undefined | null): string[] => {
+          if (!value) return [];
+          const parts = Array.isArray(value) ? value : String(value).split(',');
+          return parts.map((v) => String(v || '').trim()).filter(Boolean);
+        };
+
+        const socialAccountIds = parseList(request.query.socialAccountId);
+        const sync = String(request.query.sync || '').toLowerCase() === 'true';
+        const maxThreads = Math.max(
+          1,
+          Math.min(50, Number.parseInt(String(request.query.maxThreads || 25), 10) || 25)
+        );
+        const perThreadLimit = Math.max(
+          1,
+          Math.min(50, Number.parseInt(String(request.query.perThreadLimit || 30), 10) || 30)
+        );
+
+        if (sync) {
+          const { ingestBrandDMs } = await import('../services/inbox-dm-ingestor.js');
+          const result = await ingestBrandDMs(brandId, maxThreads, perThreadLimit, {
+            socialAccountIds,
+          });
+          return reply.send({ success: true, enqueued: false, result });
+        }
+
+        const redis = getRedisClient();
+        const throttleKey = `ingest:brand:dms:${brandId}`;
+        let nextAllowed: string | null = null;
+        if (redis) {
+          const ttl = await redis.ttl(throttleKey);
+          if (ttl > 0) {
+            nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
+            return reply.code(429).send({
+              success: false,
+              error: 'Ingestion recently requested',
+              nextAllowed,
+            });
+          }
+          await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
+        }
+
+        let jobId: string | number | null = null;
+        try {
+          const job = await backgroundJobs.scheduleJob(JobType.INBOX_DMS_INGEST, {
+            brandId,
+            socialAccountIds,
+            maxThreads,
+            perThreadLimit,
+            triggeredBy: userId,
+          });
+          jobId = job.id;
+        } catch (e) {
+          if (redis) {
+            try {
+              await redis.del(throttleKey);
+            } catch {}
+          }
+          throw e;
+        }
+
+        nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        return reply.send({ success: true, enqueued: true, jobId, nextAllowed });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to enqueue DMs ingestion');
+        return reply.code(500).send({ error: 'Failed to enqueue DMs ingestion' });
+      }
     }
-  });
+  );
 
   // Brand content history (moved from content.ts)
   fastify.get<{ Params: { id: string } }>(

@@ -3,7 +3,7 @@
  * Manages automation rules, analytics, and conversations
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
 import {
@@ -17,8 +17,28 @@ import {
 import { getStatusBroadcaster } from '../services/broadcast-registry.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { APIError } from '@postolio/errors';
+import { isInboxEnabledForUser } from '../utils/feature-flags.js';
 
 const logger = baseLogger.child({ module: 'dm-automation-routes' });
+
+type AuthenticatedRequest = FastifyRequest & {
+  user?: {
+    id?: string;
+    email?: string | null;
+  };
+};
+
+async function requireInboxFeature(request: AuthenticatedRequest, reply: FastifyReply) {
+  const userId = request.user?.id ?? null;
+  const email = request.user?.email ?? null;
+  if (!isInboxEnabledForUser({ userId, email })) {
+    return reply.code(403).send({
+      error: 'feature_disabled',
+      code: 'INBOX_DISABLED',
+      message: 'Inbox is not enabled for this account',
+    });
+  }
+}
 
 const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -27,7 +47,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get<{ Params: { brandId: string } }>(
     '/brands/:brandId/dm-automation/rules',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
@@ -73,7 +93,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post<{ Params: { brandId: string }; Body: CreateRuleInput }>(
     '/brands/:brandId/dm-automation/rules',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
@@ -136,7 +156,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.patch<{ Params: { brandId: string; id: string }; Body: UpdateRuleInput }>(
     '/brands/:brandId/dm-automation/rules/:id',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, id } = request.params;
       const userId = request.user!.id;
@@ -215,7 +235,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.delete<{ Params: { brandId: string; id: string } }>(
     '/brands/:brandId/dm-automation/rules/:id',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, id } = request.params;
       const userId = request.user!.id;
@@ -278,7 +298,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get<{ Params: { brandId: string }; Querystring: AnalyticsQuery }>(
     '/brands/:brandId/dm-automation/analytics',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
@@ -441,7 +461,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get<{ Params: { brandId: string; conversationId: string } }>(
     '/brands/:brandId/dm-automation/conversations/:conversationId/messages',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, conversationId } = request.params;
       const userId = request.user!.id;
@@ -494,7 +514,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { messageText: string };
   }>(
     '/brands/:brandId/dm-automation/conversations/:conversationId/messages',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, conversationId } = request.params;
       const { messageText } = request.body;
@@ -592,7 +612,7 @@ const dmAutomationRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { state: 'active' | 'archived' | 'spam' };
   }>(
     '/brands/:brandId/dm-automation/conversations/:conversationId',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, requireInboxFeature] },
     async (request, reply) => {
       const { brandId, conversationId } = request.params;
       const { state } = request.body;

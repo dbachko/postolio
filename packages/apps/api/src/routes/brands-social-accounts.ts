@@ -3,6 +3,7 @@ import { getDatabaseClient } from '../config/database.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { getTokenService } from '../services/service-clients.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
+import { isMultiDestinationEnabledForUser } from '../utils/feature-flags.js';
 
 const prisma = getDatabaseClient();
 
@@ -77,10 +78,12 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
+      const email = (request.user as any)?.email ?? null;
 
       const brand = await assertBrandOwnership(userId, brandId);
       const preferences = normalizePreferences(brand.preferences);
       const defaultPostSocialAccountIds = normalizeDefaultPostSocialAccountIds(preferences);
+      const multiDestinationEnabled = isMultiDestinationEnabledForUser({ userId, email });
 
       const socialAccounts = await prisma.socialAccount.findMany({
         where: { brandId },
@@ -135,12 +138,30 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
         };
       });
 
-      const primarySocialAccountId = items.find((a) => !a.disconnected)?.id ?? null;
+      const itemById = new Map(items.map((item) => [item.id, item]));
+      let normalizedDefaultPostIds = defaultPostSocialAccountIds.filter((id) => {
+        const item = itemById.get(id);
+        if (!item || item.disconnected) return false;
+        if (!multiDestinationEnabled && String(item.platform || '').toLowerCase() !== 'instagram') {
+          return false;
+        }
+        return true;
+      });
+      if (!multiDestinationEnabled && normalizedDefaultPostIds.length > 1) {
+        normalizedDefaultPostIds = [normalizedDefaultPostIds[0]!];
+      }
+
+      const primarySocialAccountId =
+        items.find(
+          (a) =>
+            !a.disconnected &&
+            (multiDestinationEnabled || String(a.platform || '').toLowerCase() === 'instagram')
+        )?.id ?? null;
 
       return reply.send({
         brandId,
         primarySocialAccountId,
-        defaultPostSocialAccountIds,
+        defaultPostSocialAccountIds: normalizedDefaultPostIds,
         socialAccounts: items,
       });
     }
@@ -153,7 +174,9 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
+      const email = (request.user as any)?.email ?? null;
       const brand = await assertBrandOwnership(userId, brandId);
+      const multiDestinationEnabled = isMultiDestinationEnabledForUser({ userId, email });
 
       const preferences = normalizePreferences(brand.preferences);
       const requested = (() => {
@@ -175,12 +198,21 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
       if (requested.length > 0) {
         const accounts = await prisma.socialAccount.findMany({
           where: { brandId, id: { in: requested } },
-          select: { id: true, metadata: true },
+          select: { id: true, metadata: true, platform: true },
         });
         const allowedSet = new Set(
-          accounts.filter((a) => !isDisconnected(a.metadata)).map((a) => a.id)
+          accounts
+            .filter((a) => !isDisconnected(a.metadata))
+            .filter(
+              (a) =>
+                multiDestinationEnabled || String(a.platform || '').toLowerCase() === 'instagram'
+            )
+            .map((a) => a.id)
         );
         allowed = requested.filter((id) => allowedSet.has(id));
+      }
+      if (!multiDestinationEnabled && allowed.length > 1) {
+        allowed = [allowed[0]!];
       }
 
       await prisma.brand.update({
