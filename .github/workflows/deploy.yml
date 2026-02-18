@@ -904,22 +904,141 @@ jobs:
             exit 1
           fi
 
+      - name: Gather ECS diagnostics on stack failure
+        if: failure() && (matrix.stack == 'api' || matrix.stack == 'asset-library')
+        continue-on-error: true
+        run: |
+          set +e
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+          STACK="${{ matrix.stack }}"
+
+          if [[ "$STACK" == "api" ]]; then
+            CLUSTER_NAME="postolio-${ENV}-api-cluster"
+            SERVICE_NAME="postolio-${ENV}-api-service"
+          else
+            CLUSTER_NAME="postolio-${ENV}-assets-cluster"
+            SERVICE_NAME="postolio-${ENV}-assets-api-service"
+          fi
+
+          echo "Collecting ECS diagnostics for cluster=${CLUSTER_NAME} service=${SERVICE_NAME}"
+          aws ecs describe-services \
+            --cluster "$CLUSTER_NAME" \
+            --services "$SERVICE_NAME" \
+            --query 'services[0].{Status:status,Desired:desiredCount,Running:runningCount,Pending:pendingCount,Events:events[0:10].[createdAt,message]}' \
+            --output table || true
+
+          STOPPED_TASK_ARN="$(
+            aws ecs list-tasks \
+              --cluster "$CLUSTER_NAME" \
+              --service-name "$SERVICE_NAME" \
+              --desired-status STOPPED \
+              --max-items 1 \
+              --query 'taskArns[0]' \
+              --output text 2>/dev/null || true
+          )"
+
+          if [[ -z "$STOPPED_TASK_ARN" || "$STOPPED_TASK_ARN" == "None" ]]; then
+            echo "No stopped tasks found for ${SERVICE_NAME}."
+            exit 0
+          fi
+
+          echo "Latest stopped task: $STOPPED_TASK_ARN"
+          aws ecs describe-tasks \
+            --cluster "$CLUSTER_NAME" \
+            --tasks "$STOPPED_TASK_ARN" \
+            --query 'tasks[0].{StoppedReason:stoppedReason,LastStatus:lastStatus,Containers:containers[*].{Name:name,Reason:reason,ExitCode:exitCode,LastStatus:lastStatus}}' \
+            --output json || true
+
+          TASK_DEF_ARN="$(
+            aws ecs describe-tasks \
+              --cluster "$CLUSTER_NAME" \
+              --tasks "$STOPPED_TASK_ARN" \
+              --query 'tasks[0].taskDefinitionArn' \
+              --output text 2>/dev/null || true
+          )"
+          if [[ -z "$TASK_DEF_ARN" || "$TASK_DEF_ARN" == "None" ]]; then
+            echo "No task definition ARN found for stopped task."
+            exit 0
+          fi
+
+          LOG_GROUP="$(
+            aws ecs describe-task-definition \
+              --task-definition "$TASK_DEF_ARN" \
+              --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-group"' \
+              --output text 2>/dev/null || true
+          )"
+          LOG_STREAM_PREFIX="$(
+            aws ecs describe-task-definition \
+              --task-definition "$TASK_DEF_ARN" \
+              --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-stream-prefix"' \
+              --output text 2>/dev/null || true
+          )"
+          if [[ -z "$LOG_GROUP" || "$LOG_GROUP" == "None" || -z "$LOG_STREAM_PREFIX" || "$LOG_STREAM_PREFIX" == "None" ]]; then
+            echo "CloudWatch log group/prefix not found on task definition."
+            exit 0
+          fi
+
+          LOG_STREAM_NAME="$(
+            aws logs describe-log-streams \
+              --log-group-name "$LOG_GROUP" \
+              --log-stream-name-prefix "$LOG_STREAM_PREFIX/" \
+              --descending \
+              --order-by LastEventTime \
+              --max-items 1 \
+              --query 'logStreams[0].logStreamName' \
+              --output text 2>/dev/null || true
+          )"
+          if [[ -z "$LOG_STREAM_NAME" || "$LOG_STREAM_NAME" == "None" ]]; then
+            echo "No CloudWatch log streams found for prefix ${LOG_STREAM_PREFIX}/"
+            exit 0
+          fi
+
+          echo "Recent container log lines from ${LOG_GROUP} / ${LOG_STREAM_NAME}"
+          aws logs get-log-events \
+            --log-group-name "$LOG_GROUP" \
+            --log-stream-name "$LOG_STREAM_NAME" \
+            --limit 200 \
+            --query 'events[*].message' \
+            --output text 2>/dev/null | tr '\t' '\n' | tail -n 120 || true
+
       - name: Sync demo assets after asset-library deploy
         if: matrix.stack == 'asset-library'
         run: |
           set -euo pipefail
 
           ENV="${{ needs.detect-changes.outputs.environment }}"
-          ASSETS_BUCKET="$(aws ssm get-parameter --name "/postolio/${ENV}/assets/bucket-name" --query 'Parameter.Value' --output text)"
-          ASSETS_CDN_DISTRIBUTION_ID="$(aws ssm get-parameter --name "/postolio/${ENV}/assets/cdn-distribution-id" --query 'Parameter.Value' --output text)"
+          ASSET_STACK="Postolio-AssetLibrary-${ENV}"
+
+          ASSETS_BUCKET="$(
+            aws cloudformation describe-stacks \
+              --stack-name "$ASSET_STACK" \
+              --query "Stacks[0].Outputs[?OutputKey=='AssetsBucketNameOutput'].OutputValue | [0]" \
+              --output text 2>/dev/null || true
+          )"
+          if [[ -z "$ASSETS_BUCKET" || "$ASSETS_BUCKET" == "None" ]]; then
+            ASSETS_BUCKET="postolio-${ENV}-assets-storage"
+            echo "Assets bucket output not found; using deterministic fallback: ${ASSETS_BUCKET}"
+          fi
+
+          ASSETS_CDN_DISTRIBUTION_ID="$(
+            aws cloudformation describe-stack-resource \
+              --stack-name "$ASSET_STACK" \
+              --logical-resource-id "AssetsDistribution" \
+              --query 'StackResourceDetail.PhysicalResourceId' \
+              --output text 2>/dev/null || true
+          )"
 
           echo "Syncing demo assets to s3://${ASSETS_BUCKET}"
           ASSETS_S3_BUCKET="$ASSETS_BUCKET" pnpm --filter @postolio/assets-api run sync:demo-assets
 
-          echo "Invalidating assets CDN demo prefix on distribution ${ASSETS_CDN_DISTRIBUTION_ID}"
-          aws cloudfront create-invalidation \
-            --distribution-id "$ASSETS_CDN_DISTRIBUTION_ID" \
-            --paths "/system/demo/default/*"
+          if [[ -n "${ASSETS_CDN_DISTRIBUTION_ID}" && "${ASSETS_CDN_DISTRIBUTION_ID}" != "None" ]]; then
+            echo "Invalidating assets CDN demo prefix on distribution ${ASSETS_CDN_DISTRIBUTION_ID}"
+            aws cloudfront create-invalidation \
+              --distribution-id "$ASSETS_CDN_DISTRIBUTION_ID" \
+              --paths "/system/demo/default/*"
+          else
+            echo "Skipping CDN invalidation: could not resolve AssetsDistribution ID from CloudFormation."
+          fi
 
   # ============================================
   # STEP 5: Deploy Frontend to S3 (Web Stack)
