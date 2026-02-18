@@ -47,6 +47,18 @@ function getDemoAssetS3KeyByIndex(index: number): string | null {
 export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Promise<void> {
   const { brandId, userId, includeAnalytics = true } = options;
 
+  // Demo mode uses a single fake Instagram destination. Backfill older demo records that
+  // were created before targetSocialAccountId was required for preview rendering.
+  const socialAccount = await prisma.socialAccount.findFirst({
+    where: { brandId, platform: 'instagram' },
+  });
+  if (socialAccount) {
+    await prisma.content.updateMany({
+      where: { brandId, targetSocialAccountId: null },
+      data: { targetSocialAccountId: socialAccount.id },
+    });
+  }
+
   const contentCount = await prisma.content.count({ where: { brandId } });
 
   // If this brand already has data, do not overwrite it.
@@ -107,6 +119,7 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
       status: input.status,
       scheduledAt,
       postedAt,
+      targetSocialAccountId: socialAccount?.id ?? null,
       generationParams: {
         isDemo: true,
         seed: 'demo-workspace',
@@ -178,10 +191,6 @@ export async function seedDemoWorkspace(options: SeedDemoWorkspaceOptions): Prom
   }
 
   // Attach basic metrics only when a demo social account exists for this brand.
-  const socialAccount = await prisma.socialAccount.findFirst({
-    where: { brandId, platform: 'instagram' },
-  });
-
   if (!socialAccount) {
     return;
   }

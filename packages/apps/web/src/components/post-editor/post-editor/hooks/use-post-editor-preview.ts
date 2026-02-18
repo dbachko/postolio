@@ -140,6 +140,22 @@ export function usePostEditorPreview(params: {
       .map((opt) => toPreviewAccountFromOption(opt as SocialAccountsPickerOption));
   }, [platformPickerOptions, selectedPlatformAccountIds]);
 
+  const fallbackPreviewAccount = useMemo<PostPreviewAccount | null>(() => {
+    if (isMultiDestinationGroup) return null;
+    if (previewAccounts.length > 0) return null;
+    if (!post) return null;
+
+    const targetId =
+      typeof post.targetSocialAccountId === 'string' ? post.targetSocialAccountId.trim() : '';
+    const preferred =
+      targetId.length > 0
+        ? platformPickerOptions.find((option) => option.id === targetId) || null
+        : null;
+    const fallback = preferred || platformPickerOptions[0] || null;
+    if (!fallback) return null;
+    return toPreviewAccountFromOption(fallback);
+  }, [isMultiDestinationGroup, platformPickerOptions, post, previewAccounts.length]);
+
   const previewItems = useMemo<PostPreviewItem[]>(() => {
     if (isMultiDestinationGroup) {
       if (groupDestinationPreviewData.length === 0) return [];
@@ -162,12 +178,20 @@ export function usePostEditorPreview(params: {
       ];
     }
 
-    if (previewAccounts.length === 0) return [];
-    return previewAccounts.map((account) => ({
+    const effectivePreviewAccounts =
+      previewAccounts.length > 0
+        ? previewAccounts
+        : fallbackPreviewAccount
+          ? [fallbackPreviewAccount]
+          : [];
+
+    if (effectivePreviewAccounts.length === 0) return [];
+    return effectivePreviewAccounts.map((account) => ({
       account,
       content: formPreviewContent,
     }));
   }, [
+    fallbackPreviewAccount,
     formPreviewContent,
     groupDestinationPreviewData,
     hasChanges,

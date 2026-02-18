@@ -5,6 +5,7 @@ import { useBrandStore } from '@/stores/brandStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 
 import type { PostEditorProps } from '../types';
@@ -33,7 +34,9 @@ export function usePostEditor(props: PostEditorProps) {
   const user = useAuthStore((state) => state.user);
   const { selectedBrand } = useBrandStore();
   const selectedBrandId = selectedBrand?.id ?? null;
-  const multiDestinationEnabled = isMultiDestinationEnabled(user);
+  const { data: onboarding } = useOnboardingStatus({ enabled: Boolean(user) });
+  const isDemoMode = onboarding?.status === 'demo';
+  const multiDestinationEnabled = isMultiDestinationEnabled(user) && !isDemoMode;
 
   const data = usePostEditorData({ id, selectedBrandId, multiDestinationEnabled });
 

@@ -83,7 +83,10 @@ export function usePostEditorFormState(params: {
 
     const candidate =
       typeof post.targetSocialAccountId === 'string' ? post.targetSocialAccountId.trim() : '';
-    setSelectedPlatformAccountIds(candidate ? [candidate] : []);
+    const fallbackTargetId =
+      !candidate && !multiDestinationEnabled ? platformPickerOptions[0]?.id || '' : '';
+    const nextSelectedIds = candidate ? [candidate] : fallbackTargetId ? [fallbackTargetId] : [];
+    setSelectedPlatformAccountIds(nextSelectedIds);
     platformsInitializedRef.current = true;
 
     setHasChanges(false);
@@ -93,6 +96,8 @@ export function usePostEditorFormState(params: {
     mediaAssetsById,
     post,
     postAssetIds.length,
+    multiDestinationEnabled,
+    platformPickerOptions,
     platformsInitializedRef,
     setSelectedPlatformAccountIds,
   ]);
@@ -131,6 +136,14 @@ export function usePostEditorFormState(params: {
       typeof post.targetSocialAccountId === 'string' && post.targetSocialAccountId.trim()
         ? post.targetSocialAccountId
         : null;
+    const destinationChanged =
+      selectedTargetSocialAccountId !== postTargetSocialAccountId &&
+      !(
+        !multiDestinationEnabled &&
+        !postTargetSocialAccountId &&
+        typeof selectedTargetSocialAccountId === 'string' &&
+        selectedTargetSocialAccountId.trim().length > 0
+      );
 
     const changed =
       trimmedCaption !== originalCaption ||
@@ -139,7 +152,7 @@ export function usePostEditorFormState(params: {
       formData.contentType !== postContentType ||
       formShareToFeed !== postShareToFeed ||
       formFirstComment !== postFirstComment ||
-      selectedTargetSocialAccountId !== postTargetSocialAccountId;
+      destinationChanged;
 
     setHasChanges(changed);
   }, [
@@ -150,6 +163,7 @@ export function usePostEditorFormState(params: {
     formData,
     id,
     isMultiDestinationGroup,
+    multiDestinationEnabled,
     post,
     selectedTargetSocialAccountId,
   ]);

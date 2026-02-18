@@ -802,6 +802,23 @@ jobs:
             exit 1
           fi
 
+      - name: Sync demo assets after asset-library deploy
+        if: matrix.stack == 'asset-library'
+        run: |
+          set -euo pipefail
+
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+          ASSETS_BUCKET="$(aws ssm get-parameter --name "/postolio/${ENV}/assets/bucket-name" --query 'Parameter.Value' --output text)"
+          ASSETS_CDN_DISTRIBUTION_ID="$(aws ssm get-parameter --name "/postolio/${ENV}/assets/cdn-distribution-id" --query 'Parameter.Value' --output text)"
+
+          echo "Syncing demo assets to s3://${ASSETS_BUCKET}"
+          ASSETS_S3_BUCKET="$ASSETS_BUCKET" pnpm --filter @postolio/assets-api run sync:demo-assets
+
+          echo "Invalidating assets CDN demo prefix on distribution ${ASSETS_CDN_DISTRIBUTION_ID}"
+          aws cloudfront create-invalidation \
+            --distribution-id "$ASSETS_CDN_DISTRIBUTION_ID" \
+            --paths "/system/demo/default/*"
+
   # ============================================
   # STEP 5: Deploy Frontend to S3 (Web Stack)
   # ============================================

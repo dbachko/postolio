@@ -11,8 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Shield, AlertTriangle, Trash2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { httpGet, httpDelete } from '../../lib/api';
 
@@ -86,30 +85,8 @@ export default function AccountSettingsTab() {
         <CardDescription>Manage your account information and preferences</CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Quick link to Security Dashboard */}
-        <div className="bg-muted/40 mt-6 rounded-lg border p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-accent text-primary grid h-9 w-9 place-items-center rounded-md">
-                <Shield className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <div className="font-medium">Security</div>
-                <div className="text-muted-foreground text-sm">
-                  Manage devices, active sessions, and recent logins
-                </div>
-              </div>
-            </div>
-            <Link to="/settings/security">
-              <Button variant="default" className="whitespace-nowrap">
-                Open
-              </Button>
-            </Link>
-          </div>
-        </div>
-
         {/* Account deletion (danger zone) */}
-        <div id="delete-account" className="mt-8 border-t pt-6">
+        <div id="delete-account" className="mt-6 border-t pt-6">
           <Card className="border-destructive/40 bg-destructive/5">
             <CardHeader>
               <div className="flex items-center gap-2">

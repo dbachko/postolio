@@ -9,7 +9,6 @@ import {
   Palette,
   Plug,
   Send,
-  Shield,
   SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
@@ -82,12 +81,6 @@ const settingsSectionItems: SectionNavItem[] = [
     path: '/settings/account',
     icon: UserRound,
     description: 'Account lifecycle and data controls',
-  },
-  {
-    label: 'Security',
-    path: '/settings/security',
-    icon: Shield,
-    description: 'Sessions and login activity',
   },
   {
     label: 'Image Analytics',

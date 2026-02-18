@@ -307,10 +307,25 @@ export function Recipes() {
 
   useEffect(() => {
     if (!runOpen) return;
-    if (runDestinationIds.length > 0) return;
     if (!preferredDestinationId) return;
+
+    if (!multiDestinationEnabled) {
+      if (runDestinationIds.length === 1 && runDestinationIds[0] === preferredDestinationId) {
+        return;
+      }
+      setRunDestinationIds([preferredDestinationId]);
+      return;
+    }
+
+    if (runDestinationIds.length > 0) return;
     setRunDestinationIds([preferredDestinationId]);
-  }, [preferredDestinationId, runDestinationIds.length, runOpen]);
+  }, [multiDestinationEnabled, preferredDestinationId, runDestinationIds, runOpen]);
+
+  const selectedRunDestination = useMemo(() => {
+    const selectedId = runDestinationIds[0];
+    if (!selectedId) return null;
+    return destinationPickerOptions.find((option) => option.id === selectedId) || null;
+  }, [destinationPickerOptions, runDestinationIds]);
 
   const recipesQuery = useQuery({
     queryKey: ['recipes', brandId, search],
@@ -1048,44 +1063,61 @@ export function Recipes() {
 
           {runRecipe ? (
             <div className="space-y-4">
-              <div className="space-y-1">
-                <Label>Destination</Label>
-                {connectedAccountsQuery.isLoading ? (
-                  <Skeleton className="h-10 w-full" />
-                ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <SocialAccountsPicker
-                      options={destinationPickerOptions}
-                      value={runDestinationIds}
-                      onChange={(next) => {
-                        const nextUnique = Array.from(new Set(next)).filter((id) =>
-                          destinationPickerOptions.some((o) => o.id === id)
-                        );
-                        if (nextUnique.length <= 1) {
-                          setRunDestinationIds(nextUnique);
-                          return;
-                        }
-                        setRunDestinationIds((prev) => {
-                          const prevSet = new Set(prev);
-                          const added = nextUnique.find((id) => !prevSet.has(id)) || null;
-                          return added ? [added] : [nextUnique[0]];
-                        });
-                      }}
-                      disabled={createRunMutation.isPending}
-                      size="md"
-                      required
-                      selectedLayout="wrap"
-                      addButtonText="Choose destination"
-                      addButtonTextMode="always"
-                      addTooltip="Pick a social account"
-                      searchPlaceholder="Search destinations…"
-                    />
-                  </div>
-                )}
-                <p className="text-muted-foreground text-xs">
-                  Defaults to your brand’s primary/default posting account when available.
-                </p>
-              </div>
+              {multiDestinationEnabled ? (
+                <div className="space-y-1">
+                  <Label>Destination</Label>
+                  {connectedAccountsQuery.isLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <SocialAccountsPicker
+                        options={destinationPickerOptions}
+                        value={runDestinationIds}
+                        onChange={(next) => {
+                          const nextUnique = Array.from(new Set(next)).filter((id) =>
+                            destinationPickerOptions.some((o) => o.id === id)
+                          );
+                          if (nextUnique.length <= 1) {
+                            setRunDestinationIds(nextUnique);
+                            return;
+                          }
+                          setRunDestinationIds((prev) => {
+                            const prevSet = new Set(prev);
+                            const added = nextUnique.find((id) => !prevSet.has(id)) || null;
+                            return added ? [added] : [nextUnique[0]];
+                          });
+                        }}
+                        disabled={createRunMutation.isPending}
+                        size="md"
+                        required
+                        selectedLayout="wrap"
+                        addButtonText="Choose destination"
+                        addButtonTextMode="always"
+                        addTooltip="Pick a social account"
+                        searchPlaceholder="Search destinations…"
+                      />
+                    </div>
+                  )}
+                  <p className="text-muted-foreground text-xs">
+                    Defaults to your brand’s primary/default posting account when available.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Destination</Label>
+                  {connectedAccountsQuery.isLoading ? (
+                    <Skeleton className="h-5 w-full" />
+                  ) : selectedRunDestination ? (
+                    <p className="text-muted-foreground text-sm">
+                      Using {selectedRunDestination.label} for this run.
+                    </p>
+                  ) : (
+                    <p className="text-destructive text-sm">
+                      No eligible destination account is connected for this brand.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-4">
                 {runRequiredInputFields.map((field) => {
@@ -1358,7 +1390,11 @@ export function Recipes() {
               onClick={() => {
                 if (!runRecipe) return;
                 if (runDestinationIds.length === 0) {
-                  toast.error('Choose a destination');
+                  toast.error(
+                    multiDestinationEnabled
+                      ? 'Choose a destination'
+                      : 'No destination account is available for this brand.'
+                  );
                   return;
                 }
                 for (const field of runRequiredInputFields) {
@@ -1375,7 +1411,8 @@ export function Recipes() {
                 !runRecipe ||
                 createRunMutation.isPending ||
                 topUpMutation.isPending ||
-                blocksRunForCredits
+                blocksRunForCredits ||
+                runDestinationIds.length === 0
               }
             >
               Generate
