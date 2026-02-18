@@ -60,7 +60,9 @@ WORKDIR /app
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
-RUN apk add --no-cache ca-certificates && update-ca-certificates
+RUN apk add --no-cache ca-certificates curl \
+  && update-ca-certificates \
+  && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem
 
 # Install prisma CLI globally for runtime migration commands
 RUN npm i -g prisma@6.16.2

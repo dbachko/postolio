@@ -11,10 +11,17 @@ echo "ASSETS_DB_PASSWORD is set: $([ -n "$ASSETS_DB_PASSWORD" ] && echo "yes" ||
 echo "JWT_SECRET is set: $([ -n "$JWT_SECRET" ] && echo "yes" || echo "no")"
 
 # SSL defaults:
-# - strict TLS verification in all environments (prod-like behavior)
-# - override with ASSETS_DB_SSLMODE only when explicitly needed
+# - keep strict TLS verification by default
+# - use AWS RDS global CA bundle when available
+# - allow explicit override via ASSETS_DB_SSLMODE / ASSETS_DB_SSLROOTCERT
 ASSETS_DB_SSLMODE="${ASSETS_DB_SSLMODE:-require}"
-ASSETS_DB_SSLROOTCERT="${ASSETS_DB_SSLROOTCERT:-/etc/ssl/certs/ca-certificates.crt}"
+if [ -z "${ASSETS_DB_SSLROOTCERT:-}" ]; then
+  if [ -f "/etc/ssl/certs/rds-global-bundle.pem" ]; then
+    ASSETS_DB_SSLROOTCERT="/etc/ssl/certs/rds-global-bundle.pem"
+  else
+    ASSETS_DB_SSLROOTCERT="/etc/ssl/certs/ca-certificates.crt"
+  fi
+fi
 SSL_QUERY="sslmode=${ASSETS_DB_SSLMODE}"
 if [ -f "${ASSETS_DB_SSLROOTCERT}" ]; then
   SSL_QUERY="${SSL_QUERY}&sslrootcert=${ASSETS_DB_SSLROOTCERT}"

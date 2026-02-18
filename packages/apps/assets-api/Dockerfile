@@ -55,7 +55,9 @@ WORKDIR /app
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
-RUN apk add --no-cache ca-certificates && update-ca-certificates
+RUN apk add --no-cache ca-certificates curl \
+  && update-ca-certificates \
+  && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem
 
 # Copy pruned workspace (built output + node_modules)
 COPY --from=builder --chown=nodejs:nodejs /app/ .

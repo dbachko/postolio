@@ -11,10 +11,17 @@ echo "DB_PASSWORD is set: $([ -n "$DB_PASSWORD" ] && echo "yes" || echo "no")"
 echo "JWT_SECRET is set: $([ -n "$JWT_SECRET" ] && echo "yes" || echo "no")"
 
 # SSL defaults:
-# - strict TLS verification in all environments (prod-like behavior)
-# - override with DB_SSLMODE only when explicitly needed
+# - keep strict TLS verification by default
+# - use AWS RDS global CA bundle when available
+# - allow explicit override via DB_SSLMODE / DB_SSLROOTCERT
 DB_SSLMODE="${DB_SSLMODE:-require}"
-DB_SSLROOTCERT="${DB_SSLROOTCERT:-/etc/ssl/certs/ca-certificates.crt}"
+if [ -z "${DB_SSLROOTCERT:-}" ]; then
+  if [ -f "/etc/ssl/certs/rds-global-bundle.pem" ]; then
+    DB_SSLROOTCERT="/etc/ssl/certs/rds-global-bundle.pem"
+  else
+    DB_SSLROOTCERT="/etc/ssl/certs/ca-certificates.crt"
+  fi
+fi
 SSL_QUERY="sslmode=${DB_SSLMODE}"
 if [ -f "${DB_SSLROOTCERT}" ]; then
   SSL_QUERY="${SSL_QUERY}&sslrootcert=${DB_SSLROOTCERT}"
