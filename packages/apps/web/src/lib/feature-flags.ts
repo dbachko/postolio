@@ -63,3 +63,7 @@ export function isSnippetsEnabled(user: User | null | undefined): boolean {
   const allowlistedEmails = parseList(import.meta.env.VITE_FEATURE_SNIPPETS_ALLOWLIST_EMAILS);
   return allowlistedEmails.includes(normalizedEmail);
 }
+
+export function isRecipeDestinationUiEnabled(): boolean {
+  return parseBoolean(import.meta.env.VITE_FEATURE_RECIPE_DESTINATIONS, false);
+}

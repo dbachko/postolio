@@ -56,31 +56,30 @@ echo "DATABASE_URL is configured"
 # Run Prisma migrations (idempotent) from the database package
 echo "Running database migrations..."
 cd /app/packages/libs/database
+PRISMA_BIN="./node_modules/.bin/prisma"
+if [ ! -x "$PRISMA_BIN" ]; then
+  echo "ERROR: Prisma CLI not found at $PRISMA_BIN"
+  exit 1
+fi
+echo "Using Prisma CLI from workspace package"
 
 # Check for failed migrations and resolve them by marking as rolled back (so deploy will re-apply)
 echo "Checking for failed migrations..."
-FAILED=$(prisma migrate status 2>&1 | grep -Eo '[0-9]{14}_[A-Za-z0-9_]+' | sort -u || true)
+FAILED=$("$PRISMA_BIN" migrate status 2>&1 | grep -Eo '[0-9]{14}_[A-Za-z0-9_]+' | sort -u || true)
 if [ -n "$FAILED" ]; then
   echo "Found failed migrations: $FAILED"
   for MID in $FAILED; do
     echo "Resolving failed migration as rolled-back: $MID"
-    prisma migrate resolve --rolled-back "$MID" || true
+    "$PRISMA_BIN" migrate resolve --rolled-back "$MID" || true
   done
 fi
 
 # Apply all migrations for main DB (idempotent).
-# If migrate deploy fails, NEVER auto-reset in shared environments.
-# Allow an explicit opt-in reset only when MIGRATE_RESET_ON_FAILURE=true.
-if ! prisma migrate deploy; then
+# On failure, exit hard. Never reset database state in deploy/runtime paths.
+if ! "$PRISMA_BIN" migrate deploy; then
   echo "migrate deploy failed"
-  if [ "${MIGRATE_RESET_ON_FAILURE:-}" = "true" ]; then
-    echo "MIGRATE_RESET_ON_FAILURE=true - attempting clean reset ..."
-    prisma migrate reset --force || true
-    prisma migrate deploy
-  else
-    echo "Automatic prisma migrate reset is disabled. Exiting with failure."
-    exit 1
-  fi
+  echo "Refusing any database reset in deploy path. Exiting with failure."
+  exit 1
 fi
 
 # Return to API app directory

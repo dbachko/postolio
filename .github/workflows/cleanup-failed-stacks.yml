@@ -19,6 +19,16 @@ on:
         description: 'Type "DELETE" to confirm stack deletion'
         required: true
         type: string
+      allow_prod_cleanup:
+        description: 'Allow cleanup in prod environment (default: false)'
+        required: false
+        type: boolean
+        default: false
+      allow_data_stack_deletion:
+        description: 'Allow deleting data-owning stacks (Foundation/AssetLibrary) (default: false)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,6 +52,13 @@ jobs:
             echo "❌ Deletion not confirmed. Please type 'DELETE' in the confirmation field."
             exit 1
           fi
+
+          if [ "${{ github.event.inputs.environment }}" = "prod" ] && [ "${{ github.event.inputs.allow_prod_cleanup }}" != "true" ]; then
+            echo "❌ Prod cleanup is blocked by default."
+            echo "Set allow_prod_cleanup=true to proceed."
+            exit 1
+          fi
+
           echo "✅ Deletion confirmed"
 
       - name: Configure AWS credentials
@@ -55,6 +72,7 @@ jobs:
         run: |
           ENV="${{ github.event.inputs.environment }}"
           SPECIFIC_STACK="${{ github.event.inputs.stack_name }}"
+          ALLOW_DATA_STACK_DELETION="${{ github.event.inputs.allow_data_stack_deletion }}"
 
           echo "🔍 Scanning for failed stacks in environment: $ENV"
 
@@ -91,6 +109,15 @@ jobs:
 
           # Delete each failed stack
           for stack in $FAILED_STACKS; do
+            # Guardrail: block deletion of stacks that may own persistent databases/storage
+            if [[ "$stack" == Postolio-Foundation-* || "$stack" == Postolio-AssetLibrary-* ]]; then
+              if [[ "$ALLOW_DATA_STACK_DELETION" != "true" ]]; then
+                echo "❌ Refusing to delete data-owning stack: $stack"
+                echo "Set allow_data_stack_deletion=true only after explicit backup/snapshot verification."
+                exit 1
+              fi
+            fi
+
             echo ""
             echo "🗑️  Deleting stack: $stack"
             

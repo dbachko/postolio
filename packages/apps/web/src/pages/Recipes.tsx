@@ -33,7 +33,7 @@ import { skills as skillsApi } from '@/lib/api';
 import { brand as brandApi } from '@/lib/api';
 import type { RecipeCategory, RecipeInputField, RecipeSummary } from '@/lib/api/recipes-client';
 import type { SkillSummary } from '@/lib/api/skills-client';
-import { isMultiDestinationEnabled } from '@/lib/feature-flags';
+import { isMultiDestinationEnabled, isRecipeDestinationUiEnabled } from '@/lib/feature-flags';
 import { formatSocialAccountLabel } from '@/lib/social-account-label';
 import { SocialAccountsPicker } from '@/components/social/social-accounts-picker';
 import type { SocialAccountsPickerOption } from '@/components/social/social-accounts-picker/types';
@@ -210,6 +210,7 @@ export function Recipes() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const multiDestinationEnabled = isMultiDestinationEnabled(user);
+  const recipeDestinationUiEnabled = isRecipeDestinationUiEnabled();
 
   const [sortField, setSortField] = useState<RecipeSortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -1063,61 +1064,63 @@ export function Recipes() {
 
           {runRecipe ? (
             <div className="space-y-4">
-              {multiDestinationEnabled ? (
-                <div className="space-y-1">
-                  <Label>Destination</Label>
-                  {connectedAccountsQuery.isLoading ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <SocialAccountsPicker
-                        options={destinationPickerOptions}
-                        value={runDestinationIds}
-                        onChange={(next) => {
-                          const nextUnique = Array.from(new Set(next)).filter((id) =>
-                            destinationPickerOptions.some((o) => o.id === id)
-                          );
-                          if (nextUnique.length <= 1) {
-                            setRunDestinationIds(nextUnique);
-                            return;
-                          }
-                          setRunDestinationIds((prev) => {
-                            const prevSet = new Set(prev);
-                            const added = nextUnique.find((id) => !prevSet.has(id)) || null;
-                            return added ? [added] : [nextUnique[0]];
-                          });
-                        }}
-                        disabled={createRunMutation.isPending}
-                        size="md"
-                        required
-                        selectedLayout="wrap"
-                        addButtonText="Choose destination"
-                        addButtonTextMode="always"
-                        addTooltip="Pick a social account"
-                        searchPlaceholder="Search destinations…"
-                      />
-                    </div>
-                  )}
-                  <p className="text-muted-foreground text-xs">
-                    Defaults to your brand’s primary/default posting account when available.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <Label>Destination</Label>
-                  {connectedAccountsQuery.isLoading ? (
-                    <Skeleton className="h-5 w-full" />
-                  ) : selectedRunDestination ? (
-                    <p className="text-muted-foreground text-sm">
-                      Using {selectedRunDestination.label} for this run.
+              {recipeDestinationUiEnabled ? (
+                multiDestinationEnabled ? (
+                  <div className="space-y-1">
+                    <Label>Destination</Label>
+                    {connectedAccountsQuery.isLoading ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <SocialAccountsPicker
+                          options={destinationPickerOptions}
+                          value={runDestinationIds}
+                          onChange={(next) => {
+                            const nextUnique = Array.from(new Set(next)).filter((id) =>
+                              destinationPickerOptions.some((o) => o.id === id)
+                            );
+                            if (nextUnique.length <= 1) {
+                              setRunDestinationIds(nextUnique);
+                              return;
+                            }
+                            setRunDestinationIds((prev) => {
+                              const prevSet = new Set(prev);
+                              const added = nextUnique.find((id) => !prevSet.has(id)) || null;
+                              return added ? [added] : [nextUnique[0]];
+                            });
+                          }}
+                          disabled={createRunMutation.isPending}
+                          size="md"
+                          required
+                          selectedLayout="wrap"
+                          addButtonText="Choose destination"
+                          addButtonTextMode="always"
+                          addTooltip="Pick a social account"
+                          searchPlaceholder="Search destinations…"
+                        />
+                      </div>
+                    )}
+                    <p className="text-muted-foreground text-xs">
+                      Defaults to your brand’s primary/default posting account when available.
                     </p>
-                  ) : (
-                    <p className="text-destructive text-sm">
-                      No eligible destination account is connected for this brand.
-                    </p>
-                  )}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Label>Destination</Label>
+                    {connectedAccountsQuery.isLoading ? (
+                      <Skeleton className="h-5 w-full" />
+                    ) : selectedRunDestination ? (
+                      <p className="text-muted-foreground text-sm">
+                        Using {selectedRunDestination.label} for this run.
+                      </p>
+                    ) : (
+                      <p className="text-destructive text-sm">
+                        No eligible destination account is connected for this brand.
+                      </p>
+                    )}
+                  </div>
+                )
+              ) : null}
 
               <div className="space-y-4">
                 {runRequiredInputFields.map((field) => {

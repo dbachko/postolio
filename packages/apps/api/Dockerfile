@@ -64,9 +64,6 @@ RUN apk add --no-cache ca-certificates curl \
   && update-ca-certificates \
   && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem
 
-# Install prisma CLI globally for runtime migration commands
-RUN npm i -g prisma@6.16.2
-
 # Ensure prisma can write a local cache (avoid writing to global path)
 RUN mkdir -p /app/.prisma && chown -R nodejs:nodejs /app/.prisma
 ENV PRISMA_HOME=/app/.prisma
