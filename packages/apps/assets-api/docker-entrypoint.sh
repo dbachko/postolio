@@ -10,13 +10,26 @@ echo "ASSETS_DB_USERNAME is set: $([ -n "$ASSETS_DB_USERNAME" ] && echo "yes" ||
 echo "ASSETS_DB_PASSWORD is set: $([ -n "$ASSETS_DB_PASSWORD" ] && echo "yes" || echo "no")"
 echo "JWT_SECRET is set: $([ -n "$JWT_SECRET" ] && echo "yes" || echo "no")"
 
+# SSL defaults:
+# - strict TLS verification in all environments (prod-like behavior)
+# - override with ASSETS_DB_SSLMODE only when explicitly needed
+ASSETS_DB_SSLMODE="${ASSETS_DB_SSLMODE:-require}"
+ASSETS_DB_SSLROOTCERT="${ASSETS_DB_SSLROOTCERT:-/etc/ssl/certs/ca-certificates.crt}"
+SSL_QUERY="sslmode=${ASSETS_DB_SSLMODE}"
+if [ -f "${ASSETS_DB_SSLROOTCERT}" ]; then
+  SSL_QUERY="${SSL_QUERY}&sslrootcert=${ASSETS_DB_SSLROOTCERT}"
+else
+  echo "ASSETS_DB_SSLROOTCERT file not found at ${ASSETS_DB_SSLROOTCERT}; continuing without sslrootcert"
+fi
+echo "ASSETS_DB_SSLMODE: ${ASSETS_DB_SSLMODE}"
+
 # Construct ASSETS_DATABASE_URL from individual parts if provided
 if [ -n "$ASSETS_DB_USERNAME" ] && [ -n "$ASSETS_DB_PASSWORD" ] && [ -n "$ASSETS_DB_HOST" ] && [ -n "$ASSETS_DB_PORT" ]; then
-  # Enforce TLS via sslmode=require
-  export ASSETS_DATABASE_URL="postgresql://${ASSETS_DB_USERNAME}:${ASSETS_DB_PASSWORD}@${ASSETS_DB_HOST}:${ASSETS_DB_PORT}/postolio_assets?sslmode=require"
+  # Enforce TLS with selected mode and optional explicit root cert bundle
+  export ASSETS_DATABASE_URL="postgresql://${ASSETS_DB_USERNAME}:${ASSETS_DB_PASSWORD}@${ASSETS_DB_HOST}:${ASSETS_DB_PORT}/postolio_assets?${SSL_QUERY}"
   echo "ASSETS_DATABASE_URL constructed successfully"
 elif [ -n "$ASSETS_DB_USERNAME" ] && [ -n "$ASSETS_DB_PASSWORD" ] && [ -n "$ASSETS_DB_HOST" ]; then
-  export ASSETS_DATABASE_URL="postgresql://${ASSETS_DB_USERNAME}:${ASSETS_DB_PASSWORD}@${ASSETS_DB_HOST}:5432/postolio_assets?sslmode=require"
+  export ASSETS_DATABASE_URL="postgresql://${ASSETS_DB_USERNAME}:${ASSETS_DB_PASSWORD}@${ASSETS_DB_HOST}:5432/postolio_assets?${SSL_QUERY}"
   echo "ASSETS_DATABASE_URL constructed with default port"
 fi
 

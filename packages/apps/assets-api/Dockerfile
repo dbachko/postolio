@@ -55,6 +55,7 @@ WORKDIR /app
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
+RUN apk add --no-cache ca-certificates && update-ca-certificates
 
 # Copy pruned workspace (built output + node_modules)
 COPY --from=builder --chown=nodejs:nodejs /app/ .

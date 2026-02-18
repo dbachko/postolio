@@ -10,13 +10,26 @@ echo "DB_USERNAME is set: $([ -n "$DB_USERNAME" ] && echo "yes" || echo "no")"
 echo "DB_PASSWORD is set: $([ -n "$DB_PASSWORD" ] && echo "yes" || echo "no")"
 echo "JWT_SECRET is set: $([ -n "$JWT_SECRET" ] && echo "yes" || echo "no")"
 
+# SSL defaults:
+# - strict TLS verification in all environments (prod-like behavior)
+# - override with DB_SSLMODE only when explicitly needed
+DB_SSLMODE="${DB_SSLMODE:-require}"
+DB_SSLROOTCERT="${DB_SSLROOTCERT:-/etc/ssl/certs/ca-certificates.crt}"
+SSL_QUERY="sslmode=${DB_SSLMODE}"
+if [ -f "${DB_SSLROOTCERT}" ]; then
+  SSL_QUERY="${SSL_QUERY}&sslrootcert=${DB_SSLROOTCERT}"
+else
+  echo "DB_SSLROOTCERT file not found at ${DB_SSLROOTCERT}; continuing without sslrootcert"
+fi
+echo "DB_SSLMODE: ${DB_SSLMODE}"
+
 # Construct DATABASE_URL from individual parts if provided
 if [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_HOST" ] && [ -n "$DB_PORT" ]; then
-  # Enforce TLS via sslmode=require
-  export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/postolio?sslmode=require"
+  # Enforce TLS with selected mode and optional explicit root cert bundle
+  export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/postolio?${SSL_QUERY}"
   echo "DATABASE_URL constructed successfully"
 elif [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_HOST" ]; then
-  export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:5432/postolio?sslmode=require"
+  export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:5432/postolio?${SSL_QUERY}"
   echo "DATABASE_URL constructed with default port"
 fi
 
