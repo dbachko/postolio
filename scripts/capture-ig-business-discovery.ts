@@ -16,7 +16,7 @@
     - DATABASE_URL (for Prisma)
     - Token Service envs used by PublisherCredentialsService
 */
-import { PrismaClient } from '@postolio/database';
+import { createPrismaClient } from '@postolio/database';
 import { PublisherCredentialsService } from '../packages/apps/api/src/services/publisher-credentials.js';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
@@ -42,7 +42,9 @@ function parseArgs(): Args {
 }
 
 async function main() {
-  const prisma = new PrismaClient();
+  const { client: prisma, pool } = createPrismaClient({
+    connectionString: process.env.DATABASE_URL,
+  });
   try {
     const { requesterBrand, username, limit } = parseArgs();
     const reqBrand = await prisma.brand.findUnique({ where: { id: requesterBrand } });
@@ -118,6 +120,7 @@ async function main() {
     console.log(`Wrote ${posts.length} posts from @${username} to ${file}`);
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 }
 

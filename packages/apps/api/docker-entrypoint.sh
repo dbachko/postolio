@@ -50,7 +50,7 @@ if ! prisma migrate deploy; then
   echo "migrate deploy failed"
   if [ "${MIGRATE_RESET_ON_FAILURE:-}" = "true" ]; then
     echo "MIGRATE_RESET_ON_FAILURE=true - attempting clean reset ..."
-    prisma migrate reset --force --skip-seed || true
+    prisma migrate reset --force || true
     prisma migrate deploy
   else
     echo "Automatic prisma migrate reset is disabled. Exiting with failure."

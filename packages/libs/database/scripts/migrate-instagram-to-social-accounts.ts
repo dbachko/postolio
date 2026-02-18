@@ -7,10 +7,15 @@
  * Run with: pnpm tsx packages/libs/database/scripts/migrate-instagram-to-social-accounts.ts
  */
 
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { nanoid } from 'nanoid';
+import { Pool } from 'pg';
 
-const prisma = new PrismaClient();
+const pool = new Pool(
+  process.env.DATABASE_URL ? { connectionString: process.env.DATABASE_URL } : undefined
+);
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 interface MigrationStats {
   brandsProcessed: number;
@@ -335,6 +340,7 @@ async function main() {
     process.exit(1);
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 }
 

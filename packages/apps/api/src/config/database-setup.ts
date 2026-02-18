@@ -23,31 +23,36 @@ export async function ensureDatabaseSchema(options?: { generateClient?: boolean 
 
   const resolvePrismaInvocation = (
     schema?: string
-  ): { cmd: string; cwd?: string; dbPkgDir?: string } => {
+  ): { cmd: string; cwd?: string; dbPkgDir?: string; configPath?: string } => {
+    const resolveDbPkgDir = (schemaPath?: string): string | undefined =>
+      schemaPath ? path.resolve(schemaPath, '..', '..') : undefined;
+    const dbPkgDir = resolveDbPkgDir(schema);
+    const configPath =
+      dbPkgDir && fs.existsSync(path.join(dbPkgDir, 'prisma.config.ts'))
+        ? path.join(dbPkgDir, 'prisma.config.ts')
+        : undefined;
+
     const envBin = process.env.PRISMA_BIN || process.env.PRISMA_CLI;
     if (envBin && fs.existsSync(envBin)) {
-      return { cmd: `"${envBin}"`, cwd: process.cwd() };
+      return { cmd: `"${envBin}"`, cwd: dbPkgDir ?? process.cwd(), dbPkgDir, configPath };
     }
 
-    let dbPkgDir: string | undefined;
-    if (schema) {
-      // packages/libs/database/prisma/schema.prisma -> packages/libs/database
-      dbPkgDir = path.resolve(schema, '..', '..');
+    if (dbPkgDir) {
       const binName = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
       const localBin = path.join(dbPkgDir, 'node_modules', '.bin', binName);
       if (fs.existsSync(localBin)) {
-        return { cmd: `"${localBin}"`, cwd: process.cwd(), dbPkgDir };
+        return { cmd: `"${localBin}"`, cwd: dbPkgDir, dbPkgDir, configPath };
       }
     }
 
     if (dbPkgDir && fs.existsSync(dbPkgDir)) {
-      return { cmd: 'pnpm exec prisma', cwd: dbPkgDir, dbPkgDir };
+      return { cmd: 'pnpm exec prisma', cwd: dbPkgDir, dbPkgDir, configPath };
     }
 
-    return { cmd: 'npx prisma', cwd: process.cwd(), dbPkgDir };
+    return { cmd: 'npx prisma', cwd: process.cwd(), dbPkgDir, configPath };
   };
 
-  const { cmd, cwd, dbPkgDir } = resolvePrismaInvocation(schemaPath);
+  const { cmd, cwd, dbPkgDir, configPath } = resolvePrismaInvocation(schemaPath);
 
   try {
     // Choose strategy based on environment:
@@ -79,9 +84,10 @@ export async function ensureDatabaseSchema(options?: { generateClient?: boolean 
       );
     } else {
       const useDbPush = strategy === 'db-push';
-      const args = useDbPush ? 'db push --skip-generate' : 'migrate deploy --skip-generate';
+      const args = useDbPush ? 'db push' : 'migrate deploy';
       const schemaArg = schemaPath ? ` --schema ${schemaPath}` : '';
-      const migrateCommand = `${cmd} ${args}${schemaArg}`;
+      const configArg = configPath ? ` --config ${configPath}` : '';
+      const migrateCommand = `${cmd} ${args}${schemaArg}${configArg}`;
 
       console.log(
         `🔧 Running (${strategy}): ${migrateCommand}${
@@ -112,7 +118,8 @@ export async function ensureDatabaseSchema(options?: { generateClient?: boolean 
       options?.generateClient === true || process.env.PRISMA_GENERATE === 'true';
     if (shouldGenerate) {
       const schemaArg = schemaPath ? ` --schema ${schemaPath}` : '';
-      const generateCommand = `${cmd} generate${schemaArg}`;
+      const configArg = configPath ? ` --config ${configPath}` : '';
+      const generateCommand = `${cmd} generate${schemaArg}${configArg}`;
       console.log(
         `🔄 Generating Prisma client: ${generateCommand}${dbPkgDir ? ` (cwd: ${dbPkgDir})` : ''}`
       );

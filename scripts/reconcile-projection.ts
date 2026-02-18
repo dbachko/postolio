@@ -15,7 +15,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { PrismaClient } from '@postolio/database';
+import { createPrismaClient } from '@postolio/database';
 
 const PROFILES_TABLE = process.env.BRAND_STYLE_PROFILES_TABLE;
 const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME;
@@ -48,7 +48,9 @@ async function getLatestDynamoVersion(
 }
 
 async function main() {
-  const prisma = new PrismaClient();
+  const { client: prisma, pool } = createPrismaClient({
+    connectionString: process.env.DATABASE_URL,
+  });
   const ddb = new DynamoDBClient({});
   const doc = DynamoDBDocumentClient.from(ddb, {
     marshallOptions: { removeUndefinedValues: true },
@@ -82,6 +84,7 @@ async function main() {
   }
   console.log(`ProjectionDriftCount=${driftCount}`);
   await prisma.$disconnect();
+  await pool.end();
 }
 
 main().catch((e) => {

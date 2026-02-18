@@ -1,7 +1,12 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 
-const prisma = new PrismaClient();
+const pool = new Pool(
+  process.env.DATABASE_URL ? { connectionString: process.env.DATABASE_URL } : undefined
+);
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 export async function setupTestData() {
   console.log('Setting up test data...');
@@ -59,6 +64,7 @@ export async function setupTestData() {
     throw error;
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 }
 

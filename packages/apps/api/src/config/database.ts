@@ -3,7 +3,7 @@
  * Centralized database client management with test support
  */
 
-import { PrismaClient, Prisma } from '@postolio/database';
+import { PrismaClient, Prisma, createPrismaClient } from '@postolio/database';
 
 interface QueryEventLike {
   query: string;
@@ -34,6 +34,7 @@ export function getDatabaseUrl(): string {
 
 // Global database client instance
 let prismaInstance: PrismaClient | null = null;
+let prismaPool: { end: () => Promise<void> } | null = null;
 
 /**
  * Get or create the database client instance with connection pooling
@@ -55,16 +56,13 @@ export function getDatabaseClient(): PrismaClient {
         : ([] as Prisma.LogDefinition[])),
     ];
 
-    prismaInstance = new PrismaClient({
+    const databaseUrl = process.env.DATABASE_URL || getDatabaseUrl();
+    const instance = createPrismaClient({
+      connectionString: databaseUrl,
       log: logLevels,
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL || getDatabaseUrl(),
-        },
-      },
-      // Note: Connection pool configuration moved to environment variables
-      // DATABASE_URL should include connection pool parameters
     });
+    prismaInstance = instance.client;
+    prismaPool = instance.pool;
 
     // Connection event handlers
     if (enableQueryLogging) {
@@ -84,6 +82,8 @@ export function getDatabaseClient(): PrismaClient {
       console.log('🔌 Disconnecting from database...');
       try {
         await prismaInstance?.$disconnect();
+        await prismaPool?.end();
+        prismaPool = null;
         console.log('✅ Database disconnected successfully');
       } catch (error) {
         console.error('❌ Error disconnecting from database:', error);
@@ -106,6 +106,10 @@ export async function disconnectDatabase(): Promise<void> {
   if (prismaInstance) {
     await prismaInstance.$disconnect();
     prismaInstance = null;
+  }
+  if (prismaPool) {
+    await prismaPool.end();
+    prismaPool = null;
   }
 }
 

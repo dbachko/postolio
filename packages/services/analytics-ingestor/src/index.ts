@@ -1,5 +1,5 @@
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { PrismaClient, Prisma } from '@postolio/database';
+import { Prisma, createPrismaClient } from '@postolio/database';
 import Redis from 'ioredis';
 import { InstagramConnector, type AccountIdentity, type Credentials } from '@postolio/connectors';
 import fetch from 'node-fetch';
@@ -33,7 +33,13 @@ function ensureDatabaseUrl() {
 
 ensureDatabaseUrl();
 
-const prisma = new PrismaClient();
+const { client: prisma, pool: prismaPool } = createPrismaClient({
+  connectionString: process.env.DATABASE_URL,
+});
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+  await prismaPool.end();
+});
 
 const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
 const wantInfo = LOG_LEVEL === 'info' || LOG_LEVEL === 'debug' || LOG_LEVEL === 'trace';

@@ -180,7 +180,7 @@ wait_for_compose_service_health redis 60 1
 if [[ "${SKIP_ASSETS_DB_RESET:-0}" != "1" ]]; then
   if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
     echo "Resetting assets Postgres database via Prisma..."
-    pnpm --filter @postolio/database-assets exec -- prisma migrate reset --force --skip-seed --skip-generate
+    pnpm --filter @postolio/database-assets exec -- prisma migrate reset --force
   else
     echo "ASSETS_DATABASE_URL is unset; cannot reset assets DB."
   fi
@@ -205,7 +205,7 @@ fi
 if [[ "${SKIP_DB_RESET:-0}" != "1" ]]; then
   if [[ -n "${DATABASE_URL:-}" ]]; then
     echo "Resetting primary Postgres database via Prisma..."
-    pnpm --filter @postolio/database exec -- prisma migrate reset --force --skip-seed --skip-generate
+    pnpm --filter @postolio/database exec -- prisma migrate reset --force
 
     echo "Generating primary Prisma client..."
     pnpm --filter @postolio/database run build

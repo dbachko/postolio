@@ -9,7 +9,7 @@
     - DATABASE_URL (for Prisma)
     - Token/SSO envs used by PublisherCredentialsService (if applicable)
 */
-import { PrismaClient } from '@postolio/database';
+import { createPrismaClient } from '@postolio/database';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 
@@ -26,7 +26,9 @@ async function main() {
     process.exit(2);
   }
   const limit = Number(limitArg || 20);
-  const prisma = new PrismaClient();
+  const { client: prisma, pool } = createPrismaClient({
+    connectionString: process.env.DATABASE_URL,
+  });
   try {
     const brand = await prisma.brand.findUnique({ where: { id: brandId } });
     if (!brand) throw new Error(`Brand not found: ${brandId}`);
@@ -54,6 +56,7 @@ async function main() {
     console.log(`Wrote ${posts.length} posts to ${file}`);
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 }
 

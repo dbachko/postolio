@@ -6,7 +6,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import type { FastifyJWT } from '@fastify/jwt';
-import { prismaAssets } from '@postolio/database-assets';
+import { prismaAssets, prismaAssetsPool } from '@postolio/database-assets';
 import assetsRoutes from './routes/assets.js';
 import foldersRoutes from './routes/folders.js';
 import healthRoutes from './routes/health.js';
@@ -178,6 +178,7 @@ export function buildFastify() {
     server.log.info(`Received ${signal}, closing server gracefully...`);
     await server.close();
     await prismaAssets.$disconnect();
+    await prismaAssetsPool.end();
     process.exit(0);
   };
 
