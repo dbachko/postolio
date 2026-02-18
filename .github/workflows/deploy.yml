@@ -17,7 +17,7 @@ on:
           - staging
           - prod
       stacks:
-        description: 'Stacks to deploy (comma-separated, or "all")'
+        description: 'Stacks to deploy ("all", "changed", or comma-separated list)'
         required: false
         default: 'all'
       forceRebuild:
@@ -91,7 +91,6 @@ jobs:
           echo "environment=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
 
       - name: Determine diff base for change detection
-        if: github.event_name != 'workflow_dispatch'
         id: diffbase
         shell: bash
         run: |
@@ -127,13 +126,12 @@ jobs:
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
 
       - name: Setup change detection
-        if: github.event_name != 'workflow_dispatch'
         uses: dorny/paths-filter@v3
         id: changes
         with:
           # Ensure ref resolves to a concrete commit (not branch name)
           # This prevents git errors like: merge-base HEAD^...main (exit code 128)
-          ref: ${{ github.sha }}
+          ref: ${{ steps.deploy-ref.outputs.sha }}
           base: ${{ steps.diffbase.outputs.base }}
           filters: |
             foundation:
@@ -197,19 +195,10 @@ jobs:
         run: |
           STACKS=()
           ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "asset-library" "publishing" "api" "analytics" "web")
+          STACKS_INPUT_RAW="${{ github.event.inputs.stacks || 'all' }}"
+          STACKS_INPUT_NORMALIZED=$(echo "$STACKS_INPUT_RAW" | tr '[:upper:]' '[:lower:]' | xargs)
 
-          # Manual runs from the UI: deploy all stacks by default (or a specific list if provided)
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ -n "${{ github.event.inputs.stacks }}" && "${{ github.event.inputs.stacks }}" != "all" ]]; then
-              IFS=',' read -ra REQUESTED_STACKS <<< "${{ github.event.inputs.stacks }}"
-              for stack in "${REQUESTED_STACKS[@]}"; do
-                # Append as plain values; we'll quote when building JSON
-                STACKS+=("$stack")
-              done
-            else
-              for s in "${ALL_STACKS[@]}"; do STACKS+=("$s"); done
-            fi
-          else
+          add_changed_stacks() {
             # Auto-detect changed stacks
             [[ "${{ steps.changes.outputs.foundation }}" == "true" ]] && STACKS+=("foundation")
             [[ "${{ steps.changes.outputs.auth }}" == "true" ]] && STACKS+=("auth")
@@ -231,6 +220,26 @@ jobs:
             if [[ ${#STACKS[@]} -eq 0 && "${{ github.event_name }}" == "push" && ( "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ) ]]; then
               for s in "${ALL_STACKS[@]}"; do STACKS+=("$s"); done
             fi
+          }
+
+          # Manual runs from the UI: deploy all stacks by default, or changed stacks, or a specific list.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "$STACKS_INPUT_NORMALIZED" == "all" || -z "$STACKS_INPUT_NORMALIZED" ]]; then
+              for s in "${ALL_STACKS[@]}"; do STACKS+=("$s"); done
+            elif [[ "$STACKS_INPUT_NORMALIZED" == "changed" ]]; then
+              add_changed_stacks
+            else
+              IFS=',' read -ra REQUESTED_STACKS <<< "$STACKS_INPUT_RAW"
+              for stack in "${REQUESTED_STACKS[@]}"; do
+                stack=$(echo "$stack" | xargs)
+                # Append as plain values; we'll quote when building JSON
+                if [[ -n "$stack" ]]; then
+                  STACKS+=("$stack")
+                fi
+              done
+            fi
+          else
+            add_changed_stacks
           fi
 
           # Expand to include transitive dependents so that changes in a base stack
@@ -313,6 +322,7 @@ jobs:
 
           EVENT="${{ github.event_name }}"
           FORCE_REBUILD="${{ github.event.inputs.forceRebuild || 'false' }}"
+          STACKS_INPUT_NORMALIZED=$(echo "${{ github.event.inputs.stacks || 'all' }}" | tr '[:upper:]' '[:lower:]' | xargs)
 
           add_image() {
             local name="$1"; local dockerfile="$2"; local scope="$3"
@@ -324,8 +334,13 @@ jobs:
             fi
           }
 
-          # If manual run or forceRebuild, build all images (preserves current behavior)
-          if [[ "$EVENT" == "workflow_dispatch" || "$FORCE_REBUILD" == "true" ]]; then
+          # Force rebuild always builds all images.
+          if [[ "$FORCE_REBUILD" == "true" ]]; then
+            add_image api packages/apps/api/Dockerfile api
+            add_image assets packages/apps/assets-api/Dockerfile assets
+            add_image analytics packages/services/analytics-ingestor/Dockerfile analytics
+          # Manual deploys build all images unless stacks=changed was requested.
+          elif [[ "$EVENT" == "workflow_dispatch" && "$STACKS_INPUT_NORMALIZED" != "changed" ]]; then
             add_image api packages/apps/api/Dockerfile api
             add_image assets packages/apps/assets-api/Dockerfile assets
             add_image analytics packages/services/analytics-ingestor/Dockerfile analytics
@@ -832,8 +847,7 @@ jobs:
       (needs.deploy-stacks.result == 'success' || needs.deploy-stacks.result == 'skipped') &&
       (
         needs.detect-changes.outputs.frontend-changed == 'true' ||
-        contains(needs.detect-changes.outputs.stack-matrix, 'web') ||
-        github.event_name == 'workflow_dispatch'
+        contains(needs.detect-changes.outputs.stack-matrix, 'web')
       )
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:

@@ -13,6 +13,7 @@ This directory contains GitHub Actions workflows for the Postolio monorepo, impl
 **Key Features:**
 
 - **Manual Deploys From UI:** Run from the GitHub Actions UI with an explicit `ref` (branch/tag/SHA)
+- **Manual Changed Deploy Mode:** Set `stacks=changed` to deploy only stacks impacted by diff detection
 - **Environment Selection:** Choose `dev`, `staging`, or `prod` via workflow input
 - **Docker Layer Caching:** Uses GitHub Actions cache for faster builds
 - **CDK Integration:** Deploys infrastructure as code without manual installation
@@ -131,6 +132,9 @@ gh workflow run deploy.yml -f ref=main -f environment=staging
 
 # Deploy specific stacks (comma-separated or "all")
 gh workflow run deploy.yml -f ref=1a2b3c4d -f environment=dev -f stacks="api,web"
+
+# Deploy only stacks changed by the selected ref (same change detection logic as auto mode)
+gh workflow run deploy.yml -f ref=main -f environment=dev -f stacks=changed
 ```
 
 ## Performance Optimizations
