@@ -25,10 +25,15 @@ fi
 SSL_QUERY="sslmode=${DB_SSLMODE}"
 if [ -f "${DB_SSLROOTCERT}" ]; then
   SSL_QUERY="${SSL_QUERY}&sslrootcert=${DB_SSLROOTCERT}"
+  if [ -z "${NODE_EXTRA_CA_CERTS:-}" ]; then
+    export NODE_EXTRA_CA_CERTS="${DB_SSLROOTCERT}"
+  fi
 else
   echo "DB_SSLROOTCERT file not found at ${DB_SSLROOTCERT}; continuing without sslrootcert"
 fi
 echo "DB_SSLMODE: ${DB_SSLMODE}"
+echo "DB_SSLROOTCERT: ${DB_SSLROOTCERT}"
+echo "NODE_EXTRA_CA_CERTS is set: $([ -n "$NODE_EXTRA_CA_CERTS" ] && echo "yes" || echo "no")"
 
 # Construct DATABASE_URL from individual parts if provided
 if [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_HOST" ] && [ -n "$DB_PORT" ]; then

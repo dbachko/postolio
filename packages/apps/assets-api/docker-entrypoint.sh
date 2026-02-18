@@ -25,10 +25,15 @@ fi
 SSL_QUERY="sslmode=${ASSETS_DB_SSLMODE}"
 if [ -f "${ASSETS_DB_SSLROOTCERT}" ]; then
   SSL_QUERY="${SSL_QUERY}&sslrootcert=${ASSETS_DB_SSLROOTCERT}"
+  if [ -z "${NODE_EXTRA_CA_CERTS:-}" ]; then
+    export NODE_EXTRA_CA_CERTS="${ASSETS_DB_SSLROOTCERT}"
+  fi
 else
   echo "ASSETS_DB_SSLROOTCERT file not found at ${ASSETS_DB_SSLROOTCERT}; continuing without sslrootcert"
 fi
 echo "ASSETS_DB_SSLMODE: ${ASSETS_DB_SSLMODE}"
+echo "ASSETS_DB_SSLROOTCERT: ${ASSETS_DB_SSLROOTCERT}"
+echo "NODE_EXTRA_CA_CERTS is set: $([ -n "$NODE_EXTRA_CA_CERTS" ] && echo "yes" || echo "no")"
 
 # Construct ASSETS_DATABASE_URL from individual parts if provided
 if [ -n "$ASSETS_DB_USERNAME" ] && [ -n "$ASSETS_DB_PASSWORD" ] && [ -n "$ASSETS_DB_HOST" ] && [ -n "$ASSETS_DB_PORT" ]; then

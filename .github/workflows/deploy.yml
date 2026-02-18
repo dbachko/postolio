@@ -524,6 +524,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.image.dockerfile }}
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.image.name }}-${{ needs.detect-changes.outputs.environment }}-${{ needs.detect-changes.outputs.deploy-sha }}
