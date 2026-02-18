@@ -31,6 +31,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   packages: write
   deployments: write
@@ -90,42 +91,127 @@ jobs:
         run: |
           echo "environment=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
 
-      - name: Determine diff base for change detection
-        id: diffbase
+      - name: Normalize stack selection
+        id: stack-selection
         shell: bash
         run: |
-          # Default to previous commit on the same ref for push/manual, PR uses PR base
+          STACKS_INPUT_RAW="${{ github.event.inputs.stacks || 'all' }}"
+          STACKS_INPUT_NORMALIZED=$(echo "$STACKS_INPUT_RAW" | tr '[:upper:]' '[:lower:]' | xargs)
+
+          if [[ -z "$STACKS_INPUT_NORMALIZED" ]]; then
+            STACKS_INPUT_NORMALIZED="all"
+          fi
+
+          echo "raw=$STACKS_INPUT_RAW" >> "$GITHUB_OUTPUT"
+          echo "normalized=$STACKS_INPUT_NORMALIZED" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" || "$STACKS_INPUT_NORMALIZED" == "changed" ]]; then
+            echo "detect_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "detect_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine diff base for change detection
+        if: steps.stack-selection.outputs.detect_changes == 'true'
+        id: diffbase
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
           EVENT="${{ github.event_name }}"
+          DEPLOY_ENV="${{ github.event.inputs.environment || 'dev' }}"
+          BASE=""
+          BASE_SOURCE="unset"
+          MAINLINE_REF=""
+
+          if git show-ref --verify --quiet refs/remotes/origin/main; then
+            MAINLINE_REF="origin/main"
+          elif git show-ref --verify --quiet refs/remotes/origin/master; then
+            MAINLINE_REF="origin/master"
+          fi
+
           if [[ "$EVENT" == "pull_request" ]]; then
             BASE="${{ github.event.pull_request.base.sha }}"
+            BASE_SOURCE="pull_request_base"
           elif [[ "$EVENT" == "push" ]]; then
             BASE="${{ github.event.before }}"
-          else
-            # workflow_dispatch or other: compare with previous commit
-            BASE="HEAD^"
-          fi
+            BASE_SOURCE="push_before"
+          elif [[ "$EVENT" == "workflow_dispatch" ]]; then
+            # For manual deploys, compare against the last successful deployment of main
+            # for this environment instead of the currently checked out ref.
+            RUNS_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?branch=main&event=workflow_dispatch&status=completed&per_page=100"
+            RUNS_JSON=$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$RUNS_URL" || true)
 
-          # Fallback if BASE is empty or all zeros
-          if [[ -z "$BASE" || "$BASE" == "0000000000000000000000000000000000000000" ]]; then
-            BASE="HEAD^"
-          fi
+            if [[ -n "$RUNS_JSON" ]]; then
+              BASE=$(echo "$RUNS_JSON" | jq -r \
+                --arg env "$DEPLOY_ENV" \
+                --argjson current_run_id "${{ github.run_id }}" '
+                  (.workflow_runs // [])
+                  | map(select(
+                      .id != $current_run_id and
+                      .conclusion == "success" and
+                      ((.display_title // .name // "") | startswith("Deploy \($env) @"))
+                    ))
+                  | first
+                  | .head_sha // empty
+                ')
+            fi
 
-          # Ensure BASE resolves; if HEAD has no parent (e.g., first commit),
-          # fall back to the initial commit so paths-filter can compute a diff.
-          if ! git rev-parse --verify -q "$BASE" >/dev/null; then
-            ROOT_COMMIT=$(git rev-list --max-parents=0 HEAD | tail -n1)
-            if [[ -n "$ROOT_COMMIT" ]]; then
-              BASE="$ROOT_COMMIT"
-            else
-              # As a last resort, use HEAD itself to avoid failure (yields empty diff)
-              BASE="HEAD"
+            if [[ -n "$BASE" ]]; then
+              BASE_SOURCE="last_successful_main_deploy"
             fi
           fi
 
+          # Fallback if BASE is empty or all zeros.
+          if [[ -z "$BASE" || "$BASE" == "0000000000000000000000000000000000000000" ]]; then
+            if [[ -n "$MAINLINE_REF" ]]; then
+              BASE=$(git rev-parse "$MAINLINE_REF^" 2>/dev/null || true)
+              if [[ -n "$BASE" ]]; then
+                BASE_SOURCE="mainline_parent"
+              else
+                BASE=$(git rev-parse "$MAINLINE_REF" 2>/dev/null || true)
+                if [[ -n "$BASE" ]]; then
+                  BASE_SOURCE="mainline_head"
+                fi
+              fi
+            fi
+          fi
+
+          # Last fallback for unusual refs where origin/main is unavailable.
+          if [[ -z "$BASE" || "$BASE" == "0000000000000000000000000000000000000000" ]]; then
+            BASE=$(git rev-parse HEAD^ 2>/dev/null || true)
+            if [[ -n "$BASE" ]]; then
+              BASE_SOURCE="head_parent_fallback"
+            fi
+          fi
+
+          # Ensure BASE resolves to a concrete commit SHA.
+          if [[ -n "$BASE" ]]; then
+            BASE=$(git rev-parse --verify -q "$BASE^{commit}" 2>/dev/null || true)
+          fi
+
+          # If HEAD has no parent (e.g., first commit), fall back to root commit.
+          if [[ -z "$BASE" ]]; then
+            ROOT_COMMIT=$(git rev-list --max-parents=0 HEAD | tail -n1)
+            if [[ -n "$ROOT_COMMIT" ]]; then
+              BASE="$ROOT_COMMIT"
+              BASE_SOURCE="root_commit_fallback"
+            else
+              # As a last resort, use HEAD itself to avoid failure (yields empty diff)
+              BASE="$(git rev-parse HEAD)"
+              BASE_SOURCE="head_fallback"
+            fi
+          fi
+
+          echo "Using diff base source: $BASE_SOURCE"
           echo "Using diff base: $BASE"
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
 
       - name: Setup change detection
+        if: steps.stack-selection.outputs.detect_changes == 'true'
         uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -195,8 +281,8 @@ jobs:
         run: |
           STACKS=()
           ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "asset-library" "publishing" "api" "analytics" "web")
-          STACKS_INPUT_RAW="${{ github.event.inputs.stacks || 'all' }}"
-          STACKS_INPUT_NORMALIZED=$(echo "$STACKS_INPUT_RAW" | tr '[:upper:]' '[:lower:]' | xargs)
+          STACKS_INPUT_RAW="${{ steps.stack-selection.outputs.raw }}"
+          STACKS_INPUT_NORMALIZED="${{ steps.stack-selection.outputs.normalized }}"
 
           add_changed_stacks() {
             # Auto-detect changed stacks
@@ -322,7 +408,7 @@ jobs:
 
           EVENT="${{ github.event_name }}"
           FORCE_REBUILD="${{ github.event.inputs.forceRebuild || 'false' }}"
-          STACKS_INPUT_NORMALIZED=$(echo "${{ github.event.inputs.stacks || 'all' }}" | tr '[:upper:]' '[:lower:]' | xargs)
+          STACKS_INPUT_NORMALIZED="${{ steps.stack-selection.outputs.normalized }}"
 
           add_image() {
             local name="$1"; local dockerfile="$2"; local scope="$3"
