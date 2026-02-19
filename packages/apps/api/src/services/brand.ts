@@ -1,7 +1,6 @@
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
-import { isDemoBrand } from '../utils/demo-brand.js';
 import { instagramService } from './instagram.js';
 import { buildAnalysisAssetMetadata } from './brand-analysis-assets.js';
 import { importImageFromExternalUrl } from './assets-media.js';
@@ -78,35 +77,6 @@ export async function createBrand(userId: string, body: CreateBrandBody) {
     return created;
   });
 
-  // After a real brand is created, remove any demo brands for this user so
-  // they no longer appear in brand lists, dashboards, or analytics.
-  try {
-    const brandsForUser = await prisma.brand.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        preferences: true,
-      },
-    });
-
-    const demoBrandIds = brandsForUser
-      .filter((b) => isDemoBrand(b.preferences) && b.id !== brand.id)
-      .map((b) => b.id);
-
-    if (demoBrandIds.length > 0) {
-      await prisma.brand.deleteMany({
-        where: {
-          id: { in: demoBrandIds },
-        },
-      });
-    }
-  } catch (error) {
-    logger.warn('Failed to clean up demo brands after real brand creation', {
-      err: error,
-      userId,
-    });
-  }
-
   return brand;
 }
 
@@ -121,17 +91,13 @@ export async function listUserBrands(userId: string): Promise<unknown[]> {
       createdAt: true,
       countryCode: true,
       postingTimezone: true,
-      preferences: true,
     },
     orderBy: { createdAt: 'desc' },
   });
 
-  const hasRealBrand = brands.some((b) => !isDemoBrand(b.preferences));
-  const visibleBrands = hasRealBrand ? brands.filter((b) => !isDemoBrand(b.preferences)) : brands;
-
   // Strip preferences from the returned shape to keep the response
   // compatible with existing Brand client types.
-  return visibleBrands.map((brand) => ({
+  return brands.map((brand) => ({
     id: brand.id,
     name: brand.name,
     description: brand.description,

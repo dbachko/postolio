@@ -27,11 +27,16 @@ export type WriteItBarProps =
       onSaveDraft: () => void;
       onAddToQueue: () => void;
       onPublishNow: () => void;
+      queueOptionDisabled?: boolean;
+      queueOptionBlocker?: string | null;
       queueDisabled: boolean;
       queueBlocker: string | null;
+      queueNeedsPublishingSchedule: boolean;
       onPickSlot: () => void;
       pickSlotDisabled: boolean;
       pickSlotBlocker: string | null;
+      pickSlotNeedsPublishingSchedule: boolean;
+      onOpenPublishingSchedule?: () => void;
       onUpgradePlan?: () => void;
     }
   | {
@@ -52,7 +57,11 @@ export type WriteItBarProps =
       onUnschedule: () => void;
       onSave: () => void | Promise<boolean>;
       onAddToQueue?: () => void;
+      queueOptionDisabled?: boolean;
+      queueOptionBlocker?: string | null;
       queueDisabled?: boolean;
+      queueBlocker?: string | null;
+      queueNeedsPublishingSchedule?: boolean;
       isQueueing?: boolean;
       onPublishNow?: () => void;
       publishNowDisabled?: boolean;
@@ -61,4 +70,6 @@ export type WriteItBarProps =
       onPickSlot?: () => void;
       pickSlotDisabled?: boolean;
       pickSlotBlocker?: string | null;
+      pickSlotNeedsPublishingSchedule?: boolean;
+      onOpenPublishingSchedule?: () => void;
     };

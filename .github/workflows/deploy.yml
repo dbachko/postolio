@@ -1001,45 +1001,6 @@ jobs:
             --query 'events[*].message' \
             --output text 2>/dev/null | tr '\t' '\n' | tail -n 120 || true
 
-      - name: Sync demo assets after asset-library deploy
-        if: matrix.stack == 'asset-library'
-        run: |
-          set -euo pipefail
-
-          ENV="${{ needs.detect-changes.outputs.environment }}"
-          ASSET_STACK="Postolio-AssetLibrary-${ENV}"
-
-          ASSETS_BUCKET="$(
-            aws cloudformation describe-stacks \
-              --stack-name "$ASSET_STACK" \
-              --query "Stacks[0].Outputs[?OutputKey=='AssetsBucketNameOutput'].OutputValue | [0]" \
-              --output text 2>/dev/null || true
-          )"
-          if [[ -z "$ASSETS_BUCKET" || "$ASSETS_BUCKET" == "None" ]]; then
-            ASSETS_BUCKET="postolio-${ENV}-assets-storage"
-            echo "Assets bucket output not found; using deterministic fallback: ${ASSETS_BUCKET}"
-          fi
-
-          ASSETS_CDN_DISTRIBUTION_ID="$(
-            aws cloudformation describe-stack-resource \
-              --stack-name "$ASSET_STACK" \
-              --logical-resource-id "AssetsDistribution" \
-              --query 'StackResourceDetail.PhysicalResourceId' \
-              --output text 2>/dev/null || true
-          )"
-
-          echo "Syncing demo assets to s3://${ASSETS_BUCKET}"
-          ASSETS_S3_BUCKET="$ASSETS_BUCKET" pnpm --filter @postolio/assets-api run sync:demo-assets
-
-          if [[ -n "${ASSETS_CDN_DISTRIBUTION_ID}" && "${ASSETS_CDN_DISTRIBUTION_ID}" != "None" ]]; then
-            echo "Invalidating assets CDN demo prefix on distribution ${ASSETS_CDN_DISTRIBUTION_ID}"
-            aws cloudfront create-invalidation \
-              --distribution-id "$ASSETS_CDN_DISTRIBUTION_ID" \
-              --paths "/system/demo/default/*"
-          else
-            echo "Skipping CDN invalidation: could not resolve AssetsDistribution ID from CloudFormation."
-          fi
-
   # ============================================
   # STEP 5: Deploy Frontend to S3 (Web Stack)
   # ============================================

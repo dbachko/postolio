@@ -1,7 +1,6 @@
 import type { AppLayoutProps } from './types';
 import { PageMetaProvider } from '@/contexts/PageMetaContext';
 import { EmailVerificationBanner } from '@/components/email-verification-banner';
-import { DemoModeBanner } from '@/components/demo-mode-banner';
 import { ScheduleLimitBanner } from '@/components/schedule-limit-banner';
 import { RightSidebarRoot } from '@/right-sidebar/RightSidebarRoot';
 import '@/right-sidebar/register';
@@ -24,7 +23,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col md:pl-[52px]">
           <EmailVerificationBanner />
-          <DemoModeBanner />
           <ScheduleLimitBanner />
 
           <AppHeader />

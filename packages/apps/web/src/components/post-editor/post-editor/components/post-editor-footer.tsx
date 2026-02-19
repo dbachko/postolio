@@ -53,11 +53,18 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
         onSaveDraft={() => state.createPostMutation.createPost('draft')}
         onAddToQueue={() => state.createPostMutation.createPost('queue')}
         onPublishNow={() => state.createPostMutation.createPost('now')}
+        queueOptionDisabled={state.derived.queueOptionDisabled}
+        queueOptionBlocker={state.derived.queueOptionBlocker}
         queueDisabled={state.derived.queueDisabled}
         queueBlocker={state.derived.queueBlocker}
+        queueNeedsPublishingSchedule={state.derived.queueNeedsPublishingSchedule}
         onPickSlot={() => state.ui.setSlotPickerOpen(true)}
         pickSlotDisabled={state.derived.pickSlotDisabled}
         pickSlotBlocker={state.derived.pickSlotBlocker}
+        pickSlotNeedsPublishingSchedule={state.derived.pickSlotNeedsPublishingSchedule}
+        onOpenPublishingSchedule={() =>
+          (window.location.href = '/social-accounts/publishing-schedule')
+        }
         onUpgradePlan={() => (window.location.href = '/limits')}
       />
     );
@@ -185,6 +192,8 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
         onSave={state.saveActions.handleSaveChanges}
         onAddToQueue={() => void state.saveActions.moveToQueue()}
         queueDisabled={!state.derived.queueSupportedForPost}
+        queueBlocker={state.derived.queueBlockerForPost}
+        queueNeedsPublishingSchedule={state.derived.queueNeedsPublishingScheduleForPost}
         isQueueing={state.mutations.isQueueing}
         onPublishNow={() => void state.mutations.publishNowAsync()}
         publishNowDisabled={state.derived.publishNowDisabled}
@@ -193,6 +202,10 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
         onPickSlot={() => state.ui.setSlotPickerOpen(true)}
         pickSlotDisabled={state.derived.pickSlotDisabled}
         pickSlotBlocker={state.derived.pickSlotBlocker}
+        pickSlotNeedsPublishingSchedule={state.derived.pickSlotNeedsPublishingSchedule}
+        onOpenPublishingSchedule={() =>
+          (window.location.href = '/social-accounts/publishing-schedule')
+        }
       />
     );
   };

@@ -9,7 +9,6 @@ import { config } from '../config/env-validation.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
 import { assertBrandOwnership } from '../services/ownership.js';
-import { isDemoBrand } from '../utils/demo-brand.js';
 
 const assetsClient = new AssetsServiceClient({
   baseUrl: config.ASSETS_API_BASE_URL,
@@ -21,15 +20,13 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
 
   const ensureBrandOwned = async (brandId: string, userId: string) => {
     try {
-      const brand = await assertBrandOwnership(userId, brandId);
+      await assertBrandOwnership(userId, brandId);
       return {
         owns: true,
-        isDemo: isDemoBrand(brand.preferences),
       };
     } catch {
       return {
         owns: false,
-        isDemo: false,
       };
     }
   };
@@ -58,12 +55,9 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Missing required fields' });
       }
 
-      const { owns, isDemo } = await ensureBrandOwned(brandId, userId);
+      const { owns } = await ensureBrandOwned(brandId, userId);
       if (!owns) {
         return reply.code(404).send({ error: 'Brand not found' });
-      }
-      if (isDemo) {
-        return reply.code(400).send({ error: 'Assets cannot be created for demo brands' });
       }
 
       const result = await assetsClient.getUploadUrl({
@@ -336,12 +330,6 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Asset not found' });
       }
 
-      // For demo brands, prevent modifying assets via the proxy.
-      const { isDemo } = await ensureBrandOwned(existing.brandId, userId);
-      if (isDemo) {
-        return reply.code(400).send({ error: 'Demo brand assets cannot be modified' });
-      }
-
       const body = request.body as Record<string, unknown>;
       const result = await assetsClient.updateAsset(id, body);
       return reply.send(result);
@@ -359,12 +347,6 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
       const existing = await ensureAssetOwned(id, userId);
       if (!existing) {
         return reply.code(404).send({ error: 'Asset not found' });
-      }
-
-      // For demo brands, prevent deleting assets via the proxy.
-      const { isDemo } = await ensureBrandOwned(existing.brandId, userId);
-      if (isDemo) {
-        return reply.code(400).send({ error: 'Demo brand assets cannot be deleted' });
       }
 
       const result: DeleteAssetResponse = await assetsClient.deleteAsset(id);

@@ -5,8 +5,6 @@ import { Mail, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { TIMEOUTS } from '@/constants/timeouts';
 import { httpGet, httpPost } from '@/lib/api';
-import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
-import { useAuthStore } from '@/stores/authStore';
 
 interface VerificationStatus {
   verified: boolean;
@@ -19,9 +17,6 @@ export function EmailVerificationBanner() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [hasError, setHasError] = useState(false);
-
-  const { isAuthenticated } = useAuthStore();
-  const { data: onboarding } = useOnboardingStatus({ enabled: isAuthenticated });
 
   const checkVerificationStatus = async () => {
     try {
@@ -66,11 +61,6 @@ export function EmailVerificationBanner() {
   useEffect(() => {
     checkVerificationStatus();
   }, []);
-
-  // In Demo Mode, hide this banner completely.
-  if (onboarding?.status === 'demo') {
-    return null;
-  }
 
   if (isLoading) {
     return null;

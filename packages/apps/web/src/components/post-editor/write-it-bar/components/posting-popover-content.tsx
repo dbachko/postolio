@@ -20,11 +20,15 @@ type PostingPopoverContentProps = {
   scheduledAt: string;
   brandTimezone: string;
   onSelectQueue: () => void;
+  queueDisabled?: boolean;
+  queueBlocker?: string | null;
   onSelectNow?: () => void;
   onSelectDateTime: () => void;
   onPickSlot?: (() => void) | null;
   pickSlotDisabled?: boolean;
   pickSlotBlocker?: string | null;
+  showPublishingScheduleCta?: boolean;
+  onOpenPublishingSchedule?: (() => void) | null;
   onBackToMenu: () => void;
   onDone: () => void;
   onScheduledAtChange: (nextValue: string) => void;
@@ -36,11 +40,15 @@ export function PostingPopoverContent({
   scheduledAt,
   brandTimezone,
   onSelectQueue,
+  queueDisabled,
+  queueBlocker,
   onSelectNow,
   onSelectDateTime,
   onPickSlot,
   pickSlotDisabled,
   pickSlotBlocker,
+  showPublishingScheduleCta,
+  onOpenPublishingSchedule,
   onBackToMenu,
   onDone,
   onScheduledAtChange,
@@ -123,30 +131,50 @@ export function PostingPopoverContent({
       </div>
 
       <div className="space-y-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left whitespace-normal',
-            postingAction === 'queue' && 'bg-muted'
-          )}
-          onClick={onSelectQueue}
-        >
-          <div className="mt-0.5 flex h-5 w-5 items-center justify-center">
-            {postingAction === 'queue' ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <ListPlus className="h-4 w-4" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium">Next available</div>
-            <div className="text-muted-foreground text-xs">
-              Use the next available posting slot in your queue.
-            </div>
-          </div>
-        </Button>
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <span className="block w-full">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-auto w-full items-start justify-start gap-3 rounded-md p-2 text-left whitespace-normal',
+                  postingAction === 'queue' && 'bg-muted',
+                  queueDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent'
+                )}
+                disabled={Boolean(queueDisabled)}
+                onClick={() => {
+                  if (queueDisabled) return;
+                  onSelectQueue();
+                }}
+              >
+                <div className="mt-0.5 flex h-5 w-5 items-center justify-center">
+                  {postingAction === 'queue' ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <ListPlus className="h-4 w-4" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">Next available</div>
+                  <div className="text-muted-foreground text-xs">
+                    Use the next available posting slot in your queue.
+                  </div>
+                </div>
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {queueDisabled ? (
+            <TooltipContent>
+              {queueBlocker ? (
+                <BlockerTooltipMessage message={queueBlocker} />
+              ) : (
+                <p className="text-sm">This option is not available right now.</p>
+              )}
+            </TooltipContent>
+          ) : null}
+        </Tooltip>
 
         {showNow ? (
           <Button
@@ -236,6 +264,19 @@ export function PostingPopoverContent({
               </TooltipContent>
             ) : null}
           </Tooltip>
+        ) : null}
+
+        {showPublishingScheduleCta && onOpenPublishingSchedule ? (
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="link"
+              className="h-auto px-0 text-xs"
+              onClick={onOpenPublishingSchedule}
+            >
+              Set up Publishing Schedule
+            </Button>
+          </div>
         ) : null}
       </div>
     </div>

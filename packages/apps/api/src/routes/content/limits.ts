@@ -6,7 +6,6 @@
 import { FastifyPluginAsync } from 'fastify';
 
 import { getDatabaseClient } from '../../config/database.js';
-import { isDemoBrand } from '../../utils/demo-brand.js';
 
 const prisma = getDatabaseClient();
 
@@ -24,20 +23,19 @@ const limitsRoutes: FastifyPluginAsync = async (fastify) => {
         const { getMaxScheduledAheadForTier } = await import('../../constants/subscription.js');
         const maxAllowed = getMaxScheduledAheadForTier(user.subscriptionTier || 'free');
 
-        // Only count scheduled/draft posts for non-demo brands.
         const brands = await prisma.brand.findMany({
           where: { userId },
-          select: { id: true, preferences: true },
+          select: { id: true },
         });
-        const realBrandIds = brands.filter((b) => !isDemoBrand(b.preferences)).map((b) => b.id);
+        const brandIds = brands.map((b) => b.id);
 
         const now = new Date();
         const currentCount =
-          realBrandIds.length === 0
+          brandIds.length === 0
             ? 0
             : await prisma.content.count({
                 where: {
-                  brandId: { in: realBrandIds },
+                  brandId: { in: brandIds },
                   scheduledAt: { gte: now },
                   status: { in: ['scheduled', 'draft'] },
                 },

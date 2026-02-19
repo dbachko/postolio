@@ -165,6 +165,12 @@ export function WriteItBarEdit({
                 postingAction={postingAction}
                 scheduledAt={barProps.scheduledAt}
                 brandTimezone={barProps.brandTimezone}
+                queueDisabled={
+                  barProps.isSaving ||
+                  barProps.isUnscheduling ||
+                  Boolean(barProps.queueOptionDisabled ?? barProps.queueDisabled)
+                }
+                queueBlocker={barProps.queueOptionBlocker ?? barProps.queueBlocker}
                 onSelectQueue={() => {
                   setPostingActionManual('queue');
                   setPostingPopoverOpen(false);
@@ -202,6 +208,11 @@ export function WriteItBarEdit({
                   barProps.isSaving || barProps.isUnscheduling || Boolean(barProps.pickSlotDisabled)
                 }
                 pickSlotBlocker={barProps.pickSlotBlocker}
+                showPublishingScheduleCta={
+                  Boolean(barProps.queueNeedsPublishingSchedule) ||
+                  Boolean(barProps.pickSlotNeedsPublishingSchedule)
+                }
+                onOpenPublishingSchedule={barProps.onOpenPublishingSchedule}
                 onBackToMenu={() => setPostingPopoverView('menu')}
                 onDone={() => {
                   setPostingPopoverOpen(false);

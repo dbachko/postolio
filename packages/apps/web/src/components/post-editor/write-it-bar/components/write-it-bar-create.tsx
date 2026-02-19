@@ -237,6 +237,11 @@ export function WriteItBarCreate({
                   postingAction={postingAction}
                   scheduledAt={barProps.scheduledAt}
                   brandTimezone={barProps.brandTimezone}
+                  queueDisabled={
+                    barProps.isCreatingPost ||
+                    Boolean(barProps.queueOptionDisabled ?? barProps.queueDisabled)
+                  }
+                  queueBlocker={barProps.queueOptionBlocker ?? barProps.queueBlocker}
                   onSelectQueue={() => {
                     setPostingActionManual('queue');
                     barProps.onScheduledAtChange('');
@@ -270,6 +275,11 @@ export function WriteItBarCreate({
                   }
                   pickSlotDisabled={barProps.isCreatingPost || barProps.pickSlotDisabled}
                   pickSlotBlocker={barProps.pickSlotBlocker}
+                  showPublishingScheduleCta={
+                    barProps.queueNeedsPublishingSchedule ||
+                    barProps.pickSlotNeedsPublishingSchedule
+                  }
+                  onOpenPublishingSchedule={barProps.onOpenPublishingSchedule}
                   onBackToMenu={() => setPostingPopoverView('menu')}
                   onDone={() => {
                     setPostingPopoverOpen(false);

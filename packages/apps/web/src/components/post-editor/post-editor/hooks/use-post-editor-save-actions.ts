@@ -35,6 +35,7 @@ export function usePostEditorSaveActions(params: {
   addToQueueAsync: () => Promise<unknown>;
   isQueueing: boolean;
   queueSupportedForPost: boolean;
+  queueBlockerForPost?: string | null;
   queryClient: { invalidateQueries: (opts: { queryKey: unknown[] }) => Promise<unknown> };
 }) {
   const {
@@ -50,6 +51,7 @@ export function usePostEditorSaveActions(params: {
     mutateContentAsync,
     post,
     queryClient,
+    queueBlockerForPost,
     queueSupportedForPost,
     scheduleBlocker,
     scheduleContentGroup,
@@ -204,7 +206,7 @@ export function usePostEditorSaveActions(params: {
   const moveToQueue = useCallback(async (): Promise<void> => {
     if (isQueueing) return;
     if (!queueSupportedForPost) {
-      toast.error('Queue scheduling is not available for this post.');
+      toast.error(queueBlockerForPost || 'Queue scheduling is not available for this post.');
       return;
     }
     if (!validation.ok) {
@@ -247,6 +249,7 @@ export function usePostEditorSaveActions(params: {
     post?.brand?.id,
     post?.scheduledAt,
     queryClient,
+    queueBlockerForPost,
     queueSupportedForPost,
     scheduleContentGroup,
     validation.ok,

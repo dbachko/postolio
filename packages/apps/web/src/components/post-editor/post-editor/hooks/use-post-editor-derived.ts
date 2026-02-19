@@ -38,6 +38,10 @@ export function usePostEditorDerived(params: {
   selectedPlatforms: Platform[];
   schedulingSupported: boolean;
   publishingSupported: boolean;
+  queueActionAccountIds: string[];
+  queueSlotsBySocialAccountId: Record<string, boolean | null>;
+  queueSlotsLoadingBySocialAccountId: Record<string, boolean>;
+  queueSlotsErrorBySocialAccountId: Record<string, boolean>;
   isCreatingPost: boolean;
 }) {
   const {
@@ -56,6 +60,10 @@ export function usePostEditorDerived(params: {
     platformPickerOptions,
     post,
     publishingSupported,
+    queueActionAccountIds,
+    queueSlotsBySocialAccountId,
+    queueSlotsErrorBySocialAccountId,
+    queueSlotsLoadingBySocialAccountId,
     schedulingSupported,
     selectedPlatformAccountIds,
     selectedPlatforms,
@@ -130,6 +138,48 @@ export function usePostEditorDerived(params: {
   const validationError = validation.ok ? null : validation.errors[0]?.message;
   const hasSelectedPlatforms = selectedPlatformAccountIds.length > 0;
 
+  const assessQueueSlotState = useMemo(() => {
+    return (accountIds: string[]) => {
+      const uniqueIds = Array.from(
+        new Set(
+          accountIds
+            .map((accountId) => (typeof accountId === 'string' ? accountId.trim() : ''))
+            .filter(Boolean)
+        )
+      );
+
+      if (uniqueIds.length === 0) {
+        return {
+          allHaveSlots: false,
+          anyMissing: false,
+          anyUnknown: false,
+          anyLoading: false,
+          anyError: false,
+        };
+      }
+
+      let anyMissing = false;
+      let anyUnknown = false;
+      let anyLoading = false;
+      let anyError = false;
+
+      for (const accountId of uniqueIds) {
+        const hasSlots = queueSlotsBySocialAccountId[accountId];
+        if (hasSlots === false) anyMissing = true;
+        if (hasSlots === null || hasSlots === undefined) anyUnknown = true;
+        if (queueSlotsLoadingBySocialAccountId[accountId]) anyLoading = true;
+        if (queueSlotsErrorBySocialAccountId[accountId]) anyError = true;
+      }
+
+      const allHaveSlots = !anyMissing && !anyUnknown;
+      return { allHaveSlots, anyMissing, anyUnknown, anyLoading, anyError };
+    };
+  }, [
+    queueSlotsBySocialAccountId,
+    queueSlotsErrorBySocialAccountId,
+    queueSlotsLoadingBySocialAccountId,
+  ]);
+
   const queueSupportedForSelection = useMemo(() => {
     if (selectedPlatformAccountIds.length === 0) return false;
     const byId = new Map(platformPickerOptions.map((o) => [o.id, o]));
@@ -143,6 +193,11 @@ export function usePostEditorDerived(params: {
       }
     });
   }, [platformPickerOptions, selectedPlatformAccountIds]);
+
+  const queueSlotStateForSelection = useMemo(
+    () => assessQueueSlotState(selectedPlatformAccountIds),
+    [assessQueueSlotState, selectedPlatformAccountIds]
+  );
 
   const effectiveSchedulingSupported = useMemo(() => {
     if (!isMultiDestinationGroup) return schedulingSupported;
@@ -158,7 +213,7 @@ export function usePostEditorDerived(params: {
     ? contentGroupSchedule.kind !== 'none'
     : post?.status === 'scheduled';
 
-  const queueSupportedForPost = useMemo(() => {
+  const queuePlatformSupportedForPost = useMemo(() => {
     if (isCreating) return queueSupportedForSelection;
     if (isMultiDestinationGroup) {
       const platforms = groupPlatforms.length ? groupPlatforms : (['instagram'] as Platform[]);
@@ -191,6 +246,17 @@ export function usePostEditorDerived(params: {
     post,
     queueSupportedForSelection,
   ]);
+
+  const queueSlotStateForPost = useMemo(
+    () => assessQueueSlotState(queueActionAccountIds),
+    [assessQueueSlotState, queueActionAccountIds]
+  );
+
+  const queueSupportedForPost =
+    queuePlatformSupportedForPost &&
+    queueSlotStateForPost.allHaveSlots &&
+    !queueSlotStateForPost.anyLoading &&
+    !queueSlotStateForPost.anyError;
 
   const minScheduleInput = useMemo(
     () => formatInTimeZone(new Date(), brandTimezone, "yyyy-MM-dd'T'HH:mm"),
@@ -225,22 +291,65 @@ export function usePostEditorDerived(params: {
     return null;
   })();
 
-  const queueDisabled = !validation.ok || !hasSelectedPlatforms || !queueSupportedForSelection;
-  const queueBlocker = (() => {
+  const queueOptionDisabled =
+    !hasSelectedPlatforms ||
+    !queueSupportedForSelection ||
+    queueSlotStateForSelection.anyLoading ||
+    !queueSlotStateForSelection.allHaveSlots;
+  const queueOptionBlocker = (() => {
     if (!hasSelectedPlatforms) return 'Select at least one destination in Destinations.';
     if (!queueSupportedForSelection)
       return 'Queue scheduling is not available for this destination.';
+    if (queueSlotStateForSelection.anyLoading) return 'Checking publishing schedule...';
+    if (queueSlotStateForSelection.anyMissing)
+      return 'Add at least one slot in Publishing Schedule for each selected destination.';
+    if (queueSlotStateForSelection.anyError || queueSlotStateForSelection.anyUnknown)
+      return 'Could not verify Publishing Schedule right now. Please try again.';
+    return null;
+  })();
+
+  const queueDisabled = queueOptionDisabled || !validation.ok;
+  const queueBlocker = (() => {
+    if (queueOptionBlocker) return queueOptionBlocker;
     if (!validation.ok) return validationError || 'Please fix validation errors before continuing.';
     return null;
   })();
 
-  const pickSlotDisabled = selectedPlatformAccountIds.length !== 1 || !queueSupportedForSelection;
+  const queueNeedsPublishingSchedule = queueSlotStateForSelection.anyMissing;
+  const queueNeedsPublishingScheduleForPost = queueSlotStateForPost.anyMissing;
+
+  const pickSlotDisabled =
+    selectedPlatformAccountIds.length !== 1 ||
+    !queueSupportedForSelection ||
+    queueSlotStateForSelection.anyLoading ||
+    !queueSlotStateForSelection.allHaveSlots;
   const pickSlotBlocker = (() => {
     if (!hasSelectedPlatforms) return 'Select at least one destination in Destinations.';
     if (!queueSupportedForSelection)
       return 'Slot schedules are not available for this destination.';
     if (selectedPlatformAccountIds.length !== 1)
       return 'Select exactly one destination to pick a slot.';
+    if (queueSlotStateForSelection.anyLoading) return 'Checking publishing schedule...';
+    if (queueSlotStateForSelection.anyMissing)
+      return 'Add at least one slot in Publishing Schedule for this destination.';
+    if (queueSlotStateForSelection.anyError || queueSlotStateForSelection.anyUnknown)
+      return 'Could not verify Publishing Schedule right now. Please try again.';
+    return null;
+  })();
+  const pickSlotNeedsPublishingSchedule =
+    selectedPlatformAccountIds.length === 1 && queueSlotStateForSelection.anyMissing;
+
+  const queueBlockerForPost = (() => {
+    if (!queuePlatformSupportedForPost)
+      return 'Queue scheduling is not available for this destination.';
+    if (queueSlotStateForPost.anyLoading) return 'Checking publishing schedule...';
+    if (queueSlotStateForPost.anyMissing) {
+      return isMultiDestinationGroup
+        ? 'Add at least one slot in Publishing Schedule for each destination in this post group.'
+        : 'Add at least one slot in Publishing Schedule for this destination.';
+    }
+    if (queueSlotStateForPost.anyError || queueSlotStateForPost.anyUnknown)
+      return 'Could not verify Publishing Schedule right now. Please try again.';
     return null;
   })();
 
@@ -292,10 +401,16 @@ export function usePostEditorDerived(params: {
     saveDraftBlocker,
     publishNowDisabled,
     publishNowBlocker,
+    queueOptionDisabled,
+    queueOptionBlocker,
     queueDisabled,
     queueBlocker,
+    queueBlockerForPost,
+    queueNeedsPublishingSchedule,
+    queueNeedsPublishingScheduleForPost,
     pickSlotDisabled,
     pickSlotBlocker,
+    pickSlotNeedsPublishingSchedule,
     queueSupportedForSelection,
     queueSupportedForPost,
     isScheduled,

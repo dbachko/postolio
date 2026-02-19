@@ -16,9 +16,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run --passWithNoTests",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
-    "generate:demo-images": "tsx src/scripts/generate-demo-images.ts",
-    "sync:demo-assets": "tsx src/scripts/sync-demo-assets.ts"
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.956.0",

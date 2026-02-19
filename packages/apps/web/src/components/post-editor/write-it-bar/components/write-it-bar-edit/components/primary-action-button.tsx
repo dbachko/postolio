@@ -20,7 +20,7 @@ export function PrimaryActionButton({
 }: PrimaryActionButtonProps) {
   const isDisabled = barProps.isSaving || barProps.isUnscheduling;
   const isBlocked =
-    (barProps.hasChanges && barProps.isScheduled && !barProps.validationOk) ||
+    (barProps.hasChanges && !barProps.validationOk) ||
     (!barProps.hasChanges && postingAction !== 'queue' && postingAction !== 'now') ||
     (postingAction === 'now' &&
       (!barProps.onPublishNow ||
@@ -45,7 +45,7 @@ export function PrimaryActionButton({
           </TooltipContent>
         );
       }
-      if (barProps.isScheduled && !barProps.validationOk) {
+      if (!barProps.validationOk) {
         return (
           <TooltipContent>
             <p className="text-sm">Fix validation errors before saving.</p>
@@ -82,6 +82,13 @@ export function PrimaryActionButton({
     }
 
     if (!barProps.onAddToQueue || Boolean(barProps.queueDisabled)) {
+      if (barProps.queueBlocker) {
+        return (
+          <TooltipContent>
+            <BlockerTooltipMessage message={barProps.queueBlocker} />
+          </TooltipContent>
+        );
+      }
       return (
         <TooltipContent>
           <p className="text-sm">Queue scheduling is not available for this post.</p>

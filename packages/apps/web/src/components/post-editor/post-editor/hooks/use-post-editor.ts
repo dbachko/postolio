@@ -1,11 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useBrandStore } from '@/stores/brandStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { isMultiDestinationEnabled } from '@/lib/feature-flags';
 
 import type { PostEditorProps } from '../types';
@@ -19,6 +18,7 @@ import { usePostEditorDestinationActions } from './use-post-editor-destination-a
 import { usePostEditorFormState } from './use-post-editor-form-state';
 import { usePostEditorMutations } from './use-post-editor-mutations';
 import { usePostEditorPreview } from './use-post-editor-preview';
+import { usePostEditorQueueAvailability } from './use-post-editor-queue-availability';
 import { usePostEditorSaveActions } from './use-post-editor-save-actions';
 import { usePostEditorTemplateForm } from './use-post-editor-template-form';
 import { usePostEditorUiState } from './use-post-editor-ui-state';
@@ -34,9 +34,7 @@ export function usePostEditor(props: PostEditorProps) {
   const user = useAuthStore((state) => state.user);
   const { selectedBrand } = useBrandStore();
   const selectedBrandId = selectedBrand?.id ?? null;
-  const { data: onboarding } = useOnboardingStatus({ enabled: Boolean(user) });
-  const isDemoMode = onboarding?.status === 'demo';
-  const multiDestinationEnabled = isMultiDestinationEnabled(user) && !isDemoMode;
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
 
   const data = usePostEditorData({ id, selectedBrandId, multiDestinationEnabled });
 
@@ -111,6 +109,44 @@ export function usePostEditor(props: PostEditorProps) {
     navigate,
   });
 
+  const queueActionAccountIds = useMemo(() => {
+    if (!id) return destinations.selectedPlatformAccountIds;
+
+    if (data.isMultiDestinationGroup) {
+      return Array.from(
+        new Set(
+          data.groupDestinations
+            .map((destination) =>
+              typeof destination.socialAccountId === 'string'
+                ? destination.socialAccountId.trim()
+                : ''
+            )
+            .filter(Boolean)
+        )
+      );
+    }
+
+    const targetSocialAccountId =
+      typeof data.post?.targetSocialAccountId === 'string'
+        ? data.post.targetSocialAccountId.trim()
+        : '';
+    if (targetSocialAccountId) return [targetSocialAccountId];
+
+    return destinations.selectedPlatformAccountIds;
+  }, [
+    data.groupDestinations,
+    data.isMultiDestinationGroup,
+    data.post?.targetSocialAccountId,
+    destinations.selectedPlatformAccountIds,
+    id,
+  ]);
+
+  const queueAvailability = usePostEditorQueueAvailability({
+    socialAccountIds: Array.from(
+      new Set([...destinations.selectedPlatformAccountIds, ...queueActionAccountIds])
+    ),
+  });
+
   const derived = usePostEditorDerived({
     id,
     layout,
@@ -129,6 +165,10 @@ export function usePostEditor(props: PostEditorProps) {
     selectedPlatforms: destinations.selectedPlatforms,
     schedulingSupported: destinations.schedulingSupported,
     publishingSupported: destinations.publishingSupported,
+    queueActionAccountIds,
+    queueSlotsBySocialAccountId: queueAvailability.hasQueueSlotsBySocialAccountId,
+    queueSlotsLoadingBySocialAccountId: queueAvailability.queueSlotsLoadingBySocialAccountId,
+    queueSlotsErrorBySocialAccountId: queueAvailability.queueSlotsErrorBySocialAccountId,
     isCreatingPost: createPostMutation.isCreatingPost,
   });
 
@@ -171,6 +211,7 @@ export function usePostEditor(props: PostEditorProps) {
     addToQueueAsync: mutations.addToQueueAsync,
     isQueueing: mutations.isQueueing,
     queueSupportedForPost: derived.queueSupportedForPost,
+    queueBlockerForPost: derived.queueBlockerForPost,
     queryClient: mutations.queryClient,
   });
 
