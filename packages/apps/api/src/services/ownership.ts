@@ -26,7 +26,6 @@ type PublishingQueueAccessPayload = Prisma.PublishingQueueGetPayload<{
     id: true;
     socialAccountId: true;
     name: true;
-    paused: true;
     isDefault: true;
     socialAccount: {
       select: {
@@ -108,7 +107,6 @@ export async function assertPublishingQueueAccess(
       id: true,
       socialAccountId: true,
       name: true,
-      paused: true,
       isDefault: true,
       socialAccount: {
         select: {

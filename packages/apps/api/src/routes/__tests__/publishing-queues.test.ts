@@ -41,7 +41,6 @@ vi.mock('../../services/ownership.js', () => ({
   assertPublishingQueueAccess: vi.fn(async (_userId: string, queueId: string) => ({
     id: queueId,
     socialAccountId: 'sa-1',
-    paused: false,
     isDefault: true,
     socialAccount: { brandId: 'brand-1' },
   })),
@@ -80,8 +79,10 @@ vi.mock('../../services/publishing-queue/slot-instance-generator.js', () => ({
 // Minimal Prisma mock for publishing-queues routes (in-memory).
 vi.mock('../../config/database.js', () => {
   let queueIdSeq = 1;
+  let queueItemIdSeq = 1;
   const queues: any[] = [];
   const slots: any[] = [];
+  const queueItems: any[] = [];
 
   const prisma = {
     publishingQueue: {
@@ -90,13 +91,38 @@ vi.mock('../../config/database.js', () => {
         let out = queues.slice();
         if (where.socialAccountId)
           out = out.filter((q) => q.socialAccountId === where.socialAccountId);
+        if (where.isDefault === true || where.isDefault === false)
+          out = out.filter((q) => q.isDefault === where.isDefault);
+        if (typeof where.id === 'string') out = out.filter((q) => q.id === where.id);
         return out.map((q) => ({
           ...q,
           _count: {
             slots: slots.filter((s) => s.queueId === q.id).length,
-            items: 0,
+            items: queueItems.filter((i) => i.queueId === q.id).length,
           },
         }));
+      }),
+      findFirst: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        let out = queues.slice();
+        if (where.socialAccountId) {
+          out = out.filter((q) => q.socialAccountId === where.socialAccountId);
+        }
+        if (where.isDefault === true || where.isDefault === false) {
+          out = out.filter((q) => q.isDefault === where.isDefault);
+        }
+        const notId = where?.id?.not;
+        if (typeof notId === 'string') out = out.filter((q) => q.id !== notId);
+        return out[0] ? { ...out[0] } : null;
+      }),
+      count: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        let out = queues.slice();
+        if (where.socialAccountId)
+          out = out.filter((q) => q.socialAccountId === where.socialAccountId);
+        if (where.isDefault === true || where.isDefault === false)
+          out = out.filter((q) => q.isDefault === where.isDefault);
+        return out.length;
       }),
       create: vi.fn(async (args: any) => {
         const data = args?.data ?? {};
@@ -104,7 +130,6 @@ vi.mock('../../config/database.js', () => {
           id: `queue-${queueIdSeq++}`,
           socialAccountId: data.socialAccountId,
           name: data.name,
-          paused: data.paused ?? false,
           isDefault: data.isDefault ?? false,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -114,6 +139,56 @@ vi.mock('../../config/database.js', () => {
           ...record,
           _count: { slots: 0, items: 0 },
         };
+      }),
+      update: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const data = args?.data ?? {};
+        const idx = queues.findIndex((q) => q.id === where.id);
+        if (idx < 0) throw new Error(`Queue not found: ${String(where.id)}`);
+        const updated = {
+          ...queues[idx],
+          ...(data.name !== undefined ? { name: data.name } : {}),
+          ...(data.isDefault !== undefined ? { isDefault: Boolean(data.isDefault) } : {}),
+          updatedAt: new Date(),
+        };
+        queues[idx] = updated;
+        return { ...updated };
+      }),
+      updateMany: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const data = args?.data ?? {};
+        let count = 0;
+        for (let i = 0; i < queues.length; i++) {
+          const queue = queues[i];
+          if (where.socialAccountId && queue.socialAccountId !== where.socialAccountId) continue;
+          if (where.isDefault === true || where.isDefault === false) {
+            if (queue.isDefault !== where.isDefault) continue;
+          }
+          const notId = where?.id?.not;
+          if (typeof notId === 'string' && queue.id === notId) continue;
+
+          const updated = {
+            ...queue,
+            ...(data.isDefault !== undefined ? { isDefault: Boolean(data.isDefault) } : {}),
+            updatedAt: new Date(),
+          };
+          queues[i] = updated;
+          count++;
+        }
+        return { count };
+      }),
+      delete: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const idx = queues.findIndex((q) => q.id === where.id);
+        if (idx < 0) throw new Error(`Queue not found: ${String(where.id)}`);
+        const [removed] = queues.splice(idx, 1);
+        for (let i = slots.length - 1; i >= 0; i--) {
+          if (slots[i]?.queueId === where.id) slots.splice(i, 1);
+        }
+        for (let i = queueItems.length - 1; i >= 0; i--) {
+          if (queueItems[i]?.queueId === where.id) queueItems.splice(i, 1);
+        }
+        return { ...removed };
       }),
     },
     publishingQueueSlot: {
@@ -151,10 +226,65 @@ vi.mock('../../config/database.js', () => {
       }),
     },
     publishingQueueItem: {
-      findMany: vi.fn(async () => []),
-      count: vi.fn(async () => 0),
+      findMany: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        let out = queueItems.slice();
+        if (where.queueId) out = out.filter((item) => item.queueId === where.queueId);
+        const orderBy = Array.isArray(args?.orderBy) ? args.orderBy : [];
+        if (orderBy.length > 0) {
+          out.sort((a, b) => {
+            for (const clause of orderBy) {
+              const [key, dir] = Object.entries(clause)[0] as [string, string];
+              const av = a[key];
+              const bv = b[key];
+              if (av === bv) continue;
+              if (dir === 'desc') return av > bv ? -1 : 1;
+              return av > bv ? 1 : -1;
+            }
+            return 0;
+          });
+        }
+        return out.map((item) => ({ ...item }));
+      }),
+      count: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        let out = queueItems.slice();
+        if (where.queueId) out = out.filter((item) => item.queueId === where.queueId);
+        return out.length;
+      }),
       findFirst: vi.fn(async () => null),
       findUnique: vi.fn(async () => null),
+      update: vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const data = args?.data ?? {};
+        const idx = queueItems.findIndex((item) => item.id === where.id);
+        if (idx < 0) throw new Error(`Queue item not found: ${String(where.id)}`);
+        const updated = {
+          ...queueItems[idx],
+          ...(data.queueId !== undefined ? { queueId: data.queueId } : {}),
+          ...(data.position !== undefined ? { position: data.position } : {}),
+          ...(data.laneKey !== undefined ? { laneKey: data.laneKey } : {}),
+          updatedAt: new Date(),
+        };
+        queueItems[idx] = updated;
+        return { ...updated };
+      }),
+      createMany: vi.fn(async (args: any) => {
+        const data = Array.isArray(args?.data) ? args.data : [];
+        for (const rec of data) {
+          queueItems.push({
+            id: `queue-item-${queueItemIdSeq++}`,
+            queueId: rec.queueId,
+            contentId: rec.contentId ?? `content-${queueItemIdSeq}`,
+            laneKey: rec.laneKey ?? 'post',
+            position: typeof rec.position === 'number' ? rec.position : 1,
+            notBefore: rec.notBefore ?? null,
+            createdAt: rec.createdAt ?? new Date(),
+            updatedAt: rec.updatedAt ?? new Date(),
+          });
+        }
+        return { count: data.length };
+      }),
       upsert: vi.fn(async () => ({})),
     },
     content: {
@@ -267,6 +397,169 @@ describe('Publishing queues routes', () => {
     const slotsPayload = getSlots.json() as any;
     expect(slotsPayload?.success).toBe(true);
     expect(slotsPayload?.data?.slots).toHaveLength(3);
+  });
+
+  it('creates non-first queues as non-default so only one queue is active', async () => {
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+    });
+    expect(list.statusCode).toBe(200);
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+      payload: { name: 'Evergreen' },
+    });
+    expect(create.statusCode).toBe(200);
+    const createPayload = create.json() as any;
+    expect(createPayload?.success).toBe(true);
+    expect(createPayload?.data?.isDefault).toBe(false);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+    });
+    expect(after.statusCode).toBe(200);
+    const queues = ((after.json() as any)?.data?.queues ?? []) as Array<any>;
+    expect(queues.filter((q) => q?.isDefault === true)).toHaveLength(1);
+  });
+
+  it('setting a queue as default unsets the previous default queue', async () => {
+    const baseList = await app.inject({
+      method: 'GET',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+    });
+    expect(baseList.statusCode).toBe(200);
+    const defaultQueueId = (baseList.json() as any)?.data?.queues?.[0]?.id as string;
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+      payload: { name: 'Queue B' },
+    });
+    expect(create.statusCode).toBe(200);
+    const queueBId = (create.json() as any)?.data?.id as string;
+    expect(typeof queueBId).toBe('string');
+
+    const activate = await app.inject({
+      method: 'PUT',
+      url: `/api/queues/${queueBId}`,
+      headers: { authorization: authHeader },
+      payload: { isDefault: true },
+    });
+    expect(activate.statusCode).toBe(200);
+    const activatePayload = activate.json() as any;
+    expect(activatePayload?.success).toBe(true);
+    expect(activatePayload?.data?.isDefault).toBe(true);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/social-accounts/sa-1/queues',
+      headers: { authorization: authHeader },
+    });
+    expect(after.statusCode).toBe(200);
+    const queues = ((after.json() as any)?.data?.queues ?? []) as Array<any>;
+    const defaultQueue = queues.find((q) => q?.id === defaultQueueId);
+    const queueB = queues.find((q) => q?.id === queueBId);
+    expect(defaultQueue?.isDefault).toBe(false);
+    expect(queueB?.isDefault).toBe(true);
+    expect(queues.filter((q) => q?.isDefault === true)).toHaveLength(1);
+  });
+
+  it('deletes non-default queue by moving its items to default queue', async () => {
+    const socialAccountId = 'sa-delete-1';
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/api/social-accounts/${socialAccountId}/queues`,
+      headers: { authorization: authHeader },
+    });
+    expect(list.statusCode).toBe(200);
+    const defaultQueueId = (list.json() as any)?.data?.queues?.[0]?.id as string;
+    expect(typeof defaultQueueId).toBe('string');
+
+    const create = await app.inject({
+      method: 'POST',
+      url: `/api/social-accounts/${socialAccountId}/queues`,
+      headers: { authorization: authHeader },
+      payload: { name: 'Queue B' },
+    });
+    expect(create.statusCode).toBe(200);
+    const queueBId = (create.json() as any)?.data?.id as string;
+    expect(typeof queueBId).toBe('string');
+
+    const { prisma } = await import('../../config/database.js');
+    await prisma.publishingQueueItem.createMany({
+      data: [
+        {
+          queueId: defaultQueueId,
+          contentId: 'default-post-1',
+          laneKey: 'post',
+          position: 1,
+        },
+        {
+          queueId: queueBId,
+          contentId: 'moved-post-1',
+          laneKey: 'post',
+          position: 1,
+        },
+        {
+          queueId: queueBId,
+          contentId: 'moved-post-2',
+          laneKey: 'post',
+          position: 2,
+        },
+      ],
+    });
+
+    const { assertPublishingQueueAccess } = await import('../../services/ownership.js');
+    vi.mocked(assertPublishingQueueAccess).mockResolvedValueOnce({
+      id: queueBId,
+      socialAccountId,
+      name: 'Queue B',
+      isDefault: false,
+      socialAccount: { brandId: 'brand-1', brand: { id: 'brand-1' } },
+    } as any);
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/queues/${queueBId}`,
+      headers: { authorization: authHeader },
+    });
+
+    expect(del.statusCode).toBe(200);
+    const delPayload = del.json() as any;
+    expect(delPayload?.success).toBe(true);
+    expect(delPayload?.data?.deletedQueueId).toBe(queueBId);
+    expect(delPayload?.data?.movedToQueueId).toBe(defaultQueueId);
+    expect(delPayload?.data?.movedItemsCount).toBe(2);
+
+    const defaultItems = await prisma.publishingQueueItem.findMany({
+      where: { queueId: defaultQueueId },
+      orderBy: [{ position: 'asc' }],
+    });
+    expect(defaultItems.map((item: any) => item.contentId)).toEqual([
+      'default-post-1',
+      'moved-post-1',
+      'moved-post-2',
+    ]);
+    expect(defaultItems.map((item: any) => item.position)).toEqual([1, 2, 3]);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: `/api/social-accounts/${socialAccountId}/queues`,
+      headers: { authorization: authHeader },
+    });
+    expect(after.statusCode).toBe(200);
+    const queues = ((after.json() as any)?.data?.queues ?? []) as Array<any>;
+    expect(queues.some((q) => q?.id === queueBId)).toBe(false);
+    expect(queues.some((q) => q?.id === defaultQueueId)).toBe(true);
   });
 
   it('filters published content out of queue items list', async () => {

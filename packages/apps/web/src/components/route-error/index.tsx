@@ -1,4 +1,10 @@
-import { isRouteErrorResponse, useRouteError, Link } from 'react-router-dom';
+import {
+  isRouteErrorResponse,
+  useLocation,
+  useNavigate,
+  useRouteError,
+  Link,
+} from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import NotFound from '@/pages/NotFound';
@@ -6,6 +12,22 @@ import { AlertCircle, ShieldAlert } from 'lucide-react';
 
 export function RouteError() {
   const error = useRouteError();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleGoBack = () => {
+    const historyIdx =
+      typeof (window.history.state as { idx?: unknown } | null)?.idx === 'number'
+        ? Number((window.history.state as { idx: number }).idx)
+        : 0;
+
+    if (historyIdx > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true });
+  };
 
   if (isRouteErrorResponse(error)) {
     if (error.status === 404) {
@@ -85,7 +107,7 @@ export function RouteError() {
         <h1 className="mb-1 text-lg font-semibold">Something went wrong</h1>
         <p className="text-muted-foreground mb-4 text-sm">{message}</p>
         <div className="flex justify-center gap-2">
-          <Button variant="outline" onClick={() => window.history.back()}>
+          <Button variant="outline" onClick={handleGoBack}>
             Go Back
           </Button>
           <Button asChild>

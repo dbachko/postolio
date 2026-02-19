@@ -8,6 +8,7 @@ import { redisService } from '../services/redis.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { getTokenService } from '../services/service-clients.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
+import { ensureDefaultQueueWithStarterSchedule } from '../services/publishing-queue/default-schedule.js';
 import { isMultiDestinationEnabledForUser } from '../utils/feature-flags.js';
 
 const prisma = getDatabaseClient();
@@ -843,6 +844,13 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
               select: { id: true },
             });
             upserts.push({ socialAccountId: updated.id, platform: candidate.platform, candidate });
+          }
+
+          const ensured = new Set<string>();
+          for (const item of upserts) {
+            if (ensured.has(item.socialAccountId)) continue;
+            ensured.add(item.socialAccountId);
+            await ensureDefaultQueueWithStarterSchedule(tx, item.socialAccountId);
           }
 
           return upserts;

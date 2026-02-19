@@ -6,7 +6,6 @@ import type {
 
 export type QueueSlotsEditorProps = {
   selectedQueueId: string;
-  queuePaused: boolean;
 
   laneView: WeeklyCalendarLaneView;
   onLaneViewChange: (next: WeeklyCalendarLaneView) => void;
@@ -17,8 +16,6 @@ export type QueueSlotsEditorProps = {
 
   newSlotTime: string;
   onNewSlotTimeChange: (next: string) => void;
-  newSlotEnabled: boolean;
-  onNewSlotEnabledChange: (next: boolean) => void;
 
   newSlotLaneKey: PublishingQueueLaneKey;
   onNewSlotLaneKeyChange: (next: PublishingQueueLaneKey) => void;

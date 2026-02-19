@@ -69,7 +69,6 @@ export function normalizeSlots(slots: PublishingQueueSlot[]): QueueSlotDraft[] {
       dayOfWeek: s.dayOfWeek,
       localTime: s.localTime,
       laneKey: s.laneKey,
-      enabled: Boolean(s.enabled),
     }))
     .sort(sortSlots);
 }

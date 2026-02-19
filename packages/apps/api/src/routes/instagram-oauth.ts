@@ -10,6 +10,7 @@ import { TokenServiceClient } from '../clients/token-service-client.js';
 import { instagramService } from '../services/instagram.js';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
+import { ensureDefaultQueueWithStarterSchedule } from '../services/publishing-queue/default-schedule.js';
 import { redisService } from '../services/redis.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { sendErrorPage } from '../utils/oauth-error-pages.js';
@@ -652,6 +653,8 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         },
         select: { id: true },
       });
+
+      await ensureDefaultQueueWithStarterSchedule(prisma, connectedSocialAccount.id);
 
       // Store sensitive token in Token Service (account-scoped)
       await tokenServiceClient.storeTokenForSocialAccount({

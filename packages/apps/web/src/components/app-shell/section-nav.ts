@@ -3,7 +3,6 @@ import {
   BarChart3,
   Bell,
   Bookmark,
-  CalendarClock,
   CreditCard,
   Inbox,
   Palette,
@@ -39,21 +38,6 @@ const inboxSectionItems: SectionNavItem[] = [
     path: '/dm-automation',
     icon: Send,
     description: 'Automated DM responses',
-  },
-];
-
-const socialAccountsSectionItems: SectionNavItem[] = [
-  {
-    label: 'Connections',
-    path: '/social-accounts/connections',
-    icon: Plug,
-    description: 'Connect and manage accounts',
-  },
-  {
-    label: 'Publishing Schedule',
-    path: '/social-accounts/publishing-schedule',
-    icon: CalendarClock,
-    description: 'Configure recurring publishing time slots',
   },
 ];
 
@@ -94,6 +78,12 @@ const settingsSectionItems: SectionNavItem[] = [
     icon: CreditCard,
     description: 'Subscription, invoices, payment methods, and credits',
   },
+  {
+    label: 'Social Accounts',
+    path: '/settings/social-accounts',
+    icon: Plug,
+    description: 'Connect and manage social destinations',
+  },
 ];
 
 export function getSectionNavItems(section: NavigationItem | null): SectionNavItem[] {
@@ -101,10 +91,6 @@ export function getSectionNavItems(section: NavigationItem | null): SectionNavIt
 
   if (section.path === '/inbox') {
     return inboxSectionItems;
-  }
-
-  if (section.path === '/social-accounts') {
-    return socialAccountsSectionItems;
   }
 
   if (section.path === '/settings') {

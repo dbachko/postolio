@@ -102,7 +102,7 @@ describe('PublishingQueueSchedulerService', () => {
         laneKey: 'post',
         position: 1,
         notBefore: null,
-        queue: { socialAccountId: 'sa-1', paused: false },
+        queue: { socialAccountId: 'sa-1', isDefault: true },
         content: {
           id: 'content-1',
           status: 'draft',
@@ -160,7 +160,7 @@ describe('PublishingQueueSchedulerService', () => {
         position: 1,
         createdAt: new Date('2025-01-06T09:00:00.000Z'),
         notBefore: null,
-        queue: { socialAccountId: 'sa-1', paused: false },
+        queue: { socialAccountId: 'sa-1', isDefault: true },
         content: {
           id: 'content-1',
           status: 'draft',
@@ -178,7 +178,7 @@ describe('PublishingQueueSchedulerService', () => {
         position: 1,
         createdAt: new Date('2025-01-06T09:30:00.000Z'),
         notBefore: null,
-        queue: { socialAccountId: 'sa-1', paused: false },
+        queue: { socialAccountId: 'sa-1', isDefault: true },
         content: {
           id: 'content-2',
           status: 'draft',
@@ -229,7 +229,7 @@ describe('PublishingQueueSchedulerService', () => {
     expect(vi.mocked(prisma.publishingQueueItem.findMany)).not.toHaveBeenCalled();
   });
 
-  it('cancels scheduled queue items when their queue is paused', async () => {
+  it('cancels scheduled queue items when they belong to a non-default queue', async () => {
     vi.mocked(prisma.content.count).mockResolvedValue(0);
     vi.mocked(prisma.publishingQueueSlot.findMany).mockResolvedValue([
       {
@@ -249,7 +249,7 @@ describe('PublishingQueueSchedulerService', () => {
         laneKey: 'post',
         position: 1,
         notBefore: null,
-        queue: { socialAccountId: 'sa-1', paused: true },
+        queue: { socialAccountId: 'sa-1', isDefault: false },
         content: {
           id: 'content-1',
           status: 'scheduled',
@@ -293,7 +293,7 @@ describe('PublishingQueueSchedulerService', () => {
         laneKey: 'post',
         position: 1,
         notBefore: null,
-        queue: { socialAccountId: 'sa-1', paused: false },
+        queue: { socialAccountId: 'sa-1', isDefault: true },
         content: {
           id: 'content-1',
           status: 'scheduled',

@@ -11,7 +11,6 @@ import { QueueSlotsDayColumn } from './components/QueueSlotsDayColumn';
 
 export function QueueSlotsEditor({
   selectedQueueId,
-  queuePaused,
   laneView,
   onLaneViewChange,
   laneSlots,
@@ -19,8 +18,6 @@ export function QueueSlotsEditor({
   onAddSlotDayChange,
   newSlotTime,
   onNewSlotTimeChange,
-  newSlotEnabled,
-  onNewSlotEnabledChange,
   newSlotLaneKey,
   onNewSlotLaneKeyChange,
   onAddSlot,
@@ -33,16 +30,6 @@ export function QueueSlotsEditor({
 }: QueueSlotsEditorProps) {
   return (
     <>
-      {queuePaused ? (
-        <div className="bg-muted border-border rounded-lg border p-3">
-          <div className="text-sm font-medium">Queue paused</div>
-          <div className="text-muted-foreground text-xs">
-            Scheduling is paused for this queue. Turn it back on in Queue status to start filling
-            slots.
-          </div>
-        </div>
-      ) : null}
-
       <Tabs
         value={laneView}
         onValueChange={(v) => {
@@ -51,7 +38,7 @@ export function QueueSlotsEditor({
           onAddSlotDayChange(null);
         }}
       >
-        <TabsList>
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="all" className="gap-1 px-2 text-xs sm:px-3 sm:text-sm">
             <LayoutGrid className="h-4 w-4" />
             <span className="hidden sm:inline">All</span>
@@ -85,35 +72,29 @@ export function QueueSlotsEditor({
             )}
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="grid min-w-[880px] grid-cols-7 gap-2">
-              {WEEK_DAYS.map((day) => (
-                <QueueSlotsDayColumn
-                  key={day.value}
-                  dayLabel={day.label}
-                  dayOfWeek={day.value}
-                  selectedQueueId={selectedQueueId}
-                  laneView={laneView}
-                  laneSlots={laneSlots}
-                  addSlotDay={addSlotDay}
-                  onAddSlotDayChange={onAddSlotDayChange}
-                  newSlotTime={newSlotTime}
-                  onNewSlotTimeChange={onNewSlotTimeChange}
-                  newSlotEnabled={newSlotEnabled}
-                  onNewSlotEnabledChange={onNewSlotEnabledChange}
-                  newSlotLaneKey={newSlotLaneKey}
-                  onNewSlotLaneKeyChange={onNewSlotLaneKeyChange}
-                  onAddSlot={onAddSlot}
-                  onUpdateSlot={onUpdateSlot}
-                  onDeleteSlot={onDeleteSlot}
-                />
-              ))}
-            </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7">
+            {WEEK_DAYS.map((day) => (
+              <QueueSlotsDayColumn
+                key={day.value}
+                dayLabel={day.label}
+                dayOfWeek={day.value}
+                selectedQueueId={selectedQueueId}
+                laneView={laneView}
+                laneSlots={laneSlots}
+                addSlotDay={addSlotDay}
+                onAddSlotDayChange={onAddSlotDayChange}
+                newSlotTime={newSlotTime}
+                onNewSlotTimeChange={onNewSlotTimeChange}
+                newSlotLaneKey={newSlotLaneKey}
+                onNewSlotLaneKeyChange={onNewSlotLaneKeyChange}
+                onAddSlot={onAddSlot}
+                onUpdateSlot={onUpdateSlot}
+                onDeleteSlot={onDeleteSlot}
+              />
+            ))}
           </div>
         </TabsContent>
       </Tabs>
-
-      {slotsDirty ? <div className="text-muted-foreground text-xs">Unsaved changes</div> : null}
 
       <DialogFooter className="gap-2 sm:gap-0">
         {onClose ? (

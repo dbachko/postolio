@@ -7,6 +7,7 @@ import { isInboxEnabled } from '@/lib/feature-flags';
 import { useBrandStore } from '@/stores/brandStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
+import { usePostEditorQueueAvailability } from '@/components/post-editor/post-editor/hooks/use-post-editor-queue-availability';
 import { useInstagramBestTime, useRefreshInstagramBestTime } from '@/hooks/useBestTime';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -19,6 +20,7 @@ import { CommentsCard } from './components/comments-card';
 import { DashboardKpis } from './components/dashboard-kpis';
 import { DraftsCard } from './components/drafts-card';
 import { NeedsAttentionCard } from './components/needs-attention-card';
+import { ScheduleSetupReminderCard } from './components/schedule-setup-reminder-card';
 import { UpNextCard } from './components/up-next-card';
 
 export function Dashboard() {
@@ -52,6 +54,12 @@ export function Dashboard() {
     queryFn: () => contentApi.getContentHistory(brandId!),
     enabled: Boolean(brandId),
     staleTime: 10_000,
+  });
+  const connectedAccountsQuery = useQuery({
+    queryKey: ['brand-social-accounts', brandId],
+    queryFn: () => brandApi.getConnectedAccounts(brandId!),
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
   });
 
   const draftsQuery = useQuery({
@@ -118,6 +126,41 @@ export function Dashboard() {
     () => ((draftsQuery.data as any)?.content || []) as Content[],
     [draftsQuery.data]
   );
+  const connectedSocialAccountIds = useMemo(() => {
+    const raw = connectedAccountsQuery.data as any;
+    const socialAccounts = Array.isArray(raw?.socialAccounts) ? raw.socialAccounts : [];
+    return socialAccounts
+      .filter((account: any) => account?.disconnected !== true && typeof account?.id === 'string')
+      .map((account: any) => account.id as string);
+  }, [connectedAccountsQuery.data]);
+  const {
+    uniqueSocialAccountIds,
+    hasQueueSlotsBySocialAccountId,
+    queueSlotsLoadingBySocialAccountId,
+    queueSlotsErrorBySocialAccountId,
+  } = usePostEditorQueueAvailability({ socialAccountIds: connectedSocialAccountIds });
+  const showScheduleSetupReminder = useMemo(() => {
+    if (!connectedSocialAccountIds.length) return false;
+
+    const allQueueChecksResolved = uniqueSocialAccountIds.every((socialAccountId) => {
+      if (queueSlotsLoadingBySocialAccountId[socialAccountId]) return false;
+      if (queueSlotsErrorBySocialAccountId[socialAccountId]) return false;
+      return hasQueueSlotsBySocialAccountId[socialAccountId] !== null;
+    });
+
+    if (!allQueueChecksResolved) return false;
+
+    const hasAnyQueueSlots = uniqueSocialAccountIds.some(
+      (socialAccountId) => hasQueueSlotsBySocialAccountId[socialAccountId] === true
+    );
+    return !hasAnyQueueSlots;
+  }, [
+    connectedSocialAccountIds.length,
+    hasQueueSlotsBySocialAccountId,
+    queueSlotsErrorBySocialAccountId,
+    queueSlotsLoadingBySocialAccountId,
+    uniqueSocialAccountIds,
+  ]);
   const unscheduledDrafts = useMemo(() => drafts.filter((d) => !d.scheduledAt), [drafts]);
   const draftPreviewDrafts = useMemo(() => unscheduledDrafts.slice(0, 3), [unscheduledDrafts]);
   const draftPreviewAssetIds = useMemo(
@@ -220,6 +263,7 @@ export function Dashboard() {
         commentsInboxPostsCount={commentsInboxItems.length}
         inboxEnabled={inboxEnabled}
       />
+      {showScheduleSetupReminder ? <ScheduleSetupReminderCard /> : null}
 
       <div
         className={cn(

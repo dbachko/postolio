@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BookOpen,
+  CalendarClock,
   ClipboardList,
   FileEdit,
   FileText,
@@ -8,9 +9,9 @@ import {
   Layers,
   MessageSquare,
   PlayCircle,
+  Plug,
   Send,
   Settings,
-  Users,
   Wrench,
 } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
@@ -81,11 +82,11 @@ export const mainNavItems: NavigationItem[] = [
 // Secondary destinations that live in the lower portion of the nav.
 export const secondaryNavItems: NavigationItem[] = [
   {
-    label: 'Social Accounts',
-    path: '/social-accounts',
-    icon: Users,
-    description: 'Connect accounts and set publishing schedules',
-    matchType: 'startsWith',
+    label: 'Schedule',
+    path: '/social-accounts/publishing-schedule',
+    icon: CalendarClock,
+    description: 'Manage publishing queue schedules',
+    matchType: 'exact',
   },
   {
     label: 'Settings',
@@ -98,6 +99,13 @@ export const secondaryNavItems: NavigationItem[] = [
 
 // Items that should be searchable / discoverable but not shown in the primary sidebar list.
 export const auxNavItems: NavigationItem[] = [
+  {
+    label: 'Connections',
+    path: '/settings/social-accounts',
+    icon: Plug,
+    description: 'Connect and manage social accounts',
+    matchType: 'exact',
+  },
   {
     label: 'DM Automation',
     path: '/dm-automation',

@@ -60,11 +60,45 @@ function FullCalendarImpl({
     return luxon.create({ weekStartsOn, timezone: brandTimezone });
   }, [weekStartsOn, brandTimezone]);
 
+  const socialAccountsQuery = useQuery({
+    queryKey: ['brand-social-accounts', brandId],
+    queryFn: () => brandApi.getConnectedAccounts(brandId),
+    enabled: Boolean(brandId),
+    staleTime: CACHE_TIMES.LONG,
+    gcTime: GC_TIMES.LONG,
+    refetchOnWindowFocus: false,
+  });
+
+  const rawSocialAccounts = useMemo(() => {
+    const raw = (socialAccountsQuery.data as any)?.socialAccounts;
+    return Array.isArray(raw) ? (raw as any[]) : [];
+  }, [socialAccountsQuery.data]);
+
+  const fallbackSingleDestinationId = useMemo(() => {
+    const connectedAccounts = rawSocialAccounts.filter(
+      (account) => account?.disconnected !== true && typeof account?.id === 'string'
+    );
+    if (!connectedAccounts.length) return null;
+
+    const rawPrimary = (socialAccountsQuery.data as any)?.primarySocialAccountId;
+    const primaryId = typeof rawPrimary === 'string' ? rawPrimary : null;
+    if (primaryId && connectedAccounts.some((account) => account.id === primaryId)) {
+      return primaryId;
+    }
+
+    const firstAccountId = connectedAccounts[0]?.id;
+    return typeof firstAccountId === 'string' ? firstAccountId : null;
+  }, [rawSocialAccounts, socialAccountsQuery.data]);
+
   const effectiveSingleDestinationId = useMemo(() => {
-    if (!Array.isArray(targetSocialAccountIds) || targetSocialAccountIds.length !== 1) return null;
-    const id = targetSocialAccountIds[0];
-    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
-  }, [targetSocialAccountIds]);
+    if (Array.isArray(targetSocialAccountIds) && targetSocialAccountIds.length === 1) {
+      const id = targetSocialAccountIds[0];
+      return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+    }
+
+    if (!multiDestinationEnabled) return fallbackSingleDestinationId;
+    return null;
+  }, [fallbackSingleDestinationId, multiDestinationEnabled, targetSocialAccountIds]);
 
   const { queueId, queueItems, queueEstimatedContent, queueSlotPlaceholders } =
     useCalendarQueueData({
@@ -129,21 +163,10 @@ function FullCalendarImpl({
   }, [mergedContent]);
   const { data: assetsById } = useAssetsByIds(primaryAssetIds);
 
-  const socialAccountsQuery = useQuery({
-    queryKey: ['brand-social-accounts', brandId],
-    queryFn: () => brandApi.getConnectedAccounts(brandId),
-    enabled: Boolean(brandId),
-    staleTime: CACHE_TIMES.LONG,
-    gcTime: GC_TIMES.LONG,
-    refetchOnWindowFocus: false,
-  });
-
   const socialAccountsById = useMemo(() => {
-    const rawAccounts = (socialAccountsQuery.data as any)?.socialAccounts;
-    const accounts = Array.isArray(rawAccounts) ? (rawAccounts as any[]) : [];
     const out: SocialAccountsById = {};
 
-    for (const account of accounts) {
+    for (const account of rawSocialAccounts) {
       const id = typeof account?.id === 'string' ? account.id : null;
       const platform =
         typeof account?.platform === 'string' ? (account.platform as Platform) : null;
@@ -159,7 +182,7 @@ function FullCalendarImpl({
     }
 
     return out;
-  }, [socialAccountsQuery.data]);
+  }, [rawSocialAccounts]);
 
   const scheduleAheadLimitQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead', brandId],

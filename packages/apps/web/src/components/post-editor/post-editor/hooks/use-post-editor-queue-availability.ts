@@ -47,13 +47,6 @@ export function usePostEditorQueueAvailability(params: { socialAccountIds: strin
         return;
       }
 
-      const activeQueues = queues.filter((queue: any) => queue?.paused !== true);
-      if (activeQueues.length === 0) {
-        // Treat destinations with no active queues the same as missing schedule setup.
-        out[socialAccountId] = false;
-        return;
-      }
-
       const defaultQueue = queues.find((queue: any) => queue?.isDefault) || queues[0] || null;
       if (!defaultQueue) {
         out[socialAccountId] = false;

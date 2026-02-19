@@ -5,7 +5,6 @@ export type PublishingQueueLaneKey = 'post' | 'reel' | 'story' | 'any';
 export type PublishingQueueSummary = {
   id: string;
   name: string;
-  paused: boolean;
   isDefault: boolean;
   slotCount?: number;
   itemCount?: number;
@@ -28,7 +27,6 @@ export type PublishingQueueSlot = {
   dayOfWeek: number;
   localTime: string;
   laneKey: PublishingQueueLaneKey;
-  enabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -89,11 +87,27 @@ export class PublishingQueuesClient {
     }>;
   }
 
-  updateQueue(queueId: string, data: { name?: string; paused?: boolean }) {
+  updateQueue(queueId: string, data: { name?: string; isDefault?: boolean }) {
     return this.request(`/api/queues/${encodeURIComponent(queueId)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }) as Promise<{ success: boolean; data?: any; error?: string }>;
+  }
+
+  deleteQueue(queueId: string) {
+    return this.request(`/api/queues/${encodeURIComponent(queueId)}`, {
+      method: 'DELETE',
+    }) as Promise<{
+      success: boolean;
+      error?: string;
+      data?: {
+        deletedQueueId: string;
+        movedItemsCount: number;
+        movedToQueueId: string;
+      };
+      errors?: Array<{ contentId: string; error: string }>;
+      recompute?: any;
+    }>;
   }
 
   getQueueSlots(queueId: string) {
@@ -109,13 +123,33 @@ export class PublishingQueuesClient {
       dayOfWeek: number;
       localTime: string;
       laneKey: PublishingQueueLaneKey;
-      enabled: boolean;
     }>
   ) {
     return this.request(`/api/queues/${encodeURIComponent(queueId)}/slots`, {
       method: 'PUT',
       body: JSON.stringify({ slots }),
     }) as Promise<{ success: boolean; error?: string }>;
+  }
+
+  applyPostingGoal(queueId: string, postsPerWeek: number) {
+    return this.request(`/api/queues/${encodeURIComponent(queueId)}/posting-goal`, {
+      method: 'POST',
+      body: JSON.stringify({ postsPerWeek }),
+    }) as Promise<{
+      success: boolean;
+      error?: string;
+      data?: {
+        postsPerWeek: number;
+        requestedSlots: number;
+        createdSlots: number;
+        conflictingSlots: number;
+        slots: Array<{
+          dayOfWeek: number;
+          localTime: string;
+          laneKey: PublishingQueueLaneKey;
+        }>;
+      };
+    }>;
   }
 
   copySlotsFromQueue(queueId: string, fromQueueId: string) {

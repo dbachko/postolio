@@ -12,6 +12,11 @@ import {
 import { generateSlotInstances } from '../services/publishing-queue/slot-instance-generator.js';
 import { publishingQueueScheduler } from '../services/publishing-queue/queue-scheduler.js';
 import { validateQueueableContent } from '../services/publishing-queue/queue-content-validation.js';
+import {
+  buildGoalBasedSlots,
+  ensureDefaultQueueWithStarterSchedule,
+  parsePostsPerWeek,
+} from '../services/publishing-queue/default-schedule.js';
 import { schedulerService } from '../services/scheduler.js';
 import { getMaxQueueDepthForTier } from '../constants/subscription.js';
 import { getStatusBroadcaster } from '../services/broadcast-registry.js';
@@ -60,7 +65,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
         id: true,
         socialAccountId: true,
         name: true,
-        paused: true,
         isDefault: true,
         createdAt: true,
         updatedAt: true,
@@ -82,15 +86,12 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (queues.length === 0) {
         try {
-          const created = await prisma.publishingQueue.create({
-            data: {
-              socialAccountId,
-              name: 'Default',
-              isDefault: true,
-            },
+          await ensureDefaultQueueWithStarterSchedule(prisma, socialAccountId);
+          queues = await prisma.publishingQueue.findMany({
+            where: { socialAccountId },
             select: listSelect,
+            orderBy: listOrderBy,
           });
-          queues = [created];
         } catch (error) {
           if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
             queues = await prisma.publishingQueue.findMany({
@@ -113,7 +114,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
           queues: queues.map((q) => ({
             id: q.id,
             name: q.name,
-            paused: q.paused,
             isDefault: q.isDefault,
             slotCount: q._count.slots,
             itemCount: q._count.items,
@@ -140,17 +140,19 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       await assertSocialAccountAccess(userId, socialAccountId);
 
       try {
+        const defaultQueueCount = await prisma.publishingQueue.count({
+          where: { socialAccountId, isDefault: true },
+        });
+
         const created = await prisma.publishingQueue.create({
           data: {
             socialAccountId,
             name,
-            paused: false,
-            isDefault: false,
+            isDefault: defaultQueueCount === 0,
           },
           select: {
             id: true,
             name: true,
-            paused: true,
             isDefault: true,
             createdAt: true,
             updatedAt: true,
@@ -169,53 +171,80 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // PUT /api/queues/:queueId
-  fastify.put<{ Params: { queueId: string }; Body: { name?: unknown; paused?: unknown } }>(
-    '/queues/:queueId',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const userId = request.user!.id;
-      const { queueId } = request.params;
-      const queue = await assertPublishingQueueAccess(userId, queueId);
+  fastify.put<{
+    Params: { queueId: string };
+    Body: { name?: unknown; isDefault?: unknown };
+  }>('/queues/:queueId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const userId = request.user!.id;
+    const { queueId } = request.params;
+    const queue = await assertPublishingQueueAccess(userId, queueId);
 
-      const name = request.body?.name === undefined ? undefined : normalizeName(request.body?.name);
-      const paused = request.body?.paused === undefined ? undefined : Boolean(request.body?.paused);
-      const pausedChanged = paused !== undefined && paused !== queue.paused;
+    const name = request.body?.name === undefined ? undefined : normalizeName(request.body?.name);
+    const isDefault =
+      request.body?.isDefault === undefined ? undefined : Boolean(request.body?.isDefault);
 
-      if (name === null) {
-        return reply.code(400).send({ success: false, error: 'invalid_queue_name' });
-      }
+    if (isDefault === false && queue.isDefault) {
+      return reply.code(400).send({ success: false, error: 'cannot_unset_default_queue' });
+    }
 
-      try {
-        const updated = await prisma.publishingQueue.update({
+    if (name === null) {
+      return reply.code(400).send({ success: false, error: 'invalid_queue_name' });
+    }
+
+    try {
+      const makingDefault = isDefault === true;
+
+      const { updated, unsetDefaultSiblingCount } = await prisma.$transaction(async (tx) => {
+        let unsetDefaultSiblings = 0;
+
+        if (makingDefault) {
+          const unsetDefaultResult = await tx.publishingQueue.updateMany({
+            where: {
+              socialAccountId: queue.socialAccountId,
+              id: { not: queue.id },
+              isDefault: true,
+            },
+            data: { isDefault: false },
+          });
+          unsetDefaultSiblings = unsetDefaultResult.count;
+        }
+
+        const updatedQueue = await tx.publishingQueue.update({
           where: { id: queue.id },
           data: {
             ...(name !== undefined ? { name } : {}),
-            ...(paused !== undefined ? { paused } : {}),
+            ...(isDefault !== undefined ? { isDefault } : {}),
           },
           select: {
             id: true,
             name: true,
-            paused: true,
             isDefault: true,
             createdAt: true,
             updatedAt: true,
           },
         });
 
-        const recompute = pausedChanged
+        return {
+          updated: updatedQueue,
+          unsetDefaultSiblingCount: unsetDefaultSiblings,
+        };
+      });
+
+      const defaultChanged = makingDefault && !queue.isDefault;
+      const recompute =
+        defaultChanged || unsetDefaultSiblingCount > 0
           ? await publishingQueueScheduler.recomputeBrandWindow(queue.socialAccount.brandId)
           : null;
 
-        return reply.send({ success: true, data: { ...updated, recompute } });
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-          return reply.code(409).send({ success: false, error: 'queue_name_taken' });
-        }
-        request.log.error({ err: error }, 'Failed to update publishing queue');
-        return reply.code(500).send({ success: false, error: 'failed_to_update_queue' });
+      return reply.send({ success: true, data: { ...updated, recompute } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return reply.code(409).send({ success: false, error: 'queue_name_taken' });
       }
+      request.log.error({ err: error }, 'Failed to update publishing queue');
+      return reply.code(500).send({ success: false, error: 'failed_to_update_queue' });
     }
-  );
+  });
 
   // DELETE /api/queues/:queueId
   fastify.delete<{ Params: { queueId: string } }>(
@@ -230,29 +259,87 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ success: false, error: 'cannot_delete_default_queue' });
       }
 
-      const scheduledItems = await prisma.publishingQueueItem.findMany({
-        where: {
-          queueId: queue.id,
-          content: { status: 'scheduled' },
-        },
-        select: { contentId: true },
-      });
+      try {
+        const moved = await prisma.$transaction(async (tx) => {
+          const defaultQueue = await tx.publishingQueue.findFirst({
+            where: {
+              socialAccountId: queue.socialAccountId,
+              isDefault: true,
+              id: { not: queue.id },
+            },
+            select: { id: true },
+          });
 
-      const errors: Array<{ contentId: string; error: string }> = [];
-      for (const item of scheduledItems) {
-        const res = await schedulerService.cancelScheduledPost(item.contentId);
-        if (!res.success) {
-          errors.push({ contentId: item.contentId, error: res.error || 'cancel_failed' });
+          if (!defaultQueue) {
+            throw new Error('default_queue_not_found');
+          }
+
+          const defaultItems = await tx.publishingQueueItem.findMany({
+            where: { queueId: defaultQueue.id },
+            select: { laneKey: true, position: true },
+            orderBy: [{ laneKey: 'asc' }, { position: 'desc' }],
+          });
+
+          const maxPositionByLane = new Map<string, number>();
+          for (const item of defaultItems) {
+            const laneKey = item.laneKey || 'post';
+            const prev = maxPositionByLane.get(laneKey) ?? 0;
+            if (item.position > prev) maxPositionByLane.set(laneKey, item.position);
+          }
+
+          const queueItems = await tx.publishingQueueItem.findMany({
+            where: { queueId: queue.id },
+            select: {
+              id: true,
+              laneKey: true,
+              position: true,
+              createdAt: true,
+            },
+            orderBy: [{ laneKey: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }],
+          });
+
+          for (const item of queueItems) {
+            const laneKey = item.laneKey || 'post';
+            const nextPosition = (maxPositionByLane.get(laneKey) ?? 0) + 1;
+            maxPositionByLane.set(laneKey, nextPosition);
+
+            await tx.publishingQueueItem.update({
+              where: { id: item.id },
+              data: {
+                queueId: defaultQueue.id,
+                position: nextPosition,
+              },
+            });
+          }
+
+          await tx.publishingQueue.delete({ where: { id: queue.id } });
+
+          return {
+            movedItemsCount: queueItems.length,
+            defaultQueueId: defaultQueue.id,
+          };
+        });
+
+        const recompute = await publishingQueueScheduler.recomputeBrandWindow(
+          queue.socialAccount.brandId
+        );
+
+        return reply.send({
+          success: true,
+          data: {
+            deletedQueueId: queue.id,
+            movedItemsCount: moved.movedItemsCount,
+            movedToQueueId: moved.defaultQueueId,
+          },
+          recompute,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'default_queue_not_found') {
+          return reply.code(409).send({ success: false, error: 'default_queue_not_found' });
         }
+        request.log.error({ err: error }, 'Failed to delete publishing queue');
+        return reply.code(500).send({ success: false, error: 'failed_to_delete_queue' });
       }
-
-      await prisma.publishingQueue.delete({ where: { id: queue.id } });
-
-      const recompute = await publishingQueueScheduler.recomputeBrandWindow(
-        queue.socialAccount.brandId
-      );
-
-      return reply.send({ success: errors.length === 0, errors, recompute });
     }
   );
 
@@ -272,7 +359,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
           dayOfWeek: true,
           localTime: true,
           laneKey: true,
-          enabled: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -289,7 +375,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
             dayOfWeek: s.dayOfWeek,
             localTime: s.localTime,
             laneKey: s.laneKey,
-            enabled: s.enabled,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
           })),
@@ -318,7 +403,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       dayOfWeek: number;
       localTime: string;
       laneKey: SlotLaneKey;
-      enabled: boolean;
     }> = [];
 
     for (const raw of rawSlots) {
@@ -329,7 +413,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       const dayOfWeek = typeof rec.dayOfWeek === 'number' ? rec.dayOfWeek : NaN;
       const localTime = typeof rec.localTime === 'string' ? rec.localTime.trim() : '';
       const laneKey = normalizeSlotLaneKey(rec.laneKey);
-      const enabled = rec.enabled === undefined ? true : Boolean(rec.enabled);
 
       if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
         return reply.code(400).send({ success: false, error: 'invalid_day_of_week' });
@@ -341,7 +424,7 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ success: false, error: 'invalid_lane_key' });
       }
 
-      nextSlots.push({ dayOfWeek, localTime, laneKey, enabled });
+      nextSlots.push({ dayOfWeek, localTime, laneKey });
     }
 
     try {
@@ -356,7 +439,7 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
               dayOfWeek: s.dayOfWeek,
               localTime: s.localTime,
               laneKey: s.laneKey,
-              enabled: s.enabled,
+              enabled: true,
             })),
           });
         }
@@ -375,6 +458,84 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true });
   });
 
+  // POST /api/queues/:queueId/posting-goal
+  fastify.post<{
+    Params: { queueId: string };
+    Body: {
+      postsPerWeek?: unknown;
+    };
+  }>(
+    '/queues/:queueId/posting-goal',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const userId = request.user!.id;
+      const { queueId } = request.params;
+      const queue = await assertPublishingQueueAccess(userId, queueId);
+
+      const postsPerWeek = parsePostsPerWeek(request.body?.postsPerWeek);
+      if (postsPerWeek === null) {
+        return reply.code(400).send({ success: false, error: 'invalid_posts_per_week' });
+      }
+
+      const desiredSlots = buildGoalBasedSlots(postsPerWeek);
+      const occupiedByOtherQueues = await prisma.publishingQueueSlot.findMany({
+        where: {
+          socialAccountId: queue.socialAccountId,
+          queueId: { not: queue.id },
+        },
+        select: {
+          dayOfWeek: true,
+          localTime: true,
+        },
+      });
+      const occupiedKeys = new Set(
+        occupiedByOtherQueues.map((slot) => `${slot.dayOfWeek}:${slot.localTime}`)
+      );
+      const nextSlots = desiredSlots.filter(
+        (slot) => !occupiedKeys.has(`${slot.dayOfWeek}:${slot.localTime}`)
+      );
+
+      if (nextSlots.length === 0) {
+        return reply.code(409).send({ success: false, error: 'no_available_slots' });
+      }
+
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.publishingQueueSlot.deleteMany({ where: { queueId: queue.id } });
+          await tx.publishingQueueSlot.createMany({
+            data: nextSlots.map((slot) => ({
+              queueId: queue.id,
+              socialAccountId: queue.socialAccountId,
+              dayOfWeek: slot.dayOfWeek,
+              localTime: slot.localTime,
+              laneKey: slot.laneKey,
+              enabled: true,
+            })),
+          });
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return reply.code(409).send({ success: false, error: 'slot_conflict' });
+        }
+        request.log.error({ err: error }, 'Failed to apply posting goal');
+        return reply.code(500).send({ success: false, error: 'failed_to_apply_posting_goal' });
+      }
+
+      await publishingQueueScheduler.recomputeBrandWindow(queue.socialAccount.brandId);
+
+      return reply.send({
+        success: true,
+        data: {
+          postsPerWeek,
+          requestedSlots: desiredSlots.length,
+          createdSlots: nextSlots.length,
+          conflictingSlots: desiredSlots.length - nextSlots.length,
+          slots: nextSlots,
+        },
+      });
+    }
+  );
+
   // POST /api/queues/:queueId/copy-slots-from
   fastify.post<{ Params: { queueId: string }; Body: { fromQueueId?: unknown } }>(
     '/queues/:queueId/copy-slots-from',
@@ -392,8 +553,8 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       const fromQueue = await assertPublishingQueueAccess(userId, fromQueueId.trim());
 
       const fromSlots = await prisma.publishingQueueSlot.findMany({
-        where: { queueId: fromQueue.id, enabled: true },
-        select: { dayOfWeek: true, localTime: true, laneKey: true, enabled: true },
+        where: { queueId: fromQueue.id },
+        select: { dayOfWeek: true, localTime: true, laneKey: true },
         orderBy: [{ dayOfWeek: 'asc' }, { localTime: 'asc' }],
       });
 
@@ -408,7 +569,7 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
                 dayOfWeek: s.dayOfWeek,
                 localTime: s.localTime,
                 laneKey: String(s.laneKey),
-                enabled: s.enabled,
+                enabled: true,
               })),
             });
           }
@@ -464,7 +625,6 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       const slots = await prisma.publishingQueueSlot.findMany({
         where: {
           queueId: queue.id,
-          enabled: true,
           ...slotLaneFilter,
         },
         select: {
@@ -740,7 +900,7 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
         return new Map(pairs);
       })(),
       prisma.publishingQueueSlot.findMany({
-        where: { queueId: queue.id, enabled: true },
+        where: { queueId: queue.id },
         select: { id: true, queueId: true, laneKey: true, dayOfWeek: true, localTime: true },
         orderBy: [{ dayOfWeek: 'asc' }, { localTime: 'asc' }],
       }),

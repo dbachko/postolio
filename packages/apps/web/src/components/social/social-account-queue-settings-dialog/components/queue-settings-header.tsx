@@ -67,8 +67,10 @@ export function QueueSettingsHeader({
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-          <div className="w-full sm:w-[240px]">
-            <Label className="sr-only">Queue</Label>
+          <div className="w-full space-y-1 sm:w-[280px]">
+            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Queue
+            </Label>
             <Select
               value={selectedQueueId}
               onValueChange={onSelectQueueId}
@@ -114,6 +116,13 @@ export function QueueSettingsHeader({
                     onChange={(e) => onNewQueueNameChange(e.target.value)}
                     placeholder="e.g. Evergreen"
                     autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      if (creatingQueue) return;
+                      if (!newQueueName.trim()) return;
+                      onCreateQueue();
+                    }}
                   />
                 </div>
 
@@ -137,6 +146,10 @@ export function QueueSettingsHeader({
             </PopoverContent>
           </Popover>
         </div>
+      </div>
+
+      <div className="text-muted-foreground text-xs">
+        The default queue is active for scheduling. Switch default to move activity.
       </div>
     </div>
   );

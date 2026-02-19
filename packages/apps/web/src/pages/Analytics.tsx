@@ -77,7 +77,7 @@ export default function Analytics() {
               No connected social accounts found. Connect a social media account to view analytics.
             </span>
             <div>
-              <Button onClick={() => navigate('/social-accounts')}>Connect Account</Button>
+              <Button onClick={() => navigate('/settings/social-accounts')}>Connect Account</Button>
             </div>
           </AlertDescription>
         </Alert>

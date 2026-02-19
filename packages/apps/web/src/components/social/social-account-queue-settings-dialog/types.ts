@@ -11,6 +11,9 @@ export type SocialAccountQueueSettingsPanelProps = {
   account: SocialAccountOption | null;
   allAccounts: SocialAccountOption[];
   onClose?: () => void;
+  hideHeader?: boolean;
+  selectedQueueId?: string | null;
+  onSelectedQueueIdChange?: (queueId: string | null) => void;
 };
 
 export type SocialAccountQueueSettingsDialogProps = {

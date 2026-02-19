@@ -189,12 +189,12 @@ export const router = createBrowserRouter([
   },
   {
     path: '/social-accounts',
-    element: <Navigate to="/social-accounts/connections" replace />,
+    element: <Navigate to="/social-accounts/publishing-schedule" replace />,
     errorElement: <RouteError />,
   },
   {
     path: '/social-accounts/connections',
-    element: appShell(<SocialAccountsConnections />),
+    element: <Navigate to="/settings/social-accounts" replace />,
     errorElement: <RouteError />,
   },
   {
@@ -329,6 +329,11 @@ export const router = createBrowserRouter([
   {
     path: '/settings/analytics',
     element: appShell(<Settings />),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/settings/social-accounts',
+    element: appShell(<SocialAccountsConnections />),
     errorElement: <RouteError />,
   },
   {

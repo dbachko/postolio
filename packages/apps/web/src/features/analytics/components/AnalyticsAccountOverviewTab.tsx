@@ -53,7 +53,7 @@ export function AnalyticsAccountOverviewTab({
       <Alert>
         <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
           <span>This account is disconnected.</span>
-          <Button variant="outline" onClick={() => navigate('/social-accounts')}>
+          <Button variant="outline" onClick={() => navigate('/settings/social-accounts')}>
             Manage connections
           </Button>
         </AlertDescription>

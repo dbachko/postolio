@@ -1,7 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { publishingQueues as publishingQueuesApi, type Content, httpGet } from '@/lib/api';
+import {
+  brand as brandApi,
+  publishingQueues as publishingQueuesApi,
+  type Content,
+  httpGet,
+} from '@/lib/api';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import { useAssetsByIds } from '@/features/assets/hooks/useAssetsByIds';
 import { getDefaultQueueId } from '@/components/publishing-queues/queue-utils';
@@ -30,6 +35,7 @@ type UseQueueSchedulesQueriesParams = {
 };
 
 export function useQueueSchedulesQueries({
+  brandId,
   brandTimezone,
   date,
   calendarContent,
@@ -38,11 +44,42 @@ export function useQueueSchedulesQueries({
   selectedQueueId,
   setSelectedQueueId,
 }: UseQueueSchedulesQueriesParams) {
+  const socialAccountsQuery = useQuery({
+    queryKey: ['brand-social-accounts', brandId],
+    queryFn: () => brandApi.getConnectedAccounts(brandId),
+    enabled: Boolean(brandId),
+    staleTime: CACHE_TIMES.LONG,
+    gcTime: GC_TIMES.LONG,
+    refetchOnWindowFocus: false,
+  });
+
+  const fallbackSocialAccountId = useMemo(() => {
+    const raw = socialAccountsQuery.data as any;
+    const list = Array.isArray(raw?.socialAccounts) ? (raw.socialAccounts as any[]) : [];
+    const connectedAccounts = list.filter(
+      (account) => account?.disconnected !== true && typeof account?.id === 'string'
+    );
+    if (!connectedAccounts.length) return null;
+
+    const rawPrimary = raw?.primarySocialAccountId;
+    const primaryId = typeof rawPrimary === 'string' ? rawPrimary : null;
+    if (primaryId && connectedAccounts.some((account) => account.id === primaryId)) {
+      return primaryId;
+    }
+
+    const firstId = connectedAccounts[0]?.id;
+    return typeof firstId === 'string' ? firstId : null;
+  }, [socialAccountsQuery.data]);
+
   const effectiveSocialAccountId = useMemo(() => {
-    if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length !== 1)
+    if (Array.isArray(selectedSocialAccountIds) && selectedSocialAccountIds.length === 1) {
+      return selectedSocialAccountIds[0];
+    }
+    if (Array.isArray(selectedSocialAccountIds) && selectedSocialAccountIds.length > 1) {
       return null;
-    return selectedSocialAccountIds[0];
-  }, [selectedSocialAccountIds]);
+    }
+    return fallbackSocialAccountId;
+  }, [fallbackSocialAccountId, selectedSocialAccountIds]);
 
   const queuesQuery = useQuery({
     queryKey: ['publishing-queues', effectiveSocialAccountId],

@@ -133,12 +133,11 @@ export class PublishingQueueSchedulerService {
 
     const timezone = await TimezoneService.getBrandTimezone(brandId);
 
-    // Load queue slots (active queues only)
+    // Load queue slots from the default queue for each social account.
     const slots = await prisma.publishingQueueSlot.findMany({
       where: {
-        enabled: true,
         queue: {
-          paused: false,
+          isDefault: true,
           socialAccount: { brandId },
         },
       },
@@ -152,7 +151,7 @@ export class PublishingQueueSchedulerService {
       },
     });
 
-    // Load queue items with content (including paused queues so we can cancel schedules)
+    // Load queue items with content from all queues so non-default queue schedules can be cancelled.
     const queueItems = await prisma.publishingQueueItem.findMany({
       where: {
         queue: {
@@ -160,7 +159,7 @@ export class PublishingQueueSchedulerService {
         },
       },
       include: {
-        queue: { select: { socialAccountId: true, paused: true } },
+        queue: { select: { socialAccountId: true, isDefault: true } },
         content: {
           select: {
             id: true,
@@ -287,7 +286,7 @@ export class PublishingQueueSchedulerService {
       if (content.brandId !== brandId) continue;
       const expectedSocialAccountId = item.queue.socialAccountId;
       if (!expectedSocialAccountId) continue;
-      if (item.queue.paused) continue;
+      if (!item.queue.isDefault) continue;
       if (content.targetSocialAccountId !== expectedSocialAccountId) continue;
       if (isSkippableContentStatus(content.status)) continue;
 
@@ -397,7 +396,7 @@ export class PublishingQueueSchedulerService {
       const desired = desiredSchedule.get(content.id) ?? null;
       const isScheduled = content.status === 'scheduled' && Boolean(content.scheduledAt);
 
-      if (item.queue.paused) {
+      if (!item.queue.isDefault) {
         if (isScheduled) toCancel.push(content.id);
         continue;
       }
