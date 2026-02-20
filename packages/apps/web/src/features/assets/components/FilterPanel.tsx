@@ -1,13 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { MultiSelect } from '@/components/ui/multi-select';
+import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select';
 import { Filter, X } from 'lucide-react';
 import { useState } from 'react';
 
 export interface AssetFilters {
   aspectRatios: string[];
   orientationTypes: Array<'portrait' | 'landscape' | 'square'>;
+  recentOnly?: boolean;
   minWidth?: number;
   maxWidth?: number;
   minHeight?: number;
@@ -19,6 +20,9 @@ export interface AssetFilters {
 
 interface FilterPanelProps {
   filters: AssetFilters;
+  labelIds?: string[];
+  labelOptions?: MultiSelectOption[];
+  onLabelIdsChange?: (labelIds: string[]) => void;
   onChange: (filters: AssetFilters) => void;
   onReset: () => void;
 }
@@ -35,12 +39,25 @@ const ASPECT_RATIOS = [
   { label: '2.39:1', value: '2.39:1', description: 'Cinematic wide' },
 ];
 
-export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
+export function FilterPanel({
+  filters,
+  labelIds,
+  labelOptions,
+  onLabelIdsChange,
+  onChange,
+  onReset,
+}: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const activeLabelIds = labelIds ?? [];
+  const activeLabelOptions = labelOptions ?? [];
+  const supportsLabelFiltering = typeof onLabelIdsChange === 'function';
+  const applyLabelIds = onLabelIdsChange ?? (() => undefined);
 
   const hasActiveFilters =
+    activeLabelIds.length > 0 ||
     filters.aspectRatios.length > 0 ||
     filters.orientationTypes.length > 0 ||
+    filters.recentOnly === true ||
     filters.minWidth !== undefined ||
     filters.maxWidth !== undefined ||
     filters.minHeight !== undefined ||
@@ -50,8 +67,10 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
     filters.usageStatuses.length > 0;
 
   const activeFilterCount =
+    activeLabelIds.length +
     filters.aspectRatios.length +
     filters.orientationTypes.length +
+    (filters.recentOnly === true ? 1 : 0) +
     (filters.minWidth !== undefined ? 1 : 0) +
     (filters.maxWidth !== undefined ? 1 : 0) +
     (filters.minHeight !== undefined ? 1 : 0) +
@@ -69,6 +88,7 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
     used: 'Used in posts',
     unused: 'Unused',
   };
+  const labelNameById = new Map(activeLabelOptions.map((option) => [option.value, option.label]));
 
   return (
     <div className="relative">
@@ -105,7 +125,12 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={onReset}
+                  onClick={() => {
+                    if (supportsLabelFiltering) {
+                      applyLabelIds([]);
+                    }
+                    onReset();
+                  }}
                   disabled={!hasActiveFilters}
                 >
                   Clear all
@@ -125,6 +150,23 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
               <div className="mb-4 rounded-lg border p-3">
                 <div className="mb-2 text-sm font-semibold">Applied filters</div>
                 <div className="flex flex-wrap gap-2">
+                  {supportsLabelFiltering
+                    ? activeLabelIds.map((labelId) => (
+                        <Button
+                          key={`chip-label-${labelId}`}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 rounded-full px-3"
+                          onClick={() =>
+                            applyLabelIds(activeLabelIds.filter((item) => item !== labelId))
+                          }
+                        >
+                          Label: {labelNameById.get(labelId) ?? labelId}
+                          <X className="ml-1 h-3.5 w-3.5" />
+                        </Button>
+                      ))
+                    : null}
                   {filters.aspectRatios.map((ratio) => (
                     <Button
                       key={`chip-ratio-${ratio}`}
@@ -163,6 +205,18 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
                       <X className="ml-1 h-3.5 w-3.5" />
                     </Button>
                   ))}
+                  {filters.recentOnly ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 rounded-full px-3"
+                      onClick={() => onChange({ ...filters, recentOnly: false })}
+                    >
+                      Recently added
+                      <X className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
                   {filters.usageStatuses.map((usage) => (
                     <Button
                       key={`chip-usage-${usage}`}
@@ -258,6 +312,25 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
             ) : null}
 
             <div className="space-y-6">
+              {supportsLabelFiltering ? (
+                <div>
+                  <Label className="mb-2 block text-sm font-medium">
+                    Labels
+                    {activeLabelIds.length > 0 ? (
+                      <span className="text-muted-foreground ml-1 text-xs font-normal">
+                        ({activeLabelIds.length})
+                      </span>
+                    ) : null}
+                  </Label>
+                  <MultiSelect
+                    options={activeLabelOptions}
+                    value={activeLabelIds}
+                    onChange={applyLabelIds}
+                    placeholder="All labels"
+                  />
+                </div>
+              ) : null}
+
               {/* Aspect Ratio Filter - PRIORITY */}
               <div>
                 <Label className="mb-2 block text-sm font-medium">
@@ -334,6 +407,27 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
                     })
                   }
                   placeholder="All assets"
+                />
+              </div>
+
+              {/* Added Date Filter */}
+              <div>
+                <Label className="mb-2 block text-sm font-medium">
+                  Added Date
+                  {filters.recentOnly ? (
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">(1)</span>
+                  ) : null}
+                </Label>
+                <MultiSelect
+                  options={[{ label: 'Recently added (last 30 days)', value: 'recent' }]}
+                  value={filters.recentOnly ? ['recent'] : []}
+                  onChange={(value) =>
+                    onChange({
+                      ...filters,
+                      recentOnly: value.includes('recent'),
+                    })
+                  }
+                  placeholder="Any time"
                 />
               </div>
             </div>

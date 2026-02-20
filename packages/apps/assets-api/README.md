@@ -26,7 +26,7 @@ pnpm --filter @postolio/database-assets db:seed -- \
   --brandId <brandId> --count 12 --cdnBase https://picsum.photos
 ```
 
-Where `brandId` can be obtained after logging in and creating/selecting a brand in the app. The seed writes `Asset` and `AssetFolder` records only; images are referenced by CDN URL when `--cdnBase` is supplied.
+Where `brandId` can be obtained after logging in and creating/selecting a brand in the app. The seed writes `Asset` records plus taxonomy collections/labels (Collections: `General`, `Brand Assets`; Labels: `seed`, `demo`, `video`). Images are referenced by CDN URL when `--cdnBase` is supplied.
 
 ## Notes
 

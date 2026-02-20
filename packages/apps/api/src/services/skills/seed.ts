@@ -124,7 +124,7 @@ const SKILL_DEFINITIONS: SkillSeed[] = [
           input: {
             prompt: 'A modern product hero shot on a soft gradient background.',
             size: '1024x1024',
-            quality: 'standard',
+            quality: 'auto',
           },
         },
       ],
@@ -145,7 +145,7 @@ const SKILL_DEFINITIONS: SkillSeed[] = [
         sampleInput: {
           prompt: 'A clean product image in studio lighting.',
           size: '1024x1024',
-          quality: 'standard',
+          quality: 'auto',
         },
       },
     },
@@ -162,8 +162,8 @@ const SKILL_DEFINITIONS: SkillSeed[] = [
         defaultModel: {
           type: 'string',
           title: 'Default Model',
-          enum: ['gpt-image-1', 'dall-e-3'],
-          default: 'dall-e-3',
+          enum: ['gpt-image-1'],
+          default: 'gpt-image-1',
         },
         defaultSize: {
           type: 'string',
@@ -174,8 +174,8 @@ const SKILL_DEFINITIONS: SkillSeed[] = [
         defaultQuality: {
           type: 'string',
           title: 'Default Quality',
-          enum: ['standard', 'hd'],
-          default: 'standard',
+          enum: ['auto', 'low', 'medium', 'high'],
+          default: 'auto',
         },
       },
     },

@@ -130,15 +130,13 @@ describe('ForecastingService', () => {
 
   describe('Confidence Calculation', () => {
     it('should have high confidence with consistent data', async () => {
-      // Create very consistent data (low variance)
-      const mockPublications = Array(30)
-        .fill(null)
-        .map((_, i) =>
-          createPublication({
-            day: i,
-            engagement: 500 + Math.random() * 10, // Very low variance
-          })
-        );
+      // Create deterministic, very consistent data (low variance).
+      const mockPublications = Array.from({ length: 30 }, (_, i) =>
+        createPublication({
+          day: i,
+          engagement: 500 + (i % 5), // Tight 5-point spread
+        })
+      );
       vi.mocked(mockPrisma.contentPublication.findMany).mockResolvedValue(mockPublications);
 
       const result = await engine.generateForecast(mockBrandId, 30, 90);
@@ -147,15 +145,13 @@ describe('ForecastingService', () => {
     });
 
     it('should have low confidence with volatile data', async () => {
-      // Create volatile data (high variance)
-      const mockPublications = Array(30)
-        .fill(null)
-        .map((_, i) =>
-          createPublication({
-            day: i,
-            engagement: 500 + Math.random() * 1000, // Very high variance
-          })
-        );
+      // Create deterministic volatile data (high variance).
+      const mockPublications = Array.from({ length: 30 }, (_, i) =>
+        createPublication({
+          day: i,
+          engagement: i % 2 === 0 ? 1500 : 100,
+        })
+      );
       vi.mocked(mockPrisma.contentPublication.findMany).mockResolvedValue(mockPublications);
 
       const result = await engine.generateForecast(mockBrandId, 30, 90);

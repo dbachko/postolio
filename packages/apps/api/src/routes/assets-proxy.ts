@@ -4,6 +4,7 @@ import {
   DeleteAssetResponse,
   ListAssetsResponse,
   type AssetRecord,
+  type BulkAssetAction,
 } from '@postolio/assets-client';
 import { config } from '../config/env-validation.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -91,8 +92,9 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         duration?: number;
         title?: string;
         altText?: string;
-        tags?: string[];
-        folderId?: string;
+        description?: string;
+        collectionId?: string | null;
+        labelIds?: string[];
       };
 
       if (!body.brandId || !body.fileName || !body.s3Key || !body.mimeType || !body.fileType) {
@@ -124,9 +126,10 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
       search?: string;
       page?: string;
       limit?: string;
-      folderId?: string;
-      tags?: string[];
-      excludeTags?: string[];
+      collectionId?: string;
+      includeSubcollections?: string;
+      labelIds?: string[];
+      labelMode?: 'any' | 'all';
       // New filter parameters
       aspectRatio?: string;
       aspectRatios?: string[];
@@ -137,7 +140,7 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
       maxHeight?: string;
       uploadedAfter?: string;
       uploadedBefore?: string;
-      usageStatuses?: Array<'used' | 'unused'>;
+      usage?: 'used' | 'unused' | 'any';
     };
   }>('/', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
@@ -148,7 +151,10 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         search,
         page,
         limit,
-        folderId,
+        collectionId,
+        includeSubcollections,
+        labelIds,
+        labelMode,
         aspectRatio,
         aspectRatios,
         orientationTypes,
@@ -158,10 +164,8 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         maxHeight,
         uploadedAfter,
         uploadedBefore,
-        usageStatuses,
+        usage,
       } = request.query;
-      const tags = request.query.tags;
-      const excludeTags = request.query.excludeTags;
 
       if (!brandId) {
         return reply.code(400).send({ error: 'brandId is required' });
@@ -178,9 +182,10 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         search,
         page: page ? Number(page) : undefined,
         limit: limit ? Number(limit) : undefined,
-        folderId: folderId || undefined,
-        tags,
-        excludeTags,
+        collectionId: collectionId || undefined,
+        includeSubcollections: includeSubcollections === 'true' || includeSubcollections === '1',
+        labelIds: labelIds,
+        labelMode,
         // Forward new filter parameters
         aspectRatio,
         aspectRatios,
@@ -191,13 +196,276 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         maxHeight: maxHeight ? Number(maxHeight) : undefined,
         uploadedAfter,
         uploadedBefore,
-        usageStatuses,
+        usage,
       });
 
       return reply.send(result);
     } catch (error) {
       request.log.error(formatError(error), 'Failed to proxy assets list');
       return reply.code(500).send({ error: 'Failed to fetch assets' });
+    }
+  });
+
+  // List taxonomy (collections/labels)
+  fastify.get<{
+    Querystring: {
+      brandId?: string;
+      type?: 'COLLECTION' | 'LABEL';
+      format?: 'tree' | 'flat';
+      includeArchived?: string;
+    };
+  }>('/taxonomy', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { brandId, type, format, includeArchived } = request.query;
+
+      if (!brandId || !type) {
+        return reply.code(400).send({ error: 'brandId and type are required' });
+      }
+
+      const { owns } = await ensureBrandOwned(brandId, userId);
+      if (!owns) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const result = await assetsClient.listTaxonomy({
+        brandId,
+        type,
+        format,
+        includeArchived: includeArchived === 'true' || includeArchived === '1',
+      });
+
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to proxy taxonomy list');
+      return reply.code(500).send({ error: 'Failed to fetch taxonomy' });
+    }
+  });
+
+  // Create taxonomy item
+  fastify.post('/taxonomy', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const body = request.body as {
+        brandId: string;
+        type: 'COLLECTION' | 'LABEL';
+        name: string;
+        parentId?: string | null;
+        color?: string;
+        sortOrder?: number;
+        isSystem?: boolean;
+      };
+
+      if (!body.brandId || !body.type || !body.name) {
+        return reply.code(400).send({ error: 'brandId, type, and name are required' });
+      }
+
+      const { owns } = await ensureBrandOwned(body.brandId, userId);
+      if (!owns) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const result = await assetsClient.createTaxonomy({
+        brandId: body.brandId,
+        type: body.type,
+        name: body.name,
+        parentId: body.parentId,
+        color: body.color,
+        sortOrder: body.sortOrder,
+        createdBy: userId,
+      });
+
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to create taxonomy item');
+      return reply.code(500).send({ error: 'Failed to create taxonomy item' });
+    }
+  });
+
+  // Update taxonomy item
+  fastify.patch('/taxonomy/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        brandId: string;
+        name?: string;
+        parentId?: string | null;
+        sortOrder?: number;
+        color?: string;
+      };
+
+      if (!body.brandId) {
+        return reply.code(400).send({ error: 'brandId is required' });
+      }
+
+      const { owns } = await ensureBrandOwned(body.brandId, userId);
+      if (!owns) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const result = await assetsClient.updateTaxonomy(id, {
+        ...body,
+        createdBy: userId,
+      });
+
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to update taxonomy item');
+      return reply.code(500).send({ error: 'Failed to update taxonomy item' });
+    }
+  });
+
+  // Delete taxonomy item
+  fastify.delete('/taxonomy/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        brandId: string;
+        onNotEmpty?: 'move_to_parent' | 'move_to_unsorted';
+      };
+
+      if (!body.brandId) {
+        return reply.code(400).send({ error: 'brandId is required' });
+      }
+
+      const { owns } = await ensureBrandOwned(body.brandId, userId);
+      if (!owns) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const result = await assetsClient.deleteTaxonomy(id, {
+        brandId: body.brandId,
+        onNotEmpty: body.onNotEmpty,
+        createdBy: userId,
+      });
+
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to delete taxonomy item');
+      return reply.code(500).send({ error: 'Failed to delete taxonomy item' });
+    }
+  });
+
+  fastify.post(
+    '/taxonomy/:id/archive',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id } = request.params as { id: string };
+        const body = request.body as { brandId: string };
+
+        if (!body.brandId) {
+          return reply.code(400).send({ error: 'brandId is required' });
+        }
+
+        const { owns } = await ensureBrandOwned(body.brandId, userId);
+        if (!owns) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
+
+        const result = await assetsClient.archiveTaxonomy(id, {
+          brandId: body.brandId,
+          createdBy: userId,
+        });
+
+        return reply.send(result);
+      } catch (error) {
+        request.log.error(formatError(error), 'Failed to archive label');
+        return reply.code(500).send({ error: 'Failed to archive label' });
+      }
+    }
+  );
+
+  fastify.post(
+    '/taxonomy/:id/unarchive',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id } = request.params as { id: string };
+        const body = request.body as { brandId: string };
+
+        if (!body.brandId) {
+          return reply.code(400).send({ error: 'brandId is required' });
+        }
+
+        const { owns } = await ensureBrandOwned(body.brandId, userId);
+        if (!owns) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
+
+        const result = await assetsClient.unarchiveTaxonomy(id, {
+          brandId: body.brandId,
+          createdBy: userId,
+        });
+
+        return reply.send(result);
+      } catch (error) {
+        request.log.error(formatError(error), 'Failed to unarchive label');
+        return reply.code(500).send({ error: 'Failed to unarchive label' });
+      }
+    }
+  );
+
+  // Merge labels
+  fastify.post('/labels:merge', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const body = request.body as { brandId: string; fromLabelId: string; intoLabelId: string };
+
+      if (!body.brandId || !body.fromLabelId || !body.intoLabelId) {
+        return reply
+          .code(400)
+          .send({ error: 'brandId, fromLabelId, and intoLabelId are required' });
+      }
+
+      const { owns } = await ensureBrandOwned(body.brandId, userId);
+      if (!owns) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const result = await assetsClient.mergeLabels({
+        ...body,
+        createdBy: userId,
+      });
+
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to merge labels');
+      return reply.code(500).send({ error: 'Failed to merge labels' });
+    }
+  });
+
+  // Bulk asset actions
+  fastify.post('/bulk', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const body = request.body as {
+        brandId: string;
+        assetIds: string[];
+        action: BulkAssetAction;
+      };
+
+      if (!body.brandId || !Array.isArray(body.assetIds) || body.assetIds.length === 0) {
+        return reply.code(400).send({ error: 'brandId and assetIds are required' });
+      }
+
+      const { owns } = await ensureBrandOwned(body.brandId, userId);
+      if (!owns) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const result = await assetsClient.bulkAssets({
+        ...body,
+      });
+
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(formatError(error), 'Failed to perform bulk asset action');
+      return reply.code(500).send({ error: 'Failed to perform bulk asset action' });
     }
   });
 

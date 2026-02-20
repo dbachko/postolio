@@ -31,9 +31,9 @@ vi.mock('../../services/redis.js', () => {
 });
 
 // Avoid initializing the assets DB Prisma client in unit tests.
-vi.mock('../../services/assets-folders.js', () => ({
-  ensureAnalysisFolder: vi.fn(async () => null),
-  disconnectAssetsFolderClient: vi.fn(async () => {}),
+vi.mock('../../services/assets-taxonomy.js', () => ({
+  ensureAnalysisCollection: vi.fn(async () => null),
+  disconnectAssetsTaxonomyClient: vi.fn(async () => {}),
 }));
 
 vi.mock('../../services/ownership.js', () => ({

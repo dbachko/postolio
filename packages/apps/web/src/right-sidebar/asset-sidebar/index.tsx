@@ -3,10 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
-import { assetsApi, type AssetType } from '@/features/assets/api/client';
+import {
+  assetsApi,
+  type AssetType,
+  type CollectionNode,
+  type LabelRecord,
+} from '@/features/assets/api/client';
 import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import {
+  CollectionMoveDropdown,
+  type CollectionMoveOption,
+} from '@/features/assets/components/collection-move-dropdown';
 
 import type { AssetFormState, AssetSidebarProps, DerivedAssetDisplay } from './types';
 import {
@@ -26,6 +36,7 @@ import { AssetMetadataForm } from './components/asset-metadata-form';
 import { AssetPreviewSection } from './components/asset-preview-section';
 import { AssetSidebarFooter } from './components/asset-sidebar-footer';
 import { AssetSidebarHeader } from './components/asset-sidebar-header';
+import { AssetLabelInput } from './components/asset-label-input';
 
 export function AssetSidebar({
   id,
@@ -41,6 +52,8 @@ export function AssetSidebar({
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+  const [labelIds, setLabelIds] = useState<string[]>([]);
 
   const assetQuery = useQuery({
     queryKey: ['asset', id],
@@ -53,13 +66,41 @@ export function AssetSidebar({
   });
 
   const asset = assetQuery.data;
+  const brandId = asset?.brandId;
+
+  const collectionsQuery = useQuery({
+    queryKey: ['asset-collections', brandId ?? '', 'tree'],
+    queryFn: () =>
+      assetsApi.listTaxonomy({
+        brandId: brandId as string,
+        type: 'COLLECTION',
+        format: 'tree',
+      }),
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
+  });
+
+  const labelsQuery = useQuery({
+    queryKey: ['asset-labels', brandId ?? ''],
+    queryFn: () =>
+      assetsApi.listTaxonomy({
+        brandId: brandId as string,
+        type: 'LABEL',
+        includeArchived: false,
+      }),
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     if (!asset) return;
     setFormState({
       title: asset.title || '',
+      description: asset.description || '',
       altText: asset.altText || '',
     });
+    setCollectionId(asset.collectionId ?? null);
+    setLabelIds(asset.labelIds ?? []);
     setHasChanges(false);
     setPreviewUrl(null);
   }, [asset]);
@@ -73,13 +114,33 @@ export function AssetSidebar({
     [previewUrl]
   );
 
+  useEffect(() => {
+    if (!asset) return;
+    const metaChanged =
+      formState.title !== (asset.title || '') ||
+      formState.description !== (asset.description || '') ||
+      formState.altText !== (asset.altText || '');
+    const currentCollection = asset.collectionId ?? null;
+    const collectionChanged = (collectionId ?? null) !== currentCollection;
+    const assetLabels = asset.labelIds ?? [];
+    const sortedA = [...assetLabels].sort();
+    const sortedB = [...labelIds].sort();
+    const labelsChanged =
+      sortedA.length !== sortedB.length || sortedA.some((val, idx) => val !== sortedB[idx]);
+
+    setHasChanges(metaChanged || collectionChanged || labelsChanged);
+  }, [asset, formState, collectionId, labelIds]);
+
   const mutationSuccess = (updated: AssetType) => {
     queryClient.setQueryData(['asset', updated.id], updated);
     queryClient.invalidateQueries({ queryKey: ['assets'] });
     setFormState({
       title: updated.title || '',
+      description: updated.description || '',
       altText: updated.altText || '',
     });
+    setCollectionId(updated.collectionId ?? null);
+    setLabelIds(updated.labelIds ?? []);
     setHasChanges(false);
     setPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
@@ -100,7 +161,10 @@ export function AssetSidebar({
       if (!id) throw new Error('Missing asset id');
       const { asset: updated } = await assetsApi.updateAsset(id, {
         title: input.title,
+        description: input.description,
         altText: input.altText,
+        collectionId,
+        labelIds,
       });
       return updated;
     },
@@ -192,25 +256,51 @@ export function AssetSidebar({
     };
   }, [asset]);
 
+  const collections = (collectionsQuery.data?.collections ?? []) as CollectionNode[];
+  const labels = (labelsQuery.data?.labels ?? []) as LabelRecord[];
+
+  const collectionOptions = useMemo<CollectionMoveOption[]>(() => {
+    const flatten = (nodes: CollectionNode[], depth = 0, acc: CollectionMoveOption[] = []) => {
+      nodes.forEach((node) => {
+        acc.push({ id: node.id, name: node.name, depth });
+        if (node.children?.length) {
+          flatten(node.children, depth + 1, acc);
+        }
+      });
+      return acc;
+    };
+    return flatten(collections);
+  }, [collections]);
+
+  const collectionNameById = useMemo(
+    () => new Map(collectionOptions.map((option) => [option.id, option.name])),
+    [collectionOptions]
+  );
+
+  const selectedCollectionLabel = collectionId
+    ? (collectionNameById.get(collectionId) ?? 'Unsorted')
+    : 'Unsorted';
+
   const handleSave = () => {
     if (!asset) return;
     updateMetadataMutation.mutate({
       title: formState.title,
+      description: formState.description,
       altText: formState.altText,
     });
   };
 
   function handleFieldChange(field: 'title'): (event: ChangeEvent<HTMLInputElement>) => void;
+  function handleFieldChange(
+    field: 'description'
+  ): (event: ChangeEvent<HTMLTextAreaElement>) => void;
   function handleFieldChange(field: 'altText'): (event: ChangeEvent<HTMLTextAreaElement>) => void;
   function handleFieldChange(field: keyof AssetFormState) {
     return (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const value = event.target.value;
       setFormState((prev) => ({ ...prev, [field]: value }));
       if (!asset) return;
-      setHasChanges(
-        (field === 'title' ? value : formState.title) !== (asset.title || '') ||
-          (field === 'altText' ? value : formState.altText) !== (asset.altText || '')
-      );
+      setHasChanges(true);
     };
   }
 
@@ -218,9 +308,48 @@ export function AssetSidebar({
     if (!asset) return;
     setFormState({
       title: asset.title || '',
+      description: asset.description || '',
       altText: asset.altText || '',
     });
+    setCollectionId(asset.collectionId ?? null);
+    setLabelIds(asset.labelIds ?? []);
     setHasChanges(false);
+  };
+
+  const handleCollectionChange = (nextCollectionId: string | null) => {
+    setCollectionId(nextCollectionId);
+  };
+
+  const handleCreateLabel = async (name: string): Promise<LabelRecord> => {
+    if (!brandId) throw new Error('Missing brand');
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error('Label name is required');
+
+    try {
+      const { item } = await assetsApi.createTaxonomy({
+        brandId,
+        type: 'LABEL',
+        name: trimmedName,
+      });
+
+      const created = item as LabelRecord;
+      queryClient.setQueryData<{ labels?: LabelRecord[] }>(['asset-labels', brandId], (current) => {
+        const existing = current?.labels ?? [];
+        if (existing.some((label) => label.id === created.id)) {
+          return current ?? { labels: existing };
+        }
+        return {
+          ...(current ?? {}),
+          labels: [...existing, created].sort((a, b) => a.name.localeCompare(b.name)),
+        };
+      });
+      void queryClient.invalidateQueries({ queryKey: ['asset-labels', brandId] });
+      return created;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create label';
+      toast.error(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
   };
 
   const handleUploadTrigger = () => {
@@ -306,10 +435,40 @@ export function AssetSidebar({
               <div className="space-y-6">
                 <AssetMetadataForm
                   title={formState.title}
+                  description={formState.description}
                   altText={formState.altText}
                   onTitleChange={handleFieldChange('title')}
+                  onDescriptionChange={handleFieldChange('description')}
                   onAltTextChange={handleFieldChange('altText')}
                 />
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Collection</Label>
+                    <CollectionMoveDropdown
+                      onMoveToCollection={handleCollectionChange}
+                      collectionOptions={collectionOptions}
+                      triggerLabel={selectedCollectionLabel}
+                      side="bottom"
+                      align="start"
+                      triggerClassName="h-10 w-full justify-between"
+                      disabled={updateMetadataMutation.isPending || collectionsQuery.isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Labels</Label>
+                    <AssetLabelInput
+                      labels={labels}
+                      value={labelIds}
+                      onChange={setLabelIds}
+                      onCreateLabel={handleCreateLabel}
+                      disabled={labelsQuery.isLoading || updateMetadataMutation.isPending}
+                    />
+                  </div>
+                </div>
 
                 <Separator />
 

@@ -1,6 +1,5 @@
 import type { AssetUploadMetadata } from './assets-media.js';
-import { ANALYSIS_CACHE_TAG } from './assets-media.js';
-import { ensureAnalysisFolder } from './assets-folders.js';
+import { ensureAnalysisCollection } from './assets-taxonomy.js';
 
 type Params = {
   brandId: string;
@@ -11,7 +10,7 @@ type Params = {
 
 export async function buildAnalysisAssetMetadata(params: Params): Promise<AssetUploadMetadata> {
   const { brandId, contentId, generatedAt, originalPrompt } = params;
-  const folderId = await ensureAnalysisFolder(brandId);
+  const collectionId = await ensureAnalysisCollection(brandId);
 
   return {
     brandId,
@@ -19,8 +18,6 @@ export async function buildAnalysisAssetMetadata(params: Params): Promise<AssetU
     generatedAt,
     originalPrompt: originalPrompt ?? 'brand-analysis cache',
     source: 'analysis_import',
-    hideFromLibrary: true,
-    tags: [ANALYSIS_CACHE_TAG],
-    folderId: folderId ?? undefined,
+    collectionId: collectionId ?? undefined,
   };
 }

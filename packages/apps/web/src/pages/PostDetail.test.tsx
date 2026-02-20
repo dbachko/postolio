@@ -87,7 +87,6 @@ describe('PostDetail', () => {
           s3Key: 's3/key',
           url: 'https://cdn.example/video.mp4',
           thumbnailUrl: 'https://cdn.example/video-thumb.jpg',
-          tags: [],
           createdAt: '2025-12-08T00:00:00.000Z',
           updatedAt: '2025-12-08T00:00:00.000Z',
         },

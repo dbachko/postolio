@@ -21,17 +21,52 @@ export interface Asset {
   aspectRatio?: string; // "1:1", "4:5", "9:16", etc.
   aspectRatioDecimal?: number;
   orientationType?: 'portrait' | 'landscape' | 'square';
+  collectionId?: string | null;
+  labelIds?: string[];
   s3Key: string;
   url: string;
   thumbnailUrl?: string | null;
   title?: string;
   altText?: string;
   description?: string;
-  tags: string[];
-  folderId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type TaxonomyType = 'COLLECTION' | 'LABEL';
+
+export interface TaxonomyItem {
+  id: string;
+  brandId: string;
+  type: TaxonomyType;
+  parentId?: string | null;
+  sortOrder?: number | null;
+  name: string;
+  nameNorm?: string | null;
+  color?: string | null;
+  isSystem?: boolean;
+  isHidden?: boolean;
+  isArchived?: boolean;
+  deletedAt?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CollectionNode extends TaxonomyItem {
+  assetCount?: number;
+  children: CollectionNode[];
+}
+
+export interface LabelRecord extends TaxonomyItem {
+  assetCount?: number;
+}
+
+export type BulkAssetAction =
+  | { move_to_collection: { collectionId?: string | null } }
+  | { add_labels: { labelIds?: string[]; labelNames?: string[] } }
+  | { remove_labels: { labelIds: string[] } }
+  | { delete: Record<string, never> };
 
 export interface PaginatedAssets {
   assets: Asset[];
@@ -91,8 +126,9 @@ export const assetsApi = {
     duration?: number;
     title?: string;
     altText?: string;
-    tags?: string[];
-    folderId?: string;
+    description?: string;
+    collectionId?: string | null;
+    labelIds?: string[];
   }): Promise<{ asset: Asset; message: string }> {
     return httpPost(`${API_BASE_URL}`, data);
   },
@@ -101,11 +137,13 @@ export const assetsApi = {
   async listAssets(params: {
     brandId?: string;
     type?: 'image' | 'video';
-    tags?: string[];
     search?: string;
     page?: number;
     limit?: number;
-    folderId?: string;
+    collectionId?: string;
+    includeSubcollections?: boolean;
+    labelIds?: string[];
+    labelMode?: 'any' | 'all';
     // New filter parameters
     aspectRatio?: string;
     aspectRatios?: string[];
@@ -116,7 +154,7 @@ export const assetsApi = {
     maxHeight?: number;
     uploadedAfter?: string;
     uploadedBefore?: string;
-    usageStatuses?: Array<'used' | 'unused'>;
+    usage?: 'used' | 'unused' | 'any';
   }): Promise<PaginatedAssets> {
     const queryParams = new URLSearchParams();
     if (params.brandId) queryParams.set('brandId', params.brandId);
@@ -124,8 +162,10 @@ export const assetsApi = {
     if (params.search) queryParams.set('search', params.search);
     if (params.page) queryParams.set('page', String(params.page));
     if (params.limit) queryParams.set('limit', String(params.limit));
-    if (params.folderId) queryParams.set('folderId', params.folderId);
-    if (params.tags) params.tags.forEach((t) => queryParams.append('tags', t));
+    if (params.collectionId) queryParams.set('collectionId', params.collectionId);
+    if (params.includeSubcollections) queryParams.set('includeSubcollections', 'true');
+    if (params.labelIds) params.labelIds.forEach((id) => queryParams.append('labelIds', id));
+    if (params.labelMode) queryParams.set('labelMode', params.labelMode);
 
     // New filter parameters
     if (params.aspectRatio) queryParams.set('aspectRatio', params.aspectRatio);
@@ -139,8 +179,7 @@ export const assetsApi = {
     if (params.maxHeight) queryParams.set('maxHeight', String(params.maxHeight));
     if (params.uploadedAfter) queryParams.set('uploadedAfter', params.uploadedAfter);
     if (params.uploadedBefore) queryParams.set('uploadedBefore', params.uploadedBefore);
-    if (params.usageStatuses)
-      params.usageStatuses.forEach((s) => queryParams.append('usageStatuses', s));
+    if (params.usage) queryParams.set('usage', params.usage);
 
     return httpGet(`${API_BASE_URL}?${queryParams.toString()}`);
   },
@@ -158,6 +197,85 @@ export const assetsApi = {
     return httpPost(`${API_BASE_URL}/usage`, { assetIds, brandId });
   },
 
+  async listTaxonomy(params: {
+    brandId: string;
+    type: TaxonomyType;
+    format?: 'tree' | 'flat';
+    includeArchived?: boolean;
+  }): Promise<{
+    collections?: CollectionNode[];
+    labels?: LabelRecord[];
+    unsortedAssetCount?: number;
+  }> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('brandId', params.brandId);
+    queryParams.set('type', params.type);
+    if (params.format) queryParams.set('format', params.format);
+    if (params.includeArchived) queryParams.set('includeArchived', 'true');
+    return httpGet(`${API_BASE_URL}/taxonomy?${queryParams.toString()}`);
+  },
+
+  async createTaxonomy(data: {
+    brandId: string;
+    type: TaxonomyType;
+    name: string;
+    parentId?: string | null;
+    color?: string;
+    sortOrder?: number;
+  }): Promise<{ item: TaxonomyItem }> {
+    return httpPost(`${API_BASE_URL}/taxonomy`, data);
+  },
+
+  async updateTaxonomy(
+    id: string,
+    data: {
+      brandId: string;
+      name?: string;
+      parentId?: string | null;
+      sortOrder?: number;
+      color?: string;
+    }
+  ): Promise<{ item: TaxonomyItem }> {
+    return http(`${API_BASE_URL}/taxonomy/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteTaxonomy(
+    id: string,
+    data: { brandId: string; onNotEmpty?: 'move_to_parent' | 'move_to_unsorted' }
+  ): Promise<{ success: boolean }> {
+    return http(`${API_BASE_URL}/taxonomy/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async archiveTaxonomy(id: string, data: { brandId: string }): Promise<{ item: TaxonomyItem }> {
+    return httpPost(`${API_BASE_URL}/taxonomy/${id}/archive`, data);
+  },
+
+  async unarchiveTaxonomy(id: string, data: { brandId: string }): Promise<{ item: TaxonomyItem }> {
+    return httpPost(`${API_BASE_URL}/taxonomy/${id}/unarchive`, data);
+  },
+
+  async mergeLabels(data: {
+    brandId: string;
+    fromLabelId: string;
+    intoLabelId: string;
+  }): Promise<{ success: boolean }> {
+    return httpPost(`${API_BASE_URL}/labels:merge`, data);
+  },
+
+  async bulkAssets(data: {
+    brandId: string;
+    assetIds: string[];
+    action: BulkAssetAction;
+  }): Promise<{ success: boolean }> {
+    return httpPost(`${API_BASE_URL}/bulk`, data);
+  },
+
   // Update asset
   async updateAsset(
     id: string,
@@ -165,8 +283,8 @@ export const assetsApi = {
       title?: string;
       altText?: string;
       description?: string;
-      tags?: string[];
-      folderId?: string | null;
+      collectionId?: string | null;
+      labelIds?: string[];
       fileName?: string;
       mimeType?: string;
       fileType?: 'image' | 'video';
@@ -183,7 +301,7 @@ export const assetsApi = {
     });
   },
 
-  // Delete asset (soft delete)
+  // Delete asset permanently
   async deleteAsset(id: string): Promise<{ success: boolean; message: string }> {
     return httpDelete(`${API_BASE_URL}/${id}`);
   },

@@ -6,15 +6,19 @@ import { Textarea } from '@/components/ui/textarea';
 
 type AssetMetadataFormProps = {
   title: string;
+  description: string;
   altText: string;
   onTitleChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onDescriptionChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onAltTextChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
 };
 
 export function AssetMetadataForm({
   title,
+  description,
   altText,
   onTitleChange,
+  onDescriptionChange,
   onAltTextChange,
 }: AssetMetadataFormProps) {
   return (
@@ -43,6 +47,18 @@ export function AssetMetadataForm({
           <span>Alt text describes the contents of the asset.</span>
           <span>{altText.length}</span>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="asset-description">Notes</Label>
+        <Textarea
+          id="asset-description"
+          value={description}
+          onChange={onDescriptionChange}
+          placeholder="Add notes or context for this asset"
+          rows={3}
+        />
+        <div className="text-muted-foreground flex justify-end text-xs">{description.length}</div>
       </div>
     </div>
   );

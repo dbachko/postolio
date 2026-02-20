@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { Eye, Image as ImageIcon, Play, Sparkles, Video } from 'lucide-react';
+import { Image as ImageIcon, Pencil, Play, Sparkles, Video } from 'lucide-react';
 import { formatBytes } from './asset-utils';
 import { type AssetType } from '@/features/assets/api/client';
 
@@ -91,9 +91,9 @@ export function AssetCard({ asset, selected, onToggle, onOpen, onCreatePost }: A
               e.stopPropagation();
               onOpen();
             }}
-            title="Preview and edit"
+            title="Edit details"
           >
-            <Eye className="h-4 w-4" />
+            <Pencil className="h-4 w-4" />
           </Button>
           <Button
             size="icon"

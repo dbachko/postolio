@@ -9,6 +9,7 @@ export type AssetSidebarProps = {
 
 export type AssetFormState = {
   title: string;
+  description: string;
   altText: string;
 };
 

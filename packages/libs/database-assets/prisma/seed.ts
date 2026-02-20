@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
-import { createAssetsPrismaClient } from '../index.js';
+import { createAssetsPrismaClient, normalizeAssetLabelName } from '../index.js';
 
 type Args = {
   brandId: string;
@@ -88,21 +88,33 @@ async function main() {
   });
 
   try {
-    async function getOrCreateFolder(
-      name: string,
-      folderType: 'general' | 'brand_assets',
-      color?: string
-    ) {
-      const existing = await prisma.assetFolder.findFirst({ where: { brandId, name } });
+    async function getOrCreateCollection(name: string, color?: string) {
+      const existing = await prisma.assetTaxonomyItem.findFirst({
+        where: { brandId, type: 'COLLECTION', name, deletedAt: null },
+      });
       if (existing) return existing;
-      return prisma.assetFolder.create({
-        data: { brandId, name, folderType, color },
+      return prisma.assetTaxonomyItem.create({
+        data: { brandId, type: 'COLLECTION', name, color },
       });
     }
 
-    const [general, brandFolder] = await Promise.all([
-      getOrCreateFolder('General', 'general', '#64748b'),
-      getOrCreateFolder('Brand Assets', 'brand_assets', '#3b82f6'),
+    async function getOrCreateLabel(name: string) {
+      const nameNorm = normalizeAssetLabelName(name);
+      const existing = await prisma.assetTaxonomyItem.findFirst({
+        where: { brandId, type: 'LABEL', nameNorm, deletedAt: null },
+      });
+      if (existing) return existing;
+      return prisma.assetTaxonomyItem.create({
+        data: { brandId, type: 'LABEL', name, nameNorm },
+      });
+    }
+
+    const [general, brandCollection, seedLabel, demoLabel, videoLabel] = await Promise.all([
+      getOrCreateCollection('General', '#64748b'),
+      getOrCreateCollection('Brand Assets', '#3b82f6'),
+      getOrCreateLabel('seed'),
+      getOrCreateLabel('demo'),
+      getOrCreateLabel('video'),
     ]);
 
     const imageAssets = Array.from({ length: count }).map((_, i) => {
@@ -134,8 +146,8 @@ async function main() {
         title: `Seed Image ${i + 1}`,
         altText: `Seed image ${i + 1}`,
         description: 'Seeded asset for local development',
-        tags: ['seed', 'demo'],
-        folderId: i % 2 === 0 ? brandFolder.id : general.id,
+        collectionId: i % 2 === 0 ? brandCollection.id : general.id,
+        labelIds: [seedLabel.id, demoLabel.id],
         processingStatus: 'completed' as const,
         thumbnailKey,
         thumbnailSmallKey: undefined,
@@ -168,8 +180,8 @@ async function main() {
         title: `Seed Video ${i + 1}`,
         altText: `Seed video ${i + 1}`,
         description: 'Seeded video asset for local development',
-        tags: ['seed', 'demo', 'video'],
-        folderId: i % 2 === 0 ? brandFolder.id : general.id,
+        collectionId: i % 2 === 0 ? brandCollection.id : general.id,
+        labelIds: [seedLabel.id, demoLabel.id, videoLabel.id],
         processingStatus: 'completed' as const,
         thumbnailKey: undefined,
         thumbnailSmallKey: undefined,
@@ -178,9 +190,27 @@ async function main() {
     });
 
     const assets = [...imageAssets, ...videoAssets];
-
-    const created = await prisma.asset.createMany({ data: assets });
-    console.log(`✅ Seeded ${created.count} assets`);
+    let createdCount = 0;
+    for (const asset of assets) {
+      const { labelIds, ...data } = asset;
+      await prisma.asset.create({
+        data: {
+          ...data,
+          labelAssignments: labelIds.length
+            ? {
+                createMany: {
+                  data: labelIds.map((taxonomyItemId) => ({
+                    taxonomyItemId,
+                    createdBy: uploadedBy,
+                  })),
+                },
+              }
+            : undefined,
+        },
+      });
+      createdCount += 1;
+    }
+    console.log(`✅ Seeded ${createdCount} assets`);
   } finally {
     await prisma.$disconnect();
     await pool.end();

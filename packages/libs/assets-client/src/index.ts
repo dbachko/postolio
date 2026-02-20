@@ -35,6 +35,8 @@ export interface AssetRecord {
   aspectRatio?: string | null;
   aspectRatioDecimal?: number | null;
   orientationType?: string | null;
+  collectionId?: string | null;
+  labelIds?: string[];
   s3Key: string;
   url: string;
   thumbnailKey?: string | null;
@@ -42,7 +44,6 @@ export interface AssetRecord {
   thumbnailLargeKey?: string | null;
   createdAt: string;
   updatedAt: string;
-  tags: string[];
   title?: string | null;
   altText?: string | null;
   description?: string | null;
@@ -64,8 +65,9 @@ export interface ImportAssetBase {
   fileType?: 'image' | 'video';
   title?: string;
   altText?: string;
-  tags?: string[];
-  folderId?: string;
+  description?: string;
+  labelIds?: string[];
+  collectionId?: string;
   publishedAt?: string;
 }
 
@@ -90,12 +92,13 @@ export interface VerifyAssetResponse {
 export interface ListAssetsParams {
   brandId: string;
   type?: 'image' | 'video';
-  tags?: string[] | string;
-  excludeTags?: string[] | string;
   search?: string;
   page?: number;
   limit?: number;
-  folderId?: string;
+  collectionId?: string;
+  includeSubcollections?: boolean;
+  labelIds?: string[] | string;
+  labelMode?: 'any' | 'all';
   aspectRatio?: string;
   aspectRatios?: string[] | string;
   orientationTypes?:
@@ -109,7 +112,7 @@ export interface ListAssetsParams {
   maxHeight?: number;
   uploadedAfter?: string;
   uploadedBefore?: string;
-  usageStatuses?: Array<'used' | 'unused'> | 'used' | 'unused';
+  usage?: 'used' | 'unused' | 'any';
 }
 
 export interface ListAssetsResponse {
@@ -135,16 +138,17 @@ export interface CreateAssetParams {
   duration?: number;
   title?: string;
   altText?: string;
-  tags?: string[];
-  folderId?: string;
+  description?: string;
+  collectionId?: string | null;
+  labelIds?: string[];
 }
 
 export interface UpdateAssetParams {
   title?: string;
   altText?: string;
   description?: string;
-  tags?: string[];
-  folderId?: string | null;
+  collectionId?: string | null;
+  labelIds?: string[];
   fileName?: string;
   mimeType?: string;
   fileType?: 'image' | 'video';
@@ -158,6 +162,97 @@ export interface UpdateAssetParams {
 export interface DeleteAssetResponse {
   success: boolean;
   message: string;
+}
+
+export type TaxonomyType = 'COLLECTION' | 'LABEL';
+
+export interface TaxonomyItem {
+  id: string;
+  brandId: string;
+  type: TaxonomyType;
+  parentId?: string | null;
+  sortOrder?: number | null;
+  name: string;
+  nameNorm?: string | null;
+  color?: string | null;
+  isSystem?: boolean;
+  isHidden?: boolean;
+  isArchived?: boolean;
+  deletedAt?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CollectionNode extends TaxonomyItem {
+  assetCount?: number;
+  children: CollectionNode[];
+}
+
+export interface LabelRecord extends TaxonomyItem {
+  assetCount?: number;
+}
+
+export interface ListTaxonomyParams {
+  brandId: string;
+  type: TaxonomyType;
+  format?: 'tree' | 'flat';
+  includeArchived?: boolean;
+}
+
+export interface ListTaxonomyResponse {
+  collections?: CollectionNode[];
+  labels?: LabelRecord[];
+  unsortedAssetCount?: number;
+}
+
+export interface CreateTaxonomyParams {
+  brandId: string;
+  type: TaxonomyType;
+  name: string;
+  parentId?: string | null;
+  color?: string;
+  sortOrder?: number;
+  isSystem?: boolean;
+  createdBy?: string;
+}
+
+export interface UpdateTaxonomyParams {
+  brandId?: string;
+  name?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  color?: string;
+  createdBy?: string;
+}
+
+export interface DeleteTaxonomyParams {
+  brandId?: string;
+  onNotEmpty?: 'move_to_parent' | 'move_to_unsorted';
+  createdBy?: string;
+}
+
+export interface MergeLabelsParams {
+  brandId: string;
+  fromLabelId: string;
+  intoLabelId: string;
+  createdBy?: string;
+}
+
+export type BulkAssetAction =
+  | { move_to_collection: { collectionId?: string | null } }
+  | { add_labels: { labelIds?: string[]; labelNames?: string[]; createdBy?: string } }
+  | { remove_labels: { labelIds: string[] } }
+  | { delete: Record<string, never> };
+
+export interface BulkAssetsParams {
+  assetIds: string[];
+  brandId?: string;
+  action: BulkAssetAction;
+}
+
+export interface BulkAssetsResponse {
+  success: boolean;
 }
 
 export interface UploadUrlParams {
@@ -225,8 +320,9 @@ export class AssetsServiceClient {
       fileType: params.fileType,
       title: params.title,
       altText: params.altText,
-      tags: params.tags,
-      folderId: params.folderId,
+      description: params.description,
+      labelIds: params.labelIds,
+      collectionId: params.collectionId,
       publishedAt: params.publishedAt,
     };
 
@@ -244,8 +340,9 @@ export class AssetsServiceClient {
       fileType: params.fileType,
       title: params.title,
       altText: params.altText,
-      tags: params.tags,
-      folderId: params.folderId,
+      description: params.description,
+      labelIds: params.labelIds,
+      collectionId: params.collectionId,
       publishedAt: params.publishedAt,
     };
 
@@ -309,15 +406,13 @@ export class AssetsServiceClient {
     if (params.search) query.set('search', params.search);
     if (params.page) query.set('page', String(params.page));
     if (params.limit) query.set('limit', String(params.limit));
-    if (params.folderId) query.set('folderId', params.folderId);
-    if (params.tags) {
-      const tags = Array.isArray(params.tags) ? params.tags : [params.tags];
-      tags.forEach((tag) => query.append('tags', tag));
+    if (params.collectionId) query.set('collectionId', params.collectionId);
+    if (params.includeSubcollections) query.set('includeSubcollections', 'true');
+    if (params.labelIds) {
+      const labelIds = Array.isArray(params.labelIds) ? params.labelIds : [params.labelIds];
+      labelIds.forEach((id) => query.append('labelIds', id));
     }
-    if (params.excludeTags) {
-      const exclude = Array.isArray(params.excludeTags) ? params.excludeTags : [params.excludeTags];
-      exclude.forEach((tag) => query.append('excludeTags', tag));
-    }
+    if (params.labelMode) query.set('labelMode', params.labelMode);
     if (params.aspectRatio) query.set('aspectRatio', params.aspectRatio);
     if (params.aspectRatios) {
       const ratios = Array.isArray(params.aspectRatios)
@@ -337,12 +432,7 @@ export class AssetsServiceClient {
     if (params.maxHeight) query.set('maxHeight', String(params.maxHeight));
     if (params.uploadedAfter) query.set('uploadedAfter', params.uploadedAfter);
     if (params.uploadedBefore) query.set('uploadedBefore', params.uploadedBefore);
-    if (params.usageStatuses) {
-      const statuses = Array.isArray(params.usageStatuses)
-        ? params.usageStatuses
-        : [params.usageStatuses];
-      statuses.forEach((s) => query.append('usageStatuses', s));
-    }
+    if (params.usage) query.set('usage', params.usage);
 
     return this.get<ListAssetsResponse>(`/assets?${query.toString()}`);
   }
@@ -364,6 +454,51 @@ export class AssetsServiceClient {
 
   async deleteAsset(assetId: string): Promise<DeleteAssetResponse> {
     return this.request<DeleteAssetResponse>(`/assets/${assetId}`, { method: 'DELETE' });
+  }
+
+  async listTaxonomy(params: ListTaxonomyParams): Promise<ListTaxonomyResponse> {
+    const query = new URLSearchParams();
+    query.set('brandId', params.brandId);
+    query.set('type', params.type);
+    if (params.format) query.set('format', params.format);
+    if (params.includeArchived) query.set('includeArchived', 'true');
+    return this.get<ListTaxonomyResponse>(`/taxonomy?${query.toString()}`);
+  }
+
+  async createTaxonomy(params: CreateTaxonomyParams): Promise<{ item: TaxonomyItem }> {
+    return this.post<{ item: TaxonomyItem }>('/taxonomy', params);
+  }
+
+  async updateTaxonomy(id: string, params: UpdateTaxonomyParams): Promise<{ item: TaxonomyItem }> {
+    return this.request<{ item: TaxonomyItem }>(`/taxonomy/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteTaxonomy(id: string, params?: DeleteTaxonomyParams): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/taxonomy/${id}`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: params ? JSON.stringify(params) : undefined,
+    });
+  }
+
+  async archiveTaxonomy(id: string, params?: { brandId?: string; createdBy?: string }) {
+    return this.post<{ item: TaxonomyItem }>(`/taxonomy/${id}/archive`, params ?? {});
+  }
+
+  async unarchiveTaxonomy(id: string, params?: { brandId?: string; createdBy?: string }) {
+    return this.post<{ item: TaxonomyItem }>(`/taxonomy/${id}/unarchive`, params ?? {});
+  }
+
+  async mergeLabels(params: MergeLabelsParams): Promise<{ success: boolean }> {
+    return this.post<{ success: boolean }>('/labels:merge', params);
+  }
+
+  async bulkAssets(params: BulkAssetsParams): Promise<BulkAssetsResponse> {
+    return this.post<BulkAssetsResponse>('/assets/bulk', params);
   }
 
   async getUploadUrl(params: UploadUrlParams): Promise<UploadUrlResponse> {

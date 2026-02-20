@@ -74,7 +74,6 @@ export async function executeVideoGenerationSkill(
     contentId: `recipe_${Date.now()}`,
     source: `video_gen:${runtime.provider}`,
     originalPrompt: prompt,
-    hideFromLibrary: false,
   });
 
   return {

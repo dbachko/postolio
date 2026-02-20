@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectsCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { customAlphabet } from 'nanoid';
 import process from 'node:process';
@@ -108,4 +108,34 @@ export function getAssetUrl(s3Key: string): string {
     : `https://${normalizedDomain}`;
   const normalizedKey = s3Key.replace(/^\/+/, '');
   return `${domainWithProtocol}/${normalizedKey}`;
+}
+
+export async function deleteS3Objects(keys: string[]): Promise<void> {
+  const normalized = Array.from(
+    new Set(keys.map((key) => key.trim()).filter((key) => key.length > 0))
+  );
+  if (normalized.length === 0) return;
+
+  const chunkSize = 1000;
+  for (let index = 0; index < normalized.length; index += chunkSize) {
+    const chunk = normalized.slice(index, index + chunkSize);
+    const response = await s3Client.send(
+      new DeleteObjectsCommand({
+        Bucket: assetsBucketName,
+        Delete: {
+          Objects: chunk.map((Key) => ({ Key })),
+          Quiet: true,
+        },
+      })
+    );
+
+    const failures = (response.Errors ?? []).filter((item) => item.Key);
+    if (failures.length > 0) {
+      const keysWithErrors = failures
+        .map((item) => item.Key)
+        .filter((key): key is string => !!key)
+        .join(', ');
+      throw new Error(`Failed to delete some S3 objects: ${keysWithErrors}`);
+    }
+  }
 }

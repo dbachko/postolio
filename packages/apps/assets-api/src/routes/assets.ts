@@ -1,11 +1,22 @@
 import { FastifyPluginAsync } from 'fastify';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { prismaAssets, Prisma as AssetsPrisma } from '@postolio/database-assets';
+import {
+  normalizeAssetLabelName,
+  prismaAssets,
+  Prisma as AssetsPrisma,
+} from '@postolio/database-assets';
 import sharp from 'sharp';
 import { customAlphabet } from 'nanoid';
-import { generateUploadUrl, getAssetUrl, assetsBucketName, s3Client } from '../utils/s3.js';
+import {
+  generateUploadUrl,
+  getAssetUrl,
+  assetsBucketName,
+  s3Client,
+  deleteS3Objects,
+} from '../utils/s3.js';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
+const UNSORTED_COLLECTION_FILTER = 'unsorted';
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -107,11 +118,28 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       duration?: number;
       title?: string;
       altText?: string;
-      tags?: string[];
-      folderId?: string;
+      description?: string;
+      collectionId?: string | null;
+      labelIds?: string[];
     };
 
     try {
+      let resolvedCollectionId: string | undefined | null = body.collectionId ?? undefined;
+      if (body.collectionId) {
+        const collection = await prismaAssets.assetTaxonomyItem.findUnique({
+          where: { id: body.collectionId },
+          select: { id: true, brandId: true, type: true },
+        });
+        if (
+          !collection ||
+          collection.brandId !== body.brandId ||
+          collection.type !== 'COLLECTION'
+        ) {
+          return reply.code(400).send({ error: 'Invalid collection selection for brand' });
+        }
+        resolvedCollectionId = collection.id;
+      }
+
       const asset = await prismaAssets.asset.create({
         data: {
           brandId: body.brandId,
@@ -127,15 +155,28 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           duration: body.duration,
           title: body.title,
           altText: body.altText,
-          tags: body.tags || [],
-          folderId: body.folderId,
+          description: body.description,
+          collectionId: resolvedCollectionId ?? undefined,
           processingStatus: 'pending',
         },
       });
 
+      const labelIds = body.labelIds && body.labelIds.length > 0 ? body.labelIds : [];
+      if (labelIds.length > 0) {
+        await prismaAssets.assetTaxonomyAssignment.createMany({
+          data: labelIds.map((taxonomyItemId) => ({
+            assetId: asset.id,
+            taxonomyItemId,
+            createdBy: body.uploadedBy || 'system',
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       return {
         asset: {
           ...asset,
+          labelIds,
           url: getAssetUrl(asset.s3Key),
         },
         message: 'Asset created successfully',
@@ -153,13 +194,13 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     const query = request.query as {
       brandId?: string;
       type?: 'image' | 'video';
-      tags?: string | string[];
-      excludeTags?: string | string[];
       search?: string;
       page?: string;
       limit?: string;
-      folderId?: string;
-      includeHidden?: string;
+      collectionId?: string;
+      includeSubcollections?: string;
+      labelIds?: string | string[];
+      labelMode?: 'any' | 'all';
 
       // New filters for aspect ratio and dimensions
       aspectRatio?: string;
@@ -176,8 +217,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       uploadedBefore?: string;
 
       // Usage filter
-      usageStatus?: 'used' | 'unused';
-      usageStatuses?: string | string[];
+      usage?: 'used' | 'unused' | 'any';
     };
 
     try {
@@ -188,51 +228,87 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       // Build where clause
       const where: AssetsPrisma.AssetWhereInput = {};
 
-      if (query.brandId) {
-        where.brandId = query.brandId;
+      if (!query.brandId) {
+        return reply.code(400).send({ error: 'brandId is required' });
       }
+      where.brandId = query.brandId;
 
       if (query.type) {
         where.fileType = query.type;
       }
+      where.archivedAt = null;
 
-      if (query.tags) {
-        const tagArray = Array.isArray(query.tags) ? query.tags : [query.tags];
-        where.tags = { hasSome: tagArray };
-      }
+      if (query.collectionId) {
+        if (query.collectionId === UNSORTED_COLLECTION_FILTER) {
+          where.collectionId = null;
+        } else {
+          const includeSub =
+            query.includeSubcollections === 'true' || query.includeSubcollections === '1';
+          const collectionIds = includeSub
+            ? (
+                await prismaAssets.$queryRaw<{ id: string }[]>`
+              WITH RECURSIVE subcollections AS (
+                SELECT "id"
+                FROM "asset_taxonomy_items"
+                WHERE "id" = ${query.collectionId}
+                  AND "brandId" = ${query.brandId}
+                  AND "type" = 'COLLECTION'
+                  AND "deletedAt" IS NULL
+                UNION ALL
+                SELECT c."id"
+                FROM "asset_taxonomy_items" c
+                JOIN subcollections s ON c."parentId" = s."id"
+                WHERE c."brandId" = ${query.brandId}
+                  AND c."type" = 'COLLECTION'
+                  AND c."deletedAt" IS NULL
+              )
+              SELECT "id" FROM subcollections;
+            `
+              ).map((row) => row.id)
+            : [query.collectionId];
 
-      const includesHidden = query.includeHidden === 'true' || query.includeHidden === '1';
-      const excludeTags = new Set<string>();
-      if (!includesHidden) {
-        excludeTags.add('__hidden');
-      }
-      if (query.excludeTags) {
-        const userExclude = Array.isArray(query.excludeTags)
-          ? query.excludeTags
-          : [query.excludeTags];
-        userExclude.forEach((tag) => excludeTags.add(tag));
-      }
-      if (excludeTags.size > 0) {
-        const andConditions: AssetsPrisma.AssetWhereInput[] = [];
-        if (where.AND) {
-          if (Array.isArray(where.AND)) {
-            andConditions.push(...where.AND);
-          } else {
-            andConditions.push(where.AND);
+          if (collectionIds.length === 0) {
+            return {
+              assets: [],
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+              },
+            };
           }
+          where.collectionId = { in: collectionIds };
         }
-        andConditions.push({
-          NOT: {
-            tags: {
-              hasSome: Array.from(excludeTags),
-            },
-          },
-        });
-        where.AND = andConditions;
       }
 
-      if (query.folderId) {
-        where.folderId = query.folderId;
+      const labelIds = query.labelIds
+        ? Array.isArray(query.labelIds)
+          ? query.labelIds
+          : [query.labelIds]
+        : [];
+      if (labelIds.length > 0) {
+        const mode = query.labelMode === 'all' ? 'all' : 'any';
+        if (mode === 'any') {
+          where.labelAssignments = {
+            some: { taxonomyItemId: { in: labelIds } },
+          };
+        } else {
+          const andConditions: AssetsPrisma.AssetWhereInput[] = [];
+          if (where.AND) {
+            if (Array.isArray(where.AND)) {
+              andConditions.push(...where.AND);
+            } else {
+              andConditions.push(where.AND);
+            }
+          }
+          labelIds.forEach((id) => {
+            andConditions.push({
+              labelAssignments: { some: { taxonomyItemId: id } },
+            });
+          });
+          where.AND = andConditions;
+        }
       }
 
       if (query.search) {
@@ -331,20 +407,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Usage status filter
-      const usageStatusList = query.usageStatuses
-        ? Array.isArray(query.usageStatuses)
-          ? query.usageStatuses
-          : [query.usageStatuses]
-        : query.usageStatus
-          ? [query.usageStatus]
-          : [];
-
-      if (usageStatusList.length === 1) {
-        if (usageStatusList[0] === 'used') {
-          where.usageCount = { gt: 0 };
-        } else if (usageStatusList[0] === 'unused') {
-          where.usageCount = 0;
-        }
+      if (query.usage === 'used') {
+        where.usageCount = { gt: 0 };
+      } else if (query.usage === 'unused') {
+        where.usageCount = 0;
       }
 
       // Fetch assets with pagination
@@ -352,7 +418,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         prismaAssets.asset.findMany({
           where,
           include: {
-            folder: true,
+            labelAssignments: {
+              select: { taxonomyItemId: true },
+            },
           },
           orderBy: { updatedAt: 'desc' },
           skip,
@@ -362,11 +430,16 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       ]);
 
       // Add URLs to assets
-      const assetsWithUrls = assets.map((asset) => ({
-        ...asset,
-        url: getAssetUrl(asset.s3Key),
-        thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
-      }));
+      const assetsWithUrls = assets.map((asset) => {
+        const { labelAssignments = [], ...rest } = asset;
+        const labelIds = labelAssignments.map((assignment) => assignment.taxonomyItemId);
+        return {
+          ...rest,
+          labelIds,
+          url: getAssetUrl(asset.s3Key),
+          thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
+        };
+      });
 
       return {
         assets: assetsWithUrls,
@@ -456,7 +529,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         const asset = await prismaAssets.asset.findUnique({
           where: { id },
           include: {
-            folder: true,
+            labelAssignments: { select: { taxonomyItemId: true } },
           },
         });
 
@@ -464,9 +537,13 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Asset not found' });
         }
 
+        const { labelAssignments = [], ...rest } = asset;
+        const labelIds = labelAssignments.map((assignment) => assignment.taxonomyItemId);
+
         return {
           asset: {
-            ...asset,
+            ...rest,
+            labelIds,
             url: getAssetUrl(asset.s3Key),
             thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
           },
@@ -509,20 +586,25 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             archivedAt: null,
           },
           include: {
-            folder: true,
+            labelAssignments: { select: { taxonomyItemId: true } },
           },
         });
 
         // Map to include CDN URLs and maintain order
         const assetMap = new Map(
-          assets.map((asset) => [
-            asset.id,
-            {
-              ...asset,
-              url: getAssetUrl(asset.s3Key),
-              thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
-            },
-          ])
+          assets.map((asset) => {
+            const { labelAssignments = [], ...rest } = asset;
+            const labelIds = labelAssignments.map((assignment) => assignment.taxonomyItemId);
+            return [
+              asset.id,
+              {
+                ...rest,
+                labelIds,
+                url: getAssetUrl(asset.s3Key),
+                thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
+              },
+            ];
+          })
         );
 
         // Return assets in the same order as requested, with null for missing
@@ -548,25 +630,61 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         title?: string;
         altText?: string;
         description?: string;
-        tags?: string[];
-        folderId?: string | null;
+        collectionId?: string | null;
+        labelIds?: string[];
       };
 
       try {
+        let resolvedCollectionId: string | null | undefined = body.collectionId ?? undefined;
+        if (body.collectionId) {
+          const collection = await prismaAssets.assetTaxonomyItem.findUnique({
+            where: { id: body.collectionId },
+            select: { id: true, brandId: true, type: true },
+          });
+          if (!collection || collection.type !== 'COLLECTION') {
+            return reply.code(400).send({ error: 'Invalid collection selection' });
+          }
+          resolvedCollectionId = collection.id;
+        }
+
         const asset = await prismaAssets.asset.update({
           where: { id },
           data: {
             title: body.title,
             altText: body.altText,
             description: body.description,
-            tags: body.tags,
-            folderId: body.folderId,
+            collectionId: resolvedCollectionId,
           },
         });
+
+        if (body.labelIds) {
+          await prismaAssets.$transaction([
+            prismaAssets.assetTaxonomyAssignment.deleteMany({ where: { assetId: id } }),
+            ...(body.labelIds.length > 0
+              ? [
+                  prismaAssets.assetTaxonomyAssignment.createMany({
+                    data: body.labelIds.map((taxonomyItemId) => ({
+                      assetId: id,
+                      taxonomyItemId,
+                      createdBy: 'system',
+                    })),
+                    skipDuplicates: true,
+                  }),
+                ]
+              : []),
+          ]);
+        }
+
+        const labelAssignments = await prismaAssets.assetTaxonomyAssignment.findMany({
+          where: { assetId: id },
+          select: { taxonomyItemId: true },
+        });
+        const labelIds = labelAssignments.map((assignment) => assignment.taxonomyItemId);
 
         return {
           asset: {
             ...asset,
+            labelIds,
             url: getAssetUrl(asset.s3Key),
           },
           message: 'Asset updated successfully',
@@ -580,7 +698,193 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Delete asset (soft delete via archiving)
+  // Bulk asset actions
+  fastify.post(
+    '/assets/bulk',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const body = request.body as {
+        assetIds: string[];
+        brandId?: string;
+        action:
+          | { move_to_collection: { collectionId?: string | null } }
+          | { add_labels: { labelIds?: string[]; labelNames?: string[]; createdBy?: string } }
+          | { remove_labels: { labelIds: string[] } }
+          | { delete: Record<string, never> };
+      };
+
+      const assetIds = Array.isArray(body.assetIds)
+        ? Array.from(new Set(body.assetIds.filter((id) => typeof id === 'string' && id.length > 0)))
+        : [];
+
+      if (assetIds.length === 0) {
+        return reply.code(400).send({ error: 'assetIds are required' });
+      }
+
+      const action = body.action;
+      if (!action || typeof action !== 'object') {
+        return reply.code(400).send({ error: 'action is required' });
+      }
+
+      if ('move_to_collection' in action) {
+        const collectionId = action.move_to_collection?.collectionId ?? null;
+        if (collectionId) {
+          const collection = await prismaAssets.assetTaxonomyItem.findUnique({
+            where: { id: collectionId },
+            select: { id: true, brandId: true, type: true },
+          });
+          if (
+            !collection ||
+            collection.type !== 'COLLECTION' ||
+            (body.brandId && collection.brandId !== body.brandId)
+          ) {
+            return reply.code(400).send({ error: 'Invalid collection selection' });
+          }
+        }
+
+        await prismaAssets.asset.updateMany({
+          where: { id: { in: assetIds } },
+          data: { collectionId: collectionId ?? null },
+        });
+
+        return { success: true };
+      }
+
+      if ('add_labels' in action) {
+        const labelIds = new Set<string>();
+        const createdBy = action.add_labels.createdBy ?? 'system';
+
+        if (action.add_labels.labelIds) {
+          action.add_labels.labelIds.forEach((id) => {
+            if (id) labelIds.add(id);
+          });
+        }
+
+        if (action.add_labels.labelNames && action.add_labels.labelNames.length > 0) {
+          if (!body.brandId) {
+            return reply.code(400).send({ error: 'brandId is required to create labels' });
+          }
+          const normalized = action.add_labels.labelNames
+            .map((name) => name?.trim())
+            .filter((name): name is string => !!name)
+            .map((name) => ({ name, nameNorm: normalizeAssetLabelName(name) }));
+
+          if (normalized.length > 0) {
+            const existing = await prismaAssets.assetTaxonomyItem.findMany({
+              where: {
+                brandId: body.brandId,
+                type: 'LABEL',
+                nameNorm: { in: normalized.map((item) => item.nameNorm) },
+                deletedAt: null,
+              },
+              select: { id: true, nameNorm: true },
+            });
+            const existingByNorm = new Map(existing.map((item) => [item.nameNorm, item.id]));
+
+            const toCreate = normalized.filter((item) => !existingByNorm.has(item.nameNorm));
+            if (toCreate.length > 0) {
+              await prismaAssets.assetTaxonomyItem.createMany({
+                data: toCreate.map((item) => ({
+                  brandId: body.brandId!,
+                  type: 'LABEL',
+                  name: item.name,
+                  nameNorm: item.nameNorm,
+                  createdBy,
+                })),
+                skipDuplicates: true,
+              });
+            }
+
+            const updated = await prismaAssets.assetTaxonomyItem.findMany({
+              where: {
+                brandId: body.brandId,
+                type: 'LABEL',
+                nameNorm: { in: normalized.map((item) => item.nameNorm) },
+                deletedAt: null,
+              },
+              select: { id: true },
+            });
+            updated.forEach((item) => labelIds.add(item.id));
+          }
+        }
+
+        const labelsToAssign = Array.from(labelIds);
+        if (labelsToAssign.length === 0) {
+          return { success: true };
+        }
+
+        const assignments = assetIds.flatMap((assetId) =>
+          labelsToAssign.map((taxonomyItemId) => ({
+            assetId,
+            taxonomyItemId,
+            createdBy,
+          }))
+        );
+
+        await prismaAssets.assetTaxonomyAssignment.createMany({
+          data: assignments,
+          skipDuplicates: true,
+        });
+
+        return { success: true };
+      }
+
+      if ('remove_labels' in action) {
+        const labelIds = action.remove_labels.labelIds ?? [];
+        if (labelIds.length === 0) {
+          return { success: true };
+        }
+        await prismaAssets.assetTaxonomyAssignment.deleteMany({
+          where: {
+            assetId: { in: assetIds },
+            taxonomyItemId: { in: labelIds },
+          },
+        });
+        return { success: true };
+      }
+
+      if ('delete' in action) {
+        const where: AssetsPrisma.AssetWhereInput = {
+          id: { in: assetIds },
+          ...(body.brandId ? { brandId: body.brandId } : {}),
+        };
+        const assetsToDelete = await prismaAssets.asset.findMany({
+          where,
+          select: {
+            id: true,
+            s3Key: true,
+            thumbnailKey: true,
+            thumbnailSmallKey: true,
+            thumbnailLargeKey: true,
+          },
+        });
+
+        if (assetsToDelete.length === 0) {
+          return { success: true };
+        }
+
+        const storageKeys = assetsToDelete.flatMap((asset) =>
+          [
+            asset.s3Key,
+            asset.thumbnailKey,
+            asset.thumbnailSmallKey,
+            asset.thumbnailLargeKey,
+          ].filter((key): key is string => !!key)
+        );
+
+        await deleteS3Objects(storageKeys);
+
+        await prismaAssets.asset.deleteMany({
+          where: { id: { in: assetsToDelete.map((asset) => asset.id) } },
+        });
+        return { success: true };
+      }
+
+      return reply.code(400).send({ error: 'Unsupported action' });
+    }
+  );
+
+  // Delete asset permanently (DB row + S3 objects)
   fastify.delete(
     '/assets/:id',
     { preHandler: [fastify.authenticateService] },
@@ -588,16 +892,37 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string };
 
       try {
-        await prismaAssets.asset.update({
+        const asset = await prismaAssets.asset.findUnique({
           where: { id },
-          data: {
-            archivedAt: new Date(),
+          select: {
+            id: true,
+            s3Key: true,
+            thumbnailKey: true,
+            thumbnailSmallKey: true,
+            thumbnailLargeKey: true,
           },
+        });
+
+        if (!asset) {
+          return reply.code(404).send({ error: 'Asset not found' });
+        }
+
+        const storageKeys = [
+          asset.s3Key,
+          asset.thumbnailKey,
+          asset.thumbnailSmallKey,
+          asset.thumbnailLargeKey,
+        ].filter((key): key is string => !!key);
+
+        await deleteS3Objects(storageKeys);
+
+        await prismaAssets.asset.delete({
+          where: { id: asset.id },
         });
 
         return {
           success: true,
-          message: 'Asset archived successfully',
+          message: 'Asset deleted permanently',
         };
       } catch (error) {
         fastify.log.error(error);
@@ -622,8 +947,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         fileType?: 'image' | 'video';
         title?: string;
         altText?: string;
-        tags?: string[];
-        folderId?: string;
+        description?: string;
+        labelIds?: string[];
+        collectionId?: string;
         publishedAt?: string;
       };
 
@@ -738,16 +1064,20 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        let resolvedFolderId: string | undefined;
-        if (body.folderId) {
-          const folder = await prismaAssets.assetFolder.findUnique({
-            where: { id: body.folderId },
-            select: { id: true, brandId: true },
+        let resolvedCollectionId: string | undefined;
+        if (body.collectionId) {
+          const collection = await prismaAssets.assetTaxonomyItem.findUnique({
+            where: { id: body.collectionId },
+            select: { id: true, brandId: true, type: true },
           });
-          if (!folder || folder.brandId !== body.brandId) {
-            return reply.code(400).send({ error: 'Invalid folder selection for brand' });
+          if (
+            !collection ||
+            collection.brandId !== body.brandId ||
+            collection.type !== 'COLLECTION'
+          ) {
+            return reply.code(400).send({ error: 'Invalid collection selection for brand' });
           }
-          resolvedFolderId = folder.id;
+          resolvedCollectionId = collection.id;
         }
 
         const asset = await prismaAssets.asset.create({
@@ -767,11 +1097,22 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             orientationType,
             title: body.title,
             altText: body.altText,
-            tags: body.tags || [],
+            description: body.description,
             processingStatus: 'pending',
-            folderId: resolvedFolderId,
+            collectionId: resolvedCollectionId,
           },
         });
+
+        if (body.labelIds && body.labelIds.length > 0) {
+          await prismaAssets.assetTaxonomyAssignment.createMany({
+            data: body.labelIds.map((taxonomyItemId) => ({
+              assetId: asset.id,
+              taxonomyItemId,
+              createdBy: body.uploadedBy || 'system',
+            })),
+            skipDuplicates: true,
+          });
+        }
 
         if (body.publishedAt) {
           const publishedDate = new Date(body.publishedAt);
@@ -788,6 +1129,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           asset: {
             ...asset,
+            labelIds: body.labelIds || [],
             url: getAssetUrl(asset.s3Key),
           },
           message: 'Asset imported successfully',

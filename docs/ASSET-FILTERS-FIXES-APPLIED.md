@@ -190,22 +190,24 @@ export interface AssetRecord {
 export interface ListAssetsParams {
   brandId: string;
   type?: 'image' | 'video';
-  tags?: string[];
-  excludeTags?: string[];
   search?: string;
   page?: number;
   limit?: number;
-  folderId?: string;
+  collectionId?: string;
+  includeSubcollections?: boolean;
+  labelIds?: string[] | string;
+  labelMode?: 'any' | 'all';
+  status?: 'active' | 'deleted';
   aspectRatio?: string;
   aspectRatios?: string[];
-  orientationType?: 'portrait' | 'landscape' | 'square';
+  orientationTypes?: Array<'portrait' | 'landscape' | 'square'>;
   minWidth?: number;
   maxWidth?: number;
   minHeight?: number;
   maxHeight?: number;
   uploadedAfter?: string;
   uploadedBefore?: string;
-  usageStatus?: 'used' | 'unused';
+  usage?: 'used' | 'unused' | 'any';
 }
 ```
 
@@ -217,14 +219,15 @@ async listAssets(params: ListAssetsParams): Promise<ListAssetsResponse> {
   // ... existing params
   if (params.aspectRatio) query.set('aspectRatio', params.aspectRatio);
   if (params.aspectRatios) params.aspectRatios.forEach((r) => query.append('aspectRatios', r));
-  if (params.orientationType) query.set('orientationType', params.orientationType);
+  if (params.orientationTypes)
+    params.orientationTypes.forEach((o) => query.append('orientationTypes', o));
   if (params.minWidth) query.set('minWidth', String(params.minWidth));
   if (params.maxWidth) query.set('maxWidth', String(params.maxWidth));
   if (params.minHeight) query.set('minHeight', String(params.minHeight));
   if (params.maxHeight) query.set('maxHeight', String(params.maxHeight));
   if (params.uploadedAfter) query.set('uploadedAfter', params.uploadedAfter);
   if (params.uploadedBefore) query.set('uploadedBefore', params.uploadedBefore);
-  if (params.usageStatus) query.set('usageStatus', params.usageStatus);
+  if (params.usage) query.set('usage', params.usage);
 
   return this.get<ListAssetsResponse>(`/assets?${query.toString()}`);
 }

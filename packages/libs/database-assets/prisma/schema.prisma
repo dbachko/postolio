@@ -10,8 +10,8 @@ datasource db {
 model Asset {
   id                String        @id @default(cuid())
   brandId           String        // Reference to main DB (no FK)
-  uploadedBy        String        // userId from main DB
-  folderId          String?
+  uploadedBy        String        // Actor identifier from main DB (optional user)
+  collectionId      String?
 
   // File metadata
   fileName          String
@@ -38,7 +38,6 @@ model Asset {
   title             String?
   altText           String?       // WCAG required
   description       String?
-  tags              String[]
 
   // AI analysis (cached)
   aiDescription           String?
@@ -62,36 +61,59 @@ model Asset {
   updatedAt         DateTime      @updatedAt
   archivedAt        DateTime?
 
-  folder            AssetFolder?  @relation(fields: [folderId], references: [id])
+  collection        AssetTaxonomyItem? @relation("AssetCollection", fields: [collectionId], references: [id])
+  labelAssignments  AssetTaxonomyAssignment[]
 
   @@index([brandId, processingStatus])
   @@index([brandId, fileType])
   @@index([brandId, createdAt])
-  @@index([tags])
   @@index([aspectRatio])
   @@index([orientationType])
   @@index([brandId, aspectRatio])
   @@index([brandId, fileType, aspectRatio])
+  @@index([brandId, collectionId, archivedAt, createdAt])
   @@map("assets")
 }
 
-model AssetFolder {
-  id          String    @id @default(cuid())
+model AssetTaxonomyItem {
+  id          String       @id @default(cuid())
   brandId     String
-  name        String
+  type        TaxonomyType
   parentId    String?
+  sortOrder   Int?
+  name        String
+  nameNorm    String?
   color       String?
-  folderType  FolderType @default(general)
+  isSystem    Boolean      @default(false)
+  isHidden    Boolean      @default(false)
+  isArchived  Boolean      @default(false)
+  deletedAt   DateTime?
+  createdBy   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  parent      AssetTaxonomyItem?  @relation("TaxonomyHierarchy", fields: [parentId], references: [id])
+  children    AssetTaxonomyItem[] @relation("TaxonomyHierarchy")
+  labelAssignments AssetTaxonomyAssignment[]
+  assetsInCollection Asset[] @relation("AssetCollection")
 
-  parent      AssetFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
-  children    AssetFolder[] @relation("FolderHierarchy")
-  assets      Asset[]
+  @@index([brandId, type])
+  @@index([parentId])
+  @@map("asset_taxonomy_items")
+}
 
-  @@index([brandId])
-  @@map("asset_folders")
+model AssetTaxonomyAssignment {
+  assetId         String
+  taxonomyItemId  String
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  asset        Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  taxonomyItem AssetTaxonomyItem  @relation(fields: [taxonomyItemId], references: [id], onDelete: Cascade)
+
+  @@id([assetId, taxonomyItemId])
+  @@index([taxonomyItemId, assetId])
+  @@map("asset_taxonomy_assignments")
 }
 
 enum AssetType {
@@ -110,7 +132,7 @@ enum ProcessingStatus {
   failed
 }
 
-enum FolderType {
-  general
-  brand_assets
+enum TaxonomyType {
+  COLLECTION
+  LABEL
 }

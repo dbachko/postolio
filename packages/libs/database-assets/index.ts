@@ -13,6 +13,10 @@ export interface AssetsPrismaClientWithPool {
   pool: Pool;
 }
 
+export function normalizeAssetLabelName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
 export function createAssetsPrismaClient(
   options: PgAssetsPrismaClientOptions = {}
 ): AssetsPrismaClientWithPool {
@@ -63,8 +67,9 @@ export { PrismaClient as AssetsPrismaClient, Prisma } from './assets-client/inde
 // Export types
 export type {
   Asset,
-  AssetFolder,
   AssetType,
   ProcessingStatus,
-  FolderType,
+  AssetTaxonomyItem,
+  AssetTaxonomyAssignment,
+  TaxonomyType,
 } from './assets-client/index.js';

@@ -26,7 +26,9 @@ SKIP_ASSETS_SEED="${SKIP_ASSETS_SEED:-0}"
 ASSETS_SEED_BRAND_EMAIL="${ASSETS_SEED_BRAND_EMAIL:-$DEV_SEED_EMAIL}"
 ASSETS_SEED_BRAND_NAME="${ASSETS_SEED_BRAND_NAME:-$DEV_SEED_BRAND}"
 ASSETS_SEED_COUNT="${ASSETS_SEED_COUNT:-12}"
+ASSETS_SEED_VIDEO_COUNT="${ASSETS_SEED_VIDEO_COUNT:-3}"
 ASSETS_SEED_CDN_BASE="${ASSETS_SEED_CDN_BASE:-https://picsum.photos}"
+ASSETS_SEED_STRUCTURE_ONLY="${ASSETS_SEED_STRUCTURE_ONLY:-1}"
 
 PIDS=()
 NAMES=()
@@ -245,8 +247,17 @@ if [[ "${SKIP_ASSETS_SEED:-0}" != "1" ]]; then
     if [[ -z "${BRAND_ID}" ]]; then
       echo "Unable to determine brand ID for assets seed; skipping."
     else
-      echo "Seeding assets database for brand ${BRAND_ID}..."
-      ASSETS_SEED_CMD=(pnpm --filter @postolio/database-assets db:seed -- --brandId="${BRAND_ID}" --count="${ASSETS_SEED_COUNT}")
+      if [[ "${ASSETS_SEED_STRUCTURE_ONLY:-0}" == "1" ]]; then
+        echo "Seeding assets taxonomy structure (no assets) for brand ${BRAND_ID}..."
+        ASSETS_SEED_CMD=(
+          pnpm --filter @postolio/database-assets db:seed -- --brandId="${BRAND_ID}" --count=0 --videoCount=0
+        )
+      else
+        echo "Seeding assets database for brand ${BRAND_ID}..."
+        ASSETS_SEED_CMD=(
+          pnpm --filter @postolio/database-assets db:seed -- --brandId="${BRAND_ID}" --count="${ASSETS_SEED_COUNT}" --videoCount="${ASSETS_SEED_VIDEO_COUNT}"
+        )
+      fi
       if [[ -n "${ASSETS_SEED_CDN_BASE}" ]]; then
         ASSETS_SEED_CMD+=("--cdnBase=${ASSETS_SEED_CDN_BASE}")
       fi

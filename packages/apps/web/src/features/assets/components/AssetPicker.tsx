@@ -42,6 +42,7 @@ export default function AssetPicker({
     aspectRatios: [],
     orientationTypes: [],
     usageStatuses: [],
+    recentOnly: false,
   });
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -57,7 +58,10 @@ export default function AssetPicker({
         aspectRatios: filters.aspectRatios.length > 0 ? filters.aspectRatios : undefined,
         orientationTypes:
           filters.orientationTypes.length > 0 ? filters.orientationTypes : undefined,
-        usageStatuses: filters.usageStatuses.length > 0 ? filters.usageStatuses : undefined,
+        uploadedAfter: filters.recentOnly
+          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+          : undefined,
+        usage: filters.usageStatuses.length === 1 ? filters.usageStatuses[0] : undefined,
       }),
     enabled: !!brandId,
     getNextPageParam: (lastPage) =>
@@ -137,6 +141,7 @@ export default function AssetPicker({
       aspectRatios: [],
       orientationTypes: [],
       usageStatuses: [],
+      recentOnly: false,
     });
   };
 
