@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { assetsApi, type AssetType } from '@/features/assets/api/client';
 import { X, Loader2, Search, Video, Image as ImageIcon, Play } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
+import { Dropzone } from '@/components/multi-image-uploader/components/dropzone';
 import {
   formatBytes,
   sortAssets,
@@ -25,6 +27,9 @@ export interface AssetPickerProps {
   onSelectMany?: (assets: AssetType[]) => void;
 }
 
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
+
 export default function AssetPicker({
   onSelect,
   onClose,
@@ -32,10 +37,14 @@ export default function AssetPicker({
   type,
   onSelectMany,
 }: AssetPickerProps) {
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Map<string, AssetType>>(new Map());
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebouncedValue(searchInput, 300);
   const [typeFilter, setTypeFilter] = useState<AssetTypeFilter>(type ?? 'all');
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('created');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filters, setFilters] = useState<AssetFilters>({
@@ -45,6 +54,8 @@ export default function AssetPicker({
     recentOnly: false,
   });
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0);
 
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
     queryKey: ['assets-picker', brandId, debouncedSearch, type ?? typeFilter, filters],
@@ -145,6 +156,156 @@ export default function AssetPicker({
     });
   };
 
+  const isFilesDragEvent = (event: DragEvent<HTMLElement>) =>
+    Array.from(event.dataTransfer.types).includes('Files');
+
+  const probeImageDimensions = (file: File): Promise<{ width?: number; height?: number }> => {
+    if (!file.type.startsWith('image/')) return Promise.resolve({});
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        resolve({});
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    });
+  };
+
+  const validateUploadFile = (file: File): string | null => {
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) {
+      return `${file.name} is not a supported image or video file.`;
+    }
+
+    if (type && type !== (isVideo ? 'video' : 'image')) {
+      return `This picker accepts ${type} files only.`;
+    }
+
+    if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+      return `${file.name} exceeds the 10MB image upload limit.`;
+    }
+
+    if (isVideo && file.size > MAX_VIDEO_SIZE_BYTES) {
+      return `${file.name} exceeds the 500MB video upload limit.`;
+    }
+
+    return null;
+  };
+
+  const uploadFiles = async (files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    setUploadError(null);
+    setIsUploading(true);
+
+    const results = await Promise.allSettled(
+      fileArray.map(async (file) => {
+        const validationError = validateUploadFile(file);
+        if (validationError) throw new Error(validationError);
+
+        const fileType = file.type.startsWith('video/') ? 'video' : 'image';
+        const uploadInfo = await assetsApi.getUploadUrl({
+          brandId,
+          fileName: file.name,
+          contentType: file.type || 'application/octet-stream',
+          fileType,
+          fileSize: file.size,
+        });
+
+        await assetsApi.uploadToS3(file, uploadInfo.uploadUrl);
+        const dimensions = await probeImageDimensions(file);
+
+        return assetsApi.createAsset({
+          brandId,
+          fileName: file.name,
+          s3Key: uploadInfo.s3Key,
+          fileSize: file.size,
+          mimeType: file.type || 'application/octet-stream',
+          fileType,
+          width: dimensions.width,
+          height: dimensions.height,
+        });
+      })
+    );
+
+    const failed = results.filter((result) => result.status === 'rejected');
+    const successCount = results.length - failed.length;
+
+    if (successCount > 0) {
+      toast.success(successCount === 1 ? '1 asset uploaded.' : `${successCount} assets uploaded.`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['assets-picker', brandId] }),
+        queryClient.invalidateQueries({ queryKey: ['assets', brandId] }),
+      ]);
+    }
+
+    if (failed.length > 0) {
+      const firstError = failed[0];
+      const message =
+        firstError.status === 'rejected' && firstError.reason instanceof Error
+          ? firstError.reason.message
+          : 'Failed to upload one or more files.';
+
+      setUploadError(message);
+      toast.error(
+        failed.length === 1 ? message : `${failed.length} files failed to upload. ${message}`
+      );
+    }
+
+    setIsUploading(false);
+  };
+
+  const handleDropzoneClick = () => {
+    if (isUploading) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    void uploadFiles(event.target.files);
+    event.target.value = '';
+  };
+
+  const handleDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!isFilesDragEvent(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDraggingFiles(true);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!isFilesDragEvent(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDraggingFiles(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDraggingFiles(false);
+    }
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDraggingFiles(false);
+    if (event.dataTransfer.files.length === 0) return;
+    void uploadFiles(event.dataTransfer.files);
+  };
+
   return (
     <div className="pl-assets">
       <div
@@ -204,8 +365,36 @@ export default function AssetPicker({
             </Button>
           </div>
 
-          <div className="overflow-y-auto px-4 pt-2 pb-4">
+          <div
+            className="relative overflow-y-auto px-4 pt-2 pb-4"
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={
+                type === 'video' ? 'video/*' : type === 'image' ? 'image/*' : 'image/*,video/*'
+              }
+              multiple
+              className="hidden"
+              onChange={handleFileInputChange}
+              disabled={isUploading}
+            />
             <div className="h-2" />
+            {uploadError ? (
+              <div className="border-destructive/50 bg-destructive/10 text-destructive mb-3 rounded-md border px-3 py-2 text-sm">
+                {uploadError}
+              </div>
+            ) : null}
+            {isUploading ? (
+              <div className="text-muted-foreground mb-3 flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Uploading files...
+              </div>
+            ) : null}
 
             {/* Assets Grid */}
             {(() => {
@@ -219,11 +408,28 @@ export default function AssetPicker({
 
               if (sortedAssets.length === 0) {
                 return (
-                  <div className="rounded-lg border-2 border-dashed py-12 text-center">
-                    <p className="text-muted-foreground">No assets found</p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                      Upload images or videos to your asset library first
-                    </p>
+                  <div className="mx-auto w-full max-w-2xl py-8">
+                    <Dropzone
+                      variant="full"
+                      allowMixedMedia
+                      maxImages={10}
+                      maxSizeInMB={10}
+                      maxVideoSizeInMB={500}
+                      mediaItemCount={0}
+                      isDragging={isDraggingFiles}
+                      isUploadInProgress={isUploading}
+                      isUploadingVideo={false}
+                      videoUploadProgress={null}
+                      onClick={handleDropzoneClick}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    />
+                    {type ? (
+                      <p className="text-muted-foreground mt-2 text-center text-xs">
+                        This picker accepts {type} files only.
+                      </p>
+                    ) : null}
                   </div>
                 );
               }
@@ -310,6 +516,28 @@ export default function AssetPicker({
                 </div>
               );
             })()}
+            {isDraggingFiles ? (
+              <div className="bg-background/85 pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="w-full max-w-2xl">
+                  <Dropzone
+                    variant="full"
+                    allowMixedMedia
+                    maxImages={10}
+                    maxSizeInMB={10}
+                    maxVideoSizeInMB={500}
+                    mediaItemCount={sortedAssets.length}
+                    isDragging
+                    isUploadInProgress={isUploading}
+                    isUploadingVideo={false}
+                    videoUploadProgress={null}
+                    onClick={() => {}}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  />
+                </div>
+              </div>
+            ) : null}
             <div ref={loadMoreRef} className="h-1" />
             {isFetchingNextPage && (
               <div className="text-muted-foreground flex justify-center py-3 text-sm">
