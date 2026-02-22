@@ -39,12 +39,20 @@ function normalizeNodeEnv(value: string): 'dev' | 'prod' | 'test' | null {
   const raw = String(value || '')
     .trim()
     .toLowerCase();
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
 
-  if (raw === 'development') return 'dev';
-  if (raw === 'production') return 'prod';
+  if (raw === 'development') {
+    return 'dev';
+  }
+  if (raw === 'production') {
+    return 'prod';
+  }
 
-  if (raw === 'dev' || raw === 'prod' || raw === 'test') return raw;
+  if (raw === 'dev' || raw === 'prod' || raw === 'test') {
+    return raw;
+  }
   return null;
 }
 

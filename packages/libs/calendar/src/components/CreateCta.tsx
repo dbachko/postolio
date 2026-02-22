@@ -17,7 +17,9 @@ export function CreateCta({
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
-        if (disabled) return;
+        if (disabled) {
+          return;
+        }
         onClick?.(date);
       }}
     >

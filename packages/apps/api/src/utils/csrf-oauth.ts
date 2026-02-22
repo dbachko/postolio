@@ -103,14 +103,13 @@ export class OAuthCSRFProtection {
         }
 
         return stateData;
-      } else {
-        // In development without Redis
-        if (process.env.NODE_ENV !== 'prod') {
-          this.fastify.log.warn('OAuth state validation skipped - Redis not available');
-          return { state, timestamp: Date.now() };
-        }
-        return null;
       }
+      // In development without Redis
+      if (process.env.NODE_ENV !== 'prod') {
+        this.fastify.log.warn('OAuth state validation skipped - Redis not available');
+        return { state, timestamp: Date.now() };
+      }
+      return null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       this.fastify.log.error({ message }, 'Failed to validate OAuth state:');
@@ -122,7 +121,9 @@ export class OAuthCSRFProtection {
    * Clean up expired states (maintenance task)
    */
   async cleanupExpiredStates(): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) {
+      return;
+    }
 
     try {
       // Redis TTL handles expiry automatically

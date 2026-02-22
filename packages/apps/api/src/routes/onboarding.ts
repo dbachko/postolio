@@ -14,7 +14,9 @@ interface OnboardingResponse {
 }
 
 function isSocialAccountDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as Record<string, unknown>).disconnected);
 }
 

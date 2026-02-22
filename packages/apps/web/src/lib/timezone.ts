@@ -53,7 +53,7 @@ export const clearTimezoneCache = (): void => {
  */
 export const formatInUserTimezone = (
   utcDate: string | Date,
-  formatStr: string = 'MMM d, yyyy h:mm a',
+  formatStr = 'MMM d, yyyy h:mm a',
   timezone?: string
 ): string => {
   const tz = timezone || getUserTimezone();
@@ -72,7 +72,7 @@ export const formatInUserTimezone = (
  */
 export const formatCompact = (
   utcDate: string | Date,
-  formatStr: string = 'MMM d, h:mm a',
+  formatStr = 'MMM d, h:mm a',
   timezone?: string
 ): string => {
   const tz = timezone || getUserTimezone();
@@ -229,7 +229,9 @@ export const COMMON_TIMEZONES = [
  */
 export const getTimezoneLabel = (timezone: string): string => {
   const tz = COMMON_TIMEZONES.find((t) => t.value === timezone);
-  if (tz) return tz.label;
+  if (tz) {
+    return tz.label;
+  }
 
   // Format unknown timezone nicely
   const parts = timezone.split('/');

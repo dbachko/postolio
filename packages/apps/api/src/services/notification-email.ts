@@ -10,7 +10,9 @@ const CRITICAL_TYPES = new Set<string>([
 ]);
 
 function isCritical(type: string, severity?: string) {
-  if (severity && String(severity).toLowerCase() === 'error') return true;
+  if (severity && String(severity).toLowerCase() === 'error') {
+    return true;
+  }
   return CRITICAL_TYPES.has(type);
 }
 
@@ -36,7 +38,9 @@ export async function maybeSendImmediateEmail(params: {
       },
       orderBy: { brandId: 'desc' },
     });
-    if (master && master.enabled === false) return;
+    if (master?.enabled === false) {
+      return;
+    }
   } catch {
     // ignore and continue to channel-level checks
   }
@@ -46,7 +50,9 @@ export async function maybeSendImmediateEmail(params: {
     where: { id: params.userId },
     select: { email: true },
   });
-  if (!user?.email) return;
+  if (!user?.email) {
+    return;
+  }
 
   // Preferences check (brand-specific overrides general)
   const pref = await prisma.notificationPreference.findFirst({
@@ -61,7 +67,9 @@ export async function maybeSendImmediateEmail(params: {
   });
 
   const shouldEmail = pref ? pref.enabled : isCritical(params.type, params.severity);
-  if (!shouldEmail) return;
+  if (!shouldEmail) {
+    return;
+  }
 
   const { html, text } = EmailService.generateEmailTemplate({
     title: params.title,

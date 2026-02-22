@@ -2,8 +2,7 @@ import type { ReactNode } from 'react';
 import { CircleFadingPlus, Film, Image as ImageIcon } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { InstagramContentType } from '@postolio/content-validation';
 
@@ -47,7 +46,9 @@ export function ContentTypeSelector({
       </Label>
     );
 
-    if (!opts.disabledReason) return base;
+    if (!opts.disabledReason) {
+      return base;
+    }
 
     return (
       <Tooltip delayDuration={0}>

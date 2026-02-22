@@ -11,7 +11,9 @@ export interface ChangePointDetection {
 // delta: small drift tolerance around mean
 // lambda: threshold for change detection
 export function pageHinkley(series: number[], delta = 0.05, lambda = 5): ChangePointDetection {
-  if (!Array.isArray(series) || series.length < 10) return { hasChange: false };
+  if (!Array.isArray(series) || series.length < 10) {
+    return { hasChange: false };
+  }
   let mean = 0;
   let ph = 0;
   let phMin = 0;
@@ -20,7 +22,9 @@ export function pageHinkley(series: number[], delta = 0.05, lambda = 5): ChangeP
     const x = series[i];
     mean = (mean * i + x) / (i + 1);
     ph += x - mean - delta;
-    if (ph < phMin) phMin = ph;
+    if (ph < phMin) {
+      phMin = ph;
+    }
     if (ph - phMin > lambda) {
       tChange = i;
       break;
@@ -34,7 +38,9 @@ export function pageHinkley(series: number[], delta = 0.05, lambda = 5): ChangeP
 // Binary segmentation for single change using variance reduction (simple)
 export function binarySegmentationOnce(series: number[], minSeg = 8): ChangePointDetection {
   const n = series.length;
-  if (n < 2 * minSeg) return { hasChange: false };
+  if (n < 2 * minSeg) {
+    return { hasChange: false };
+  }
   const mean = series.reduce((a, b) => a + b, 0) / n;
   const totalVar = series.reduce((acc, x) => acc + Math.pow(x - mean, 2), 0) / n;
   let bestIdx = -1;

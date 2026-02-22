@@ -49,7 +49,7 @@ export function RecommendationsPanel({
     );
   }
 
-  if (!recommendations || !recommendations.contentOptimizations?.length) {
+  if (!recommendations?.contentOptimizations?.length) {
     return (
       <Card>
         <CardHeader>

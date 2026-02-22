@@ -39,7 +39,9 @@ export type RecipeCreditEstimate = {
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const n = Number.parseInt(String(raw || ''), 10);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
+  if (!Number.isFinite(n) || n <= 0) {
+    return fallback;
+  }
   return n;
 }
 
@@ -60,24 +62,32 @@ function toFixedUsd(value: number): string {
 }
 
 export function creditsToUsd(credits: number): string {
-  if (!Number.isFinite(credits) || credits <= 0) return '0.0000';
+  if (!Number.isFinite(credits) || credits <= 0) {
+    return '0.0000';
+  }
   return toFixedUsd((Math.floor(credits) * USD_PER_CREDIT) / 1);
 }
 
 export function usdToCredits(usdAmount: number): number {
-  if (!Number.isFinite(usdAmount) || usdAmount <= 0) return 0;
+  if (!Number.isFinite(usdAmount) || usdAmount <= 0) {
+    return 0;
+  }
   return Math.max(1, Math.ceil(usdAmount / USD_PER_CREDIT));
 }
 
 export function getEstimatedCreditsForSkillCall(skillId: string): number {
   const key = SKILL_ID_TO_ESTIMATE_KEY[skillId as keyof typeof SKILL_ID_TO_ESTIMATE_KEY] || null;
-  if (!key) return 0;
+  if (!key) {
+    return 0;
+  }
   return ESTIMATE_COST_CREDITS[key];
 }
 
 export function getEstimatedUsdForSkillCall(skillId: string): number {
   const credits = getEstimatedCreditsForSkillCall(skillId);
-  if (credits <= 0) return 0;
+  if (credits <= 0) {
+    return 0;
+  }
   return Number((credits * USD_PER_CREDIT).toFixed(4));
 }
 
@@ -217,12 +227,22 @@ function pricingForOpenAiTextModel(modelRaw: string | null | undefined): {
   const model = String(modelRaw || '')
     .trim()
     .toLowerCase();
-  if (!model) return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
+  if (!model) {
+    return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
+  }
 
-  if (model.includes('gpt-4o-mini')) return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
-  if (model.includes('gpt-4.1-mini')) return { inputPer1KUsd: 0.0004, outputPer1KUsd: 0.0016 };
-  if (model.includes('gpt-4.1-nano')) return { inputPer1KUsd: 0.0001, outputPer1KUsd: 0.0004 };
-  if (model.includes('gpt-4o')) return { inputPer1KUsd: 0.005, outputPer1KUsd: 0.015 };
+  if (model.includes('gpt-4o-mini')) {
+    return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
+  }
+  if (model.includes('gpt-4.1-mini')) {
+    return { inputPer1KUsd: 0.0004, outputPer1KUsd: 0.0016 };
+  }
+  if (model.includes('gpt-4.1-nano')) {
+    return { inputPer1KUsd: 0.0001, outputPer1KUsd: 0.0004 };
+  }
+  if (model.includes('gpt-4o')) {
+    return { inputPer1KUsd: 0.005, outputPer1KUsd: 0.015 };
+  }
 
   return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
 }
@@ -245,7 +265,9 @@ export function estimateOpenAiTextCostUsd(params: {
       ? params.outputTokens
       : 0;
 
-  if (inputTokens === 0 && outputTokens === 0) return 0;
+  if (inputTokens === 0 && outputTokens === 0) {
+    return 0;
+  }
   const pricing = pricingForOpenAiTextModel(params.model);
   const inputUsd = (inputTokens / 1000) * pricing.inputPer1KUsd;
   const outputUsd = (outputTokens / 1000) * pricing.outputPer1KUsd;
@@ -262,7 +284,9 @@ async function ensureWalletTx(tx: Prisma.TransactionClient, brandId: string) {
       totalDebitedCredits: true,
     },
   });
-  if (existing) return existing;
+  if (existing) {
+    return existing;
+  }
 
   const initialCredits = getDefaultStartingCredits();
   const created = await tx.brandAiCreditWallet.create({

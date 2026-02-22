@@ -54,10 +54,18 @@ export async function runToneExtractor(input: ToneExtractorInput): Promise<ToneE
     const q = (text.match(/\?/g) || []).length;
     const emojis = (text.match(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu) || []).length;
     const tone: string[] = [];
-    if (exclam > 5) tone.push('energetic');
-    if (q > 3) tone.push('curious');
-    if (emojis > 10) tone.push('playful');
-    if (tone.length === 0) tone.push('informative');
+    if (exclam > 5) {
+      tone.push('energetic');
+    }
+    if (q > 3) {
+      tone.push('curious');
+    }
+    if (emojis > 10) {
+      tone.push('playful');
+    }
+    if (tone.length === 0) {
+      tone.push('informative');
+    }
     return { tone };
   }
 }

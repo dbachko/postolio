@@ -63,7 +63,9 @@ async function probeVideoMetadata(file: File | Blob): Promise<{
 }
 
 function formatSeconds(duration?: number): string {
-  if (!duration || Number.isNaN(duration)) return 'unknown length';
+  if (!duration || Number.isNaN(duration)) {
+    return 'unknown length';
+  }
   return `${Math.round(duration)}s`;
 }
 

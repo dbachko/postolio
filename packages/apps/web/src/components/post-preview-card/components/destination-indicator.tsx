@@ -3,8 +3,7 @@ import { Layers } from 'lucide-react';
 
 import type { SocialAccountsById } from '@/types/social-accounts';
 import type { CalendarItem } from '@/types/calendar';
-import type { Platform } from '@/lib/platform-config';
-import { getPlatformConfig } from '@/lib/platform-config';
+import { type Platform, getPlatformConfig } from '@/lib/platform-config';
 import { getPlatformIcon } from '@/lib/platform-icons';
 import { cn } from '@/lib/utils';
 
@@ -22,9 +21,15 @@ export function DestinationIndicator({
   hideDestinations?: boolean;
 }) {
   return useMemo(() => {
-    if (hideDestinations) return null;
-    if (item.type === 'placeholder') return null;
-    if (!socialAccountsById) return null;
+    if (hideDestinations) {
+      return null;
+    }
+    if (item.type === 'placeholder') {
+      return null;
+    }
+    if (!socialAccountsById) {
+      return null;
+    }
 
     const record = item as unknown as Record<string, unknown>;
     const rawIds = Array.isArray(record.destinationSocialAccountIds)
@@ -39,7 +44,9 @@ export function DestinationIndicator({
       .filter((v) => v.length > 0);
 
     const unique = Array.from(new Set(ids));
-    if (unique.length === 0) return null;
+    if (unique.length === 0) {
+      return null;
+    }
 
     const destinations: Array<{
       id: string;
@@ -51,7 +58,9 @@ export function DestinationIndicator({
     }> = [];
     for (const id of unique) {
       const meta = socialAccountsById[id];
-      if (!meta) continue;
+      if (!meta) {
+        continue;
+      }
       destinations.push({
         id,
         label: meta.label,
@@ -61,7 +70,9 @@ export function DestinationIndicator({
         disconnected: meta.disconnected,
       });
     }
-    if (destinations.length === 0) return null;
+    if (destinations.length === 0) {
+      return null;
+    }
 
     const destinationCount = destinations.length;
 

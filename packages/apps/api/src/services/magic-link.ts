@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { formatError } from '../utils/logging.js';
 import { createRedisClient } from './redis.js';
 

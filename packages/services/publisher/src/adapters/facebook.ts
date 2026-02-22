@@ -9,9 +9,13 @@ import {
 } from '../utils/media';
 
 function readStringField(obj: unknown, field: string): string | null {
-  if (!obj || typeof obj !== 'object') return null;
+  if (!obj || typeof obj !== 'object') {
+    return null;
+  }
   const value = (obj as Record<string, unknown>)[field];
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
 }
@@ -188,13 +192,21 @@ export class FacebookAdapter implements PlatformAdapter {
   }
 
   private extractGraphErrorMessage(body: unknown, fallback: string): string {
-    if (!body || typeof body !== 'object') return fallback;
+    if (!body || typeof body !== 'object') {
+      return fallback;
+    }
     const error = (body as { error?: Record<string, unknown> }).error;
-    if (!error || typeof error !== 'object') return fallback;
+    if (!error || typeof error !== 'object') {
+      return fallback;
+    }
     const userMsg = error.error_user_msg;
     const msg = error.message;
-    if (typeof userMsg === 'string' && userMsg.trim()) return userMsg.trim();
-    if (typeof msg === 'string' && msg.trim()) return msg.trim();
+    if (typeof userMsg === 'string' && userMsg.trim()) {
+      return userMsg.trim();
+    }
+    if (typeof msg === 'string' && msg.trim()) {
+      return msg.trim();
+    }
     return fallback;
   }
 

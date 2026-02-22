@@ -1,4 +1,4 @@
-import { type DragEvent } from 'react';
+import type { DragEvent } from 'react';
 import { GripVertical, Video as VideoIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
@@ -44,12 +44,16 @@ export function MediaCard({
   className,
 }: MediaCardProps) {
   const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
-    if (!draggable || isUploading || !onDragStart) return;
+    if (!draggable || isUploading || !onDragStart) {
+      return;
+    }
     onDragStart(event);
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!onDragOver) return;
+    if (!onDragOver) {
+      return;
+    }
     onDragOver(event);
   };
 

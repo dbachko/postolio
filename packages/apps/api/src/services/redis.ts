@@ -1,5 +1,4 @@
-import { Redis } from 'ioredis';
-import type { RedisOptions } from 'ioredis';
+import { Redis, type RedisOptions } from 'ioredis';
 import { logger as baseLogger } from '@postolio/logger';
 import { getRedisUrl } from '../utils/redis-url.js';
 

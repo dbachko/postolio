@@ -27,7 +27,9 @@ describe('computeDerivedProjection', () => {
 // Idempotency decision is enforced via SQL WHERE clause. As a unit we assert that
 // we only accept newer versions conceptually (this documents expectation for reviewers).
 function shouldUpsert(current: number | null, incoming: number) {
-  if (current == null) return true;
+  if (current == null) {
+    return true;
+  }
   return incoming > current;
 }
 

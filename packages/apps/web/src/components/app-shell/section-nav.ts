@@ -87,7 +87,9 @@ const settingsSectionItems: SectionNavItem[] = [
 ];
 
 export function getSectionNavItems(section: NavigationItem | null): SectionNavItem[] {
-  if (!section) return [];
+  if (!section) {
+    return [];
+  }
 
   if (section.path === '/inbox') {
     return inboxSectionItems;

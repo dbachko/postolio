@@ -170,7 +170,9 @@ async function cleanupOrphanedEventBridgeRules(
 
     // Check each EventBridge schedule against DynamoDB
     for (const schedule of listResult.Schedules) {
-      if (!schedule.Name) continue;
+      if (!schedule.Name) {
+        continue;
+      }
 
       // Extract schedule ID from the name (format: schedule-SCH_xxx)
       const scheduleId = schedule.Name.replace('schedule-', '');

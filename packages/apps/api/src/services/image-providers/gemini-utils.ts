@@ -1,10 +1,16 @@
 type InlineDataPart = { inlineData: { data: string } };
 
 function isInlineDataPart(value: unknown): value is InlineDataPart {
-  if (!value || typeof value !== 'object') return false;
-  if (!('inlineData' in value)) return false;
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (!('inlineData' in value)) {
+    return false;
+  }
   const inlineData = (value as { inlineData?: unknown }).inlineData;
-  if (!inlineData || typeof inlineData !== 'object') return false;
+  if (!inlineData || typeof inlineData !== 'object') {
+    return false;
+  }
   return typeof (inlineData as { data?: unknown }).data === 'string';
 }
 
@@ -23,7 +29,9 @@ type GeminiResponseLike = {
 export function extractInlineImageBuffer(response: unknown): Buffer | null {
   const candidates = (response as GeminiResponseLike | null | undefined)?.candidates;
   const parts = candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return null;
+  if (!Array.isArray(parts)) {
+    return null;
+  }
 
   for (const part of parts) {
     if (isInlineDataPart(part)) {

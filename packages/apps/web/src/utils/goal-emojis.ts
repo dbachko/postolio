@@ -40,9 +40,13 @@ const MATCHERS: Matcher[] = [
 ];
 
 export function goalEmoji(goal: string | undefined | null): string {
-  if (!goal) return '🎯';
+  if (!goal) {
+    return '🎯';
+  }
   for (const m of MATCHERS) {
-    if (m.pattern.test(goal)) return m.emoji;
+    if (m.pattern.test(goal)) {
+      return m.emoji;
+    }
   }
   return '🎯';
 }

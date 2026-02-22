@@ -80,7 +80,9 @@ export function RulesList({ brandId }: RulesListProps) {
   const rules = data?.rules || [];
   const filteredRules = useMemo(() => {
     return rules.filter((rule) => {
-      if (statusFilter !== 'all' && rule.status !== statusFilter) return false;
+      if (statusFilter !== 'all' && rule.status !== statusFilter) {
+        return false;
+      }
 
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -93,14 +95,18 @@ export function RulesList({ brandId }: RulesListProps) {
           .join(' ')
           .toLowerCase();
 
-        if (!searchableText.includes(query)) return false;
+        if (!searchableText.includes(query)) {
+          return false;
+        }
       }
 
       return true;
     });
   }, [rules, searchQuery, statusFilter]);
 
-  if (isLoading) return <RulesListLoading />;
+  if (isLoading) {
+    return <RulesListLoading />;
+  }
 
   return (
     <>

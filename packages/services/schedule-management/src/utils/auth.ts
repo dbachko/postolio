@@ -3,7 +3,7 @@
  * Verifies JWT tokens and extracts user information
  */
 
-import { APIGatewayProxyEvent, APIGatewayProxyEventV2 } from 'aws-lambda';
+import type { APIGatewayProxyEvent, APIGatewayProxyEventV2 } from 'aws-lambda';
 import * as jwt from 'jsonwebtoken';
 import { Logger } from '@aws-lambda-powertools/logger';
 
@@ -17,7 +17,7 @@ export interface AuthenticatedUser {
 export class AuthenticationError extends Error {
   constructor(
     message: string,
-    public readonly statusCode: number = 401
+    public readonly statusCode = 401
   ) {
     super(message);
     this.name = 'AuthenticationError';

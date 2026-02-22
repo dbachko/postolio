@@ -1,5 +1,7 @@
 export function isTouchDevice(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') {
+    return false;
+  }
 
   const nav = navigator as Navigator & { maxTouchPoints?: number };
 

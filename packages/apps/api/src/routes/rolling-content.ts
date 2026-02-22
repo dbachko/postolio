@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { rollingContentService } from '../services/rolling-content.js';
 import { getDatabaseClient } from '../config/database.js';
 import { assertBrandOwnership } from '../services/ownership.js';
@@ -14,7 +14,7 @@ function ensureAuth(
   request: FastifyRequest,
   reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string } } {
-  if (!request.user || !request.user.id) {
+  if (!request.user?.id) {
     reply.code(401).send({ success: false, error: 'Authentication required' });
     return false;
   }
@@ -41,7 +41,9 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { brandId } = request.params as BrandParams;
 
         // Verify brand ownership
@@ -95,7 +97,9 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { brandId } = request.params as BrandParams;
 
         // Verify brand ownership
@@ -147,7 +151,9 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { brandId } = request.params as BrandParams;
 
         // Verify brand ownership
@@ -190,7 +196,9 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/overview', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const userId = request.user.id;
 
       // Get all user's brands with Instagram integration

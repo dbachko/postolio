@@ -78,7 +78,9 @@ function FullCalendarImpl({
     const connectedAccounts = rawSocialAccounts.filter(
       (account) => account?.disconnected !== true && typeof account?.id === 'string'
     );
-    if (!connectedAccounts.length) return null;
+    if (!connectedAccounts.length) {
+      return null;
+    }
 
     const rawPrimary = (socialAccountsQuery.data as any)?.primarySocialAccountId;
     const primaryId = typeof rawPrimary === 'string' ? rawPrimary : null;
@@ -96,7 +98,9 @@ function FullCalendarImpl({
       return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
     }
 
-    if (!multiDestinationEnabled) return fallbackSingleDestinationId;
+    if (!multiDestinationEnabled) {
+      return fallbackSingleDestinationId;
+    }
     return null;
   }, [fallbackSingleDestinationId, multiDestinationEnabled, targetSocialAccountIds]);
 
@@ -125,7 +129,9 @@ function FullCalendarImpl({
   }, []);
 
   const mergedPlaceholders = useMemo(() => {
-    if (!effectiveSingleDestinationId) return placeholders;
+    if (!effectiveSingleDestinationId) {
+      return placeholders;
+    }
     return [...placeholders, ...queueSlotPlaceholders];
   }, [effectiveSingleDestinationId, placeholders, queueSlotPlaceholders]);
 
@@ -137,7 +143,9 @@ function FullCalendarImpl({
   }, [optimisticByContentId]);
 
   const mergedContent = useMemo(() => {
-    if (!effectiveSingleDestinationId) return [...optimisticOverrides, ...content];
+    if (!effectiveSingleDestinationId) {
+      return [...optimisticOverrides, ...content];
+    }
     return [...optimisticOverrides, ...content, ...queueEstimatedContent];
   }, [content, effectiveSingleDestinationId, optimisticOverrides, queueEstimatedContent]);
 
@@ -157,7 +165,9 @@ function FullCalendarImpl({
             ? firstMedia
             : null
       ) as string | null;
-      if (candidate) ids.add(candidate);
+      if (candidate) {
+        ids.add(candidate);
+      }
     }
     return Array.from(ids);
   }, [mergedContent]);
@@ -170,7 +180,9 @@ function FullCalendarImpl({
       const id = typeof account?.id === 'string' ? account.id : null;
       const platform =
         typeof account?.platform === 'string' ? (account.platform as Platform) : null;
-      if (!id || !platform) continue;
+      if (!id || !platform) {
+        continue;
+      }
       const username = typeof account?.username === 'string' ? account.username : null;
       const displayName = typeof account?.displayName === 'string' ? account.displayName : null;
       const label = formatSocialAccountLabel({ platform, username, displayName });

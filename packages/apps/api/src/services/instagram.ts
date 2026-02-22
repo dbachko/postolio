@@ -153,7 +153,9 @@ class InstagramService {
       select: { id: true, metadata: true },
     });
 
-    if (!account) return false;
+    if (!account) {
+      return false;
+    }
 
     const metadata = (account.metadata || {}) as Record<string, unknown>;
     if (metadata && typeof metadata === 'object' && (metadata as any).disconnected) {
@@ -166,7 +168,7 @@ class InstagramService {
   private async getCredentialsOrThrow(brandOrId: BrandData | string) {
     const brandId = typeof brandOrId === 'string' ? brandOrId : brandOrId.id;
     const credentials = await PublisherCredentialsService.getCredentialsForBrand(brandId);
-    if (!credentials || !credentials.accessToken || !credentials.accountId) {
+    if (!credentials?.accessToken || !credentials.accountId) {
       throw new Error('Failed to get Instagram credentials');
     }
     return credentials;
@@ -175,7 +177,7 @@ class InstagramService {
   private async getCredentialsOrThrowForSocialAccount(socialAccountId: string) {
     const credentials =
       await PublisherCredentialsService.getCredentialsForSocialAccount(socialAccountId);
-    if (!credentials || !credentials.accessToken || !credentials.accountId) {
+    if (!credentials?.accessToken || !credentials.accountId) {
       throw new Error('Failed to get Instagram credentials');
     }
     return credentials;
@@ -193,8 +195,12 @@ class InstagramService {
       try {
         const res = await axios.get(fbGraph(p));
         const data = (res.data as any)?.data ?? null;
-        if (Array.isArray(data)) return res.data as T;
-        if ((res.data as any)?.id || (res.data as any)?.messages) return res.data as T;
+        if (Array.isArray(data)) {
+          return res.data as T;
+        }
+        if ((res.data as any)?.id || (res.data as any)?.messages) {
+          return res.data as T;
+        }
       } catch (error) {
         lastError = error;
         // ignore and try next
@@ -224,14 +230,17 @@ class InstagramService {
     threads: Array<{ id: string; updated_time?: string; participants?: any[] }>;
     paging?: any;
   }> {
-    if (!(await this.isConfigured(brand)))
+    if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
+    }
     const limit = opts.limit ?? 25;
     const credentials = await this.getCredentialsOrThrow(brand);
     await this.checkRateLimit(String(credentials.accountId));
 
     const qs = [`limit=${limit}`, `access_token=${credentials.accessToken}`];
-    if (opts.after) qs.push(`after=${encodeURIComponent(opts.after)}`);
+    if (opts.after) {
+      qs.push(`after=${encodeURIComponent(opts.after)}`);
+    }
 
     const paths = [
       `${credentials.accountId}/conversations?${qs.join('&')}`,
@@ -239,11 +248,13 @@ class InstagramService {
     ].filter(Boolean) as string[];
 
     const res = await this.tryGraphGet<{ data: any[]; paging?: any }>(paths);
-    if (!res) return { supported: false, threads: [] };
+    if (!res) {
+      return { supported: false, threads: [] };
+    }
     const threads = (res.data || []).map((c: any) => ({
       id: String(c.id || ''),
       updated_time: c.updated_time,
-      participants: (c.participants && c.participants.data) || c.participants || [],
+      participants: c.participants?.data || c.participants || [],
     }));
     return { supported: true, threads, paging: res.paging };
   }
@@ -261,7 +272,9 @@ class InstagramService {
     await this.checkRateLimit(String(credentials.accountId));
 
     const qs = [`limit=${limit}`, `access_token=${credentials.accessToken}`];
-    if (opts.after) qs.push(`after=${encodeURIComponent(opts.after)}`);
+    if (opts.after) {
+      qs.push(`after=${encodeURIComponent(opts.after)}`);
+    }
 
     const paths = [
       `${credentials.accountId}/conversations?${qs.join('&')}`,
@@ -269,11 +282,13 @@ class InstagramService {
     ].filter(Boolean) as string[];
 
     const res = await this.tryGraphGet<{ data: any[]; paging?: any }>(paths);
-    if (!res) return { supported: false, threads: [] };
+    if (!res) {
+      return { supported: false, threads: [] };
+    }
     const threads = (res.data || []).map((c: any) => ({
       id: String(c.id || ''),
       updated_time: c.updated_time,
-      participants: (c.participants && c.participants.data) || c.participants || [],
+      participants: c.participants?.data || c.participants || [],
     }));
     return { supported: true, threads, paging: res.paging };
   }
@@ -287,8 +302,9 @@ class InstagramService {
     messages: Array<{ id: string; message?: string; from?: any; created_time?: string }>;
     paging?: any;
   }> {
-    if (!(await this.isConfigured(brand)))
+    if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
+    }
     const limit = opts.limit ?? 50;
     const credentials = await this.getCredentialsOrThrow(brand);
     await this.checkRateLimit(String(credentials.accountId));
@@ -298,14 +314,18 @@ class InstagramService {
       `access_token=${credentials.accessToken}`,
       `fields=from,to,message,created_time,id`,
     ];
-    if (opts.before) qs.push(`before=${encodeURIComponent(opts.before)}`);
+    if (opts.before) {
+      qs.push(`before=${encodeURIComponent(opts.before)}`);
+    }
     const res = await this.tryGraphGet<{ data: any[]; paging?: any }>([
       `${threadId}/messages?${qs.join('&')}`,
       `${threadId}?fields=messages{from,to,message,created_time,id}&${qs
         .filter((q) => !q.startsWith('fields='))
         .join('&')}`,
     ]);
-    if (!res) return { supported: false, messages: [] };
+    if (!res) {
+      return { supported: false, messages: [] };
+    }
     const rows = (res as any).data ? (res as any).data : (res as any).messages?.data || [];
     const messages = rows.map((m: any) => ({
       id: String(m.id || ''),
@@ -334,7 +354,9 @@ class InstagramService {
       `access_token=${credentials.accessToken}`,
       `fields=from,to,message,created_time,id`,
     ];
-    if (opts.before) qs.push(`before=${encodeURIComponent(opts.before)}`);
+    if (opts.before) {
+      qs.push(`before=${encodeURIComponent(opts.before)}`);
+    }
 
     const res = await this.tryGraphGet<{ data: any[]; paging?: any }>([
       `${threadId}/messages?${qs.join('&')}`,
@@ -342,7 +364,9 @@ class InstagramService {
         .filter((q) => !q.startsWith('fields='))
         .join('&')}`,
     ]);
-    if (!res) return { supported: false, messages: [] };
+    if (!res) {
+      return { supported: false, messages: [] };
+    }
 
     const rows = (res as any).data ? (res as any).data : (res as any).messages?.data || [];
     const messages = rows.map((m: any) => ({
@@ -362,7 +386,9 @@ class InstagramService {
     const lastInbound = messages.find(
       (m) => m.created_time && (!m.from || !selfIds.includes(String(m.from.id || '')))
     );
-    if (!lastInbound?.created_time) return true; // If unknown, allow
+    if (!lastInbound?.created_time) {
+      return true;
+    } // If unknown, allow
     const ts = new Date(lastInbound.created_time).getTime();
     return Date.now() - ts <= 24 * 60 * 60 * 1000;
   }
@@ -372,15 +398,20 @@ class InstagramService {
     threadId: string,
     text: string
   ): Promise<{ supported: boolean; success: boolean; errorCode?: string; message?: string }> {
-    if (!(await this.isConfigured(brand)))
+    if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
-    if (!text || !text.trim()) throw new Error('Message must not be empty');
+    }
+    if (!text?.trim()) {
+      throw new Error('Message must not be empty');
+    }
     const credentials = await this.getCredentialsOrThrow(brand);
     await this.checkRateLimit(String(credentials.accountId));
 
     // Enforce 24h window: fetch a few recent messages
     const recent = await this.getDmThreadMessages(brand, threadId, { limit: 20 });
-    if (!recent.supported) return { supported: false, success: false };
+    if (!recent.supported) {
+      return { supported: false, success: false };
+    }
     const selfIds = [credentials.accountId, credentials.pageId].filter(Boolean).map(String);
     const inWindow = this.isWithin24hWindow(recent.messages, selfIds as string[]);
     if (!inWindow) {
@@ -429,8 +460,12 @@ class InstagramService {
     if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
     }
-    if (!message || !message.trim()) throw new Error('Message must not be empty');
-    if (!recipientId) throw new Error('Recipient ID is required');
+    if (!message?.trim()) {
+      throw new Error('Message must not be empty');
+    }
+    if (!recipientId) {
+      throw new Error('Recipient ID is required');
+    }
 
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
@@ -492,8 +527,12 @@ class InstagramService {
     recipientId: string,
     message: string
   ): Promise<{ messageId: string }> {
-    if (!message || !message.trim()) throw new Error('Message must not be empty');
-    if (!recipientId) throw new Error('Recipient ID is required');
+    if (!message?.trim()) {
+      throw new Error('Message must not be empty');
+    }
+    if (!recipientId) {
+      throw new Error('Recipient ID is required');
+    }
 
     try {
       const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
@@ -564,8 +603,12 @@ class InstagramService {
     if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
     }
-    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
-    if (!commentId) throw new Error('Comment ID is required');
+    if (!message?.trim()) {
+      throw new Error('Reply message must not be empty');
+    }
+    if (!commentId) {
+      throw new Error('Comment ID is required');
+    }
 
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
@@ -605,8 +648,12 @@ class InstagramService {
     commentId: string,
     message: string
   ): Promise<{ commentId: string }> {
-    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
-    if (!commentId) throw new Error('Comment ID is required');
+    if (!message?.trim()) {
+      throw new Error('Reply message must not be empty');
+    }
+    if (!commentId) {
+      throw new Error('Comment ID is required');
+    }
 
     try {
       const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
@@ -654,7 +701,9 @@ class InstagramService {
     if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
     }
-    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+    if (!message?.trim()) {
+      throw new Error('Reply message must not be empty');
+    }
 
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
@@ -668,7 +717,9 @@ class InstagramService {
       } as const;
       const res = await axios.post(url, payload);
       const id = String((res.data as any)?.id || '');
-      if (!id) throw new Error('Instagram did not return a comment id');
+      if (!id) {
+        throw new Error('Instagram did not return a comment id');
+      }
       return { id };
     } catch (error) {
       instagramLogger.error('Failed to reply to comment', formatError(error));
@@ -684,7 +735,9 @@ class InstagramService {
     commentId: string,
     message: string
   ): Promise<{ id: string }> {
-    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+    if (!message?.trim()) {
+      throw new Error('Reply message must not be empty');
+    }
 
     try {
       const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
@@ -698,7 +751,9 @@ class InstagramService {
       } as const;
       const res = await axios.post(url, payload);
       const id = String((res.data as any)?.id || '');
-      if (!id) throw new Error('Instagram did not return a comment id');
+      if (!id) {
+        throw new Error('Instagram did not return a comment id');
+      }
       return { id };
     } catch (error) {
       instagramLogger.error('Failed to reply to comment', formatError(error));
@@ -714,8 +769,9 @@ class InstagramService {
     commentId: string,
     hide: boolean
   ): Promise<{ success: boolean }> {
-    if (!(await this.isConfigured(brand)))
+    if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
+    }
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
       await this.checkRateLimit(String(credentials.accountId));
@@ -739,8 +795,9 @@ class InstagramService {
 
   /** Delete a comment */
   async deleteComment(brand: BrandData | string, commentId: string): Promise<{ success: boolean }> {
-    if (!(await this.isConfigured(brand)))
+    if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
+    }
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
       await this.checkRateLimit(String(credentials.accountId));
@@ -762,8 +819,9 @@ class InstagramService {
    * endpoint and surface an explicit error if unsupported.
    */
   async likeComment(brand: BrandData | string, commentId: string): Promise<{ success: boolean }> {
-    if (!(await this.isConfigured(brand)))
+    if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
+    }
     try {
       const credentials = await this.getCredentialsOrThrow(brand);
       await this.checkRateLimit(String(credentials.accountId));
@@ -832,29 +890,28 @@ class InstagramService {
     if (redisService.isConnected()) {
       const count = await redisService.increment(key, 3600);
       return count ? count <= 200 : true;
-    } else {
-      // Fallback to in-memory rate limiting
-      const now = Date.now();
-      const windowStart = Math.floor(now / (60 * 60 * 1000)) * (60 * 60 * 1000);
-      const windowKey = `${identifier}_${windowStart}`;
-
-      const currentCount = this.rateLimitWindow.get(windowKey) || 0;
-      if (currentCount >= 200) {
-        return false;
-      }
-
-      this.rateLimitWindow.set(windowKey, currentCount + 1);
-
-      // Clean up old windows
-      for (const [key] of this.rateLimitWindow) {
-        const keyTime = parseInt(key.split('_')[1] || '0');
-        if (keyTime < windowStart - 60 * 60 * 1000) {
-          this.rateLimitWindow.delete(key);
-        }
-      }
-
-      return true;
     }
+    // Fallback to in-memory rate limiting
+    const now = Date.now();
+    const windowStart = Math.floor(now / (60 * 60 * 1000)) * (60 * 60 * 1000);
+    const windowKey = `${identifier}_${windowStart}`;
+
+    const currentCount = this.rateLimitWindow.get(windowKey) || 0;
+    if (currentCount >= 200) {
+      return false;
+    }
+
+    this.rateLimitWindow.set(windowKey, currentCount + 1);
+
+    // Clean up old windows
+    for (const [key] of this.rateLimitWindow) {
+      const keyTime = parseInt(key.split('_')[1] || '0');
+      if (keyTime < windowStart - 60 * 60 * 1000) {
+        this.rateLimitWindow.delete(key);
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -949,7 +1006,7 @@ class InstagramService {
   /**
    * Get recent posts from Instagram account
    */
-  async getRecentPosts(brand: BrandData | string, limit: number = 25): Promise<InstagramPost[]> {
+  async getRecentPosts(brand: BrandData | string, limit = 25): Promise<InstagramPost[]> {
     if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
     }
@@ -1022,7 +1079,7 @@ class InstagramService {
 
       const containerData = {
         image_url: request.cdnImageUrl,
-        caption: caption,
+        caption,
         access_token: credentials.accessToken,
       };
 
@@ -1102,7 +1159,9 @@ class InstagramService {
       select: { metadata: true },
     });
 
-    if (!account) return { status: 'not_connected' };
+    if (!account) {
+      return { status: 'not_connected' };
+    }
 
     const accountMetadata = (account.metadata || {}) as Record<string, unknown>;
     if (
@@ -1157,7 +1216,9 @@ class InstagramService {
         demographics.cities.length > 0 ||
         demographics.locales.length > 0;
 
-      if (hasAny) return { status: 'available', demographics };
+      if (hasAny) {
+        return { status: 'available', demographics };
+      }
     }
 
     try {
@@ -1190,10 +1251,10 @@ class InstagramService {
       const timeframe = 'this_month';
 
       const parseDemographicBreakdown = (
-        rows: Array<any>,
+        rows: any[],
         breakdownDimension: 'age' | 'gender' | 'country' | 'city'
       ): Record<string, number> => {
-        const row = rows.find((r) => r && r.name === demographicsMetric) || rows[0];
+        const row = rows.find((r) => r?.name === demographicsMetric) || rows[0];
 
         const breakdowns = row?.total_value?.breakdowns;
         if (Array.isArray(breakdowns)) {
@@ -1203,9 +1264,11 @@ class InstagramService {
               ? breakdown.dimension_keys.map((k: unknown) => String(k))
               : [];
             const idx = keys.indexOf(breakdownDimension);
-            if (idx < 0) continue;
+            if (idx < 0) {
+              continue;
+            }
 
-            const results: Array<any> = Array.isArray(breakdown?.results) ? breakdown.results : [];
+            const results: any[] = Array.isArray(breakdown?.results) ? breakdown.results : [];
             for (const result of results) {
               const dimensionValues: unknown[] = Array.isArray(result?.dimension_values)
                 ? result.dimension_values
@@ -1214,7 +1277,9 @@ class InstagramService {
               const key =
                 typeof dimensionValue === 'string' ? dimensionValue : String(dimensionValue ?? '');
               const valueNum = Number(result?.value);
-              if (!key || !isFinite(valueNum) || isNaN(valueNum) || valueNum <= 0) continue;
+              if (!key || !isFinite(valueNum) || isNaN(valueNum) || valueNum <= 0) {
+                continue;
+              }
               map[key] = (map[key] || 0) + valueNum;
             }
           }
@@ -1226,7 +1291,9 @@ class InstagramService {
           const map: Record<string, number> = {};
           for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
             const num = Number(value);
-            if (!key || !isFinite(num) || isNaN(num) || num <= 0) continue;
+            if (!key || !isFinite(num) || isNaN(num) || num <= 0) {
+              continue;
+            }
             map[String(key)] = (map[String(key)] || 0) + num;
           }
           return map;
@@ -1252,7 +1319,7 @@ class InstagramService {
         const tryRequest = async (breakdownKey: 'breakdowns' | 'breakdown') => {
           await this.checkRateLimit(String(credentials.accountId));
           const response = await axios.get(buildUrl(breakdownKey));
-          const rows: Array<any> = Array.isArray(response.data?.data) ? response.data.data : [];
+          const rows: any[] = Array.isArray(response.data?.data) ? response.data.data : [];
           return parseDemographicBreakdown(rows, breakdownDimension);
         };
 
@@ -1268,7 +1335,9 @@ class InstagramService {
           const shouldRetryWithSingular =
             /breakdowns|breakdown/i.test(String(message)) ||
             (fbError?.code === 100 && /breakdown/i.test(String(message)));
-          if (!shouldRetryWithSingular) throw error;
+          if (!shouldRetryWithSingular) {
+            throw error;
+          }
           return await tryRequest('breakdown');
         }
       };
@@ -1314,7 +1383,9 @@ class InstagramService {
       for (const [range, value] of Object.entries(ageMap)) {
         const cleaned = String(range || '').trim();
         const num = Number(value);
-        if (!cleaned || !isFinite(num) || isNaN(num) || num <= 0) continue;
+        if (!cleaned || !isFinite(num) || isNaN(num) || num <= 0) {
+          continue;
+        }
         ageTotals.set(cleaned, (ageTotals.get(cleaned) || 0) + num);
       }
 
@@ -1408,7 +1479,7 @@ class InstagramService {
   async getPostComments(
     brand: BrandData | string,
     mediaId: string,
-    limit: number = 25
+    limit = 25
   ): Promise<{ data: InstagramComment[]; total: number }> {
     if (!(await this.isConfigured(brand))) {
       throw new Error('Instagram not connected for this brand');
@@ -1457,7 +1528,7 @@ class InstagramService {
   async getPostCommentsForSocialAccount(
     socialAccountId: string,
     mediaId: string,
-    limit: number = 25
+    limit = 25
   ): Promise<{ data: InstagramComment[]; total: number }> {
     try {
       const credentials = await this.getCredentialsOrThrowForSocialAccount(socialAccountId);
@@ -1552,7 +1623,9 @@ class InstagramService {
       }
     } catch (e) {
       // If Redis not available, continue without a lock
-      if ((e as Error).message === 'Sync already in progress') throw e;
+      if ((e as Error).message === 'Sync already in progress') {
+        throw e;
+      }
     }
 
     // Check rate limit
@@ -1590,7 +1663,9 @@ class InstagramService {
 
         // Filter by date threshold
         const recentPosts = batch.data.filter((post) => {
-          if (!post.timestamp) return true;
+          if (!post.timestamp) {
+            return true;
+          }
           return new Date(post.timestamp) >= dateThreshold;
         });
 
@@ -1699,7 +1774,7 @@ class InstagramService {
    */
   async getRecentPostsPaginated(
     brand: BrandData | string,
-    limit: number = 25,
+    limit = 25,
     cursor?: string | null
   ): Promise<{
     data: InstagramPost[];
@@ -1741,7 +1816,7 @@ class InstagramService {
 
       return {
         id: media.id,
-        caption: caption,
+        caption,
         media_type: media.media_type || 'IMAGE',
         media_url: media.media_url || '',
         permalink: media.permalink || '',
@@ -1782,7 +1857,9 @@ class InstagramService {
         },
         select: { id: true },
       });
-      if (duplicatePub) throw new Error('Post already exists');
+      if (duplicatePub) {
+        throw new Error('Post already exists');
+      }
     }
 
     // Helper: attempt to find an existing draft/scheduled item that likely represents this IG post
@@ -1814,7 +1891,9 @@ class InstagramService {
         take: 25,
       });
 
-      if (!candidates.length) return null;
+      if (!candidates.length) {
+        return null;
+      }
 
       // Rank candidates: 1) closest scheduledAt to postedAt 2) exact caption match after normalization
       const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();

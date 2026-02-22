@@ -128,7 +128,7 @@ export class DeletionQueueService {
     });
   }
 
-  async scheduleDeletion(data: DeletionJob, delay: number = 0): Promise<Bull.Job<DeletionJob>> {
+  async scheduleDeletion(data: DeletionJob, delay = 0): Promise<Bull.Job<DeletionJob>> {
     const jobOptions: Bull.JobOptions = {
       delay: delay > 0 ? delay : 0,
       priority: 1, // Low priority

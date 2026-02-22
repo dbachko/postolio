@@ -179,8 +179,12 @@ export async function updateBrand(
     countryCode?: string | null;
   }
   const updateData: BrandUpdateData = {};
-  if (name !== undefined) updateData.name = name.trim();
-  if (description !== undefined) updateData.description = description?.trim() || null;
+  if (name !== undefined) {
+    updateData.name = name.trim();
+  }
+  if (description !== undefined) {
+    updateData.description = description?.trim() || null;
+  }
   if (countryCode !== undefined) {
     updateData.countryCode = countryCode ? countryCode.toUpperCase() : null;
   }

@@ -60,12 +60,22 @@ export function ActivityHeatmap({ heatmap, bestTimes, loading }: ActivityHeatmap
 
   // Get color intensity based on value
   const getColor = (value: number) => {
-    if (value === 0) return 'bg-muted';
+    if (value === 0) {
+      return 'bg-muted';
+    }
     const intensity = Math.min(1, value / maxValue);
-    if (intensity > 0.8) return 'bg-green-500 dark:bg-green-600';
-    if (intensity > 0.6) return 'bg-green-400 dark:bg-green-700';
-    if (intensity > 0.4) return 'bg-green-300 dark:bg-green-800';
-    if (intensity > 0.2) return 'bg-green-200 dark:bg-green-900';
+    if (intensity > 0.8) {
+      return 'bg-green-500 dark:bg-green-600';
+    }
+    if (intensity > 0.6) {
+      return 'bg-green-400 dark:bg-green-700';
+    }
+    if (intensity > 0.4) {
+      return 'bg-green-300 dark:bg-green-800';
+    }
+    if (intensity > 0.2) {
+      return 'bg-green-200 dark:bg-green-900';
+    }
     return 'bg-green-100 dark:bg-green-950';
   };
 

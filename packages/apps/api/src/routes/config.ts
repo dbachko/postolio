@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 export default async function configRoutes(fastify: FastifyInstance) {
   // Get WebSocket configuration for frontend

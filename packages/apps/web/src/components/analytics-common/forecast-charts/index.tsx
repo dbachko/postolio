@@ -30,7 +30,7 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
   const [selectedMetric, setSelectedMetric] = useState<MetricType>('engagement');
 
   // Keep header + selector visible even when loading or no data
-  const fc = forecasts && forecasts[selectedMetric];
+  const fc = forecasts?.[selectedMetric];
   const hasData = Boolean(fc && fc.predicted?.length);
 
   if (loading) {
@@ -164,9 +164,15 @@ export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastCh
                     ? formatForecastValue(numericValue, selectedMetric)
                     : String(value);
 
-                  if (label === 'Predicted') return [formattedValue, label];
-                  if (label === 'Lower Bound') return [formattedValue, label];
-                  if (label === 'Upper Bound') return [formattedValue, label];
+                  if (label === 'Predicted') {
+                    return [formattedValue, label];
+                  }
+                  if (label === 'Lower Bound') {
+                    return [formattedValue, label];
+                  }
+                  if (label === 'Upper Bound') {
+                    return [formattedValue, label];
+                  }
                   return [value as any, label];
                 }}
               />

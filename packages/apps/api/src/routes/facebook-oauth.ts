@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -232,7 +232,9 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       try {
         const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body;
         const userId = request.user.id;
@@ -310,7 +312,9 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       try {
         const userId = request.user.id;
 

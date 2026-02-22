@@ -5,7 +5,7 @@
  * Ensures consistent response format across all endpoints
  */
 
-import { APIGatewayProxyResult } from 'aws-lambda';
+import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**
  * Create a successful HTTP response

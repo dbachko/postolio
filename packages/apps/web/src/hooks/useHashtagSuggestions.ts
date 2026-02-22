@@ -22,7 +22,9 @@ export function useHashtagSuggestions(brandId: string | undefined) {
   return useQuery({
     queryKey: ['hashtag-suggestions', brandId],
     queryFn: async () => {
-      if (!brandId) return [];
+      if (!brandId) {
+        return [];
+      }
 
       const response = (await analytics.getBrandHashtags(brandId)) as HashtagAnalyticsResponse;
 

@@ -12,9 +12,13 @@ const DEFAULT_RECOVERY_MINUTES = 30 * 24 * 60; // 30 days
 
 function parseRecoveryMinutesFromEnv(): number | null {
   const raw = process.env.DATA_DELETION_RECOVERY_MINUTES;
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const num = Number(raw);
-  if (!Number.isFinite(num) || num <= 0) return null;
+  if (!Number.isFinite(num) || num <= 0) {
+    return null;
+  }
   return num;
 }
 

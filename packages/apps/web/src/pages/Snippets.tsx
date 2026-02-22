@@ -273,7 +273,9 @@ export default function SnippetsPage() {
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) setEditingSnippet(null);
+          if (!open) {
+            setEditingSnippet(null);
+          }
         }}
         brandId={selectedBrand.id}
         snippet={editingSnippet}

@@ -19,7 +19,7 @@ export function initSentry(config: SentryInitConfig): void {
   if (sentryInitialized) {
     // Multiple initializations are ignored to avoid duplicate clients.
     // Log a warning to make this behavior explicit during development.
-    // eslint-disable-next-line no-console
+
     console.warn(
       '[observability] Sentry has already been initialized. Subsequent calls to initSentry are ignored.'
     );

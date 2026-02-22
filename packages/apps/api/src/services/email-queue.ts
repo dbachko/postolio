@@ -327,7 +327,7 @@ export class EmailQueueService {
   /**
    * Get failed jobs for debugging
    */
-  async getFailedJobs(limit: number = 10): Promise<Bull.Job[]> {
+  async getFailedJobs(limit = 10): Promise<Bull.Job[]> {
     return this.emailQueue.getFailed(0, limit - 1);
   }
 

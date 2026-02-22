@@ -1,4 +1,4 @@
-import fastify, { FastifyInstance } from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
 import { getDatabaseClient } from '../config/database.js';
 

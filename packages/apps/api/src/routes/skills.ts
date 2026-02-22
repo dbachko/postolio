@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { validateBody, validateQuery, validateParams } from '../middleware/validation.js';
@@ -92,7 +92,9 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       await ensureDefaultSkillInstallations(brandId, userId);
 
       const skill = await getSkill(brandId, skillId);
-      if (!skill) return reply.code(404).send({ error: 'Skill not found' });
+      if (!skill) {
+        return reply.code(404).send({ error: 'Skill not found' });
+      }
 
       return reply.send({ skill });
     }
@@ -156,7 +158,9 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: installationId },
         select: { id: true, brandId: true },
       });
-      if (!installation) return reply.code(404).send({ error: 'Skill installation not found' });
+      if (!installation) {
+        return reply.code(404).send({ error: 'Skill installation not found' });
+      }
 
       await assertBrandOwnership(userId, installation.brandId);
 
@@ -201,7 +205,9 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: installationId },
         select: { id: true, brandId: true },
       });
-      if (!installation) return reply.code(404).send({ error: 'Skill installation not found' });
+      if (!installation) {
+        return reply.code(404).send({ error: 'Skill installation not found' });
+      }
 
       await assertBrandOwnership(userId, installation.brandId);
       const res = await uninstallSkillByInstallationId({ installationId });

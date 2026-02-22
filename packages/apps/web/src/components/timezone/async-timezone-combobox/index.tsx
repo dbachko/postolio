@@ -13,7 +13,9 @@ const LazyTimezoneCombobox = lazy(async () => {
 type Props = TimezoneComboboxProps;
 
 function formatTimezoneLabel(timezone: string): string {
-  if (timezone === 'UTC') return 'UTC';
+  if (timezone === 'UTC') {
+    return 'UTC';
+  }
   const parts = timezone.split('/');
   const lastPart = parts[parts.length - 1] || timezone;
   return lastPart.replace(/_/g, ' ');

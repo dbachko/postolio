@@ -6,7 +6,9 @@ export function simplePostTokenizer(texts: string[]): string[] {
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
       .filter(Boolean)) {
-      if (w.length >= 3) tokens.add(w);
+      if (w.length >= 3) {
+        tokens.add(w);
+      }
     }
   }
   return Array.from(tokens).slice(0, 200);

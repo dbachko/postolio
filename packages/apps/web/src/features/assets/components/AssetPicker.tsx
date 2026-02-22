@@ -93,10 +93,14 @@ export default function AssetPicker({
   const selectedAssets = useMemo(() => Array.from(selected.values()), [selected]);
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
+    if (typeof document === 'undefined') {
+      return;
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape') {
+        return;
+      }
       event.stopPropagation();
       event.preventDefault();
       onClose();
@@ -110,7 +114,9 @@ export default function AssetPicker({
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasNextPage) return;
+    if (!sentinel || !hasNextPage) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -128,7 +134,9 @@ export default function AssetPicker({
 
   const handleConfirm = (assetsOverride?: AssetType[]) => {
     const assetsToSend = assetsOverride ?? selectedAssets;
-    if (assetsToSend.length === 0) return;
+    if (assetsToSend.length === 0) {
+      return;
+    }
     if (onSelectMany) {
       onSelectMany(assetsToSend);
     } else if (onSelect) {
@@ -141,8 +149,11 @@ export default function AssetPicker({
   const handleSelectAsset = (asset: AssetType) => {
     setSelected((prev) => {
       const next = new Map(prev);
-      if (next.has(asset.id)) next.delete(asset.id);
-      else next.set(asset.id, asset);
+      if (next.has(asset.id)) {
+        next.delete(asset.id);
+      } else {
+        next.set(asset.id, asset);
+      }
       return next;
     });
   };
@@ -160,7 +171,9 @@ export default function AssetPicker({
     Array.from(event.dataTransfer.types).includes('Files');
 
   const probeImageDimensions = (file: File): Promise<{ width?: number; height?: number }> => {
-    if (!file.type.startsWith('image/')) return Promise.resolve({});
+    if (!file.type.startsWith('image/')) {
+      return Promise.resolve({});
+    }
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
@@ -199,7 +212,9 @@ export default function AssetPicker({
   };
 
   const uploadFiles = async (files: FileList | File[] | null) => {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      return;
+    }
 
     const fileArray = Array.from(files);
     setUploadError(null);
@@ -208,7 +223,9 @@ export default function AssetPicker({
     const results = await Promise.allSettled(
       fileArray.map(async (file) => {
         const validationError = validateUploadFile(file);
-        if (validationError) throw new Error(validationError);
+        if (validationError) {
+          throw new Error(validationError);
+        }
 
         const fileType = file.type.startsWith('video/') ? 'video' : 'image';
         const uploadInfo = await assetsApi.getUploadUrl({
@@ -263,7 +280,9 @@ export default function AssetPicker({
   };
 
   const handleDropzoneClick = () => {
-    if (isUploading) return;
+    if (isUploading) {
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -273,7 +292,9 @@ export default function AssetPicker({
   };
 
   const handleDragEnter = (event: DragEvent<HTMLElement>) => {
-    if (!isFilesDragEvent(event)) return;
+    if (!isFilesDragEvent(event)) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     dragDepthRef.current += 1;
@@ -281,7 +302,9 @@ export default function AssetPicker({
   };
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
-    if (!isFilesDragEvent(event)) return;
+    if (!isFilesDragEvent(event)) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'copy';
@@ -302,7 +325,9 @@ export default function AssetPicker({
     event.stopPropagation();
     dragDepthRef.current = 0;
     setIsDraggingFiles(false);
-    if (event.dataTransfer.files.length === 0) return;
+    if (event.dataTransfer.files.length === 0) {
+      return;
+    }
     void uploadFiles(event.dataTransfer.files);
   };
 

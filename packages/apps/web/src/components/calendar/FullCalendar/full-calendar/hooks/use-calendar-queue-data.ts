@@ -111,11 +111,15 @@ export function useCalendarQueueData({
   const queueItems = useMemo(() => {
     const raw = queueItemsQuery.data as any;
     const lanes = raw?.data?.lanes;
-    if (!Array.isArray(lanes)) return [] as PublishingQueueItem[];
+    if (!Array.isArray(lanes)) {
+      return [] as PublishingQueueItem[];
+    }
     const collected: PublishingQueueItem[] = [];
     for (const lane of lanes) {
       const items = lane?.items;
-      if (Array.isArray(items)) collected.push(...(items as PublishingQueueItem[]));
+      if (Array.isArray(items)) {
+        collected.push(...(items as PublishingQueueItem[]));
+      }
     }
     return collected;
   }, [queueItemsQuery.data]);
@@ -123,37 +127,55 @@ export function useCalendarQueueData({
   const queueItemsByEstimatedMs = useMemo(() => {
     const map = new Map<number, PublishingQueueItem>();
     for (const item of queueItems) {
-      if (!item.estimatedScheduledAt) continue;
+      if (!item.estimatedScheduledAt) {
+        continue;
+      }
       const ms = new Date(item.estimatedScheduledAt).getTime();
-      if (!Number.isFinite(ms)) continue;
-      if (!map.has(ms)) map.set(ms, item);
+      if (!Number.isFinite(ms)) {
+        continue;
+      }
+      if (!map.has(ms)) {
+        map.set(ms, item);
+      }
     }
     return map;
   }, [queueItems]);
 
   const occupiedTimesUtcMsSorted = useMemo(() => {
-    if (!effectiveSingleDestinationId) return [] as number[];
+    if (!effectiveSingleDestinationId) {
+      return [] as number[];
+    }
 
     const occupied: number[] = [];
 
     // Optimistic drops should immediately reserve the target slot.
     for (const op of Object.values(optimisticByContentId)) {
       const scheduledAt = op?.override?.scheduledAt;
-      if (!scheduledAt) continue;
+      if (!scheduledAt) {
+        continue;
+      }
       const ms = new Date(scheduledAt).getTime();
-      if (Number.isFinite(ms)) occupied.push(ms);
+      if (Number.isFinite(ms)) {
+        occupied.push(ms);
+      }
     }
 
     // Pinned / scheduled content within the month data.
     for (const item of content) {
-      if (!item?.scheduledAt) continue;
+      if (!item?.scheduledAt) {
+        continue;
+      }
       const ms = new Date(item.scheduledAt).getTime();
-      if (Number.isFinite(ms)) occupied.push(ms);
+      if (Number.isFinite(ms)) {
+        occupied.push(ms);
+      }
     }
 
     // Queue-estimated schedule (computed server-side).
     for (const ms of queueItemsByEstimatedMs.keys()) {
-      if (Number.isFinite(ms)) occupied.push(ms);
+      if (Number.isFinite(ms)) {
+        occupied.push(ms);
+      }
     }
 
     occupied.sort((a, b) => a - b);
@@ -161,15 +183,21 @@ export function useCalendarQueueData({
   }, [content, effectiveSingleDestinationId, optimisticByContentId, queueItemsByEstimatedMs]);
 
   const queueEstimatedContent = useMemo(() => {
-    if (!effectiveSingleDestinationId) return [] as Content[];
-    if (!slotRange) return [] as Content[];
+    if (!effectiveSingleDestinationId) {
+      return [] as Content[];
+    }
+    if (!slotRange) {
+      return [] as Content[];
+    }
 
     const endUtcMs = slotRange.endUtcMs;
     const nowUtcMs = Date.now();
     const out: Content[] = [];
 
     for (const [ms, item] of queueItemsByEstimatedMs.entries()) {
-      if (ms < nowUtcMs || ms >= endUtcMs) continue;
+      if (ms < nowUtcMs || ms >= endUtcMs) {
+        continue;
+      }
       const base = item.content;
       const status = (() => {
         const raw = base?.status;

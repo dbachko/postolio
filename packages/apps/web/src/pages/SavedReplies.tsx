@@ -251,7 +251,9 @@ export default function SavedReplies() {
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) setEditingReply(null);
+          if (!open) {
+            setEditingReply(null);
+          }
         }}
         savedReply={editingReply}
         onSave={handleSave}

@@ -51,20 +51,28 @@ export function usePostEditorDestinations(params: {
   );
 
   const createSelectedDestinations = useMemo(() => {
-    if (!isCreateWithRail) return [] as SocialAccountsPickerOption[];
-    if (!platformPickerOptions.length || !selectedPlatformAccountIds.length) return [];
+    if (!isCreateWithRail) {
+      return [] as SocialAccountsPickerOption[];
+    }
+    if (!platformPickerOptions.length || !selectedPlatformAccountIds.length) {
+      return [];
+    }
     const byId = new Map(platformPickerOptions.map((opt) => [opt.id, opt]));
     const out: SocialAccountsPickerOption[] = [];
     for (const selectedId of selectedPlatformAccountIds) {
       const opt = byId.get(selectedId);
-      if (opt) out.push(opt);
+      if (opt) {
+        out.push(opt);
+      }
     }
     return out;
   }, [isCreateWithRail, platformPickerOptions, selectedPlatformAccountIds]);
 
   const toggleCreateDestination = useCallback(
     (accountId: string) => {
-      if (!accountId) return;
+      if (!accountId) {
+        return;
+      }
 
       let next: string[];
 
@@ -88,28 +96,38 @@ export function usePostEditorDestinations(params: {
 
   const selectedTargetSocialAccountId = useMemo(() => {
     const first = selectedPlatformAccountIds[0];
-    if (!first) return null;
+    if (!first) {
+      return null;
+    }
     return first;
   }, [selectedPlatformAccountIds]);
 
   const selectedPlatforms = useMemo(() => {
-    if (!platformPickerOptions.length || !selectedPlatformAccountIds.length) return [];
+    if (!platformPickerOptions.length || !selectedPlatformAccountIds.length) {
+      return [];
+    }
     const byId = new Map(platformPickerOptions.map((opt) => [opt.id, opt.platform]));
     const out = new Set<Platform>();
     for (const selectedId of selectedPlatformAccountIds) {
       const platform = byId.get(selectedId);
-      if (platform) out.add(platform);
+      if (platform) {
+        out.add(platform);
+      }
     }
     return Array.from(out);
   }, [platformPickerOptions, selectedPlatformAccountIds]);
 
   const schedulingSupported = useMemo(() => {
-    if (selectedPlatforms.length === 0) return false;
+    if (selectedPlatforms.length === 0) {
+      return false;
+    }
     return selectedPlatforms.every((p) => getPlatformConfig(p).features.scheduling);
   }, [selectedPlatforms]);
 
   const publishingSupported = useMemo(() => {
-    if (selectedPlatforms.length === 0) return false;
+    if (selectedPlatforms.length === 0) {
+      return false;
+    }
     return selectedPlatforms.every((p) => getPlatformConfig(p).features.publishing);
   }, [selectedPlatforms]);
 
@@ -135,9 +153,15 @@ export function usePostEditorDestinations(params: {
   }, [destinationsErrorDelayEnabled, selectedPlatformAccountIds.length]);
 
   useEffect(() => {
-    if (!isCreating) return;
-    if (platformsInitializedRef.current) return;
-    if (!socialAccountsData) return;
+    if (!isCreating) {
+      return;
+    }
+    if (platformsInitializedRef.current) {
+      return;
+    }
+    if (!socialAccountsData) {
+      return;
+    }
 
     const rawDefaults = (socialAccountsData as any)?.defaultPostSocialAccountIds;
     if (Array.isArray(rawDefaults)) {
@@ -159,7 +183,9 @@ export function usePostEditorDestinations(params: {
 
     const fallbackId = platformPickerOptions[0]?.id || null;
     const next: string[] = [];
-    if (fallbackId) next.push(fallbackId);
+    if (fallbackId) {
+      next.push(fallbackId);
+    }
 
     setSelectedPlatformAccountIds(next);
     platformsInitializedRef.current = true;

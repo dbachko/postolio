@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { getTokenService } from '../services/service-clients.js';
@@ -10,19 +10,27 @@ const prisma = getDatabaseClient();
 type TokenStatus = 'healthy' | 'expiring' | 'expired' | 'unknown' | 'disconnected';
 
 function normalizePreferences(preferences: unknown): Record<string, unknown> {
-  if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) return {};
+  if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) {
+    return {};
+  }
   return preferences as Record<string, unknown>;
 }
 
 function normalizeDefaultPostSocialAccountIds(preferences: Record<string, unknown>): string[] {
   const raw = (preferences as any).defaultPostSocialAccountIds;
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const seen = new Set<string>();
   const out: string[] = [];
   for (const v of raw) {
-    if (typeof v !== 'string') continue;
+    if (typeof v !== 'string') {
+      continue;
+    }
     const id = v.trim();
-    if (!id || seen.has(id)) continue;
+    if (!id || seen.has(id)) {
+      continue;
+    }
     seen.add(id);
     out.push(id);
   }
@@ -30,16 +38,24 @@ function normalizeDefaultPostSocialAccountIds(preferences: Record<string, unknow
 }
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return false;
+  }
   return (metadata as any).disconnected === true;
 }
 
 function extractTokenExpiresAt(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
   const direct = (metadata as any).tokenExpiresAt;
-  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
+  }
   const nested = (metadata as any).token?.expiresAt;
-  if (typeof nested === 'string' && nested.trim()) return nested.trim();
+  if (typeof nested === 'string' && nested.trim()) {
+    return nested.trim();
+  }
   return null;
 }
 
@@ -114,9 +130,13 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
             : null;
         const profilePictureUrl = (() => {
           const direct = meta.profile_picture_url;
-          if (typeof direct === 'string' && direct) return direct;
+          if (typeof direct === 'string' && direct) {
+            return direct;
+          }
           const nested = profileData?.profile_picture_url;
-          if (typeof nested === 'string' && nested) return nested;
+          if (typeof nested === 'string' && nested) {
+            return nested;
+          }
           return null;
         })();
 
@@ -141,7 +161,9 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
       const itemById = new Map(items.map((item) => [item.id, item]));
       let normalizedDefaultPostIds = defaultPostSocialAccountIds.filter((id) => {
         const item = itemById.get(id);
-        if (!item || item.disconnected) return false;
+        if (!item || item.disconnected) {
+          return false;
+        }
         if (!multiDestinationEnabled && String(item.platform || '').toLowerCase() !== 'instagram') {
           return false;
         }
@@ -181,13 +203,19 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
       const preferences = normalizePreferences(brand.preferences);
       const requested = (() => {
         const raw = request.body?.socialAccountIds;
-        if (!Array.isArray(raw)) return [] as string[];
+        if (!Array.isArray(raw)) {
+          return [] as string[];
+        }
         const seen = new Set<string>();
         const out: string[] = [];
         for (const v of raw) {
-          if (typeof v !== 'string') continue;
+          if (typeof v !== 'string') {
+            continue;
+          }
           const id = v.trim();
-          if (!id || seen.has(id)) continue;
+          if (!id || seen.has(id)) {
+            continue;
+          }
           seen.add(id);
           out.push(id);
         }
@@ -251,9 +279,13 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
       const requested: string[] = [];
       const seen = new Set<string>();
       for (const v of raw) {
-        if (typeof v !== 'string') continue;
+        if (typeof v !== 'string') {
+          continue;
+        }
         const id = v.trim();
-        if (!id || seen.has(id)) continue;
+        if (!id || seen.has(id)) {
+          continue;
+        }
         seen.add(id);
         requested.push(id);
       }
@@ -271,12 +303,18 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
       const nextOrderedConnected: string[] = [];
       for (const id of requested) {
         const account = byId.get(id);
-        if (!account) continue;
-        if (isDisconnected(account.metadata)) continue;
+        if (!account) {
+          continue;
+        }
+        if (isDisconnected(account.metadata)) {
+          continue;
+        }
         nextOrderedConnected.push(id);
       }
       for (const id of connectedIdsInBrandOrder) {
-        if (!nextOrderedConnected.includes(id)) nextOrderedConnected.push(id);
+        if (!nextOrderedConnected.includes(id)) {
+          nextOrderedConnected.push(id);
+        }
       }
 
       await prisma.$transaction(
@@ -333,9 +371,9 @@ const brandsSocialAccountsRoutes: FastifyPluginAsync = async (fastify) => {
         return null;
       })();
 
-      const url =
-        `/api/auth/meta/authorize?brandId=${encodeURIComponent(brandId)}` +
-        (parentOrigin ? `&parentOrigin=${encodeURIComponent(parentOrigin)}` : '');
+      const url = `/api/auth/meta/authorize?brandId=${encodeURIComponent(brandId)}${
+        parentOrigin ? `&parentOrigin=${encodeURIComponent(parentOrigin)}` : ''
+      }`;
 
       const r = await fastify.inject({
         method: 'GET',

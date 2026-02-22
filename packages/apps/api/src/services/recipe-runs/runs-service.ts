@@ -39,9 +39,15 @@ export type RunCostEstimate = {
 
 function collectSkillIdsFromSteps(steps: RecipeStep[], out: Set<string>) {
   for (const step of steps) {
-    if (step.type === 'llm') out.add('text_generation');
-    if (step.type === 'skill_call') out.add(step.skill);
-    if (step.type === 'foreach') collectSkillIdsFromSteps(step.do, out);
+    if (step.type === 'llm') {
+      out.add('text_generation');
+    }
+    if (step.type === 'skill_call') {
+      out.add(step.skill);
+    }
+    if (step.type === 'foreach') {
+      collectSkillIdsFromSteps(step.do, out);
+    }
   }
 }
 
@@ -57,7 +63,9 @@ function inferManagedSkills(
     .map((skill) => skill.id);
   for (const skillId of requiredSkills) {
     const install = installsBySkill.get(skillId);
-    if (install?.enabled && install.mode === 'managed') managed.add(skillId);
+    if (install?.enabled && install.mode === 'managed') {
+      managed.add(skillId);
+    }
   }
 
   // Runtime-implied capability usage (llm / skill_call) should also count
@@ -65,7 +73,9 @@ function inferManagedSkills(
   collectSkillIdsFromSteps(config.steps || [], usedBySteps);
   for (const skillId of usedBySteps) {
     const install = installsBySkill.get(skillId);
-    if (install?.enabled && install.mode === 'managed') managed.add(skillId);
+    if (install?.enabled && install.mode === 'managed') {
+      managed.add(skillId);
+    }
   }
 
   return Array.from(managed);
@@ -112,7 +122,9 @@ async function loadInstalledSkills(
   brandId: string,
   skillIds: string[]
 ): Promise<Map<string, InstalledSkillRecord>> {
-  if (skillIds.length === 0) return new Map();
+  if (skillIds.length === 0) {
+    return new Map();
+  }
   const installs = await prisma.skillInstallation.findMany({
     where: {
       brandId,
@@ -130,8 +142,12 @@ function validateRequiredSkills(params: {
   const missingSkills = params.requiredSkillIds
     .map((skillId: string) => {
       const rec = params.installsBySkill.get(skillId) || null;
-      if (!rec) return { skillId, reason: 'not_installed' as const };
-      if (!rec.enabled) return { skillId, reason: 'disabled' as const };
+      if (!rec) {
+        return { skillId, reason: 'not_installed' as const };
+      }
+      if (!rec.enabled) {
+        return { skillId, reason: 'disabled' as const };
+      }
       return null;
     })
     .filter(Boolean) as Array<{ skillId: string; reason: 'not_installed' | 'disabled' }>;
@@ -257,7 +273,9 @@ export async function listRuns(params: {
   limit: number;
 }) {
   const where: any = { brandId: params.brandId };
-  if (params.status) where.status = params.status;
+  if (params.status) {
+    where.status = params.status;
+  }
 
   const runs = await prisma.recipeRun.findMany({
     where,
@@ -350,12 +368,16 @@ export async function getRun(runId: string): Promise<GetRunResult | null> {
     },
   });
 
-  if (!run) return null;
+  if (!run) {
+    return null;
+  }
 
   const totalInputTokens = run.costs.reduce((sum, cost) => sum + (cost.inputTokens || 0), 0);
   const totalOutputTokens = run.costs.reduce((sum, cost) => sum + (cost.outputTokens || 0), 0);
   const totalEstimatedCostUsd = run.costs.reduce((sum, cost) => {
-    if (!cost.estimatedCostUsd) return sum;
+    if (!cost.estimatedCostUsd) {
+      return sum;
+    }
     return sum + Number(cost.estimatedCostUsd.toString() || '0');
   }, 0);
   const managedCreditsSpent = await getRunManagedCreditsSpent(runId);

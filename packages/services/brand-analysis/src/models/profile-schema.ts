@@ -84,10 +84,12 @@ export function validateProfile(profile: unknown): { ok: boolean; errors?: strin
   }
   if (data.text?.tone) {
     for (const t of data.text.tone) {
-      if (t.length > 32) errors.push('text.tone entries must be <= 32 chars');
+      if (t.length > 32) {
+        errors.push('text.tone entries must be <= 32 chars');
+      }
     }
   }
-  if (data.visual && data.visual.motifs && data.visual.motifs.length > 0) {
+  if (data.visual?.motifs && data.visual.motifs.length > 0) {
     if (!data.visual.palette || data.visual.palette.length === 0) {
       errors.push('visual.palette required when visual.motifs present');
     }
@@ -95,8 +97,12 @@ export function validateProfile(profile: unknown): { ok: boolean; errors?: strin
   if (data.topics) {
     const seen = new Set<string>();
     for (const t of data.topics) {
-      if (t.count <= 0) errors.push(`topics[${t.value}].count must be > 0`);
-      if (seen.has(t.value)) errors.push(`topics duplicate value: ${t.value}`);
+      if (t.count <= 0) {
+        errors.push(`topics[${t.value}].count must be > 0`);
+      }
+      if (seen.has(t.value)) {
+        errors.push(`topics duplicate value: ${t.value}`);
+      }
       seen.add(t.value);
     }
   }

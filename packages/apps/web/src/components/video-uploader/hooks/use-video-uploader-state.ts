@@ -51,7 +51,9 @@ export function useVideoUploaderState({
 
   const handleVideoLoad = useCallback(
     (video: HTMLVideoElement | null) => {
-      if (!video) return;
+      if (!video) {
+        return;
+      }
 
       const width = video.videoWidth;
       const height = video.videoHeight;
@@ -268,7 +270,9 @@ export function useVideoUploaderState({
       setIsDragging(false);
 
       const files = Array.from(e.dataTransfer.files);
-      if (!files.length) return;
+      if (!files.length) {
+        return;
+      }
 
       const kindError = validateMediaKind(files, 'video-only');
       if (kindError) {
@@ -286,7 +290,9 @@ export function useVideoUploaderState({
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if (!files || !files.length) return;
+      if (!files?.length) {
+        return;
+      }
 
       const kindError = validateMediaKind(files, 'video-only');
       if (kindError) {

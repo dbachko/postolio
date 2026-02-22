@@ -90,10 +90,14 @@ export function usePostEditorData(params: {
       .sort((a: any, b: any) => {
         const aOrder = typeof a?.sortOrder === 'number' ? a.sortOrder : 0;
         const bOrder = typeof b?.sortOrder === 'number' ? b.sortOrder : 0;
-        if (aOrder !== bOrder) return aOrder - bOrder;
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
         const aCreated = typeof a?.createdAt === 'string' ? a.createdAt : '';
         const bCreated = typeof b?.createdAt === 'string' ? b.createdAt : '';
-        if (aCreated !== bCreated) return aCreated.localeCompare(bCreated);
+        if (aCreated !== bCreated) {
+          return aCreated.localeCompare(bCreated);
+        }
         return String(a?.id || '').localeCompare(String(b?.id || ''));
       });
 
@@ -118,7 +122,9 @@ export function usePostEditorData(params: {
 
   const contentGroupId = useMemo(() => {
     const raw = (post as any)?.contentGroupId;
-    if (typeof raw !== 'string') return null;
+    if (typeof raw !== 'string') {
+      return null;
+    }
     const trimmed = raw.trim();
     return trimmed.length ? trimmed : null;
   }, [post]);
@@ -142,9 +148,15 @@ export function usePostEditorData(params: {
         const social = entry?.socialAccount;
         const socialAccountId = social?.id;
         const platform = social?.platform as Platform | undefined;
-        if (typeof contentId !== 'string' || !contentId.trim()) return null;
-        if (typeof socialAccountId !== 'string' || !socialAccountId.trim()) return null;
-        if (!platform || typeof platform !== 'string') return null;
+        if (typeof contentId !== 'string' || !contentId.trim()) {
+          return null;
+        }
+        if (typeof socialAccountId !== 'string' || !socialAccountId.trim()) {
+          return null;
+        }
+        if (!platform || typeof platform !== 'string') {
+          return null;
+        }
         const status =
           typeof contentStatus === 'string' && contentStatus.trim()
             ? contentStatus.trim()
@@ -175,17 +187,23 @@ export function usePostEditorData(params: {
   );
 
   const groupDestinationSocialAccountIds = useMemo(() => {
-    if (!isMultiDestinationGroup) return new Set<string>();
+    if (!isMultiDestinationGroup) {
+      return new Set<string>();
+    }
     return new Set(groupDestinations.map((d) => d.socialAccountId));
   }, [groupDestinations, isMultiDestinationGroup]);
 
   const groupHasPublishedDestinations = useMemo(() => {
-    if (!isMultiDestinationGroup) return false;
+    if (!isMultiDestinationGroup) {
+      return false;
+    }
     return groupDestinations.some((dest) => dest.status === 'published');
   }, [groupDestinations, isMultiDestinationGroup]);
 
   const groupPlatforms = useMemo(() => {
-    if (!isMultiDestinationGroup) return [] as Platform[];
+    if (!isMultiDestinationGroup) {
+      return [] as Platform[];
+    }
     const out = new Set<Platform>();
     for (const destination of groupDestinations) {
       out.add(destination.platform);
@@ -196,7 +214,9 @@ export function usePostEditorData(params: {
   const contentGroupTemplate = useMemo<ContentGroupTemplate | null>(() => {
     const raw = contentGroupQuery.data as any;
     const template = raw?.contentGroup?.template;
-    if (!template || typeof template !== 'object') return null;
+    if (!template || typeof template !== 'object') {
+      return null;
+    }
 
     const caption = typeof template.caption === 'string' ? template.caption : '';
     const contentType = (() => {
@@ -238,7 +258,9 @@ export function usePostEditorData(params: {
   const { data: templateAssetsById } = useAssetsByIds(templateAssetIds);
 
   const templateCarouselAssets = useMemo((): AssetReference[] => {
-    if (!contentGroupTemplate) return [];
+    if (!contentGroupTemplate) {
+      return [];
+    }
     return templateAssetIds.map((assetId) => {
       const asset = templateAssetsById?.[assetId] ?? null;
       const type = asset?.fileType === 'video' ? ('video' as const) : ('image' as const);
@@ -258,7 +280,9 @@ export function usePostEditorData(params: {
     const destinations = Array.isArray(raw?.destinations) ? (raw.destinations as any[]) : [];
     const normalized = destinations.map((entry) => {
       const value = entry?.content?.scheduledAt;
-      if (value instanceof Date) return value.toISOString();
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
       if (typeof value === 'string') {
         const trimmed = value.trim();
         return trimmed.length ? trimmed : null;
@@ -267,7 +291,9 @@ export function usePostEditorData(params: {
     });
 
     const nonNull = normalized.filter((v): v is string => typeof v === 'string' && v.length > 0);
-    if (nonNull.length === 0) return { kind: 'none', scheduledAt: null };
+    if (nonNull.length === 0) {
+      return { kind: 'none', scheduledAt: null };
+    }
     const first = nonNull[0]!;
     const allEqual = normalized.every((v) => (v === null ? false : v === first));
     if (allEqual && destinations.length > 0 && nonNull.length === destinations.length) {
@@ -277,7 +303,9 @@ export function usePostEditorData(params: {
   }, [contentGroupQuery.data, isMultiDestinationGroup]);
 
   const groupDestinationPreviewData = useMemo<GroupDestinationPreviewData[]>(() => {
-    if (!isMultiDestinationGroup) return [];
+    if (!isMultiDestinationGroup) {
+      return [];
+    }
     const raw = contentGroupQuery.data as any;
     const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
     return destinations
@@ -287,7 +315,9 @@ export function usePostEditorData(params: {
         const accountId = typeof social?.id === 'string' ? social.id : null;
         const platform =
           typeof social?.platform === 'string' ? (social.platform as Platform) : null;
-        if (!accountId || !platform) return null;
+        if (!accountId || !platform) {
+          return null;
+        }
         const label = formatSocialAccountLabel({
           platform,
           username: typeof social.username === 'string' ? String(social.username) : null,

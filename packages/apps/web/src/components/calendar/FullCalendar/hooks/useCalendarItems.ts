@@ -8,18 +8,30 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function getIsoMillis(value: string | null | undefined): number | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const ts = new Date(value).getTime();
   return Number.isNaN(ts) ? null : ts;
 }
 
 function deriveGroupStatus(items: Content[]): Content['status'] {
   const statuses = items.map((item) => String((item as any)?.status || '')).filter(Boolean);
-  if (statuses.some((s) => s === 'failed')) return 'failed';
-  if (statuses.every((s) => s === 'published')) return 'published';
-  if (statuses.some((s) => s === 'published')) return 'published';
-  if (statuses.some((s) => s === 'scheduled')) return 'scheduled';
-  if (statuses.some((s) => s === 'skipped')) return 'skipped';
+  if (statuses.some((s) => s === 'failed')) {
+    return 'failed';
+  }
+  if (statuses.every((s) => s === 'published')) {
+    return 'published';
+  }
+  if (statuses.some((s) => s === 'published')) {
+    return 'published';
+  }
+  if (statuses.some((s) => s === 'scheduled')) {
+    return 'scheduled';
+  }
+  if (statuses.some((s) => s === 'skipped')) {
+    return 'skipped';
+  }
   return 'draft';
 }
 
@@ -32,8 +44,12 @@ export function useCalendarItems(
     const seen = new Set<string>();
 
     const sanitizedContent = (content ?? []).filter((entry) => {
-      if (!entry?.id) return false;
-      if (seen.has(entry.id)) return false;
+      if (!entry?.id) {
+        return false;
+      }
+      if (seen.has(entry.id)) {
+        return false;
+      }
       seen.add(entry.id);
       return true;
     });
@@ -85,7 +101,9 @@ export function useCalendarItems(
         const times = items
           .map((c) => getIsoMillis(c.scheduledAt))
           .filter((v): v is number => typeof v === 'number');
-        if (!times.length) return null;
+        if (!times.length) {
+          return null;
+        }
         return new Date(Math.min(...times)).toISOString();
       })();
 
@@ -100,7 +118,9 @@ export function useCalendarItems(
         const times = items
           .map((c) => getIsoMillis(c.postedAt))
           .filter((v): v is number => typeof v === 'number');
-        if (!times.length) return null;
+        if (!times.length) {
+          return null;
+        }
         return new Date(Math.max(...times)).toISOString();
       })();
 
@@ -108,7 +128,9 @@ export function useCalendarItems(
         const times = items
           .map((c) => getIsoMillis(c.createdAt))
           .filter((v): v is number => typeof v === 'number');
-        if (!times.length) return primary.createdAt;
+        if (!times.length) {
+          return primary.createdAt;
+        }
         return new Date(Math.min(...times)).toISOString();
       })();
 
@@ -116,7 +138,9 @@ export function useCalendarItems(
         const times = items
           .map((c) => getIsoMillis(c.updatedAt))
           .filter((v): v is number => typeof v === 'number');
-        if (!times.length) return primary.updatedAt;
+        if (!times.length) {
+          return primary.updatedAt;
+        }
         return new Date(Math.max(...times)).toISOString();
       })();
 

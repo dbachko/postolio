@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { Image as ImageIcon, Pencil, Play, Sparkles, Video } from 'lucide-react';
 import { formatBytes } from './asset-utils';
-import { type AssetType } from '@/features/assets/api/client';
+import type { AssetType } from '@/features/assets/api/client';
 
 interface AssetCardProps {
   asset: AssetType;

@@ -23,7 +23,9 @@ export const WEEK_DAYS: Array<{ value: number; label: string }> = [...DAYS.slice
 export const DEFAULT_NEW_SLOT_LANE_KEY: PublishingQueueLaneKey = 'any';
 
 export function normalizeLaneKey(value: unknown): PublishingQueueLaneKey | null {
-  if (value === 'reel' || value === 'story' || value === 'any' || value === 'post') return value;
+  if (value === 'reel' || value === 'story' || value === 'any' || value === 'post') {
+    return value;
+  }
   return null;
 }
 
@@ -44,22 +46,38 @@ export function persistDefaultNewSlotLaneKey(
 }
 
 export function laneLabel(laneKey: PublishingQueueLaneKey): string {
-  if (laneKey === 'any') return 'Any post';
-  if (laneKey === 'reel') return 'Reels';
-  if (laneKey === 'story') return 'Stories';
+  if (laneKey === 'any') {
+    return 'Any post';
+  }
+  if (laneKey === 'reel') {
+    return 'Reels';
+  }
+  if (laneKey === 'story') {
+    return 'Stories';
+  }
   return 'Posts';
 }
 
 export function laneIcon(laneKey: PublishingQueueLaneKey, className = 'h-4 w-4') {
-  if (laneKey === 'any') return <Asterisk className={className} />;
-  if (laneKey === 'reel') return <Film className={className} />;
-  if (laneKey === 'story') return <CircleFadingPlus className={className} />;
+  if (laneKey === 'any') {
+    return <Asterisk className={className} />;
+  }
+  if (laneKey === 'reel') {
+    return <Film className={className} />;
+  }
+  if (laneKey === 'story') {
+    return <CircleFadingPlus className={className} />;
+  }
   return <ImageIcon className={className} />;
 }
 
 export function sortSlots(a: QueueSlotDraft, b: QueueSlotDraft): number {
-  if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
-  if (a.localTime !== b.localTime) return a.localTime.localeCompare(b.localTime);
+  if (a.dayOfWeek !== b.dayOfWeek) {
+    return a.dayOfWeek - b.dayOfWeek;
+  }
+  if (a.localTime !== b.localTime) {
+    return a.localTime.localeCompare(b.localTime);
+  }
   return a.laneKey.localeCompare(b.laneKey);
 }
 

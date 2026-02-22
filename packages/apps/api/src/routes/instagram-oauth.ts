@@ -1,8 +1,8 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import crypto from 'crypto';
 import { captureException, captureMessage } from '@postolio/observability';
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 
 import { getDatabaseClient } from '../config/database.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
@@ -46,7 +46,7 @@ function ensureAuth(
   request: FastifyRequest,
   reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string } } {
-  if (!request.user || !request.user.id) {
+  if (!request.user?.id) {
     reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
@@ -116,7 +116,9 @@ function redactOauthSensitiveDetails(value: string): string {
 function parseFacebookGraphError(raw: string): ParsedFacebookGraphError | null {
   try {
     const parsed = JSON.parse(raw) as { error?: ParsedFacebookGraphError };
-    if (!parsed?.error || typeof parsed.error !== 'object') return null;
+    if (!parsed?.error || typeof parsed.error !== 'object') {
+      return null;
+    }
     return parsed.error;
   } catch {
     return null;
@@ -124,7 +126,9 @@ function parseFacebookGraphError(raw: string): ParsedFacebookGraphError | null {
 }
 
 function truncate(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
+  if (value.length <= maxLength) {
+    return value;
+  }
   return `${value.slice(0, maxLength)}…`;
 }
 
@@ -177,7 +181,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
 
         const { brandId } = request.query;
 
@@ -329,7 +335,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
 
       const logFacebookOauthDebug = (message: string, context: Record<string, unknown> = {}) => {
-        if (!FB_OAUTH_DEBUG_ENABLED) return;
+        if (!FB_OAUTH_DEBUG_ENABLED) {
+          return;
+        }
         fastify.log.info(
           {
             debug: 'facebook-oauth',
@@ -346,7 +354,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         client_id: FACEBOOK_APP_ID,
         client_secret: FACEBOOK_APP_SECRET,
         redirect_uri: REDIRECT_URI,
-        code: code,
+        code,
       });
 
       const tokenResponse = await fetch(`${tokenExchangeUrl}?${tokenParams}`, {
@@ -461,12 +469,16 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       // Fallback: in some cases the Pages list response does not include the connected IG fields.
       if (!pageWithInstagram && pages.length) {
         for (const page of pages) {
-          if (!page.access_token) continue;
+          if (!page.access_token) {
+            continue;
+          }
           const pageDetailsUrl = fbGraph(
             `${page.id}?fields=instagram_business_account,connected_instagram_account&access_token=${page.access_token}`
           );
           const pageDetailsResponse = await fetch(pageDetailsUrl);
-          if (!pageDetailsResponse.ok) continue;
+          if (!pageDetailsResponse.ok) {
+            continue;
+          }
 
           const pageDetails = (await pageDetailsResponse.json()) as Pick<
             FacebookPage,

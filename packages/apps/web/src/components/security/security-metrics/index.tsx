@@ -81,7 +81,8 @@ export function SecurityMetrics({ summary }: SecurityMetricsProps) {
 
       if (daysSinceChange > 180) {
         return { variant: 'danger' as const, description: 'Consider updating your password' };
-      } else if (daysSinceChange > 90) {
+      }
+      if (daysSinceChange > 90) {
         return { variant: 'warning' as const, description: 'Password is aging' };
       }
       return {

@@ -82,7 +82,9 @@ export function WriteItBarCreate({
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (barProps.saveDraftDisabled) return;
+                    if (barProps.saveDraftDisabled) {
+                      return;
+                    }
                     barProps.onSaveDraft();
                   }}
                   disabled={barProps.isCreatingPost}
@@ -108,7 +110,9 @@ export function WriteItBarCreate({
               open={postingPopoverOpen}
               onOpenChange={(open) => {
                 setPostingPopoverOpen(open);
-                if (!open) setPostingPopoverView('menu');
+                if (!open) {
+                  setPostingPopoverView('menu');
+                }
               }}
             >
               <ButtonGroup className="w-full sm:w-auto">
@@ -145,8 +149,12 @@ export function WriteItBarCreate({
                         type="button"
                         size="sm"
                         onClick={() => {
-                          if (barProps.isCreatingPost) return;
-                          if (barProps.queueDisabled) return;
+                          if (barProps.isCreatingPost) {
+                            return;
+                          }
+                          if (barProps.queueDisabled) {
+                            return;
+                          }
                           barProps.onAddToQueue();
                         }}
                         disabled={barProps.isCreatingPost}
@@ -173,8 +181,12 @@ export function WriteItBarCreate({
                         type="button"
                         size="sm"
                         onClick={() => {
-                          if (barProps.isCreatingPost) return;
-                          if (barProps.publishNowDisabled) return;
+                          if (barProps.isCreatingPost) {
+                            return;
+                          }
+                          if (barProps.publishNowDisabled) {
+                            return;
+                          }
                           barProps.onPublishNow();
                         }}
                         disabled={barProps.isCreatingPost}
@@ -201,8 +213,12 @@ export function WriteItBarCreate({
                         type="button"
                         size="sm"
                         onClick={() => {
-                          if (barProps.isCreatingPost) return;
-                          if (barProps.createScheduleDisabled) return;
+                          if (barProps.isCreatingPost) {
+                            return;
+                          }
+                          if (barProps.createScheduleDisabled) {
+                            return;
+                          }
                           barProps.onSchedule();
                         }}
                         disabled={barProps.isCreatingPost}

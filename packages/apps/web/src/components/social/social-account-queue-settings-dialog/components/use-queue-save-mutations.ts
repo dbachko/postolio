@@ -20,7 +20,9 @@ export function useQueueSaveMutations({
 
   const updateQueueMutation = useMutation({
     mutationFn: async (data: { name?: string; isDefault?: boolean }) => {
-      if (!selectedQueueId) throw new Error('Missing queue');
+      if (!selectedQueueId) {
+        throw new Error('Missing queue');
+      }
       return await publishingQueuesApi.updateQueue(selectedQueueId, data);
     },
     onSuccess: async (res) => {
@@ -37,7 +39,9 @@ export function useQueueSaveMutations({
 
   const saveSlotsMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedQueueId) throw new Error('Missing queue');
+      if (!selectedQueueId) {
+        throw new Error('Missing queue');
+      }
       return await publishingQueuesApi.setQueueSlots(selectedQueueId, draftSlots);
     },
     onSuccess: async (res) => {

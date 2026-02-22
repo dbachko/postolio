@@ -3,7 +3,7 @@
  * Handles subscription limits and quotas for content operations
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 import { getDatabaseClient } from '../../config/database.js';
 
@@ -18,7 +18,9 @@ const limitsRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
         const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) return reply.code(404).send({ success: false, error: 'User not found' });
+        if (!user) {
+          return reply.code(404).send({ success: false, error: 'User not found' });
+        }
 
         const { getMaxScheduledAheadForTier } = await import('../../constants/subscription.js');
         const maxAllowed = getMaxScheduledAheadForTier(user.subscriptionTier || 'free');

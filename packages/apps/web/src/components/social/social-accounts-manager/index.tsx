@@ -186,14 +186,18 @@ export function SocialAccountsManager({ brand, onAccountsChanged }: SocialAccoun
           isPending={disconnectMutation.isPending}
           hasTarget={Boolean(disconnectTarget)}
           onKeepImportedPosts={() => {
-            if (!disconnectTarget) return;
+            if (!disconnectTarget) {
+              return;
+            }
             disconnectMutation.mutate({
               socialAccountId: disconnectTarget.id,
               removeImportedPosts: false,
             });
           }}
           onRemoveImportedPosts={() => {
-            if (!disconnectTarget) return;
+            if (!disconnectTarget) {
+              return;
+            }
             disconnectMutation.mutate({
               socialAccountId: disconnectTarget.id,
               removeImportedPosts: true,

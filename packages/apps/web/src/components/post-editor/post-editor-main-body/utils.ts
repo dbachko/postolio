@@ -21,14 +21,18 @@ export function getSelectedPlatforms(params: {
   selectedPlatformAccountIds?: string[];
 }): Platform[] {
   const { platformOptions, selectedPlatformAccountIds } = params;
-  if (!platformOptions || !selectedPlatformAccountIds) return [];
+  if (!platformOptions || !selectedPlatformAccountIds) {
+    return [];
+  }
 
   const byId = new Map(platformOptions.map((opt) => [opt.id, opt.platform]));
   const out = new Set<Platform>();
 
   for (const id of selectedPlatformAccountIds) {
     const platform = byId.get(id);
-    if (platform) out.add(platform);
+    if (platform) {
+      out.add(platform);
+    }
   }
 
   return Array.from(out);
@@ -82,8 +86,14 @@ export function getContentTypeDisabledReasons(params: {
 export function findFirstEnabledContentType(
   disabledReasons: Record<InstagramContentType, string | null>
 ): InstagramContentType | null {
-  if (!disabledReasons.post) return 'post';
-  if (!disabledReasons.reel) return 'reel';
-  if (!disabledReasons.story) return 'story';
+  if (!disabledReasons.post) {
+    return 'post';
+  }
+  if (!disabledReasons.reel) {
+    return 'reel';
+  }
+  if (!disabledReasons.story) {
+    return 'story';
+  }
   return null;
 }

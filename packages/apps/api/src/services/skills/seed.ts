@@ -1,4 +1,4 @@
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 import { prisma } from '../../config/database.js';
 
 type SkillSeed = {
@@ -454,7 +454,9 @@ const SKILL_DEFINITIONS: SkillSeed[] = [
 let didSeed = false;
 
 export async function ensureSkillDefinitionsSeeded(): Promise<void> {
-  if (didSeed) return;
+  if (didSeed) {
+    return;
+  }
   didSeed = true;
 
   // Hard refresh: remove legacy provider-specific skills and old provider-scoped secrets.

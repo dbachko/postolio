@@ -144,7 +144,7 @@ export const allNavItems: NavigationItem[] = [
 
 export const isRouteActive = (item: NavigationItem, currentPath: string): boolean => {
   if (item.matchType === 'startsWith') {
-    return currentPath === item.path || currentPath.startsWith(item.path + '/');
+    return currentPath === item.path || currentPath.startsWith(`${item.path}/`);
   }
   return currentPath === item.path;
 };

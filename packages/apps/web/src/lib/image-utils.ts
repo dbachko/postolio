@@ -14,7 +14,9 @@ export const preloadImage = (url: string): Promise<void> => {
 
 // Check browser support for modern image formats
 export const supportsWebP = (): boolean => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') {
+    return false;
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = 1;
@@ -24,7 +26,9 @@ export const supportsWebP = (): boolean => {
 
 // Future enhancement: AVIF support detection
 export const supportsAVIF = (): boolean => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') {
+    return false;
+  }
 
   // Simple AVIF support detection
   const avif = new Image();

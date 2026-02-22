@@ -52,15 +52,21 @@ export function useSocialAccountsManagerAccounts({
   const defaultPostSocialAccountIds = useMemo(() => {
     const data = accountsQuery.data as any;
     const raw = data?.defaultPostSocialAccountIds;
-    if (!Array.isArray(raw)) return [] as string[];
+    if (!Array.isArray(raw)) {
+      return [] as string[];
+    }
 
     const allowed = new Set(connectedAccounts.map((account) => account.id));
     const seen = new Set<string>();
     const out: string[] = [];
     for (const v of raw) {
-      if (typeof v !== 'string') continue;
+      if (typeof v !== 'string') {
+        continue;
+      }
       const id = v.trim();
-      if (!id || !allowed.has(id) || seen.has(id)) continue;
+      if (!id || !allowed.has(id) || seen.has(id)) {
+        continue;
+      }
       seen.add(id);
       out.push(id);
     }

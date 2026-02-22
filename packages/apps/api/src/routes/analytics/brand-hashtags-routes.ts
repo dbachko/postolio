@@ -53,7 +53,9 @@ export const brandHashtagsAnalyticsRoutes: FastifyPluginAsync = async (fastify) 
           existing.uses += 1;
 
           for (const pub of content.publications) {
-            if (!pub.metricsLatest) continue;
+            if (!pub.metricsLatest) {
+              continue;
+            }
             existing.totalReach += pub.metricsLatest.reach || 0;
             existing.totalEngagement += pub.metricsLatest.engagement || 0;
             existing.totalImpressions += pub.metricsLatest.impressions || 0;

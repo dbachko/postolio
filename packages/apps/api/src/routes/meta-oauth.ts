@@ -1,7 +1,7 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import crypto from 'crypto';
 import { captureException, captureMessage } from '@postolio/observability';
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 
 import { getDatabaseClient } from '../config/database.js';
 import { redisService } from '../services/redis.js';
@@ -100,7 +100,7 @@ function ensureAuth(
   request: FastifyRequest,
   reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string } } {
-  if (!request.user || !request.user.id) {
+  if (!request.user?.id) {
     reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
@@ -114,12 +114,16 @@ function redactOauthSensitiveDetails(value: string): string {
 }
 
 function truncate(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
+  if (value.length <= maxLength) {
+    return value;
+  }
   return `${value.slice(0, maxLength)}…`;
 }
 
 function isMetadataDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return false;
+  }
   return (metadata as any).disconnected === true;
 }
 
@@ -218,13 +222,21 @@ function buildRedisKeys(connectSessionId: string, state?: string) {
 }
 
 function normalizeOrigin(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
   const trimmed = value.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return null;
+  }
   try {
     const origin = new URL(trimmed).origin;
-    if (origin === 'null') return null;
-    if (!/^https?:\/\//.test(origin)) return null;
+    if (origin === 'null') {
+      return null;
+    }
+    if (!/^https?:\/\//.test(origin)) {
+      return null;
+    }
     return origin;
   } catch {
     return null;
@@ -234,7 +246,9 @@ function normalizeOrigin(value: unknown): string | null {
 async function loadConnectSessionByState(state: string): Promise<MetaConnectSession | null> {
   const key = buildRedisKeys('unused', state).stateKey!;
   const raw = await redisService.get(key);
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     return JSON.parse(raw) as MetaConnectSession;
   } catch {
@@ -311,7 +325,9 @@ async function listAllPages(userAccessToken: string): Promise<FacebookPage[]> {
     }
 
     const data = (await response.json()) as PagesResponse;
-    if (Array.isArray(data.data)) pages.push(...data.data);
+    if (Array.isArray(data.data)) {
+      pages.push(...data.data);
+    }
     nextUrl = data.paging?.next;
     fetches += 1;
   }
@@ -329,7 +345,9 @@ async function fetchInstagramProfile(
     )}`
   );
   const response = await fetch(url);
-  if (!response.ok) return null;
+  if (!response.ok) {
+    return null;
+  }
   return (await response.json()) as InstagramProfile;
 }
 
@@ -340,7 +358,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
 
         if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) {
           return reply.code(500).send({
@@ -350,7 +370,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         }
 
         const { brandId } = request.query;
-        if (!brandId) return reply.code(400).send({ error: 'brandId is required' });
+        if (!brandId) {
+          return reply.code(400).send({ error: 'brandId is required' });
+        }
 
         const userId = request.user.id;
         await assertBrandOwnership(userId, brandId);
@@ -480,7 +502,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       const tokens: Record<string, MetaConnectCandidateToken> = {};
 
       for (const page of pages) {
-        if (!page.id || !page.access_token) continue;
+        if (!page.id || !page.access_token) {
+          continue;
+        }
 
         const pageCandidateId = `facebook:${page.id}`;
         candidates.push({
@@ -506,7 +530,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
         const instagramAccountId =
           page.instagram_business_account?.id || page.connected_instagram_account?.id;
-        if (!instagramAccountId) continue;
+        if (!instagramAccountId) {
+          continue;
+        }
 
         const igProfile = await fetchInstagramProfile(instagramAccountId, page.access_token);
         const igCandidateId = `instagram:${instagramAccountId}`;
@@ -552,8 +578,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
       // Refresh session TTLs after callback
       await redisService.set(sessionKey, JSON.stringify(session), CONNECT_SESSION_TTL_SECONDS);
-      if (stateKey)
+      if (stateKey) {
         await redisService.set(stateKey, JSON.stringify(session), CONNECT_SESSION_TTL_SECONDS);
+      }
 
       captureOauthMessage('Meta OAuth candidates generated', {
         phase: 'callback',
@@ -591,10 +618,13 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { connectSessionId } = request.query;
-        if (!connectSessionId)
+        if (!connectSessionId) {
           return reply.code(400).send({ error: 'connectSessionId is required' });
+        }
 
         const { sessionKey, candidatesKey } = buildRedisKeys(connectSessionId);
         const rawSession = await redisService.get(sessionKey);
@@ -639,20 +669,26 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
 
         const body = (request.body || {}) as FinalizeBody;
         const connectSessionId = body.connectSessionId;
         const candidateIds = Array.isArray(body.candidateIds) ? body.candidateIds : [];
 
-        if (!connectSessionId)
+        if (!connectSessionId) {
           return reply.code(400).send({ error: 'connectSessionId is required' });
-        if (!candidateIds.length)
+        }
+        if (!candidateIds.length) {
           return reply.code(400).send({ error: 'candidateIds must not be empty' });
+        }
 
         const { sessionKey, candidatesKey, tokensKey } = buildRedisKeys(connectSessionId);
         const rawSession = await redisService.get(sessionKey);
-        if (!rawSession) return reply.code(404).send({ error: 'connect_session_not_found' });
+        if (!rawSession) {
+          return reply.code(404).send({ error: 'connect_session_not_found' });
+        }
         const session = JSON.parse(rawSession) as MetaConnectSession;
         const stateKey = buildRedisKeys(connectSessionId, session.state).stateKey;
 
@@ -761,7 +797,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           where: { id: session.brandId },
           select: { id: true, userId: true, preferences: true },
         });
-        if (!brand) return reply.code(404).send({ error: 'brand_not_found' });
+        if (!brand) {
+          return reply.code(404).send({ error: 'brand_not_found' });
+        }
 
         const tokenClient = await getTokenService();
 
@@ -848,7 +886,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
           const ensured = new Set<string>();
           for (const item of upserts) {
-            if (ensured.has(item.socialAccountId)) continue;
+            if (ensured.has(item.socialAccountId)) {
+              continue;
+            }
             ensured.add(item.socialAccountId);
             await ensureDefaultQueueWithStarterSchedule(tx, item.socialAccountId);
           }
@@ -859,7 +899,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         // Store tokens in Token Service AFTER DB commit
         for (const item of createdAccounts) {
           const token = tokens[item.candidate.candidateId];
-          if (!token?.accessToken) continue;
+          if (!token?.accessToken) {
+            continue;
+          }
 
           await tokenClient.storeTokenForSocialAccount({
             userId: brand.userId,
@@ -883,7 +925,9 @@ const metaOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         await redisService.del(candidatesKey);
         await redisService.del(tokensKey);
         await redisService.del(sessionKey);
-        if (stateKey) await redisService.del(stateKey);
+        if (stateKey) {
+          await redisService.del(stateKey);
+        }
 
         const socialAccounts = await prisma.socialAccount.findMany({
           where: { brandId: session.brandId },

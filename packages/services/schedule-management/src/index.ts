@@ -6,7 +6,11 @@
  */
 
 import { Logger } from '@aws-lambda-powertools/logger';
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  APIGatewayProxyEventV2,
+} from 'aws-lambda';
 import { HttpHandler } from './handlers/http-handler';
 import { createErrorResponse } from './utils/response-utils';
 import { initSentry, captureException } from '@postolio/observability';
@@ -82,9 +86,8 @@ function determineEventType(event: APIGatewayProxyEvent | APIGatewayProxyEventV2
 function getMethod(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
   if ('httpMethod' in event) {
     return event.httpMethod; // API Gateway v1.0
-  } else {
-    return event.requestContext.http.method; // API Gateway v2.0 / Function URL
   }
+  return event.requestContext.http.method; // API Gateway v2.0 / Function URL
 }
 
 /**
@@ -93,9 +96,8 @@ function getMethod(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string
 function getPath(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
   if ('path' in event) {
     return event.path; // API Gateway v1.0
-  } else {
-    return event.requestContext.http.path; // API Gateway v2.0 / Function URL
   }
+  return event.requestContext.http.path; // API Gateway v2.0 / Function URL
 }
 
 /**

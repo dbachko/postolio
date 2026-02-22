@@ -15,7 +15,9 @@ export function SocialAccountQueueSettingsDialog({
   account,
   allAccounts,
 }: SocialAccountQueueSettingsDialogProps) {
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

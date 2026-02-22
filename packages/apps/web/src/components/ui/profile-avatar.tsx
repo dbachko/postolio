@@ -13,7 +13,9 @@ export type ProfileAvatarProps = {
 
 function getInitials(name?: string | null): string {
   const n = (name || '').trim();
-  if (!n) return 'U';
+  if (!n) {
+    return 'U';
+  }
   const parts = n.split(/[\s\u00A0]+/).filter(Boolean);
   if (parts.length === 1) {
     const s = parts[0].slice(0, 2).toUpperCase();

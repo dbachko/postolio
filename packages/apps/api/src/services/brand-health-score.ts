@@ -123,7 +123,9 @@ function calculateEngagementRateFactor(
 ): number {
   const validPubs = publications.filter((p) => p.metricsLatest && p.metricsLatest.impressions > 0);
 
-  if (validPubs.length === 0) return 50; // Neutral if no data
+  if (validPubs.length === 0) {
+    return 50;
+  } // Neutral if no data
 
   const avgEngagementRate =
     validPubs.reduce((sum, p) => {
@@ -151,7 +153,9 @@ async function calculateFollowerGrowthFactor(brandId: string, startDate: Date): 
     include: { accountMetricsLatest: true },
   });
 
-  if (socialAccounts.length === 0) return 50; // Neutral
+  if (socialAccounts.length === 0) {
+    return 50;
+  } // Neutral
 
   let totalFollowers = 0;
   let totalStartFollowers = 0;
@@ -174,7 +178,9 @@ async function calculateFollowerGrowthFactor(brandId: string, startDate: Date): 
     totalStartFollowers += startFollowers;
   }
 
-  if (totalStartFollowers === 0) return 50; // Avoid division by zero
+  if (totalStartFollowers === 0) {
+    return 50;
+  } // Avoid division by zero
 
   const growthRate = ((totalFollowers - totalStartFollowers) / totalStartFollowers) * 100;
 
@@ -198,7 +204,9 @@ function calculateContentConsistencyFactor(
     .map((p) => p.publishedAt!.getTime())
     .sort((a, b) => a - b);
 
-  if (publishedDates.length < 2) return 50; // Need at least 2 posts
+  if (publishedDates.length < 2) {
+    return 50;
+  } // Need at least 2 posts
 
   // Calculate gaps between posts (in days)
   const gaps = [];
@@ -245,7 +253,9 @@ function calculateCommentResponseFactor(
     repliedComments += rootCommentIds.filter((id) => repliedIds.has(id)).length;
   }
 
-  if (totalComments === 0) return 75; // Neutral-positive if no comments yet
+  if (totalComments === 0) {
+    return 75;
+  } // Neutral-positive if no comments yet
 
   const responseRate = (repliedComments / totalComments) * 100;
 
@@ -268,14 +278,14 @@ function calculatePublishingFrequencyFactor(
   // Score: 100 if in optimal range, decreases outside range
   if (postsPerWeek >= 3 && postsPerWeek <= 5) {
     return 100;
-  } else if (postsPerWeek < 3) {
+  }
+  if (postsPerWeek < 3) {
     // Too few posts
     return Math.max(0, (postsPerWeek / 3) * 100);
-  } else {
-    // Too many posts (can lead to audience fatigue)
-    const excess = postsPerWeek - 5;
-    return Math.max(50, 100 - excess * 10);
   }
+  // Too many posts (can lead to audience fatigue)
+  const excess = postsPerWeek - 5;
+  return Math.max(50, 100 - excess * 10);
 }
 
 /**

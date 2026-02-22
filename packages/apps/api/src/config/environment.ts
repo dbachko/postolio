@@ -91,7 +91,9 @@ class EnvironmentService {
    * Get a secret from AWS Secrets Manager
    */
   private async getSecretValue(secretId: string, key: string): Promise<string | undefined> {
-    if (!this.secretsManager) return undefined;
+    if (!this.secretsManager) {
+      return undefined;
+    }
 
     try {
       const response = await this.secretsManager.getSecretValue({
@@ -112,7 +114,9 @@ class EnvironmentService {
    * Initialize configuration from environment variables and AWS Secrets Manager
    */
   async initialize(): Promise<EnvironmentConfig> {
-    if (this.config) return this.config;
+    if (this.config) {
+      return this.config;
+    }
 
     const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'dev';
     const isProduction = environment === 'prod';
@@ -193,7 +197,9 @@ class EnvironmentService {
    * Validate that required configuration is present
    */
   private validateConfig(): void {
-    if (!this.config) return;
+    if (!this.config) {
+      return;
+    }
 
     const required: Array<keyof EnvironmentConfig> = ['jwtSecret', 'databaseUrl'];
 

@@ -10,12 +10,16 @@ type UserIdentity = {
 };
 
 function parseBoolean(value: string | undefined, defaultValue = false): boolean {
-  if (typeof value !== 'string') return defaultValue;
+  if (typeof value !== 'string') {
+    return defaultValue;
+  }
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on')
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
     return true;
-  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off')
+  }
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') {
     return false;
+  }
   return defaultValue;
 }
 

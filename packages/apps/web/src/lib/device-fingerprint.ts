@@ -51,18 +51,30 @@ export function getDeviceName(): string {
   const ua = navigator.userAgent;
 
   let browser = 'Unknown Browser';
-  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
-  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
-  else if (ua.includes('Firefox')) browser = 'Firefox';
-  else if (ua.includes('Edg')) browser = 'Edge';
+  if (ua.includes('Chrome') && !ua.includes('Edg')) {
+    browser = 'Chrome';
+  } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+    browser = 'Safari';
+  } else if (ua.includes('Firefox')) {
+    browser = 'Firefox';
+  } else if (ua.includes('Edg')) {
+    browser = 'Edge';
+  }
 
   let os = 'Unknown OS';
-  if (ua.includes('Win')) os = 'Windows';
-  else if (ua.includes('Mac')) os = 'macOS';
-  else if (ua.includes('Linux')) os = 'Linux';
-  else if (ua.includes('iPhone')) os = 'iPhone';
-  else if (ua.includes('iPad')) os = 'iPad';
-  else if (ua.includes('Android')) os = 'Android';
+  if (ua.includes('Win')) {
+    os = 'Windows';
+  } else if (ua.includes('Mac')) {
+    os = 'macOS';
+  } else if (ua.includes('Linux')) {
+    os = 'Linux';
+  } else if (ua.includes('iPhone')) {
+    os = 'iPhone';
+  } else if (ua.includes('iPad')) {
+    os = 'iPad';
+  } else if (ua.includes('Android')) {
+    os = 'Android';
+  }
 
   return `${browser} on ${os}`;
 }

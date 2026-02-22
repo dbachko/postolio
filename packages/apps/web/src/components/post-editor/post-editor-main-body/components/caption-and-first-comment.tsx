@@ -29,7 +29,9 @@ export function CaptionAndFirstComment({
   brandId,
   disabled,
 }: CaptionAndFirstCommentProps) {
-  if (contentType === 'story') return null;
+  if (contentType === 'story') {
+    return null;
+  }
 
   return (
     <>

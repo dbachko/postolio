@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { MagicLinkService } from '../services/magic-link.js';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';

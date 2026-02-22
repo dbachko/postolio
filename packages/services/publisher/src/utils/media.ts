@@ -34,7 +34,9 @@ export async function getSignedVideoUrl(videoKey: string): Promise<string> {
   if (/^https?:\/\//i.test(candidate)) {
     try {
       const url = new URL(candidate);
-      if (url.protocol === 'http:') url.protocol = 'https:';
+      if (url.protocol === 'http:') {
+        url.protocol = 'https:';
+      }
       return url.toString();
     } catch {
       return candidate;
@@ -60,7 +62,9 @@ export async function getSignedImageUrlFromKey(key: string): Promise<string> {
   if (/^https?:\/\//i.test(candidate)) {
     try {
       const url = new URL(candidate);
-      if (url.protocol === 'http:') url.protocol = 'https:';
+      if (url.protocol === 'http:') {
+        url.protocol = 'https:';
+      }
       return url.toString();
     } catch {
       return candidate;

@@ -117,10 +117,16 @@ export function QueueSettingsHeader({
                     placeholder="e.g. Evergreen"
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return;
+                      if (e.key !== 'Enter') {
+                        return;
+                      }
                       e.preventDefault();
-                      if (creatingQueue) return;
-                      if (!newQueueName.trim()) return;
+                      if (creatingQueue) {
+                        return;
+                      }
+                      if (!newQueueName.trim()) {
+                        return;
+                      }
                       onCreateQueue();
                     }}
                   />

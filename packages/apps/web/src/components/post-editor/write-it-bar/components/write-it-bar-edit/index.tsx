@@ -95,8 +95,12 @@ export function WriteItBarEdit({
                       'hover:text-foreground cursor-not-allowed opacity-50 hover:bg-transparent'
                   )}
                   onClick={() => {
-                    if (barProps.isSaving || barProps.isUnscheduling) return;
-                    if (!barProps.hasChanges) return;
+                    if (barProps.isSaving || barProps.isUnscheduling) {
+                      return;
+                    }
+                    if (!barProps.hasChanges) {
+                      return;
+                    }
                     barProps.onSave();
                   }}
                 >
@@ -116,7 +120,9 @@ export function WriteItBarEdit({
             open={postingPopoverOpen}
             onOpenChange={(open) => {
               setPostingPopoverOpen(open);
-              if (!open) setPostingPopoverView('menu');
+              if (!open) {
+                setPostingPopoverView('menu');
+              }
             }}
           >
             <ButtonGroup className="w-full sm:w-auto">

@@ -61,14 +61,18 @@ export function usePostEditorSaveActions(params: {
   } = params;
 
   const mediaChanged = useMemo(() => {
-    if (!post) return false;
+    if (!post) {
+      return false;
+    }
     const formCarouselIds = (formData.carouselAssets || []).map((a) => a.id);
     const postCarouselIds = (post.mediaAssets || []).map((asset) => asset.assetId);
     return JSON.stringify(formCarouselIds) !== JSON.stringify(postCarouselIds);
   }, [formData.carouselAssets, post]);
 
   const persistMediaChanges = useCallback(async () => {
-    if (!id || !mediaChanged) return;
+    if (!id || !mediaChanged) {
+      return;
+    }
     const assetIds = formData.carouselAssets.map((a) => a.id).filter(Boolean);
     const validAssetIds = assetIds.filter(
       (assetId) => typeof assetId === 'string' && !assetId.startsWith('http')
@@ -89,7 +93,9 @@ export function usePostEditorSaveActions(params: {
   }, [formData.carouselAssets, id, mediaChanged, queryClient]);
 
   const handleSaveChanges = useCallback(async (): Promise<boolean> => {
-    if (!id || !hasChanges) return true;
+    if (!id || !hasChanges) {
+      return true;
+    }
 
     if (!validation.ok) {
       toast.error(validationError || 'Please fix validation errors before saving');
@@ -204,7 +210,9 @@ export function usePostEditorSaveActions(params: {
   ]);
 
   const moveToQueue = useCallback(async (): Promise<void> => {
-    if (isQueueing) return;
+    if (isQueueing) {
+      return;
+    }
     if (!queueSupportedForPost) {
       toast.error(queueBlockerForPost || 'Queue scheduling is not available for this post.');
       return;

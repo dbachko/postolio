@@ -35,8 +35,7 @@ import {
 } from '@/features/analytics/hooks';
 import type { Period } from '@/features/analytics/types';
 import { daysFromPeriod } from '@/features/analytics/utils';
-import type { AnalyticsTabKey } from '@/features/analytics/platforms';
-import { getPlatformAnalyticsModule } from '@/features/analytics/platforms';
+import { type AnalyticsTabKey, getPlatformAnalyticsModule } from '@/features/analytics/platforms';
 import { AnalyticsPeriodSelect } from '@/features/analytics/components/AnalyticsPeriodSelect';
 import { getPlatformIcon } from '@/lib/platform-icons';
 
@@ -60,7 +59,9 @@ export default function AnalyticsAccount() {
   const accounts = useMemo(() => accountsQuery.data?.socialAccounts || [], [accountsQuery.data]);
 
   const currentAccount = useMemo(() => {
-    if (!socialAccountId) return null;
+    if (!socialAccountId) {
+      return null;
+    }
     return accounts.find((a) => a.id === socialAccountId) || null;
   }, [accounts, socialAccountId]);
 

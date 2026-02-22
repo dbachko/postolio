@@ -39,7 +39,9 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
       for (const p of pubs) {
         const m = p.metricsLatest;
-        if (!m) continue;
+        if (!m) {
+          continue;
+        }
         const key = p.platform;
         byPlatform[key] ||= { posts: 0, impressions: 0, engagement: 0, reach: 0 };
         byPlatform[key].posts += 1;
@@ -66,11 +68,19 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
         let seriesReach = 0;
         for (const s of samples) {
           const val = Number(s.value || 0);
-          if ((s.metricName as any) === 'impressions') seriesImpressions += val;
-          if ((s.metricName as any) === 'reach') seriesReach += val;
+          if ((s.metricName as any) === 'impressions') {
+            seriesImpressions += val;
+          }
+          if ((s.metricName as any) === 'reach') {
+            seriesReach += val;
+          }
         }
-        if (totalImpressions === 0) totalImpressions = seriesImpressions;
-        if (totalReach === 0) totalReach = seriesReach;
+        if (totalImpressions === 0) {
+          totalImpressions = seriesImpressions;
+        }
+        if (totalReach === 0) {
+          totalReach = seriesReach;
+        }
       }
 
       const averageEngagementRate =
@@ -97,7 +107,9 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
       for (const p of previousPubs) {
         const m = p.metricsLatest;
-        if (!m) continue;
+        if (!m) {
+          continue;
+        }
         prevImpressions += m.impressions || 0;
         prevEngagement += m.engagement || 0;
         prevReach += m.reach || 0;
@@ -194,9 +206,13 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
         const date = s.asOf.toISOString().split('T')[0];
         byDate[date] ||= { impressions: 0, reach: 0, profile_views: 0 };
         const val = Number(s.value || 0);
-        if ((s.metricName as any) === 'impressions') byDate[date].impressions += val;
-        else if ((s.metricName as any) === 'reach') byDate[date].reach += val;
-        else if ((s.metricName as any) === 'profile_views') byDate[date].profile_views += val;
+        if ((s.metricName as any) === 'impressions') {
+          byDate[date].impressions += val;
+        } else if ((s.metricName as any) === 'reach') {
+          byDate[date].reach += val;
+        } else if ((s.metricName as any) === 'profile_views') {
+          byDate[date].profile_views += val;
+        }
       }
 
       const series = Object.keys(byDate)
@@ -256,7 +272,9 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           const assetsClient = getAssetsClient();
           const assets = await assetsClient.getBatchAssets(uniquePrimaryAssetIds);
           assets.forEach((asset) => {
-            if (asset?.id) assetsById.set(asset.id, asset);
+            if (asset?.id) {
+              assetsById.set(asset.id, asset);
+            }
           });
         } catch (error) {
           fastify.log.warn(
@@ -645,7 +663,9 @@ export const brandAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           const assetsClient = getAssetsClient();
           const assets = await assetsClient.getBatchAssets(uniquePrimaryAssetIds);
           assets.forEach((asset) => {
-            if (asset?.id) assetsById.set(asset.id, asset);
+            if (asset?.id) {
+              assetsById.set(asset.id, asset);
+            }
           });
         } catch (error) {
           fastify.log.warn(

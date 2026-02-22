@@ -1,5 +1,9 @@
-import type { Connector, PlatformName } from '@postolio/connectors';
-import { InstagramConnector, FacebookConnector } from '@postolio/connectors';
+import {
+  InstagramConnector,
+  FacebookConnector,
+  type Connector,
+  type PlatformName,
+} from '@postolio/connectors';
 
 /**
  * Factory for getting platform-specific connectors

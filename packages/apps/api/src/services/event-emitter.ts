@@ -3,7 +3,7 @@
  * Emits events to AWS EventBridge for microservices communication
  */
 
-import { EventBridge, PutEventsCommandOutput } from '@aws-sdk/client-eventbridge';
+import { EventBridge, type PutEventsCommandOutput } from '@aws-sdk/client-eventbridge';
 import { logger as baseLogger } from '@postolio/logger';
 import { formatError } from '../utils/logging.js';
 
@@ -95,7 +95,7 @@ export class EventEmitter {
       hashtags?: string[];
       imageUrl?: string;
     },
-    version: number = 1
+    version = 1
   ): Promise<void> {
     try {
       const result = await this.eventBridge.putEvents({

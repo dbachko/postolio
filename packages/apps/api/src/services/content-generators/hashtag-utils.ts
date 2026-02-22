@@ -20,7 +20,9 @@ export function slugifyWord(value: string): string {
 
 export function expandTopicHashtags(topic: string): string[] {
   const token = slugifyWord(topic);
-  if (!token) return [];
+  if (!token) {
+    return [];
+  }
 
   const variants = [
     token,
@@ -56,8 +58,12 @@ export function buildHashtagPool(
   }
 
   topics.forEach((topic) => expandTopicHashtags(topic).forEach((tag) => pool.add(tag)));
-  if (theme) expandTopicHashtags(theme).forEach((tag) => pool.add(tag));
-  if (style) expandTopicHashtags(style).forEach((tag) => pool.add(tag));
+  if (theme) {
+    expandTopicHashtags(theme).forEach((tag) => pool.add(tag));
+  }
+  if (style) {
+    expandTopicHashtags(style).forEach((tag) => pool.add(tag));
+  }
 
   // Generic safe fillers (kept short and neutral)
   ['howto', 'tips', 'guide', 'daily', 'today', 'facts', 'ideas', 'insights'].forEach((tag) =>
@@ -125,7 +131,9 @@ export function enforceHashtagDiversity(
     // ensure minimum count
     while (tags.length < opts.minPerPost) {
       const candidate = nextCandidate(new Set(tags));
-      if (!candidate) break;
+      if (!candidate) {
+        break;
+      }
       tags.push(candidate);
       usage.set(candidate, (usage.get(candidate) || 0) + 1);
     }

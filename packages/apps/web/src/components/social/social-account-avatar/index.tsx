@@ -31,7 +31,9 @@ const iconSizeMap: Record<NonNullable<ProfileAvatarProps['size']>, string> = {
 
 function getFallbackInitial(name: string): string {
   const trimmed = (name || '').trim();
-  if (!trimmed) return 'U';
+  if (!trimmed) {
+    return 'U';
+  }
   const withoutAt = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
   const letter = withoutAt.trim()[0] || 'U';
   return letter.toUpperCase();

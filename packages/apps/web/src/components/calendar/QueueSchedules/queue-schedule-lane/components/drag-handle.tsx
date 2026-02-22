@@ -26,7 +26,9 @@ export function DragHandle({
     </span>
   );
 
-  if (!tooltip) return handle;
+  if (!tooltip) {
+    return handle;
+  }
 
   return (
     <TooltipProvider>

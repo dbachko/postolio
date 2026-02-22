@@ -53,7 +53,9 @@ export function InboxFeatureGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
   // Let ProtectedRoute handle redirects for unauthenticated sessions.
-  if (!isAuthenticated || isLoading) return <>{children}</>;
+  if (!isAuthenticated || isLoading) {
+    return <>{children}</>;
+  }
 
   if (!isInboxEnabled(user)) {
     return <Navigate to="/" replace />;
@@ -66,7 +68,9 @@ export function SnippetsFeatureGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
   // Let ProtectedRoute handle redirects for unauthenticated sessions.
-  if (!isAuthenticated || isLoading) return <>{children}</>;
+  if (!isAuthenticated || isLoading) {
+    return <>{children}</>;
+  }
 
   if (!isSnippetsEnabled(user)) {
     return <Navigate to="/" replace />;

@@ -1,6 +1,5 @@
-import { FastifyPluginAsync } from 'fastify';
-import { instagramBestTimeService } from '../services/instagram-best-time.js';
-import type { BestTimePayload } from '../services/instagram-best-time.js';
+import type { FastifyPluginAsync } from 'fastify';
+import { instagramBestTimeService, type BestTimePayload } from '../services/instagram-best-time.js';
 import { getRedisClient, redisService } from '../services/redis.js';
 import { assertBrandOwnership, assertInstagramConnected } from '../services/ownership.js';
 
@@ -134,9 +133,13 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       let ttl = -1;
       let meta: BestTimePayload | null = null;
       try {
-        if (redis) ttl = await redis.ttl(key);
+        if (redis) {
+          ttl = await redis.ttl(key);
+        }
         const cached = await redisService.get(key);
-        if (cached) meta = JSON.parse(cached) as BestTimePayload;
+        if (cached) {
+          meta = JSON.parse(cached) as BestTimePayload;
+        }
       } catch (e) {
         request.log.warn({ err: e }, 'Failed to read cache status');
       }

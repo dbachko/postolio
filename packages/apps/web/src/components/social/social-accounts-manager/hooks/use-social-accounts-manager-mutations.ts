@@ -29,7 +29,9 @@ export function useSocialAccountsManagerMutations({
       await queryClient.cancelQueries({ queryKey: ['brand-social-accounts', brandId] });
       const previous = queryClient.getQueryData(['brand-social-accounts', brandId]);
       queryClient.setQueryData(['brand-social-accounts', brandId], (old: any) => {
-        if (!old || typeof old !== 'object') return old;
+        if (!old || typeof old !== 'object') {
+          return old;
+        }
         return { ...old, defaultPostSocialAccountIds: socialAccountIds };
       });
       return { previous };
@@ -110,12 +112,16 @@ export function useSocialAccountsManagerMutations({
       await queryClient.cancelQueries({ queryKey: ['brand-social-accounts', brandId] });
       const previous = queryClient.getQueryData(['brand-social-accounts', brandId]);
       queryClient.setQueryData(['brand-social-accounts', brandId], (old: any) => {
-        if (!old || typeof old !== 'object') return old;
+        if (!old || typeof old !== 'object') {
+          return old;
+        }
         const accounts = Array.isArray(old.socialAccounts) ? old.socialAccounts.slice() : [];
         const orderIndex = new Map(orderedIds.map((id, idx) => [id, idx]));
         const nextAccounts = accounts.map((a: any) => {
           const idx = orderIndex.get(a?.id);
-          if (typeof idx !== 'number') return a;
+          if (typeof idx !== 'number') {
+            return a;
+          }
           return { ...a, sortOrder: idx };
         });
         return {
@@ -127,7 +133,9 @@ export function useSocialAccountsManagerMutations({
       return { previous };
     },
     onError: (error: any, _orderedIds, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(['brand-social-accounts', brandId], ctx.previous);
+      if (ctx?.previous) {
+        queryClient.setQueryData(['brand-social-accounts', brandId], ctx.previous);
+      }
       toast.error('Failed to reorder accounts', {
         description: error?.message || 'Please try again',
       });

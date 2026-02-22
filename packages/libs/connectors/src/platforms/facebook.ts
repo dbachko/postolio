@@ -31,7 +31,7 @@ export class FacebookConnector implements Connector {
   async listRecentPosts(
     creds: Credentials,
     account: AccountIdentity,
-    limit: number = 25,
+    limit = 25,
     cursor?: string | null
   ): Promise<ListPostsResult> {
     try {
@@ -83,15 +83,22 @@ export class FacebookConnector implements Connector {
           }
 
           if (!mediaUrl) {
-            if (imageSrc) mediaUrl = imageSrc;
-            else if (fullPicture) mediaUrl = fullPicture;
+            if (imageSrc) {
+              mediaUrl = imageSrc;
+            } else if (fullPicture) {
+              mediaUrl = fullPicture;
+            }
           }
         }
 
         if (!mediaType) {
-          if (fullPicture) mediaType = 'IMAGE';
-          else if (caption) mediaType = 'TEXT';
-          else mediaType = 'TEXT';
+          if (fullPicture) {
+            mediaType = 'IMAGE';
+          } else if (caption) {
+            mediaType = 'TEXT';
+          } else {
+            mediaType = 'TEXT';
+          }
         }
 
         return {

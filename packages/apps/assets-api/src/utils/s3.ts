@@ -114,7 +114,9 @@ export async function deleteS3Objects(keys: string[]): Promise<void> {
   const normalized = Array.from(
     new Set(keys.map((key) => key.trim()).filter((key) => key.length > 0))
   );
-  if (normalized.length === 0) return;
+  if (normalized.length === 0) {
+    return;
+  }
 
   const chunkSize = 1000;
   for (let index = 0; index < normalized.length; index += chunkSize) {

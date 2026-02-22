@@ -21,7 +21,9 @@ export function useCalendarBackgroundClick({
 }: UseCalendarBackgroundClickParams) {
   return useCallback(
     (value: Date) => {
-      if (typeof window === 'undefined') return;
+      if (typeof window === 'undefined') {
+        return;
+      }
 
       try {
         const brandTz = tzRef.current;

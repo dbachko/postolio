@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { monitoringService } from '../services/monitoring.js';
 import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js';
 

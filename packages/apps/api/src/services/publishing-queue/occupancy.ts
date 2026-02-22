@@ -6,7 +6,9 @@ export function findOccupiedTime(params: {
   windowMs: number;
 }): number | null {
   const { candidateUtcMs, occupiedUtcMsSorted, windowMs } = params;
-  if (occupiedUtcMsSorted.length === 0) return null;
+  if (occupiedUtcMsSorted.length === 0) {
+    return null;
+  }
 
   // Binary search for nearest occupied time.
   let lo = 0;
@@ -14,9 +16,14 @@ export function findOccupiedTime(params: {
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
     const t = occupiedUtcMsSorted[mid]!;
-    if (t === candidateUtcMs) return t;
-    if (t < candidateUtcMs) lo = mid + 1;
-    else hi = mid - 1;
+    if (t === candidateUtcMs) {
+      return t;
+    }
+    if (t < candidateUtcMs) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
 
   const left = hi >= 0 ? occupiedUtcMsSorted[hi] : null;
@@ -28,8 +35,12 @@ export function findOccupiedTime(params: {
   if (leftOk && rightOk) {
     return Math.abs(candidateUtcMs - left!) <= Math.abs(candidateUtcMs - right!) ? left : right;
   }
-  if (leftOk) return left;
-  if (rightOk) return right;
+  if (leftOk) {
+    return left;
+  }
+  if (rightOk) {
+    return right;
+  }
   return null;
 }
 

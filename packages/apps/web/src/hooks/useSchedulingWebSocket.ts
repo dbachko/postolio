@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useBrandStore } from '../stores/brandStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOfflineQueue } from './useOfflineQueue';
-import type {
-  ConnectionStatus,
-  StatusUpdateEvent,
-  UseSchedulingWebSocketOptions,
-  WebSocketMessage,
+import {
+  type ConnectionStatus,
+  type StatusUpdateEvent,
+  type UseSchedulingWebSocketOptions,
+  type WebSocketMessage,
+  ConnectionError,
 } from '../types/websocket';
-import { ConnectionError } from '../types/websocket';
 import { useWsCacheInvalidation } from './ws/useWsCacheInvalidation';
 import { useWsBackoff } from './ws/useWsBackoff';
 import { useWsErrorHandler } from './ws/useWsErrorHandler';
@@ -75,7 +75,9 @@ export function useSchedulingWebSocket({
 
   // Memoize query keys for better performance
   const queryKeys = useMemo(() => {
-    if (!selectedBrand?.id) return [];
+    if (!selectedBrand?.id) {
+      return [];
+    }
     return [
       // Calendar drives most status badges (month key is appended downstream)
       ['calendar', selectedBrand.id],
@@ -248,9 +250,13 @@ export function useSchedulingWebSocket({
             // Subscribe to brand room and user notifications room after authentication
             try {
               const rooms: string[] = [];
-              if (selectedBrand?.id) rooms.push(`brand:${selectedBrand.id}`);
+              if (selectedBrand?.id) {
+                rooms.push(`brand:${selectedBrand.id}`);
+              }
               const anyMsg: any = message as any;
-              if (anyMsg.userId) rooms.push(`user:${anyMsg.userId}`);
+              if (anyMsg.userId) {
+                rooms.push(`user:${anyMsg.userId}`);
+              }
               if (rooms.length > 0) {
                 ws.send(
                   JSON.stringify({
@@ -353,7 +359,9 @@ export function useSchedulingWebSocket({
           const delay = calculateReconnectDelay(reconnectAttemptsRef.current);
           // Only increment attempts if we never reached authenticated state
           // This prevents infinite 1/5 loops when server immediately closes after onopen
-          if (!wasAuthenticated) reconnectAttemptsRef.current++;
+          if (!wasAuthenticated) {
+            reconnectAttemptsRef.current++;
+          }
 
           console.log(
             `Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`

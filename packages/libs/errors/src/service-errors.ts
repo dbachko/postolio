@@ -277,12 +277,7 @@ export function isServiceError(error: any, code?: string): error is ServiceError
 export class APIError extends ServiceError {
   public readonly statusCode: number;
 
-  constructor(
-    message: string,
-    code: string,
-    statusCode: number = 400,
-    details?: Record<string, any>
-  ) {
+  constructor(message: string, code: string, statusCode = 400, details?: Record<string, any>) {
     super({
       code,
       message,

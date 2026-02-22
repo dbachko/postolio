@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { getRedisClient } from '../services/redis.js';
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -176,11 +176,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Parse month string (format: YYYY-MM)
         const parts = month.split('-');
-        if (parts.length !== 2)
+        if (parts.length !== 2) {
           return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' });
+        }
         const [yearStr, monthStr] = parts;
-        if (!yearStr || !monthStr)
+        if (!yearStr || !monthStr) {
           return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' });
+        }
         const year = parseInt(yearStr, 10);
         const monthNum = parseInt(monthStr, 10);
         if (isNaN(year) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
@@ -229,7 +231,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         };
 
         // Get existing content for the month
-        let content: Array<any> = [];
+        let content: any[] = [];
         let hasPublications = true;
         try {
           content = await prisma.content.findMany({
@@ -421,7 +423,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         await assertBrandOwnership(userId, brandId);
 
         const parseList = (value: string | string[] | undefined | null): string[] => {
-          if (!value) return [];
+          if (!value) {
+            return [];
+          }
           const parts = Array.isArray(value) ? value : String(value).split(',');
           return parts.map((v) => String(v || '').trim()).filter(Boolean);
         };
@@ -439,8 +443,12 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           const v = String(value || '')
             .trim()
             .toLowerCase();
-          if (v === 'ig') return 'instagram';
-          if (v === 'fb') return 'facebook';
+          if (v === 'ig') {
+            return 'instagram';
+          }
+          if (v === 'fb') {
+            return 'facebook';
+          }
           return v;
         };
         const platformAllowList = new Set([
@@ -522,9 +530,15 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
               archived: 0,
             };
             const status = String(row.status);
-            if (status === 'open') entry.open = row._count._all;
-            if (status === 'resolved') entry.resolved = row._count._all;
-            if (status === 'archived') entry.archived = row._count._all;
+            if (status === 'open') {
+              entry.open = row._count._all;
+            }
+            if (status === 'resolved') {
+              entry.resolved = row._count._all;
+            }
+            if (status === 'archived') {
+              entry.archived = row._count._all;
+            }
             countsByPublicationId.set(row.publicationId, entry);
           }
 
@@ -571,13 +585,17 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             const totalComments = Math.max(persistedTotal, metricsTotal);
 
             // Inbox is engagement-driven; don't show posts with zero comment activity.
-            if (totalComments <= 0) continue;
+            if (totalComments <= 0) {
+              continue;
+            }
 
             // If we haven't ingested comment rows yet, treat the total as "to review" so the thread
             // appears and selecting it can hydrate details via Graph.
             const newCount = persistedTotal > 0 ? counts.open : totalComments;
 
-            if (view === 'to_review' && (!pub.content?.id || newCount <= 0)) continue;
+            if (view === 'to_review' && (!pub.content?.id || newCount <= 0)) {
+              continue;
+            }
 
             const latest = latestCommentByPublicationId.get(pub.id) || null;
             const lastActivityAt =
@@ -610,9 +628,15 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           (!channels && true) || (channels && (channels.has('dms') || channels.has('dm')));
         if (includeDMs) {
           const where: any = { brandId };
-          if (socialAccountIds.length) where.socialAccountId = { in: socialAccountIds };
-          if (view === 'to_review') where.state = 'active';
-          if (platforms) where.platform = { in: Array.from(platforms) } as any;
+          if (socialAccountIds.length) {
+            where.socialAccountId = { in: socialAccountIds };
+          }
+          if (view === 'to_review') {
+            where.state = 'active';
+          }
+          if (platforms) {
+            where.platform = { in: Array.from(platforms) } as any;
+          }
 
           const conversations = await prisma.dMConversation.findMany({
             where,
@@ -650,9 +674,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           );
 
           for (const conv of conversations) {
-            if (conv._count.messages <= 0) continue;
+            if (conv._count.messages <= 0) {
+              continue;
+            }
             const last = lastMessageByConversationId.get(conv.id) || null;
-            if (view === 'to_review' && last?.direction !== 'inbound') continue;
+            if (view === 'to_review' && last?.direction !== 'inbound') {
+              continue;
+            }
 
             items.push({
               type: 'dm_conversation',
@@ -708,10 +736,14 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
         const { id: brandId } = request.params;
         const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
 
         const parseList = (value: string | string[] | undefined | null): string[] => {
-          if (!value) return [];
+          if (!value) {
+            return [];
+          }
           const parts = Array.isArray(value) ? value : String(value).split(',');
           return parts.map((v) => String(v || '').trim()).filter(Boolean);
         };
@@ -799,10 +831,14 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
         const { id: brandId } = request.params;
         const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
 
         const parseList = (value: string | string[] | undefined | null): string[] => {
-          if (!value) return [];
+          if (!value) {
+            return [];
+          }
           const parts = Array.isArray(value) ? value : String(value).split(',');
           return parts.map((v) => String(v || '').trim()).filter(Boolean);
         };
@@ -881,7 +917,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Verify ownership
         const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
 
         const contentHistory = await prisma.content.findMany({
           where: {

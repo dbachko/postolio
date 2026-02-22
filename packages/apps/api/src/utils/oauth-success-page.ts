@@ -1,4 +1,4 @@
-import { FastifyReply } from 'fastify';
+import type { FastifyReply } from 'fastify';
 
 interface SuccessPageOptions {
   profile: {
@@ -27,9 +27,15 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
   };
 
   const formatNumber = (num: number | undefined): string => {
-    if (num === undefined || num === null) return '0';
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    if (num === undefined || num === null) {
+      return '0';
+    }
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
     return num.toString();
   };
 
@@ -324,7 +330,7 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
           </p>
 
           ${
-            profile && profile.username
+            profile?.username
               ? `
             <div class="profile-card">
               <div class="profile-header">

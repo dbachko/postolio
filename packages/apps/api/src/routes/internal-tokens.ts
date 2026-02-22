@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { getTokenService } from '../services/service-clients.js';
@@ -63,7 +63,7 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        if (!brand || brand.userId !== requesterId) {
+        if (brand?.userId !== requesterId) {
           fastify.log.warn({
             action: 'token.access.denied',
             reason: !brand ? 'brand_not_found' : 'unauthorized',

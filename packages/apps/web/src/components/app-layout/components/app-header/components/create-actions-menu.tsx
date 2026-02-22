@@ -54,7 +54,9 @@ export function CreateActionsMenu({
                 className="h-auto w-full items-start justify-start gap-3 px-3 py-2"
                 disabled={!hasSelectedBrand}
                 onClick={() => {
-                  if (!selectedBrandId) return;
+                  if (!selectedBrandId) {
+                    return;
+                  }
                   setOpen(false);
                   onUploadAsset(selectedBrandId);
                 }}

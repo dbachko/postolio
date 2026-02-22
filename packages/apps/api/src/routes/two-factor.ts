@@ -1,5 +1,5 @@
-import { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { TwoFactorService, TwoFactorMethod } from '../services/two-factor.js';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import { TwoFactorService, type TwoFactorMethod } from '../services/two-factor.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import { twoFactorSetupSchema, twoFactorVerifySchema } from '../schemas/auth.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
@@ -40,7 +40,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [fastify.authenticate, validateAndSanitize(twoFactorSetupSchema)],
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const { type, phoneNumber } = request.body;
       const userId = request.user.id;
 
@@ -73,7 +75,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [fastify.authenticate, validateAndSanitize(twoFactorVerifySchema)],
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const { code } = request.body; // trustDevice ignored for setup verification
       const userId = request.user.id;
       const ipAddress = request.ip;
@@ -145,7 +149,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [fastify.authenticate, enhancedRateLimiters.emailVerification()],
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const userId = request.user.id;
 
       const result = await TwoFactorService.sendEmailCode(userId);
@@ -171,7 +177,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const { password } = request.body;
       const userId = request.user.id;
       const ipAddress = request.ip;
@@ -200,7 +208,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const { password } = request.body;
       const userId = request.user.id;
 
@@ -229,7 +239,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       const userId = request.user.id;
 
       const { getDatabaseClient } = await import('../config/database.js');

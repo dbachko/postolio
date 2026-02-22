@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { monitoringService } from '../services/monitoring.js';
 
 // Simple monitoring middleware functions

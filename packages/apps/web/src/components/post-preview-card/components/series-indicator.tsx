@@ -5,7 +5,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 export function SeriesIndicator({ item }: { item: CalendarItem }) {
   return useMemo(() => {
-    if (item.type === 'placeholder') return null;
+    if (item.type === 'placeholder') {
+      return null;
+    }
     const record = item as unknown as Record<string, unknown>;
 
     const seriesId =
@@ -21,7 +23,9 @@ export function SeriesIndicator({ item }: { item: CalendarItem }) {
         ? record.contentSeriesColor.trim()
         : null;
 
-    if (!seriesId || !seriesName || !seriesColor) return null;
+    if (!seriesId || !seriesName || !seriesColor) {
+      return null;
+    }
 
     return (
       <TooltipProvider>

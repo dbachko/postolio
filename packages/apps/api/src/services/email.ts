@@ -1,8 +1,7 @@
-import nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import { logger as baseLogger } from '@postolio/logger';
-import { SESClient, SendEmailCommand, SESClientConfig } from '@aws-sdk/client-ses';
+import { SESClient, SendEmailCommand, type SESClientConfig } from '@aws-sdk/client-ses';
 import CircuitBreaker from 'opossum';
 import { formatError } from '../utils/logging.js';
 
@@ -603,7 +602,7 @@ If you didn't request this email, you can safely ignore it.
 
     const { html, text } = this.generateEmailTemplate({
       title: 'Welcome to Postolio! 🎉',
-      greeting: `Hi${name ? ' ' + name : ''},`,
+      greeting: `Hi${name ? ` ${name}` : ''},`,
       content: `
         <p>Welcome to Postolio - your AI-powered Instagram content management platform!</p>
         
@@ -719,12 +718,11 @@ If you didn't request this email, you can safely ignore it.
         // If we get a 400 error, it means SES is configured but email not verified
         // If we get 200 or 400, SES is working
         return $metadata.httpStatusCode === 200 || $metadata.httpStatusCode === 400;
-      } else {
-        // Verify SMTP connection
-        const transporter = this.getTransporter();
-        await transporter.verify();
-        return true;
       }
+      // Verify SMTP connection
+      const transporter = this.getTransporter();
+      await transporter.verify();
+      return true;
     } catch (error) {
       emailLogger.error('Email service verification failed', formatError(error));
       return false;

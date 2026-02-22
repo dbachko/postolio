@@ -77,11 +77,15 @@ export function usePostEditorDestinationActions(params: {
 
   const handleDestinationSwitch = useCallback(
     async (nextContentId: string) => {
-      if (!nextContentId || nextContentId === id) return;
+      if (!nextContentId || nextContentId === id) {
+        return;
+      }
 
       if (!disabled && hasChanges) {
         const ok = await handleSaveChanges();
-        if (!ok) return;
+        if (!ok) {
+          return;
+        }
       }
 
       if (layout === 'sidebar') {
@@ -96,12 +100,16 @@ export function usePostEditorDestinationActions(params: {
 
   const handleGroupTabChange = useCallback(
     async (value: string) => {
-      if (!isMultiDestinationGroup || !id) return;
+      if (!isMultiDestinationGroup || !id) {
+        return;
+      }
 
       if (value === 'template') {
         if (!disabled && hasChanges) {
           const ok = await handleSaveChanges();
-          if (!ok) return;
+          if (!ok) {
+            return;
+          }
         }
         setIsTemplateTab(true);
         return;
@@ -147,7 +155,9 @@ export function usePostEditorDestinationActions(params: {
   }, [templateFirstCommentOpen, templateFormData]);
 
   const handleSaveTemplate = useCallback(async (): Promise<boolean> => {
-    if (!contentGroupId) return false;
+    if (!contentGroupId) {
+      return false;
+    }
     try {
       await saveTemplateAsync(buildTemplatePayload());
       return true;
@@ -157,31 +167,45 @@ export function usePostEditorDestinationActions(params: {
   }, [buildTemplatePayload, contentGroupId, saveTemplateAsync]);
 
   const handleApplyTemplate = useCallback(async () => {
-    if (!contentGroupId) return;
+    if (!contentGroupId) {
+      return;
+    }
     if (templateHasChanges) {
       const ok = await handleSaveTemplate();
-      if (!ok) return;
+      if (!ok) {
+        return;
+      }
     }
     await applyTemplateAsync();
   }, [applyTemplateAsync, contentGroupId, handleSaveTemplate, templateHasChanges]);
 
   const handleResetDestinationToTemplate = useCallback(async () => {
-    if (!contentGroupId || !id) return;
+    if (!contentGroupId || !id) {
+      return;
+    }
     if (!disabled && hasChanges) {
       const ok = window.confirm(
         'You have unsaved changes for this destination. Resetting will discard them. Continue?'
       );
-      if (!ok) return;
+      if (!ok) {
+        return;
+      }
     }
     await resetDestinationAsync();
   }, [contentGroupId, disabled, hasChanges, id, resetDestinationAsync]);
 
   const handleAddDestinationToGroup = useCallback(
     async (targetSocialAccountId: string) => {
-      if (!multiDestinationEnabled) return;
-      if (!isMultiDestinationGroup || !contentGroupId) return;
+      if (!multiDestinationEnabled) {
+        return;
+      }
+      if (!isMultiDestinationGroup || !contentGroupId) {
+        return;
+      }
       const normalized = (targetSocialAccountId || '').trim();
-      if (!normalized || groupDestinationSocialAccountIds.has(normalized)) return;
+      if (!normalized || groupDestinationSocialAccountIds.has(normalized)) {
+        return;
+      }
       if (
         disabled ||
         groupHasPublishedDestinations ||
@@ -200,12 +224,16 @@ export function usePostEditorDestinationActions(params: {
           return;
         }
         const ok = await handleSaveTemplate();
-        if (!ok) return;
+        if (!ok) {
+          return;
+        }
       }
 
       if (!isTemplateTab && hasChanges) {
         const ok = await handleSaveChanges();
-        if (!ok) return;
+        if (!ok) {
+          return;
+        }
       }
 
       try {
@@ -222,7 +250,7 @@ export function usePostEditorDestinationActions(params: {
 
         const scheduling = response?.scheduling;
         const results = Array.isArray(scheduling?.results) ? scheduling.results : [];
-        const failed = results.find((r: any) => r && r.ok === false);
+        const failed = results.find((r: any) => r?.ok === false);
         if (failed) {
           const errorMessage =
             typeof failed?.error?.message === 'string'
@@ -274,16 +302,28 @@ export function usePostEditorDestinationActions(params: {
 
   const handleAddDestinationToSingle = useCallback(
     async (targetSocialAccountId: string) => {
-      if (!multiDestinationEnabled) return;
-      if (!id || isMultiDestinationGroup) return;
+      if (!multiDestinationEnabled) {
+        return;
+      }
+      if (!id || isMultiDestinationGroup) {
+        return;
+      }
       const normalized = (targetSocialAccountId || '').trim();
-      if (!normalized) return;
-      if (normalized === selectedTargetSocialAccountId) return;
-      if (disabled || isSaving || isAddingContentDestination) return;
+      if (!normalized) {
+        return;
+      }
+      if (normalized === selectedTargetSocialAccountId) {
+        return;
+      }
+      if (disabled || isSaving || isAddingContentDestination) {
+        return;
+      }
 
       if (hasChanges) {
         const ok = await handleSaveChanges();
-        if (!ok) return;
+        if (!ok) {
+          return;
+        }
       }
 
       try {
@@ -300,7 +340,7 @@ export function usePostEditorDestinationActions(params: {
 
         const scheduling = response?.scheduling;
         const results = Array.isArray(scheduling?.results) ? scheduling.results : [];
-        const failed = results.find((r: any) => r && r.ok === false);
+        const failed = results.find((r: any) => r?.ok === false);
         if (failed) {
           const errorMessage =
             typeof failed?.error?.message === 'string'
@@ -342,7 +382,9 @@ export function usePostEditorDestinationActions(params: {
   );
 
   useEffect(() => {
-    if (isMultiDestinationGroup) return;
+    if (isMultiDestinationGroup) {
+      return;
+    }
     setIsTemplateTab(false);
   }, [isMultiDestinationGroup, setIsTemplateTab]);
 

@@ -3,7 +3,7 @@
  * Provides a unified interface for publishing to multiple social media platforms
  */
 
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 // Centralize Facebook Graph API version to ease upgrades across adapters
 const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
 const fbGraph = (path: string) => `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
@@ -117,7 +117,7 @@ export class InstagramAdapter implements PlatformAdapter {
 
   formatContent(content: PlatformContent): PlatformContent {
     const finalCaption =
-      content.caption.length > 2200 ? content.caption.substring(0, 2197) + '...' : content.caption;
+      content.caption.length > 2200 ? `${content.caption.substring(0, 2197)}...` : content.caption;
 
     return {
       ...content,
@@ -444,48 +444,47 @@ export class FacebookAdapter implements PlatformAdapter {
             postType: 'photo',
           },
         };
-      } else {
-        // Text-only post
-        const response = await fetch(fbGraph(`${pageId}/feed`), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(postData),
-        });
-
-        if (!response.ok) {
-          const errorJson: unknown = await response.json();
-          const fbErr =
-            errorJson && typeof errorJson === 'object' && 'error' in errorJson
-              ? (errorJson as { error?: { message?: string } })
-              : undefined;
-          throw new Error(`Facebook post failed: ${fbErr?.error?.message || 'Unknown error'}`);
-        }
-
-        const responseData = (await response.json()) as { id: string };
-        const postId = responseData.id;
-
-        // Get the permalink
-        const permalinkResponse = await fetch(
-          fbGraph(`${postId}?fields=permalink_url&access_token=${credentials.accessToken}`)
-        );
-
-        const permalinkData = (await permalinkResponse.json()) as {
-          permalink_url?: string;
-        };
-
-        return {
-          platform: 'facebook',
-          postId,
-          permalink: permalinkData.permalink_url || `https://facebook.com/${postId}`,
-          publishedAt: new Date().toISOString(),
-          metadata: {
-            pageId,
-            postType: 'text',
-          },
-        };
       }
+      // Text-only post
+      const response = await fetch(fbGraph(`${pageId}/feed`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(postData),
+      });
+
+      if (!response.ok) {
+        const errorJson: unknown = await response.json();
+        const fbErr =
+          errorJson && typeof errorJson === 'object' && 'error' in errorJson
+            ? (errorJson as { error?: { message?: string } })
+            : undefined;
+        throw new Error(`Facebook post failed: ${fbErr?.error?.message || 'Unknown error'}`);
+      }
+
+      const responseData = (await response.json()) as { id: string };
+      const postId = responseData.id;
+
+      // Get the permalink
+      const permalinkResponse = await fetch(
+        fbGraph(`${postId}?fields=permalink_url&access_token=${credentials.accessToken}`)
+      );
+
+      const permalinkData = (await permalinkResponse.json()) as {
+        permalink_url?: string;
+      };
+
+      return {
+        platform: 'facebook',
+        postId,
+        permalink: permalinkData.permalink_url || `https://facebook.com/${postId}`,
+        publishedAt: new Date().toISOString(),
+        metadata: {
+          pageId,
+          postType: 'text',
+        },
+      };
     } catch (error) {
       console.error('Facebook publish error:', error);
       throw error;

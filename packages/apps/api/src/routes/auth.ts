@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { validateAndSanitize } from '../middleware/validation.js';
@@ -335,7 +335,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       if (invalidated && sessionId && userId) {
         const { SessionService } = await import('../services/session.service.js');
         const session = await SessionService.getSessionById(sessionId, userId);
-        sessionRevoked = !session || session.revokedAt !== null;
+        sessionRevoked = session?.revokedAt !== null;
       }
     }
 
@@ -460,7 +460,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         );
         if (err.name === 'TokenExpiredError') {
           return reply.code(401).send({ error: 'Token expired' });
-        } else if (err.name === 'JsonWebTokenError') {
+        }
+        if (err.name === 'JsonWebTokenError') {
           return reply.code(401).send({ error: 'Invalid token' });
         }
       }

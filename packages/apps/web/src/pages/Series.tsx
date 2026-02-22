@@ -25,8 +25,12 @@ type ContentSeriesSummary = {
 function statusBadgeVariant(
   status: ContentSeriesSummary['status']
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'active') return 'secondary';
-  if (status === 'paused') return 'outline';
+  if (status === 'active') {
+    return 'secondary';
+  }
+  if (status === 'paused') {
+    return 'outline';
+  }
   return 'outline';
 }
 
@@ -50,7 +54,9 @@ export function Series() {
   const filtered = useMemo(() => {
     const list = seriesQuery.data ?? [];
     const q = search.trim().toLowerCase();
-    if (!q) return list;
+    if (!q) {
+      return list;
+    }
     return list.filter((s) => {
       const hay = `${s.name || ''} ${s.description || ''}`.toLowerCase();
       return hay.includes(q);

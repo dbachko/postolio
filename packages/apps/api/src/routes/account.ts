@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 
 // Lightweight proxy endpoints for account-scoped utilities
@@ -33,7 +33,9 @@ const accountRoutes: FastifyPluginAsync = async (fastify) => {
           select: { id: true, name: true },
         });
 
-        if (brands.length === 0) return reply.send({ success: true, data: [] });
+        if (brands.length === 0) {
+          return reply.send({ success: true, data: [] });
+        }
 
         const brandIds = brands.map((b) => b.id);
 
@@ -54,9 +56,14 @@ const accountRoutes: FastifyPluginAsync = async (fastify) => {
         }
         for (const row of grouped) {
           const entry = brandMap.get(row.brandId);
-          if (!entry) continue;
-          if (row.status === 'scheduled') entry.scheduled += row._count._all as number;
-          else if (row.status === 'draft') entry.draft += row._count._all as number;
+          if (!entry) {
+            continue;
+          }
+          if (row.status === 'scheduled') {
+            entry.scheduled += row._count._all as number;
+          } else if (row.status === 'draft') {
+            entry.draft += row._count._all as number;
+          }
         }
 
         const data = Array.from(brandMap.entries()).map(([brandId, v]) => ({

@@ -61,7 +61,7 @@ export class LearningRepository {
 
   async listRecentSignals(
     brandId: string,
-    limit: number = 20
+    limit = 20
   ): Promise<Array<Pick<LearningSignalItem, 'insights' | 'profileUpdates' | 'createdAt'>>> {
     // In unit tests or local scripts without AWS region/creds, skip querying and return empty
     if (!process.env.AWS_REGION) {

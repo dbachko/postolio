@@ -79,7 +79,7 @@ export default function NotificationPreferencesPanel() {
     };
     const meta = byType[type] ?? {
       title: humanizeType(type),
-      description: 'Notification about: ' + humanizeType(type).toLowerCase(),
+      description: `Notification about: ${humanizeType(type).toLowerCase()}`,
     };
     return { categoryLabel: categoryTitle(category), ...meta };
   };
@@ -98,8 +98,12 @@ export default function NotificationPreferencesPanel() {
         }
         const key = `${p.category}:${p.type}`;
         const entry = map.get(key) ?? {};
-        if (p.channel === 'in_app') entry.in_app = p.enabled;
-        if (p.channel === 'email') entry.email = p.enabled;
+        if (p.channel === 'in_app') {
+          entry.in_app = p.enabled;
+        }
+        if (p.channel === 'email') {
+          entry.email = p.enabled;
+        }
         map.set(key, entry);
       }
 
@@ -140,7 +144,9 @@ export default function NotificationPreferencesPanel() {
     const accountIndices: number[] = [];
 
     rows.forEach((r, i) => {
-      if (r.category === 'accounts') accountIndices.push(i);
+      if (r.category === 'accounts') {
+        accountIndices.push(i);
+      }
     });
 
     if (accountIndices.length > 0) {
@@ -166,7 +172,9 @@ export default function NotificationPreferencesPanel() {
     }
 
     rows.forEach((r, i) => {
-      if (r.category === 'accounts') return;
+      if (r.category === 'accounts') {
+        return;
+      }
       const meta = getMeta(r.category, r.type);
       groups.push({
         key: `${r.category}:${r.type}`,
@@ -192,7 +200,9 @@ export default function NotificationPreferencesPanel() {
   useEffect(() => {
     if (rows.length > 0 && Object.keys(expanded).length === 0) {
       const defaults: Record<string, boolean> = {};
-      for (const g of buildGroups()) defaults[g.key] = true;
+      for (const g of buildGroups()) {
+        defaults[g.key] = true;
+      }
       setExpanded(defaults);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,7 +240,9 @@ export default function NotificationPreferencesPanel() {
 
   const toggleTypeMaster = async (key: string, enabled: boolean) => {
     const idx = rows.findIndex((r) => `${r.category}:${r.type}` === key);
-    if (idx === -1) return;
+    if (idx === -1) {
+      return;
+    }
     const next = [...rows];
     const row = { ...next[idx] };
     const prev = { in_app: row.in_app, email: row.email };
@@ -247,7 +259,7 @@ export default function NotificationPreferencesPanel() {
         channel: 'in_app' | 'email';
         enabled: boolean;
       }> = [];
-      if (prev.in_app !== enabled)
+      if (prev.in_app !== enabled) {
         updates.push({
           category: row.category,
           type: row.type,
@@ -255,7 +267,8 @@ export default function NotificationPreferencesPanel() {
           channel: 'in_app',
           enabled,
         });
-      if (prev.email !== enabled)
+      }
+      if (prev.email !== enabled) {
         updates.push({
           category: row.category,
           type: row.type,
@@ -263,7 +276,10 @@ export default function NotificationPreferencesPanel() {
           channel: 'email',
           enabled,
         });
-      if (updates.length > 0) await notificationsApi.updatePreferences(updates);
+      }
+      if (updates.length > 0) {
+        await notificationsApi.updatePreferences(updates);
+      }
       toast.success(`Preferences ${enabled ? 'enabled' : 'disabled'} for ${row.type}`);
     } catch (_e) {
       const revert = [...rows];
@@ -383,7 +399,9 @@ export default function NotificationPreferencesPanel() {
                 <div className="border-t p-3">
                   {g.items.map((item, idx) => {
                     const r = rows[item.index];
-                    if (!r) return null;
+                    if (!r) {
+                      return null;
+                    }
                     const disabled =
                       g.category === 'accounts' ? !(masters['accounts'] ?? true) : false;
                     return (

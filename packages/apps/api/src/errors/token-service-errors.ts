@@ -8,7 +8,7 @@ export class TokenServiceError extends Error {
     message: string,
     public code: string,
     public statusCode?: number,
-    public retryable: boolean = false,
+    public retryable = false,
     public retryAfter?: number
   ) {
     super(message);

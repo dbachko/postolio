@@ -14,7 +14,9 @@ function parseArgs(): Partial<Args> {
   const out: Partial<Args> = {};
   for (let i = 2; i < process.argv.length; i++) {
     const token = process.argv[i];
-    if (token === '--') continue;
+    if (token === '--') {
+      continue;
+    }
 
     let key = token;
     let value: string | undefined;
@@ -27,7 +29,9 @@ function parseArgs(): Partial<Args> {
       i++;
     }
 
-    if (!value) continue;
+    if (!value) {
+      continue;
+    }
 
     switch (key) {
       case '--brandId':
@@ -92,7 +96,9 @@ async function main() {
       const existing = await prisma.assetTaxonomyItem.findFirst({
         where: { brandId, type: 'COLLECTION', name, deletedAt: null },
       });
-      if (existing) return existing;
+      if (existing) {
+        return existing;
+      }
       return prisma.assetTaxonomyItem.create({
         data: { brandId, type: 'COLLECTION', name, color },
       });
@@ -103,7 +109,9 @@ async function main() {
       const existing = await prisma.assetTaxonomyItem.findFirst({
         where: { brandId, type: 'LABEL', nameNorm, deletedAt: null },
       });
-      if (existing) return existing;
+      if (existing) {
+        return existing;
+      }
       return prisma.assetTaxonomyItem.create({
         data: { brandId, type: 'LABEL', name, nameNorm },
       });

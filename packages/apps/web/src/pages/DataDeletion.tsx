@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { ReactElement } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@postolio/database';
 
 import { getDatabaseClient } from '../config/database.js';
@@ -284,7 +284,9 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
           for (const item of defaultItems) {
             const laneKey = item.laneKey || 'post';
             const prev = maxPositionByLane.get(laneKey) ?? 0;
-            if (item.position > prev) maxPositionByLane.set(laneKey, item.position);
+            if (item.position > prev) {
+              maxPositionByLane.set(laneKey, item.position);
+            }
           }
 
           const queueItems = await tx.publishingQueueItem.findMany({
@@ -668,9 +670,13 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       const occupiedByMs = new Map<number, string>();
       const occupiedMsSorted: number[] = [];
       for (const c of scheduled) {
-        if (!c.scheduledAt) continue;
+        if (!c.scheduledAt) {
+          continue;
+        }
         const ms = c.scheduledAt.getTime();
-        if (!occupiedByMs.has(ms)) occupiedByMs.set(ms, c.id);
+        if (!occupiedByMs.has(ms)) {
+          occupiedByMs.set(ms, c.id);
+        }
         occupiedMsSorted.push(ms);
       }
       occupiedMsSorted.sort((a, b) => a - b);
@@ -958,7 +964,9 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
       scheduledAtUtc: Date
     ): { item: QueueItemRow; index: number } | null => {
       const list = itemsByLane.get(lk) ?? [];
-      if (list.length === 0) return null;
+      if (list.length === 0) {
+        return null;
+      }
 
       let idx = indexByLane.get(lk) ?? 0;
       while (idx < list.length) {
@@ -988,7 +996,9 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
 
         for (const lk of contentLanes) {
           const peek = peekNextEligibleItem(lk, inst.scheduledAtUtc);
-          if (!peek) continue;
+          if (!peek) {
+            continue;
+          }
 
           if (
             !chosen ||
@@ -1001,9 +1011,13 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        if (!chosenLane || !chosen) continue;
+        if (!chosenLane || !chosen) {
+          continue;
+        }
         const content = chosen.item.content;
-        if (!content) continue;
+        if (!content) {
+          continue;
+        }
 
         estimatedByContentId.set(content.id, inst.scheduledAtUtc);
         indexByLane.set(chosenLane, chosen.index + 1);
@@ -1012,9 +1026,13 @@ const publishingQueuesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const lk = inst.laneKey as ContentLaneKey;
       const peek = peekNextEligibleItem(lk, inst.scheduledAtUtc);
-      if (!peek) continue;
+      if (!peek) {
+        continue;
+      }
       const content = peek.item.content;
-      if (!content) continue;
+      if (!content) {
+        continue;
+      }
 
       estimatedByContentId.set(content.id, inst.scheduledAtUtc);
       indexByLane.set(lk, peek.index + 1);

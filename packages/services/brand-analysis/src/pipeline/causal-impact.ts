@@ -23,17 +23,22 @@ function naiveEffect(series: number[], idx: number): CausalImpactResult {
 
 export async function estimateCausalImpact(input: CausalImpactInput): Promise<CausalImpactResult> {
   const url = process.env.CAUSAL_IMPACT_URL;
-  if (!url) return naiveEffect(input.series, input.interventionIndex);
+  if (!url) {
+    return naiveEffect(input.series, input.interventionIndex);
+  }
   try {
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
     } as RequestInit);
-    if (!resp.ok) return naiveEffect(input.series, input.interventionIndex);
-    const json = (await resp.json()) as Partial<CausalImpactResult>;
-    if (typeof json?.effectEstimate !== 'number')
+    if (!resp.ok) {
       return naiveEffect(input.series, input.interventionIndex);
+    }
+    const json = (await resp.json()) as Partial<CausalImpactResult>;
+    if (typeof json?.effectEstimate !== 'number') {
+      return naiveEffect(input.series, input.interventionIndex);
+    }
     return {
       method: 'remote',
       effectEstimate: json.effectEstimate,

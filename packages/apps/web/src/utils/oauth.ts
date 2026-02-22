@@ -54,8 +54,8 @@ export function handleOAuthError(error: unknown, provider: 'google' | 'facebook'
 
 export async function retryWithExponentialBackoff<T>(
   fn: () => Promise<T>,
-  maxRetries: number = 3,
-  initialDelay: number = 1000
+  maxRetries = 3,
+  initialDelay = 1000
 ): Promise<T> {
   let lastError: unknown;
 

@@ -39,7 +39,9 @@ export function useSocialAccountsManagerConnect({
         typeof data.connectSessionId === 'string' && data.connectSessionId.trim()
           ? data.connectSessionId
           : null;
-      if (initialConnectSessionId) setConnectSessionId(initialConnectSessionId);
+      if (initialConnectSessionId) {
+        setConnectSessionId(initialConnectSessionId);
+      }
 
       const opened = startMetaOAuthPopup({
         authUrl: data.authUrl,
@@ -74,11 +76,17 @@ export function useSocialAccountsManagerConnect({
     queryFn: () => brandApi.getMetaConnectCandidates(connectSessionId!),
     enabled: !!connectSessionId,
     refetchInterval: (query) => {
-      if (!connectDialogOpen) return false;
-      if (!connectSessionId) return false;
+      if (!connectDialogOpen) {
+        return false;
+      }
+      if (!connectSessionId) {
+        return false;
+      }
       const data = query.state.data as any;
       const candidates = data?.candidates;
-      if (Array.isArray(candidates) && candidates.length > 0) return false;
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        return false;
+      }
       const error = query.state.error as any;
       const status = error?.status;
       const code = error?.data?.error;
@@ -117,19 +125,30 @@ export function useSocialAccountsManagerConnect({
   }, [candidates]);
 
   useEffect(() => {
-    if (!connectDialogOpen) return;
-    if (!candidates.length) return;
-    if (selectedCandidateIds.size > 0) return;
+    if (!connectDialogOpen) {
+      return;
+    }
+    if (!candidates.length) {
+      return;
+    }
+    if (selectedCandidateIds.size > 0) {
+      return;
+    }
 
     const defaults = new Set<string>();
     if (!multiDestinationEnabled) {
       const firstInstagram = candidates.find((c) => c.platform === 'instagram') || null;
-      if (firstInstagram) defaults.add(firstInstagram.candidateId);
+      if (firstInstagram) {
+        defaults.add(firstInstagram.candidateId);
+      }
     } else {
       for (const c of candidates) {
-        if (connectIntent === 'instagram' && c.platform === 'instagram')
+        if (connectIntent === 'instagram' && c.platform === 'instagram') {
           defaults.add(c.candidateId);
-        if (connectIntent === 'facebook' && c.platform === 'facebook') defaults.add(c.candidateId);
+        }
+        if (connectIntent === 'facebook' && c.platform === 'facebook') {
+          defaults.add(c.candidateId);
+        }
       }
     }
     setSelectedCandidateIds(defaults);
@@ -143,7 +162,9 @@ export function useSocialAccountsManagerConnect({
 
   const finalizeConnectMutation = useMutation({
     mutationFn: async () => {
-      if (!connectSessionId) throw new Error('Missing connectSessionId');
+      if (!connectSessionId) {
+        throw new Error('Missing connectSessionId');
+      }
       return brandApi.finalizeMetaConnect(connectSessionId, Array.from(selectedCandidateIds));
     },
     onSuccess: async () => {
@@ -162,17 +183,26 @@ export function useSocialAccountsManagerConnect({
   const toggleCandidate = (candidateId: string, checked: boolean) => {
     setSelectedCandidateIds((prev) => {
       const candidate = candidatesById.get(candidateId) || null;
-      if (!candidate) return prev;
+      if (!candidate) {
+        return prev;
+      }
 
       if (!multiDestinationEnabled) {
-        if (candidate.platform !== 'instagram') return prev;
-        if (!checked) return prev;
+        if (candidate.platform !== 'instagram') {
+          return prev;
+        }
+        if (!checked) {
+          return prev;
+        }
         return new Set([candidateId]);
       }
 
       const next = new Set(prev);
-      if (checked) next.add(candidateId);
-      else next.delete(candidateId);
+      if (checked) {
+        next.add(candidateId);
+      } else {
+        next.delete(candidateId);
+      }
       return next;
     });
   };

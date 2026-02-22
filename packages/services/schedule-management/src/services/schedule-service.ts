@@ -510,7 +510,9 @@ export class ScheduleService {
             })
           );
           const scheduleAgain = existingAgain.Item as Schedule | undefined;
-          if (!scheduleAgain) throw putErr;
+          if (!scheduleAgain) {
+            throw putErr;
+          }
           if (scheduleAgain.userId !== request.userId) {
             return { success: false, error: 'Forbidden: You do not have access to this schedule' };
           }
@@ -948,7 +950,7 @@ export class ScheduleService {
 
       // Build UpdateExpression supporting SET ... and conditional REMOVE ...
       const updateExpression = `SET ${updateExpressions.join(', ')}${
-        removeExpressions.length > 0 ? ' REMOVE ' + removeExpressions.join(', ') : ''
+        removeExpressions.length > 0 ? ` REMOVE ${removeExpressions.join(', ')}` : ''
       }`;
 
       // Update DynamoDB record

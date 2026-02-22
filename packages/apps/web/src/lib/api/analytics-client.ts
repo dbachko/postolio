@@ -58,11 +58,21 @@ export class AnalyticsClient {
     }
   ) {
     const params = new URLSearchParams();
-    if (options?.platform) params.set('platform', options.platform);
-    if (options?.sortBy) params.set('sortBy', options.sortBy);
-    if (options?.order) params.set('order', options.order);
-    if (options?.limit) params.set('limit', String(options.limit));
-    if (options?.offset) params.set('offset', String(options.offset));
+    if (options?.platform) {
+      params.set('platform', options.platform);
+    }
+    if (options?.sortBy) {
+      params.set('sortBy', options.sortBy);
+    }
+    if (options?.order) {
+      params.set('order', options.order);
+    }
+    if (options?.limit) {
+      params.set('limit', String(options.limit));
+    }
+    if (options?.offset) {
+      params.set('offset', String(options.offset));
+    }
 
     const qs = params.toString();
     return this.request(`/api/analytics/brands/${brandId}/posts${qs ? `?${qs}` : ''}`);
@@ -90,27 +100,37 @@ export class AnalyticsClient {
     }
   ) {
     const params = new URLSearchParams();
-    if (options.period) params.set('period', options.period);
-    if (options.sortBy) params.set('sortBy', options.sortBy);
-    if (options.order) params.set('order', options.order);
-    if (options.limit !== undefined) params.set('limit', String(options.limit));
-    if (options.offset !== undefined) params.set('offset', String(options.offset));
+    if (options.period) {
+      params.set('period', options.period);
+    }
+    if (options.sortBy) {
+      params.set('sortBy', options.sortBy);
+    }
+    if (options.order) {
+      params.set('order', options.order);
+    }
+    if (options.limit !== undefined) {
+      params.set('limit', String(options.limit));
+    }
+    if (options.offset !== undefined) {
+      params.set('offset', String(options.offset));
+    }
 
     const qs = params.toString();
     return this.request(`/api/analytics/social-accounts/${socialAccountId}/posts?${qs}`);
   }
 
-  getSocialAccountAIInsights(socialAccountId: string, days: number = 30) {
+  getSocialAccountAIInsights(socialAccountId: string, days = 30) {
     const qs = new URLSearchParams({ days: String(days) }).toString();
     return this.request(`/api/analytics/social-accounts/${socialAccountId}/ai-insights?${qs}`);
   }
 
-  getSocialAccountRecommendations(socialAccountId: string, days: number = 90) {
+  getSocialAccountRecommendations(socialAccountId: string, days = 90) {
     const qs = new URLSearchParams({ days: String(days) }).toString();
     return this.request(`/api/analytics/social-accounts/${socialAccountId}/recommendations?${qs}`);
   }
 
-  getSocialAccountForecasting(socialAccountId: string, days: number = 30, historical: number = 90) {
+  getSocialAccountForecasting(socialAccountId: string, days = 30, historical = 90) {
     const qs = new URLSearchParams({
       days: String(days),
       historical: String(historical),

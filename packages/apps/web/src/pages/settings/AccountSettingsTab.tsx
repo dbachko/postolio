@@ -46,15 +46,21 @@ export default function AccountSettingsTab() {
       'Are you sure you want to delete your Postolio account? This will schedule your account for deletion and may remove associated brands, posts, and analytics after the recovery period.'
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     setIsDeletingAccount(true);
     setDeletionRecoveryDeadline(null);
 
     try {
       const payload: { reason?: string; feedback?: string } = {};
-      if (selectedDeletionReason) payload.reason = selectedDeletionReason;
-      if (deletionFeedback.trim()) payload.feedback = deletionFeedback.trim();
+      if (selectedDeletionReason) {
+        payload.reason = selectedDeletionReason;
+      }
+      if (deletionFeedback.trim()) {
+        payload.feedback = deletionFeedback.trim();
+      }
 
       const res = await httpDelete('/api/legal/account', {
         body: JSON.stringify(payload),

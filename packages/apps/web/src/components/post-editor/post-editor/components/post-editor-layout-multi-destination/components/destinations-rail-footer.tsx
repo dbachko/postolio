@@ -74,7 +74,9 @@ export function DestinationsRailFooter({ state }: { state: PostEditorState }) {
                       key={opt.id}
                       value={searchValue}
                       onSelect={() => {
-                        if (isAlreadyInGroup) return;
+                        if (isAlreadyInGroup) {
+                          return;
+                        }
                         state.destinations.setEditDestinationsPopoverOpen(false);
                         void state.destinationActions.handleAddDestinationToGroup(opt.id);
                       }}

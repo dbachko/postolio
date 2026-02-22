@@ -33,7 +33,9 @@ export const schedulerAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { contentId, customTime } = request.body as ScheduleBody;
 
         if (!contentId) {
@@ -95,7 +97,9 @@ export const schedulerAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { brandId } = request.params as BrandParams;
         const userId = request.user.id;
 
@@ -118,7 +122,9 @@ export const schedulerAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { contentId } = request.params as ContentParams;
         const userId = request.user.id;
 
@@ -156,7 +162,9 @@ export const schedulerAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { contentId, newTime } = request.body as RescheduleBody;
 
         if (!contentId || !newTime) {
@@ -202,7 +210,9 @@ export const schedulerAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { contentIds, startTime } = request.body as BulkScheduleBody;
 
         if (!contentIds || !Array.isArray(contentIds) || contentIds.length === 0) {
@@ -245,7 +255,9 @@ export const schedulerAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const { brandId } = request.params as BrandParams;
         const userId = request.user.id;
 

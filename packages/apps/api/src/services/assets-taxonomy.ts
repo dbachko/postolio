@@ -35,7 +35,9 @@ async function resolveAnalysisCollection(brandId: string): Promise<string | null
       where: { brandId, type: 'COLLECTION', name: ANALYSIS_COLLECTION_NAME, deletedAt: null },
       select: { id: true },
     });
-    if (existing) return existing.id;
+    if (existing) {
+      return existing.id;
+    }
 
     const created = await prisma.assetTaxonomyItem.create({
       data: {

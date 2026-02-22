@@ -8,8 +8,12 @@ export function slugify(value: string, maxLength = 64): string {
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-  if (!normalized) return 'recipe';
-  if (normalized.length <= maxLength) return normalized;
+  if (!normalized) {
+    return 'recipe';
+  }
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
   return normalized.slice(0, maxLength).replace(/-+$/g, '');
 }
 

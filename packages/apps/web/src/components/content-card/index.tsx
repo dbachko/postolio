@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 // react-query not needed here after removing actions
 import { useNavigate } from 'react-router-dom';
-import { type Content } from '@/lib/api';
+import type { Content } from '@/lib/api';
 import { OptimizedImage } from '../optimized-image';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { useTimezone } from '@/contexts/TimezoneContext';
@@ -39,9 +39,13 @@ export function ContentCard({
     const resolveBrandTimezone = async () => {
       try {
         const tz = await getBrandTimezone(brandId);
-        if (mounted && tz) setBrandTimezone(tz);
+        if (mounted && tz) {
+          setBrandTimezone(tz);
+        }
       } catch {
-        if (mounted) setBrandTimezone(timezone);
+        if (mounted) {
+          setBrandTimezone(timezone);
+        }
       }
     };
     void resolveBrandTimezone();

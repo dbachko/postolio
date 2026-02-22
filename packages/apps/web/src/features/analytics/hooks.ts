@@ -72,7 +72,7 @@ export function useAccountTopPosts(socialAccountId?: string, period: Period = '3
   });
 }
 
-export function useAccountAIInsights(socialAccountId?: string, days: number = 30) {
+export function useAccountAIInsights(socialAccountId?: string, days = 30) {
   return useQuery<AIInsight[]>({
     queryKey: ['account-ai-insights', socialAccountId, days],
     enabled: Boolean(socialAccountId),
@@ -84,7 +84,7 @@ export function useAccountAIInsights(socialAccountId?: string, days: number = 30
   });
 }
 
-export function useAccountRecommendations(socialAccountId?: string, days: number = 90) {
+export function useAccountRecommendations(socialAccountId?: string, days = 90) {
   return useQuery<RecommendationsData | null>({
     queryKey: ['account-recommendations', socialAccountId, days],
     enabled: Boolean(socialAccountId),
@@ -96,11 +96,7 @@ export function useAccountRecommendations(socialAccountId?: string, days: number
   });
 }
 
-export function useAccountForecasts(
-  socialAccountId?: string,
-  days: number = 30,
-  historical: number = 90
-) {
+export function useAccountForecasts(socialAccountId?: string, days = 30, historical = 90) {
   return useQuery<ForecastsData | null>({
     queryKey: ['account-forecasts', socialAccountId, days, historical],
     enabled: Boolean(socialAccountId),

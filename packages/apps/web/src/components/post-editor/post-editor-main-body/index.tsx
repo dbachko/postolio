@@ -65,14 +65,22 @@ export function PostEditorMainBody({
   );
 
   useEffect(() => {
-    if (selectedPlatforms.length === 0) return;
+    if (selectedPlatforms.length === 0) {
+      return;
+    }
     const current = formData.contentType;
     const currentDisabledReason = contentTypeDisabledReasons[current];
-    if (!currentDisabledReason) return;
+    if (!currentDisabledReason) {
+      return;
+    }
 
     const firstEnabled = findFirstEnabledContentType(contentTypeDisabledReasons);
-    if (!firstEnabled) return;
-    if (firstEnabled === current) return;
+    if (!firstEnabled) {
+      return;
+    }
+    if (firstEnabled === current) {
+      return;
+    }
     setFormData((s) => ({ ...s, contentType: firstEnabled }));
   }, [contentTypeDisabledReasons, formData.contentType, selectedPlatforms.length, setFormData]);
 

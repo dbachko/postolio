@@ -3,7 +3,7 @@
  * Handles image upload for content
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { buildContentResponse } from '../../services/content-response-builder.js';
 import {
   verifyAssetOwnership,

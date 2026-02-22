@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { EmailVerificationService } from '../services/email-verification.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 
@@ -11,13 +11,15 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/email/send-verification',
     {
-      preHandler: async function (request: FastifyRequest, reply) {
+      async preHandler(request: FastifyRequest, reply) {
         // Run authentication first
         try {
           if (this.authenticate) {
             await this.authenticate(request, reply);
             // If authenticate sent a response, don't continue
-            if (reply.sent) return;
+            if (reply.sent) {
+              return;
+            }
           } else {
             return reply.code(401).send({ error: 'Authentication required' });
           }
@@ -71,13 +73,15 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     '/email/verification-status',
     {
-      preHandler: async function (request: FastifyRequest, reply) {
+      async preHandler(request: FastifyRequest, reply) {
         // Run authentication
         try {
           if (this.authenticate) {
             await this.authenticate(request, reply);
             // If authenticate sent a response, don't continue
-            if (reply.sent) return;
+            if (reply.sent) {
+              return;
+            }
           } else {
             return reply.code(401).send({ error: 'Authentication required' });
           }

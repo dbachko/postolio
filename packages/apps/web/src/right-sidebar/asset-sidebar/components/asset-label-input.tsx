@@ -31,10 +31,18 @@ function toDisplayLabelName(value: string): string {
 
 function rankLabelMatch(labelName: string, term: string): number {
   const normalized = normalizeLabelName(labelName);
-  if (!term) return 0;
-  if (normalized === term) return 0;
-  if (normalized.startsWith(term)) return 1;
-  if (normalized.includes(term)) return 2;
+  if (!term) {
+    return 0;
+  }
+  if (normalized === term) {
+    return 0;
+  }
+  if (normalized.startsWith(term)) {
+    return 1;
+  }
+  if (normalized.includes(term)) {
+    return 2;
+  }
   return 3;
 }
 
@@ -75,7 +83,9 @@ export function AssetLabelInput({
       .sort((a, b) => {
         const aRank = rankLabelMatch(a.name, normalizedInput);
         const bRank = rankLabelMatch(b.name, normalizedInput);
-        if (aRank !== bRank) return aRank - bRank;
+        if (aRank !== bRank) {
+          return aRank - bRank;
+        }
         return a.name.localeCompare(b.name);
       })
       .slice(0, 8)
@@ -132,7 +142,9 @@ export function AssetLabelInput({
 
   const commitInput = useCallback(
     async (suggestion?: SuggestionItem) => {
-      if (disabled || isCreating) return;
+      if (disabled || isCreating) {
+        return;
+      }
 
       const normalizedInput = normalizeLabelName(inputValue);
       const displayName = toDisplayLabelName(inputValue);
@@ -151,14 +163,18 @@ export function AssetLabelInput({
           : ({ kind: 'create', name: displayName } satisfies SuggestionItem);
       }
 
-      if (!nextSuggestion) return;
+      if (!nextSuggestion) {
+        return;
+      }
 
       if (nextSuggestion.kind === 'existing') {
         addExistingLabel(nextSuggestion.id);
         return;
       }
 
-      if (!nextSuggestion.name) return;
+      if (!nextSuggestion.name) {
+        return;
+      }
       setIsCreating(true);
       try {
         const created = await onCreateLabel(nextSuggestion.name);
@@ -176,7 +192,9 @@ export function AssetLabelInput({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (disabled) return;
+      if (disabled) {
+        return;
+      }
 
       if (event.key === 'ArrowDown' && suggestions.length > 0) {
         event.preventDefault();
@@ -195,7 +213,9 @@ export function AssetLabelInput({
         event.key === ',' ||
         (event.key === 'Tab' && inputValue.trim().length > 0)
       ) {
-        if (inputValue.trim().length === 0) return;
+        if (inputValue.trim().length === 0) {
+          return;
+        }
         event.preventDefault();
         const activeSuggestion = suggestions[activeSuggestionIndex];
         void commitInput(activeSuggestion);
@@ -226,7 +246,9 @@ export function AssetLabelInput({
             disabled && 'cursor-not-allowed opacity-60'
           )}
           onMouseDown={() => {
-            if (!disabled) inputRef.current?.focus();
+            if (!disabled) {
+              inputRef.current?.focus();
+            }
           }}
         >
           {selectedLabels.map((label) => (

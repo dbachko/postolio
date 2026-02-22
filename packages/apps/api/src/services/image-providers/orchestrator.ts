@@ -126,7 +126,9 @@ export class ImageGenerationOrchestrator {
     const fallbackOrder = imageProviderRegistry.getFallbackOrder();
 
     for (const providerName of fallbackOrder) {
-      if (providerName === failedProvider) continue;
+      if (providerName === failedProvider) {
+        continue;
+      }
 
       try {
         contentLogger.info('[Orchestrator] Trying fallback provider', {

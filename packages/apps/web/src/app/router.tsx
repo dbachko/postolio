@@ -1,5 +1,4 @@
-import type { ReactNode } from 'react';
-import { Suspense } from 'react';
+import { type ReactNode, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { AppLayout as Layout } from '@/components/app-layout';
@@ -79,7 +78,9 @@ function appShell(element: ReactNode, options: AppShellOptions = {}) {
   }
 
   content = <Layout>{content}</Layout>;
-  if (onboarding) content = <OnboardingGuard>{content}</OnboardingGuard>;
+  if (onboarding) {
+    content = <OnboardingGuard>{content}</OnboardingGuard>;
+  }
 
   return <ProtectedRoute>{content}</ProtectedRoute>;
 }

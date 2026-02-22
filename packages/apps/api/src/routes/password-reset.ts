@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { PasswordResetService } from '../services/password-reset.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import { passwordResetRequestSchema, passwordResetSchema } from '../schemas/auth.js';

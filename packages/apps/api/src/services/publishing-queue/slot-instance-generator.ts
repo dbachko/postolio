@@ -21,11 +21,17 @@ export interface PublishingQueueSlotInstance {
 export function parseLocalTime(localTime: string): { hours: number; minutes: number } | null {
   const raw = String(localTime ?? '').trim();
   const match = raw.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const hours = parseInt(match[1] ?? '', 10);
   const minutes = parseInt(match[2] ?? '', 10);
-  if (!Number.isFinite(hours) || hours < 0 || hours > 23) return null;
-  if (!Number.isFinite(minutes) || minutes < 0 || minutes > 59) return null;
+  if (!Number.isFinite(hours) || hours < 0 || hours > 23) {
+    return null;
+  }
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes > 59) {
+    return null;
+  }
   return { hours, minutes };
 }
 
@@ -35,7 +41,9 @@ function computeNextZonedOccurrence(
   dayOfWeek: number,
   time: { hours: number; minutes: number }
 ): Date | null {
-  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) return null;
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+    return null;
+  }
 
   const zonedNow = toZonedTime(nowUtc, timezone);
   let candidate = set(zonedNow, {
@@ -63,10 +71,14 @@ export function generateSlotInstances(params: {
 }): PublishingQueueSlotInstance[] {
   const { slots, timezone, startAtUtc, limit } = params;
   const startAt = startAtUtc instanceof Date ? startAtUtc : new Date(startAtUtc);
-  if (Number.isNaN(startAt.getTime())) return [];
+  if (Number.isNaN(startAt.getTime())) {
+    return [];
+  }
 
   const max = Number.isFinite(limit) ? Math.max(0, Math.min(1000, Math.floor(limit))) : 0;
-  if (max === 0) return [];
+  if (max === 0) {
+    return [];
+  }
 
   type NextSlotEntry = {
     slot: PublishingQueueSlotTemplate;
@@ -78,11 +90,17 @@ export function generateSlotInstances(params: {
 
   for (const slot of slots) {
     const time = parseLocalTime(slot.localTime);
-    if (!time) continue;
+    if (!time) {
+      continue;
+    }
     const nextZoned = computeNextZonedOccurrence(startAt, timezone, slot.dayOfWeek, time);
-    if (!nextZoned) continue;
+    if (!nextZoned) {
+      continue;
+    }
     const nextUtc = fromZonedTime(nextZoned, timezone);
-    if (Number.isNaN(nextUtc.getTime())) continue;
+    if (Number.isNaN(nextUtc.getTime())) {
+      continue;
+    }
     nextBySlot.set(slot.slotId, {
       slot,
       nextZoned,
@@ -100,7 +118,9 @@ export function generateSlotInstances(params: {
       }
     }
 
-    if (!nextEntry) break;
+    if (!nextEntry) {
+      break;
+    }
 
     instances.push({
       slotId: nextEntry.slot.slotId,

@@ -61,11 +61,15 @@ export function useCalendarEventDrop({
       targetEvent?: CalendarEvent | null;
     }) => {
       const upsertCalendarCache = (nextItem: Content) => {
-        if (!nextItem?.scheduledAt) return;
+        if (!nextItem?.scheduledAt) {
+          return;
+        }
         const monthKey = formatInTimeZone(new Date(nextItem.scheduledAt), brandTimezone, 'yyyy-MM');
         queryClient.setQueryData(['calendar', brandId, monthKey], (prev: any) => {
           const list = prev?.data?.content;
-          if (!Array.isArray(list)) return prev;
+          if (!Array.isArray(list)) {
+            return prev;
+          }
 
           const existingIdx = list.findIndex((c: any) => c && c.id === nextItem.id);
           const merged = {
@@ -99,10 +103,14 @@ export function useCalendarEventDrop({
           ['publishing-queue-items-calendar', params.queueId, params.viewKey],
           (prev: any) => {
             const lanes = prev?.data?.lanes;
-            if (!Array.isArray(lanes)) return prev;
+            if (!Array.isArray(lanes)) {
+              return prev;
+            }
             const nextLanes = lanes.map((lane: any) => {
               const items = lane?.items;
-              if (!Array.isArray(items)) return lane;
+              if (!Array.isArray(items)) {
+                return lane;
+              }
               return {
                 ...lane,
                 items: items.filter(
@@ -122,12 +130,16 @@ export function useCalendarEventDrop({
       };
 
       const adjustQueueDepth = (delta: number) => {
-        if (!effectiveSingleDestinationId) return;
+        if (!effectiveSingleDestinationId) {
+          return;
+        }
         queryClient.setQueryData(
           ['publishing-queues', effectiveSingleDestinationId],
           (prev: any) => {
             const current = prev?.data?.queueDepthCurrent;
-            if (typeof current !== 'number' || !Number.isFinite(current)) return prev;
+            if (typeof current !== 'number' || !Number.isFinite(current)) {
+              return prev;
+            }
             const next = Math.max(0, current + delta);
             return {
               ...prev,
@@ -147,7 +159,9 @@ export function useCalendarEventDrop({
           delete timers[contentId];
         }
         setOptimisticByContentId((prev) => {
-          if (!(contentId in prev)) return prev;
+          if (!(contentId in prev)) {
+            return prev;
+          }
           const next = { ...prev };
           delete next[contentId];
           return next;
@@ -169,7 +183,9 @@ export function useCalendarEventDrop({
         }));
 
         const timers = optimisticClearTimersRef.current;
-        if (timers[params.contentId]) window.clearTimeout(timers[params.contentId]);
+        if (timers[params.contentId]) {
+          window.clearTimeout(timers[params.contentId]);
+        }
         timers[params.contentId] = window.setTimeout(
           () => clearOptimistic(params.contentId),
           15_000
@@ -187,9 +203,13 @@ export function useCalendarEventDrop({
         }
 
         const isQueueSlotTarget = (() => {
-          if (!targetEvent?.resource?.placeholder) return false;
+          if (!targetEvent?.resource?.placeholder) {
+            return false;
+          }
           const record = targetEvent.resource.item as any;
-          if (record?.message === 'Queue slot') return true;
+          if (record?.message === 'Queue slot') {
+            return true;
+          }
           return typeof record?.id === 'string' && record.id.startsWith('queue-slot:');
         })();
 
@@ -215,15 +235,21 @@ export function useCalendarEventDrop({
           const targetLaneKey = (() => {
             const rec = targetEvent?.resource?.item as any;
             const lk = typeof rec?.laneKey === 'string' ? rec.laneKey : null;
-            if (lk === 'post' || lk === 'reel' || lk === 'story' || lk === 'any') return lk;
+            if (lk === 'post' || lk === 'reel' || lk === 'story' || lk === 'any') {
+              return lk;
+            }
             return 'post' as const;
           })();
 
           const sourceLaneKey = (() => {
             const rec = resource.item as any;
             const ct = typeof rec?.contentType === 'string' ? String(rec.contentType).trim() : '';
-            if (ct === 'reel') return 'reel' as const;
-            if (ct === 'story') return 'story' as const;
+            if (ct === 'reel') {
+              return 'reel' as const;
+            }
+            if (ct === 'story') {
+              return 'story' as const;
+            }
             return 'post' as const;
           })();
 
@@ -304,7 +330,9 @@ export function useCalendarEventDrop({
           targetEvent.resource.scheduledAt.trim().length > 0
             ? targetEvent.resource.scheduledAt.trim()
             : null;
-        if (!targetSlotUtcIso) return;
+        if (!targetSlotUtcIso) {
+          return;
+        }
 
         const record = resource.item as unknown as Record<string, unknown>;
         const sourceQueueItemId =
@@ -351,7 +379,9 @@ export function useCalendarEventDrop({
         console.error(error);
         if (event?.id) {
           setOptimisticByContentId((prev) => {
-            if (!(event.id in prev)) return prev;
+            if (!(event.id in prev)) {
+              return prev;
+            }
             const next = { ...prev };
             delete next[event.id];
             return next;

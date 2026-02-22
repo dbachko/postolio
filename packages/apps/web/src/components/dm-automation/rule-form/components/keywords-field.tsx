@@ -16,7 +16,9 @@ export function KeywordsField({ triggerConfig, onChange }: KeywordsFieldProps) {
 
   const addKeyword = () => {
     const trimmed = keywordInput.trim();
-    if (!trimmed || keywords.includes(trimmed)) return;
+    if (!trimmed || keywords.includes(trimmed)) {
+      return;
+    }
     onChange({ ...triggerConfig, keywords: [...keywords, trimmed] });
     setKeywordInput('');
   };
@@ -36,7 +38,9 @@ export function KeywordsField({ triggerConfig, onChange }: KeywordsFieldProps) {
           value={keywordInput}
           onChange={(e) => setKeywordInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
+            if (e.key !== 'Enter') {
+              return;
+            }
             e.preventDefault();
             addKeyword();
           }}

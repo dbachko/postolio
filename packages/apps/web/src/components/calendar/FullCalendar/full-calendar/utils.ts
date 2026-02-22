@@ -45,7 +45,9 @@ export function isTimeOccupied(params: {
   occupiedUtcMsSorted: number[];
 }): boolean {
   const { candidateUtcMs, occupiedUtcMsSorted } = params;
-  if (occupiedUtcMsSorted.length === 0) return false;
+  if (occupiedUtcMsSorted.length === 0) {
+    return false;
+  }
 
   // Binary search for nearest occupied time.
   let lo = 0;
@@ -53,15 +55,24 @@ export function isTimeOccupied(params: {
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
     const t = occupiedUtcMsSorted[mid]!;
-    if (t === candidateUtcMs) return true;
-    if (t < candidateUtcMs) lo = mid + 1;
-    else hi = mid - 1;
+    if (t === candidateUtcMs) {
+      return true;
+    }
+    if (t < candidateUtcMs) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
 
   const left = hi >= 0 ? occupiedUtcMsSorted[hi] : null;
   const right = lo < occupiedUtcMsSorted.length ? occupiedUtcMsSorted[lo] : null;
 
-  if (left !== null && Math.abs(candidateUtcMs - left) < SLOT_CONFLICT_WINDOW_MS) return true;
-  if (right !== null && Math.abs(candidateUtcMs - right) < SLOT_CONFLICT_WINDOW_MS) return true;
+  if (left !== null && Math.abs(candidateUtcMs - left) < SLOT_CONFLICT_WINDOW_MS) {
+    return true;
+  }
+  if (right !== null && Math.abs(candidateUtcMs - right) < SLOT_CONFLICT_WINDOW_MS) {
+    return true;
+  }
   return false;
 }

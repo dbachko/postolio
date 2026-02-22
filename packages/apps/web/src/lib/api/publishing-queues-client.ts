@@ -180,9 +180,15 @@ export class PublishingQueuesClient {
     after?: string;
   }) {
     const qs = new URLSearchParams();
-    if (params.laneKey) qs.set('laneKey', params.laneKey);
-    if (params.limit) qs.set('limit', String(params.limit));
-    if (params.after) qs.set('after', params.after);
+    if (params.laneKey) {
+      qs.set('laneKey', params.laneKey);
+    }
+    if (params.limit) {
+      qs.set('limit', String(params.limit));
+    }
+    if (params.after) {
+      qs.set('after', params.after);
+    }
 
     return this.request(
       `/api/queues/${encodeURIComponent(params.queueId)}/slot-instances${qs.toString() ? `?${qs.toString()}` : ''}`
@@ -204,9 +210,15 @@ export class PublishingQueuesClient {
     after?: string;
   }) {
     const qs = new URLSearchParams();
-    if (params.laneKey) qs.set('laneKey', params.laneKey);
-    if (params.limit) qs.set('limit', String(params.limit));
-    if (params.after) qs.set('after', params.after);
+    if (params.laneKey) {
+      qs.set('laneKey', params.laneKey);
+    }
+    if (params.limit) {
+      qs.set('limit', String(params.limit));
+    }
+    if (params.after) {
+      qs.set('after', params.after);
+    }
 
     return this.request(
       `/api/queues/${encodeURIComponent(params.queueId)}/items${qs.toString() ? `?${qs.toString()}` : ''}`

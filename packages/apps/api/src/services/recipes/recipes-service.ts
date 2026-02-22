@@ -19,9 +19,15 @@ export async function listRecipes(params: ListRecipesParams) {
   };
 
   // Archived recipes should not appear in the default browse experience.
-  if (!status) where.AND.push({ status: { not: 'archived' } });
-  if (status) where.AND.push({ status });
-  if (category) where.AND.push({ category });
+  if (!status) {
+    where.AND.push({ status: { not: 'archived' } });
+  }
+  if (status) {
+    where.AND.push({ status });
+  }
+  if (category) {
+    where.AND.push({ category });
+  }
   if (q) {
     where.AND.push({
       OR: [
@@ -58,9 +64,13 @@ export async function listRecipes(params: ListRecipesParams) {
       : null,
     summary: (() => {
       const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') return null;
+      if (!cfg || typeof cfg !== 'object') {
+        return null;
+      }
       const summary = (cfg as any).summary;
-      if (!summary || typeof summary !== 'object') return null;
+      if (!summary || typeof summary !== 'object') {
+        return null;
+      }
       return {
         produces: typeof (summary as any).produces === 'string' ? (summary as any).produces : null,
         postsCount:
@@ -70,33 +80,45 @@ export async function listRecipes(params: ListRecipesParams) {
     })(),
     skillRequirements: (() => {
       const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') return [];
+      if (!cfg || typeof cfg !== 'object') {
+        return [];
+      }
       return normalizeSkillRequirements((cfg as any).skills_required);
     })(),
     skillsRequired: (() => {
       const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') return [];
+      if (!cfg || typeof cfg !== 'object') {
+        return [];
+      }
       return normalizeSkillRequirements((cfg as any).skills_required)
         .filter((s) => !s.optional)
         .map((s) => s.id);
     })(),
     inputSchema: (() => {
       const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') return { fields: [] };
+      if (!cfg || typeof cfg !== 'object') {
+        return { fields: [] };
+      }
       const inputs = normalizeInputFields((cfg as any).inputs);
       return { fields: inputs.fields };
     })(),
     inputs: (() => {
       const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') return { required: [], optional: [] };
+      if (!cfg || typeof cfg !== 'object') {
+        return { required: [], optional: [] };
+      }
       const inputs = normalizeInputFields((cfg as any).inputs);
       return { required: inputs.required, optional: inputs.optional };
     })(),
     cadence: (() => {
       const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') return null;
+      if (!cfg || typeof cfg !== 'object') {
+        return null;
+      }
       const cadence = (cfg as any).cadence;
-      if (!cadence || typeof cadence !== 'object') return null;
+      if (!cadence || typeof cadence !== 'object') {
+        return null;
+      }
       return cadence;
     })(),
   }));

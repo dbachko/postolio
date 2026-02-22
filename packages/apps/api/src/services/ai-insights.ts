@@ -19,12 +19,12 @@ export interface AIInsight {
     type: 'schedule' | 'content' | 'hashtag' | 'engagement';
     data?: any;
   };
-  supportingData: {
+  supportingData: Array<{
     metric: string;
     value: number | string;
     change?: number;
     trend?: 'up' | 'down' | 'stable';
-  }[];
+  }>;
   timestamp: Date;
 }
 
@@ -50,7 +50,7 @@ export class AIInsightsService {
    */
   async generateInsights(
     brandId: string,
-    days: number = 30,
+    days = 30,
     options?: GenerateInsightsOptions
   ): Promise<InsightsReport> {
     const insights: AIInsight[] = [];
@@ -134,7 +134,9 @@ export class AIInsightsService {
 
     // Calculate average engagement rate
     const validPubs = publications.filter((p) => p.metricsLatest);
-    if (validPubs.length < 2) return insights;
+    if (validPubs.length < 2) {
+      return insights;
+    }
 
     // Split into recent vs older posts
     const midpoint = Math.floor(validPubs.length / 2);
@@ -159,7 +161,9 @@ export class AIInsightsService {
         olderPosts.reduce((s, p) => s + Number(p.metricsLatest.engagement || 0), 0) /
         Math.max(1, olderPosts.length);
       const engChange = olderEng === 0 ? 0 : ((recentEng - olderEng) / olderEng) * 100;
-      if (Math.abs(engChange) > Math.abs(change)) change = engChange;
+      if (Math.abs(engChange) > Math.abs(change)) {
+        change = engChange;
+      }
     }
 
     if (Math.abs(change) >= 5 || validPubs.length >= 10) {
@@ -208,7 +212,9 @@ export class AIInsightsService {
     const insights: AIInsight[] = [];
     const validPubs = publications.filter((p) => p.metricsLatest && p.publishedAt);
 
-    if (validPubs.length < 5) return insights;
+    if (validPubs.length < 5) {
+      return insights;
+    }
 
     // Group by day of week and hour
     const timeSlots: Map<string, { engagement: number; count: number }> = new Map();
@@ -297,7 +303,9 @@ export class AIInsightsService {
     const insights: AIInsight[] = [];
     const validPubs = publications.filter((p) => p.metricsLatest);
 
-    if (validPubs.length < 10) return insights;
+    if (validPubs.length < 10) {
+      return insights;
+    }
 
     // Analyze caption length vs engagement
     const captionData = validPubs
@@ -413,7 +421,9 @@ export class AIInsightsService {
     const insights: AIInsight[] = [];
     const validPubs = publications.filter((p) => p.metricsLatest);
 
-    if (validPubs.length < 10) return insights;
+    if (validPubs.length < 10) {
+      return insights;
+    }
 
     // Analyze saves vs likes ratio
     const totalLikes = validPubs.reduce((sum, p) => sum + (p.metricsLatest.likes || 0), 0);
@@ -451,7 +461,9 @@ export class AIInsightsService {
     const insights: AIInsight[] = [];
     const validPubs = publications.filter((p) => p.metricsLatest);
 
-    if (validPubs.length < 10) return insights;
+    if (validPubs.length < 10) {
+      return insights;
+    }
 
     // Calculate mean and standard deviation
     const engagementRates = validPubs.map((p) => Number(p.metricsLatest.engagementRate || 0));
@@ -558,9 +570,15 @@ export class AIInsightsService {
    * Format hour for display
    */
   private formatHour(hour: number): string {
-    if (hour === 0) return '12:00 AM';
-    if (hour === 12) return '12:00 PM';
-    if (hour < 12) return `${hour}:00 AM`;
+    if (hour === 0) {
+      return '12:00 AM';
+    }
+    if (hour === 12) {
+      return '12:00 PM';
+    }
+    if (hour < 12) {
+      return `${hour}:00 AM`;
+    }
     return `${hour - 12}:00 PM`;
   }
 }

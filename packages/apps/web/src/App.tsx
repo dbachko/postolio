@@ -22,7 +22,9 @@ function App() {
   useEffect(() => {
     // Skip auth check in minimal timezone render route to avoid API dependency in E2E
     const path = typeof window !== 'undefined' ? window.location.pathname : '';
-    if (path.startsWith('/__tz')) return;
+    if (path.startsWith('/__tz')) {
+      return;
+    }
     checkAuth();
   }, [checkAuth]);
 

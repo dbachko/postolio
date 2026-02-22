@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { prismaAssets } from '@postolio/database-assets';
 
 const healthRoutes: FastifyPluginAsync = async (fastify) => {

@@ -5,9 +5,9 @@
  */
 
 import {
-  Platform,
+  type Platform,
   PlatformErrorCode,
-  PlatformError,
+  type PlatformError,
   createPlatformError,
 } from './platform-errors.js';
 

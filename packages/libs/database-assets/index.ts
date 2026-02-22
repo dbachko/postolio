@@ -1,6 +1,6 @@
 import { Pool, type PoolConfig } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Prisma } from './assets-client/index.js';
+import { PrismaClient, type Prisma } from './assets-client/index.js';
 
 export interface PgAssetsPrismaClientOptions extends Prisma.PrismaClientOptions {
   connectionString?: string;

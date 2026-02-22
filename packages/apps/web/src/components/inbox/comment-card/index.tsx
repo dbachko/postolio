@@ -107,7 +107,7 @@ export function CommentCard({
                   key={r.id}
                   size="sm"
                   variant="secondary"
-                  onClick={() => setReplyText(replyText ? replyText + ' ' + r.body : r.body)}
+                  onClick={() => setReplyText(replyText ? `${replyText} ${r.body}` : r.body)}
                 >
                   {r.title}
                 </Button>

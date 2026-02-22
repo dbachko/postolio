@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { validateBody, validateQuery, validateParams } from '../middleware/validation.js';
@@ -23,7 +23,9 @@ const ListRunsQuerySchema = z.object({
     .optional()
     .transform((v) => {
       const n = Number(v ?? 50);
-      if (!Number.isFinite(n)) return 50;
+      if (!Number.isFinite(n)) {
+        return 50;
+      }
       return Math.max(1, Math.min(200, Math.floor(n)));
     }),
 });
@@ -168,7 +170,9 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
       const { runId } = request.params;
 
       const data = await getRun(runId);
-      if (!data) return reply.code(404).send({ error: 'Run not found' });
+      if (!data) {
+        return reply.code(404).send({ error: 'Run not found' });
+      }
 
       await assertBrandOwnership(userId, data.run.brandId);
 
@@ -184,7 +188,9 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
       const { runId } = request.params;
 
       const data = await getRun(runId);
-      if (!data) return reply.code(404).send({ error: 'Run not found' });
+      if (!data) {
+        return reply.code(404).send({ error: 'Run not found' });
+      }
 
       await assertBrandOwnership(userId, data.run.brandId);
 

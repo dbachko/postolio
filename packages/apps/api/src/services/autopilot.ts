@@ -26,7 +26,7 @@ export interface AutopilotConfig {
   contentStrategy?: {
     themes?: string[];
     postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
-    optimalTimes?: { hour: number; minute: number }[];
+    optimalTimes?: Array<{ hour: number; minute: number }>;
   };
 }
 

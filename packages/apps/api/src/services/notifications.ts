@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { prisma } from '../config/database.js';
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 import type { NotificationsBroadcaster } from './notifications-broadcaster.js';
 import { getNotificationsBroadcaster } from './broadcast-registry.js';
 import { maybeSendImmediateEmail } from './notification-email.js';
@@ -56,7 +56,9 @@ class NotificationsServiceImpl {
   }
 
   private getBroadcaster(): NotificationsBroadcaster | null {
-    if (!this.broadcaster) this.broadcaster = getNotificationsBroadcaster();
+    if (!this.broadcaster) {
+      this.broadcaster = getNotificationsBroadcaster();
+    }
     return this.broadcaster;
   }
 
@@ -73,7 +75,7 @@ class NotificationsServiceImpl {
         },
         orderBy: { brandId: 'desc' },
       });
-      if (master && master.enabled === false) {
+      if (master?.enabled === false) {
         // Suppressed by master preference: do not create/broadcast/email
         return null;
       }
@@ -179,10 +181,18 @@ class NotificationsServiceImpl {
     const take = Math.min(Math.max(filters.limit || 20, 1), 100);
 
     const where: Prisma.NotificationWhereInput = { userId: filters.userId };
-    if (filters.brandId) where.brandId = filters.brandId;
-    if (filters.category) where.category = filters.category;
-    if (filters.type) where.type = filters.type;
-    if (filters.since) where.createdAt = { gte: filters.since };
+    if (filters.brandId) {
+      where.brandId = filters.brandId;
+    }
+    if (filters.category) {
+      where.category = filters.category;
+    }
+    if (filters.type) {
+      where.type = filters.type;
+    }
+    if (filters.since) {
+      where.createdAt = { gte: filters.since };
+    }
 
     if (filters.filter === 'unread') {
       where.readAt = null;
@@ -227,25 +237,37 @@ class NotificationsServiceImpl {
     patch: { read?: boolean; archived?: boolean; seen?: boolean }
   ) {
     const data: Prisma.NotificationUpdateInput = {};
-    if (patch.read !== undefined) data.readAt = patch.read ? new Date() : null;
-    if (patch.seen) data.seenAt = new Date();
-    if (patch.archived !== undefined) data.archivedAt = patch.archived ? new Date() : null;
+    if (patch.read !== undefined) {
+      data.readAt = patch.read ? new Date() : null;
+    }
+    if (patch.seen) {
+      data.seenAt = new Date();
+    }
+    if (patch.archived !== undefined) {
+      data.archivedAt = patch.archived ? new Date() : null;
+    }
 
     await prisma.notification.update({ where: { id }, data });
 
     const count = await this.recomputeUnreadCount(userId);
     const b = this.getBroadcaster();
-    if (b) await b.broadcastUnreadCount(userId, count);
+    if (b) {
+      await b.broadcastUnreadCount(userId, count);
+    }
     return { success: true };
   }
 
   async markAllRead(userId: string, before?: Date) {
     const where: Prisma.NotificationWhereInput = { userId, readAt: null };
-    if (before) where.createdAt = { lte: before };
+    if (before) {
+      where.createdAt = { lte: before };
+    }
     const res = await prisma.notification.updateMany({ where, data: { readAt: new Date() } });
     const count = await this.recomputeUnreadCount(userId);
     const b = this.getBroadcaster();
-    if (b) await b.broadcastUnreadCount(userId, count);
+    if (b) {
+      await b.broadcastUnreadCount(userId, count);
+    }
     return { success: true, marked: res.count };
   }
 

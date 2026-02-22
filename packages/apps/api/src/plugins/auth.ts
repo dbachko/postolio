@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from '@fastify/jwt';
 import fp from 'fastify-plugin';
 
@@ -67,7 +67,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         if (cookieToken) {
           // Verify cookie token
           request.user = await fastify.jwt.verify(cookieToken);
-        } else if (authHeader && authHeader.startsWith('Bearer ')) {
+        } else if (authHeader?.startsWith('Bearer ')) {
           // Verify bearer token
           const token = authHeader.slice(7);
           request.user = await fastify.jwt.verify(token);
@@ -76,7 +76,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         }
 
         // Validate required claims
-        if (!request.user || !request.user.id || !request.user.email) {
+        if (!request.user?.id || !request.user.email) {
           throw new Error('Invalid token payload: missing required fields');
         }
 
@@ -126,7 +126,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
         if (cookieToken) {
           request.user = await fastify.jwt.verify(cookieToken);
-        } else if (authHeader && authHeader.startsWith('Bearer ')) {
+        } else if (authHeader?.startsWith('Bearer ')) {
           const token = authHeader.slice(7);
           request.user = await fastify.jwt.verify(token);
         }

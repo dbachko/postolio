@@ -15,11 +15,17 @@ export function SocialAvatarMultiSelect({
   ariaLabel = 'Select social platforms',
 }: SocialAvatarMultiSelectProps) {
   const toggle = (id: string) => {
-    if (disabled) return;
+    if (disabled) {
+      return;
+    }
     const option = options.find((o) => o.id === id);
     const isSelected = value.includes(id);
-    if (!option) return;
-    if (option.disabled && !isSelected) return;
+    if (!option) {
+      return;
+    }
+    if (option.disabled && !isSelected) {
+      return;
+    }
 
     const next = new Set(value);
     if (next.has(id)) {

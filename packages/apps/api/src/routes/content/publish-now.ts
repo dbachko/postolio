@@ -5,7 +5,7 @@
  * across scheduled and immediate publishing.
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 import { getDatabaseClient } from '../../config/database.js';
 import { contentSeriesRollingService } from '../../services/content-series-rolling.js';
@@ -25,7 +25,7 @@ const publishNowRoutes: FastifyPluginAsync = async (fastify) => {
 
       const authResult = await verifyContentEditable(userId, contentId);
       if (!authResult.authorized) {
-        const isImmutable = Boolean(authResult.error && authResult.error.includes('immutable'));
+        const isImmutable = Boolean(authResult.error?.includes('immutable'));
         return reply.code(isImmutable ? 400 : 404).send({ error: authResult.error });
       }
 

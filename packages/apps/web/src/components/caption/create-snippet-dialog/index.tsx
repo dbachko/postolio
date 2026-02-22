@@ -118,7 +118,9 @@ export function CreateSnippetDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !content.trim()) {
+      return;
+    }
     if (isEditMode) {
       updateMutation.mutate();
     } else {

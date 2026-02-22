@@ -44,7 +44,9 @@ export function usePostEditorMutations(params: {
     }) => contentApi.updateContent(data),
     onSuccess: (response) => {
       queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
-        if (!oldData) return oldData;
+        if (!oldData) {
+          return oldData;
+        }
         return {
           ...oldData,
           ...response.content,
@@ -65,15 +67,23 @@ export function usePostEditorMutations(params: {
       thumbOffset?: number | null;
       assetIds?: string[];
     }) => {
-      if (!contentGroupId) throw new Error('Missing contentGroupId');
+      if (!contentGroupId) {
+        throw new Error('Missing contentGroupId');
+      }
       return contentApi.updateContentGroupTemplate(contentGroupId, payload);
     },
     onSuccess: (response: any) => {
-      if (!contentGroupId) return;
+      if (!contentGroupId) {
+        return;
+      }
       queryClient.setQueryData(['content-group', contentGroupId], (oldData: any) => {
-        if (!oldData) return oldData;
+        if (!oldData) {
+          return oldData;
+        }
         const nextTemplate = response?.contentGroup?.template;
-        if (!nextTemplate) return oldData;
+        if (!nextTemplate) {
+          return oldData;
+        }
         return {
           ...oldData,
           contentGroup: {
@@ -92,11 +102,15 @@ export function usePostEditorMutations(params: {
 
   const { mutateAsync: applyTemplateAsync, isPending: isApplyingTemplate } = useMutation({
     mutationFn: async () => {
-      if (!contentGroupId) throw new Error('Missing contentGroupId');
+      if (!contentGroupId) {
+        throw new Error('Missing contentGroupId');
+      }
       return contentApi.applyContentGroupTemplate(contentGroupId);
     },
     onSuccess: () => {
-      if (!contentGroupId) return;
+      if (!contentGroupId) {
+        return;
+      }
       toast.success('Template applied to destinations');
       queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
       for (const dest of groupDestinations) {
@@ -114,12 +128,18 @@ export function usePostEditorMutations(params: {
 
   const { mutateAsync: resetDestinationAsync, isPending: isResettingDestination } = useMutation({
     mutationFn: async () => {
-      if (!contentGroupId) throw new Error('Missing contentGroupId');
-      if (!id) throw new Error('Missing contentId');
+      if (!contentGroupId) {
+        throw new Error('Missing contentGroupId');
+      }
+      if (!id) {
+        throw new Error('Missing contentId');
+      }
       return contentApi.resetGroupDestinationToTemplate(contentGroupId, id);
     },
     onSuccess: () => {
-      if (!contentGroupId || !id) return;
+      if (!contentGroupId || !id) {
+        return;
+      }
       toast.success('Destination reset to template');
       queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
       queryClient.invalidateQueries({ queryKey: ['post', id] });
@@ -135,13 +155,17 @@ export function usePostEditorMutations(params: {
 
   const { mutateAsync: addGroupDestinationsAsync, isPending: isAddingDestination } = useMutation({
     mutationFn: async (payload: { targetSocialAccountId: string }) => {
-      if (!contentGroupId) throw new Error('Missing contentGroupId');
+      if (!contentGroupId) {
+        throw new Error('Missing contentGroupId');
+      }
       return contentApi.addContentGroupDestinations(contentGroupId, [
         payload.targetSocialAccountId,
       ]);
     },
     onSuccess: () => {
-      if (!contentGroupId) return;
+      if (!contentGroupId) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
     },
   });
@@ -149,7 +173,9 @@ export function usePostEditorMutations(params: {
   const { mutateAsync: addContentDestinationsAsync, isPending: isAddingContentDestination } =
     useMutation({
       mutationFn: async (payload: { targetSocialAccountId: string }) => {
-        if (!id) throw new Error('Missing contentId');
+        if (!id) {
+          throw new Error('Missing contentId');
+        }
         return contentApi.addContentDestinations(id, [payload.targetSocialAccountId]);
       },
       onSuccess: (response: any) => {
@@ -181,7 +207,9 @@ export function usePostEditorMutations(params: {
     onSuccess: (response, contentId) => {
       toast.success('Post unscheduled and moved to Drafts');
       queryClient.setQueryData(['post', contentId], (oldData: PostDetailData | undefined) => {
-        if (!oldData) return oldData;
+        if (!oldData) {
+          return oldData;
+        }
         return {
           ...oldData,
           ...response.content,
@@ -211,7 +239,9 @@ export function usePostEditorMutations(params: {
 
   const { mutateAsync: deletePostAsync, isPending: isDeleting } = useMutation({
     mutationFn: async () => {
-      if (!id) throw new Error('Missing contentId');
+      if (!id) {
+        throw new Error('Missing contentId');
+      }
       return contentApi.deletePost(id);
     },
     onSuccess: async () => {
@@ -241,10 +271,14 @@ export function usePostEditorMutations(params: {
   const { mutateAsync: publishNowAsync, isPending: isPublishingNow } = useMutation({
     mutationFn: async () => {
       if (isMultiDestinationGroup) {
-        if (!contentGroupId) throw new Error('Missing contentGroupId');
+        if (!contentGroupId) {
+          throw new Error('Missing contentGroupId');
+        }
         return contentApi.publishContentGroupNow(contentGroupId);
       }
-      if (!id) throw new Error('Missing contentId');
+      if (!id) {
+        throw new Error('Missing contentId');
+      }
       return contentApi.publishNow(id);
     },
     onSuccess: () => {
@@ -258,7 +292,9 @@ export function usePostEditorMutations(params: {
         queryClient.invalidateQueries({ queryKey: ['drafts'] });
       }
       queryClient.invalidateQueries({ queryKey: ['content'] });
-      if (id) queryClient.invalidateQueries({ queryKey: ['post', id] });
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: ['post', id] });
+      }
       if (contentGroupId) {
         queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
       }
@@ -274,11 +310,15 @@ export function usePostEditorMutations(params: {
 
   const { mutateAsync: scheduleContentGroup, isPending: isSchedulingContentGroup } = useMutation({
     mutationFn: async (scheduledAt: string | null) => {
-      if (!contentGroupId) throw new Error('Missing contentGroupId');
+      if (!contentGroupId) {
+        throw new Error('Missing contentGroupId');
+      }
       return contentApi.scheduleContentGroup(contentGroupId, scheduledAt);
     },
     onSuccess: (_response, scheduledAt) => {
-      if (!contentGroupId) return;
+      if (!contentGroupId) {
+        return;
+      }
       toast.success(scheduledAt ? 'Destinations scheduled' : 'Destinations unscheduled');
       queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
       for (const dest of groupDestinations) {
@@ -297,21 +337,29 @@ export function usePostEditorMutations(params: {
   const { mutateAsync: addToQueueAsync, isPending: isQueueing } = useMutation({
     mutationFn: async () => {
       if (isMultiDestinationGroup) {
-        if (!contentGroupId) throw new Error('Missing contentGroupId');
+        if (!contentGroupId) {
+          throw new Error('Missing contentGroupId');
+        }
         return contentApi.queueContentGroup(contentGroupId);
       }
 
-      if (!id) throw new Error('Missing contentId');
+      if (!id) {
+        throw new Error('Missing contentId');
+      }
       const targetSocialAccountId =
         typeof (post as any)?.targetSocialAccountId === 'string'
           ? String((post as any).targetSocialAccountId)
           : null;
-      if (!targetSocialAccountId) throw new Error('Missing target social account');
+      if (!targetSocialAccountId) {
+        throw new Error('Missing target social account');
+      }
 
       const queues = await publishingQueuesApi.listQueuesForSocialAccount(targetSocialAccountId);
       const list = Array.isArray((queues as any)?.data?.queues) ? (queues as any).data.queues : [];
       const defaultQueue = list.find((q: any) => q?.isDefault) || list[0] || null;
-      if (!defaultQueue?.id) throw new Error('Missing default queue');
+      if (!defaultQueue?.id) {
+        throw new Error('Missing default queue');
+      }
 
       return publishingQueuesApi.addQueueItem(String(defaultQueue.id), id);
     },
@@ -322,7 +370,9 @@ export function usePostEditorMutations(params: {
         queryClient.invalidateQueries({ queryKey: ['calendar', brandId] });
         queryClient.invalidateQueries({ queryKey: ['drafts', brandId] });
       }
-      if (id) queryClient.invalidateQueries({ queryKey: ['post', id] });
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: ['post', id] });
+      }
       if (contentGroupId) {
         queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
       }

@@ -80,8 +80,12 @@ export class BrandClient {
     options?: { startDate?: string; endDate?: string }
   ): Promise<ImageAnalyticsResponse> {
     const params = new URLSearchParams();
-    if (options?.startDate) params.set('startDate', options.startDate);
-    if (options?.endDate) params.set('endDate', options.endDate);
+    if (options?.startDate) {
+      params.set('startDate', options.startDate);
+    }
+    if (options?.endDate) {
+      params.set('endDate', options.endDate);
+    }
     const qs = params.toString();
     return this.request(
       `/api/image-providers/${brandId}/analytics${qs ? `?${qs}` : ''}`
@@ -103,24 +107,34 @@ export class BrandClient {
 
     const socialAccountIds = options?.socialAccountIds || [];
     for (const id of socialAccountIds) {
-      if (!id) continue;
+      if (!id) {
+        continue;
+      }
       params.append('socialAccountId', id);
     }
 
     const channels = options?.channels || [];
     for (const channel of channels) {
-      if (!channel) continue;
+      if (!channel) {
+        continue;
+      }
       params.append('channel', channel);
     }
 
     const platforms = options?.platforms || [];
     for (const platform of platforms) {
-      if (!platform) continue;
+      if (!platform) {
+        continue;
+      }
       params.append('platform', platform);
     }
 
-    if (options?.view) params.set('view', options.view);
-    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.view) {
+      params.set('view', options.view);
+    }
+    if (options?.limit) {
+      params.set('limit', String(options.limit));
+    }
 
     const qs = params.toString();
     return this.request(
@@ -173,13 +187,21 @@ export class BrandClient {
 
     const socialAccountIds = options?.socialAccountIds || [];
     for (const id of socialAccountIds) {
-      if (!id) continue;
+      if (!id) {
+        continue;
+      }
       params.append('socialAccountId', id);
     }
 
-    if (options?.sync) params.set('sync', 'true');
-    if (options?.maxPosts) params.set('maxPosts', String(options.maxPosts));
-    if (options?.perPostLimit) params.set('perPostLimit', String(options.perPostLimit));
+    if (options?.sync) {
+      params.set('sync', 'true');
+    }
+    if (options?.maxPosts) {
+      params.set('maxPosts', String(options.maxPosts));
+    }
+    if (options?.perPostLimit) {
+      params.set('perPostLimit', String(options.perPostLimit));
+    }
 
     const qs = params.toString();
     return this.request(
@@ -214,13 +236,21 @@ export class BrandClient {
 
     const socialAccountIds = options?.socialAccountIds || [];
     for (const id of socialAccountIds) {
-      if (!id) continue;
+      if (!id) {
+        continue;
+      }
       params.append('socialAccountId', id);
     }
 
-    if (options?.sync) params.set('sync', 'true');
-    if (options?.maxThreads) params.set('maxThreads', String(options.maxThreads));
-    if (options?.perThreadLimit) params.set('perThreadLimit', String(options.perThreadLimit));
+    if (options?.sync) {
+      params.set('sync', 'true');
+    }
+    if (options?.maxThreads) {
+      params.set('maxThreads', String(options.maxThreads));
+    }
+    if (options?.perThreadLimit) {
+      params.set('perThreadLimit', String(options.perThreadLimit));
+    }
 
     const qs = params.toString();
     return this.request(
@@ -466,7 +496,9 @@ export class BrandClient {
     return this.request(`/api/brands/${brandId}/analysis/profile`)
       .then(() => true)
       .catch((e: any) => {
-        if (e && /not found|404/i.test(String(e.message))) return false;
+        if (e && /not found|404/i.test(String(e.message))) {
+          return false;
+        }
         return false;
       });
   }
@@ -513,9 +545,15 @@ export class BrandClient {
     opts?: { campaignType?: string; goals?: string[]; limit?: number }
   ) {
     const params = new URLSearchParams();
-    if (opts?.campaignType) params.set('campaignType', String(opts.campaignType));
-    if (opts?.goals && opts.goals.length) params.set('goals', JSON.stringify(opts.goals));
-    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.campaignType) {
+      params.set('campaignType', String(opts.campaignType));
+    }
+    if (opts?.goals?.length) {
+      params.set('goals', JSON.stringify(opts.goals));
+    }
+    if (opts?.limit) {
+      params.set('limit', String(opts.limit));
+    }
     const qs = params.toString();
     return this.request(
       `/api/brands/${encodeURIComponent(brandId)}/theme-suggestions${qs ? `?${qs}` : ''}`
@@ -529,7 +567,9 @@ export class BrandClient {
   // Instagram: Preferred Posting Time (Best Time)
   getInstagramBestTime(brandId: string, opts?: { force?: boolean }) {
     const params = new URLSearchParams();
-    if (opts?.force) params.set('force', 'true');
+    if (opts?.force) {
+      params.set('force', 'true');
+    }
     const qs = params.toString();
     return this.request(
       `/api/brands/${encodeURIComponent(brandId)}/instagram/best-time${qs ? `?${qs}` : ''}`

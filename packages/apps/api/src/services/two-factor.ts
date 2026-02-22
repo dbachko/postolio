@@ -311,7 +311,7 @@ export class TwoFactorService {
   static async verifyCode(
     userId: string,
     code: string,
-    trustDevice: boolean = false,
+    trustDevice = false,
     ipAddress?: string
   ): Promise<{
     success: boolean;
@@ -451,7 +451,7 @@ export class TwoFactorService {
         },
       });
 
-      if (!user || !user.twoFactorEnabled || user.twoFactorMethod !== TwoFactorMethod.EMAIL) {
+      if (!user?.twoFactorEnabled || user.twoFactorMethod !== TwoFactorMethod.EMAIL) {
         return {
           success: false,
           message: 'Email two-factor not enabled',
@@ -606,7 +606,9 @@ export class TwoFactorService {
    * Check if device is trusted
    */
   static async isTrustedDevice(token: string): Promise<string | null> {
-    if (!token) return null;
+    if (!token) {
+      return null;
+    }
 
     const userId = await redis.get(`trusted-device:${token}`);
     return userId;
@@ -634,7 +636,7 @@ export class TwoFactorService {
         },
       });
 
-      if (!user || !user.twoFactorEnabled) {
+      if (!user?.twoFactorEnabled) {
         return {
           success: false,
           message: 'Two-factor authentication not enabled',

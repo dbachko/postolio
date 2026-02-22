@@ -1,4 +1,4 @@
-import { Prisma, type ContentStatus } from '@postolio/database';
+import type { Prisma, ContentStatus } from '@postolio/database';
 import { getDatabaseClient } from '../../../config/database.js';
 import { getBrandProfileContext, type BrandProfileContext } from '../../brand-profile.js';
 import { contentLogger } from '../logger.js';
@@ -93,7 +93,9 @@ export async function loadRecentContentWindow(
   const priorHashtagUsage = new Map<string, number>();
   for (const item of recent) {
     (item.hashtags || []).map(sanitizeTag).forEach((tag) => {
-      if (!tag) return;
+      if (!tag) {
+        return;
+      }
       priorHashtagUsage.set(tag, (priorHashtagUsage.get(tag) || 0) + 1);
     });
   }

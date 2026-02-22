@@ -20,8 +20,12 @@ import {
 const logger = new Logger({ serviceName: 'publisher' });
 
 function asIGErrorPayload(u: unknown): IGErrorPayload | null {
-  if (!u || typeof u !== 'object') return null;
-  if ('error' in u) return u as IGErrorPayload;
+  if (!u || typeof u !== 'object') {
+    return null;
+  }
+  if ('error' in u) {
+    return u as IGErrorPayload;
+  }
   return null;
 }
 
@@ -166,7 +170,9 @@ export class InstagramAdapter implements PlatformAdapter {
           }
         }
 
-        if (code === 'FINISHED' || code === 'PUBLISHED' || code === 'READY') return true;
+        if (code === 'FINISHED' || code === 'PUBLISHED' || code === 'READY') {
+          return true;
+        }
         if (code === 'ERROR' || code === 'EXPIRED') {
           const reason =
             errorMessageValue ||
@@ -397,7 +403,7 @@ export class InstagramAdapter implements PlatformAdapter {
   ): string {
     const safeCaption = caption ?? '';
     const hashtagString = hashtags?.length
-      ? '\n\n' + hashtags.map((tag) => `#${tag}`).join(' ')
+      ? `\n\n${hashtags.map((tag) => `#${tag}`).join(' ')}`
       : '';
     return `${safeCaption}${hashtagString}`.slice(0, PLATFORM_LIMITS.INSTAGRAM_CAPTION);
   }
@@ -464,10 +470,18 @@ export class InstagramAdapter implements PlatformAdapter {
       hasMediaUrl: !!mediaUrl,
       mediaUrl: sanitizeUrlForLog(mediaUrl),
       mediaKind: (() => {
-        if (isReel) return 'reel';
-        if (isStory && isVideo) return 'story_video';
-        if (isStory) return 'story_image';
-        if (isVideo) return 'video';
+        if (isReel) {
+          return 'reel';
+        }
+        if (isStory && isVideo) {
+          return 'story_video';
+        }
+        if (isStory) {
+          return 'story_image';
+        }
+        if (isVideo) {
+          return 'video';
+        }
         return 'image';
       })(),
       contentType: schedule.contentType,

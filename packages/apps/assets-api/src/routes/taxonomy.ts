@@ -1,11 +1,13 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { normalizeAssetLabelName, prismaAssets } from '@postolio/database-assets';
 
-type TreeNode<T extends { id: string; parentId?: string | null }> = T & { children: TreeNode<T>[] };
+type TreeNode<T extends { id: string; parentId?: string | null }> = T & {
+  children: Array<TreeNode<T>>;
+};
 
 function buildTree<T extends { id: string; parentId?: string | null }>(items: T[]) {
   const byId = new Map<string, TreeNode<T>>();
-  const roots: TreeNode<T>[] = [];
+  const roots: Array<TreeNode<T>> = [];
 
   items.forEach((item) => {
     byId.set(item.id, { ...item, children: [] });
@@ -13,7 +15,9 @@ function buildTree<T extends { id: string; parentId?: string | null }>(items: T[
 
   items.forEach((item) => {
     const node = byId.get(item.id);
-    if (!node) return;
+    if (!node) {
+      return;
+    }
     if (item.parentId && byId.has(item.parentId)) {
       byId.get(item.parentId)!.children.push(node);
     } else {

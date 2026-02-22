@@ -7,7 +7,9 @@ export function BlockerTooltipMessage({ message }: { message: string }) {
   const parsed = parsePlatformPrefixedMessage(message);
   const icon = parsed.platform ? getPlatformIcon(parsed.platform, 'h-4 w-4') : null;
   const color = (() => {
-    if (!parsed.platform) return null;
+    if (!parsed.platform) {
+      return null;
+    }
     try {
       return getPlatformConfig(parsed.platform).color;
     } catch {
@@ -15,7 +17,9 @@ export function BlockerTooltipMessage({ message }: { message: string }) {
     }
   })();
 
-  if (!icon) return <p className="text-sm">{parsed.message}</p>;
+  if (!icon) {
+    return <p className="text-sm">{parsed.message}</p>;
+  }
 
   return (
     <div className="flex items-start gap-2">

@@ -57,8 +57,12 @@ export function usePostEditorFormState(params: {
   }, []);
 
   useEffect(() => {
-    if (!post || !brandTimezone) return;
-    if (postAssetIds.length > 0 && !mediaAssetsById) return;
+    if (!post || !brandTimezone) {
+      return;
+    }
+    if (postAssetIds.length > 0 && !mediaAssetsById) {
+      return;
+    }
 
     const normalizedContentType = (post.contentType as InstagramContentType) || 'post';
     const carouselAssetsFromPost: AssetReference[] = (post.mediaAssets || []).map((entry) => {
@@ -169,8 +173,12 @@ export function usePostEditorFormState(params: {
   ]);
 
   useEffect(() => {
-    if (!isMultiDestinationGroup || !brandTimezone || !formInitializedRef.current) return;
-    if (hasChanges) return;
+    if (!isMultiDestinationGroup || !brandTimezone || !formInitializedRef.current) {
+      return;
+    }
+    if (hasChanges) {
+      return;
+    }
     const next =
       contentGroupSchedule.kind === 'uniform'
         ? formatScheduledInput(contentGroupSchedule.scheduledAt, brandTimezone)
@@ -194,7 +202,9 @@ export function usePostEditorFormState(params: {
   const qAssetIdsParam = searchParams.get('assetIds');
   const prefillAssetIds = useMemo(() => {
     const ids = new Set<string>();
-    if (qAssetId) ids.add(qAssetId);
+    if (qAssetId) {
+      ids.add(qAssetId);
+    }
     if (qAssetIdsParam) {
       qAssetIdsParam
         .split(',')
@@ -234,8 +244,12 @@ export function usePostEditorFormState(params: {
   useEffect(() => {
     const wasCreating = wasCreatingRef.current;
     wasCreatingRef.current = isCreating;
-    if (!isCreating) return;
-    if (wasCreating) return;
+    if (!isCreating) {
+      return;
+    }
+    if (wasCreating) {
+      return;
+    }
     setFormData(createEmptyPostFormState());
     setHasChanges(false);
     setFirstCommentOpen(false);
@@ -247,7 +261,9 @@ export function usePostEditorFormState(params: {
   }, [isCreating, platformsInitializedRef, setSelectedPlatformAccountIds]);
 
   useEffect(() => {
-    if (!isCreating) return;
+    if (!isCreating) {
+      return;
+    }
     const normalizedTargetSocialAccountIds = (() => {
       const raw = typeof qTargetSocialAccountIds === 'string' ? qTargetSocialAccountIds.trim() : '';
       if (raw) {
@@ -303,7 +319,9 @@ export function usePostEditorFormState(params: {
     }
 
     if (shouldApplyAssets) {
-      if (isPrefillAssetsLoading) return;
+      if (isPrefillAssetsLoading) {
+        return;
+      }
       const normalizedAssets: AssetReference[] =
         prefillAssets?.map((asset) => ({
           id: asset.id,
@@ -318,7 +336,9 @@ export function usePostEditorFormState(params: {
     }
 
     if (shouldApplyPlatforms) {
-      if (platformPickerOptions.length === 0) return;
+      if (platformPickerOptions.length === 0) {
+        return;
+      }
       const allowed = new Set(platformPickerOptions.map((opt) => opt.id));
       const next = (normalizedTargetSocialAccountIds ?? []).filter((value) => allowed.has(value));
       const normalized = !multiDestinationEnabled && next.length > 1 ? [next[0]!] : next;
@@ -346,10 +366,16 @@ export function usePostEditorFormState(params: {
   ]);
 
   useEffect(() => {
-    if (!isCreating) return;
-    if (scheduledAtTouchedRef.current) return;
+    if (!isCreating) {
+      return;
+    }
+    if (scheduledAtTouchedRef.current) {
+      return;
+    }
     const raw = typeof qScheduledAt === 'string' ? qScheduledAt.trim() : '';
-    if (!raw) return;
+    if (!raw) {
+      return;
+    }
     const next = formatScheduledInput(raw, brandTimezone);
     setFormData((prev) => (prev.scheduledAt === next ? prev : { ...prev, scheduledAt: next }));
   }, [brandTimezone, isCreating, qScheduledAt]);

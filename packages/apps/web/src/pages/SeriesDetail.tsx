@@ -92,8 +92,12 @@ type SeriesContentItem = {
 function statusBadgeVariant(
   status: ContentSeries['status']
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'active') return 'secondary';
-  if (status === 'paused') return 'outline';
+  if (status === 'active') {
+    return 'secondary';
+  }
+  if (status === 'paused') {
+    return 'outline';
+  }
   return 'outline';
 }
 
@@ -123,7 +127,9 @@ function toRollingConfig(value: unknown): RollingConfig {
 
 function parseNumberInput(value: string, fallback: number): number {
   const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n)) return fallback;
+  if (!Number.isFinite(n)) {
+    return fallback;
+  }
   return Math.max(1, n);
 }
 
@@ -163,15 +169,23 @@ export function SeriesDetail() {
   const canEditStatus = Boolean(series) && selectedBrand && series?.brandId === selectedBrand.id;
 
   const nextPauseResume = useMemo(() => {
-    if (!series) return null;
-    if (series.status === 'active') return { label: 'Pause', status: 'paused' as const };
-    if (series.status === 'paused') return { label: 'Resume', status: 'active' as const };
+    if (!series) {
+      return null;
+    }
+    if (series.status === 'active') {
+      return { label: 'Pause', status: 'paused' as const };
+    }
+    if (series.status === 'paused') {
+      return { label: 'Resume', status: 'active' as const };
+    }
     return null;
   }, [series]);
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { status?: ContentSeries['status']; rolling?: RollingConfig }) => {
-      if (!contentSeriesId) throw new Error('Missing series id');
+      if (!contentSeriesId) {
+        throw new Error('Missing series id');
+      }
       return await contentApi.updateSeries(contentSeriesId, payload);
     },
     onSuccess: async () => {
@@ -180,8 +194,9 @@ export function SeriesDetail() {
       await queryClient.invalidateQueries({
         queryKey: ['content-series-rolling-status', contentSeriesId],
       });
-      if (selectedBrand?.id)
+      if (selectedBrand?.id) {
         await queryClient.invalidateQueries({ queryKey: ['content-series', selectedBrand.id] });
+      }
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to update series');
@@ -190,7 +205,9 @@ export function SeriesDetail() {
 
   const refreshRollingMutation = useMutation({
     mutationFn: async () => {
-      if (!contentSeriesId) throw new Error('Missing series id');
+      if (!contentSeriesId) {
+        throw new Error('Missing series id');
+      }
       return await contentApi.refreshSeriesRolling(contentSeriesId);
     },
     onSuccess: async (res: any) => {

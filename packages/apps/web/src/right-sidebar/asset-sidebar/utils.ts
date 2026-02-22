@@ -1,7 +1,9 @@
 import type { AssetProbeResult } from './types';
 
 export function formatBytes(bytes?: number | null) {
-  if (!bytes || Number.isNaN(bytes)) return '—';
+  if (!bytes || Number.isNaN(bytes)) {
+    return '—';
+  }
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let size = bytes;
   let unitIndex = 0;
@@ -13,7 +15,9 @@ export function formatBytes(bytes?: number | null) {
 }
 
 export function formatDateTime(value?: string | null) {
-  if (!value) return '—';
+  if (!value) {
+    return '—';
+  }
   try {
     const date = new Date(value);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
@@ -23,7 +27,9 @@ export function formatDateTime(value?: string | null) {
 }
 
 export function getFileExtension(fileName?: string | null) {
-  if (!fileName) return 'Unknown';
+  if (!fileName) {
+    return 'Unknown';
+  }
   const idx = fileName.lastIndexOf('.');
   return idx > -1 ? fileName.slice(idx + 1).toUpperCase() : fileName.toUpperCase();
 }

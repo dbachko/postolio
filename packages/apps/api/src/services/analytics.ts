@@ -50,7 +50,9 @@ class AnalyticsServiceV2Compat {
     const posts: AnalyticsReport['topPerformingPosts'] = [];
     for (const p of pubs) {
       const m = p.metricsLatest;
-      if (!m) continue;
+      if (!m) {
+        continue;
+      }
       totalImpressions += m.impressions || 0;
       totalReach += m.reach || 0;
       totalEngagements += m.engagement || 0;
@@ -89,9 +91,15 @@ class AnalyticsServiceV2Compat {
     return days[dayOfWeek] ?? 'Unknown';
   }
   formatHour(hour: number): string {
-    if (hour === 0) return '12:00 AM';
-    if (hour === 12) return '12:00 PM';
-    if (hour < 12) return `${hour}:00 AM`;
+    if (hour === 0) {
+      return '12:00 AM';
+    }
+    if (hour === 12) {
+      return '12:00 PM';
+    }
+    if (hour < 12) {
+      return `${hour}:00 AM`;
+    }
     return `${hour - 12}:00 PM`;
   }
   // Legacy stubs retained for API surface compatibility

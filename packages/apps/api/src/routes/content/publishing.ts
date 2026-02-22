@@ -3,7 +3,7 @@
  * Handles publishing content to social media platforms (currently Instagram)
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 import { verifyContentOwnership } from '../../services/content-operations/authorization.js';
 import { publishContentToInstagram } from '../../services/content-operations/publishing.js';

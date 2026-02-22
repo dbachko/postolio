@@ -17,8 +17,12 @@ import { useBrandStore } from '@/stores/brandStore';
 import { format } from 'date-fns';
 
 function getLogStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destructive' {
-  if (status === 'success') return 'default';
-  if (status === 'fallback') return 'secondary';
+  if (status === 'success') {
+    return 'default';
+  }
+  if (status === 'fallback') {
+    return 'secondary';
+  }
   return 'destructive';
 }
 
@@ -30,7 +34,9 @@ export default function ImageAnalytics() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['imageAnalytics', selectedBrand?.id, dateRange],
     queryFn: () => {
-      if (!selectedBrand) return null;
+      if (!selectedBrand) {
+        return null;
+      }
       return brandApi.getImageAnalytics(selectedBrand.id, dateRange);
     },
     enabled: !!selectedBrand,

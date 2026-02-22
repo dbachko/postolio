@@ -227,15 +227,21 @@ export type RecipeSkillRequirement = z.infer<typeof SkillRequirementSchema>;
 
 function toHumanLabel(raw: string): string {
   const s = String(raw || '').trim();
-  if (!s) return '';
+  if (!s) {
+    return '';
+  }
   const cleaned = s.replace(/[_-]+/g, ' ');
   return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function legacyFieldType(rawKey: string): RecipeInputFieldType {
   const key = String(rawKey || '').toLowerCase();
-  if (key.includes('date')) return 'date';
-  if (key.includes('brief') || key.includes('caption')) return 'textarea';
+  if (key.includes('date')) {
+    return 'date';
+  }
+  if (key.includes('brief') || key.includes('caption')) {
+    return 'textarea';
+  }
   return 'input';
 }
 
@@ -286,18 +292,24 @@ export function normalizeSkillRequirements(skillsRequired: unknown): Array<{
   mode: 'managed' | 'byok' | 'either' | null;
 }> {
   const parsed = z.array(SkillRequirementSchema).safeParse(skillsRequired);
-  if (!parsed.success) return [];
+  if (!parsed.success) {
+    return [];
+  }
 
   return parsed.data
     .map((item) => {
       if (typeof item === 'string') {
         const id = item.trim();
-        if (!id) return null;
+        if (!id) {
+          return null;
+        }
         return { id, optional: false, mode: null };
       }
 
       const id = item.id.trim();
-      if (!id) return null;
+      if (!id) {
+        return null;
+      }
       return {
         id,
         optional: Boolean(item.optional),

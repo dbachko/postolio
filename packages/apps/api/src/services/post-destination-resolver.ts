@@ -11,18 +11,26 @@ export type ResolvedPostDestinations = {
 };
 
 function normalizePreferences(preferences: unknown): Record<string, unknown> {
-  if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) return {};
+  if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) {
+    return {};
+  }
   return preferences as Record<string, unknown>;
 }
 
 function normalizeSocialAccountIds(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
+  if (!Array.isArray(input)) {
+    return [];
+  }
   const out: string[] = [];
   const seen = new Set<string>();
   for (const v of input) {
-    if (typeof v !== 'string') continue;
+    if (typeof v !== 'string') {
+      continue;
+    }
     const id = v.trim();
-    if (!id || seen.has(id)) continue;
+    if (!id || seen.has(id)) {
+      continue;
+    }
     seen.add(id);
     out.push(id);
   }
@@ -30,7 +38,9 @@ function normalizeSocialAccountIds(input: unknown): string[] {
 }
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 

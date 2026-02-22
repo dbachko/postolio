@@ -84,7 +84,9 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function toInt(value: unknown, fallback: number, min: number, max: number): number {
   const n = Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(n)) return fallback;
+  if (!Number.isFinite(n)) {
+    return fallback;
+  }
   return Math.max(min, Math.min(max, n));
 }
 
@@ -108,7 +110,9 @@ function ymdDiff(fromYmd: string, toYmd: string): number {
 
 function sanitizePostingTime(value: unknown): string {
   const raw = typeof value === 'string' ? value.trim() : '';
-  if (/^\d{2}:\d{2}$/.test(raw)) return raw;
+  if (/^\d{2}:\d{2}$/.test(raw)) {
+    return raw;
+  }
   return '09:00';
 }
 
@@ -142,11 +146,15 @@ export function normalizeSeriesRollingConfig(input: unknown): SeriesRollingConfi
 export function normalizeSeriesGeneratorSource(input: unknown): SeriesGeneratorSource | null {
   const raw = asRecord(input);
   const source = typeof raw.source === 'string' ? raw.source.trim().toLowerCase() : '';
-  if (!source) return null;
+  if (!source) {
+    return null;
+  }
 
   const recipeTemplateVersionId =
     typeof raw.recipeTemplateVersionId === 'string' ? raw.recipeTemplateVersionId.trim() : '';
-  if (!recipeTemplateVersionId) return null;
+  if (!recipeTemplateVersionId) {
+    return null;
+  }
 
   const recipeTemplateIdRaw =
     typeof raw.recipeTemplateId === 'string' ? raw.recipeTemplateId.trim() : null;
@@ -164,7 +172,9 @@ export function normalizeSeriesGeneratorSource(input: unknown): SeriesGeneratorS
 }
 
 function derivePostingTime(generator: SeriesGeneratorSource | null): string {
-  if (!generator) return '09:00';
+  if (!generator) {
+    return '09:00';
+  }
   const input = asRecord(generator.inputJson);
   return sanitizePostingTime(input.posting_time ?? input.postingTime);
 }
@@ -181,7 +191,9 @@ function deriveTargetSocialAccountId(
         : typeof input.targetSocialAccountId === 'string'
           ? input.targetSocialAccountId.trim()
           : '';
-    if (fromInput.length > 0) return fromInput;
+    if (fromInput.length > 0) {
+      return fromInput;
+    }
   }
 
   const fromContent = fromContentRows
@@ -233,26 +245,36 @@ async function buildSeriesRollingStatus(params: {
   let futurePostCount = 0;
 
   for (const row of rows) {
-    if (!row.scheduledAt) continue;
+    if (!row.scheduledAt) {
+      continue;
+    }
     const ymd = formatInTimeZone(row.scheduledAt, timezone, 'yyyy-MM-dd');
     const offset = ymdDiff(todayYmd, ymd);
-    if (offset < 1) continue;
+    if (offset < 1) {
+      continue;
+    }
     futurePostCount += 1;
     scheduledDays.add(ymd);
-    if (offset > furthestDayOffset) furthestDayOffset = offset;
+    if (offset > furthestDayOffset) {
+      furthestDayOffset = offset;
+    }
   }
 
   let daysAhead = 0;
   for (let day = 1; day <= rolling.maxQueueDays; day++) {
     const ymd = addDaysToYmd(todayYmd, day);
-    if (!scheduledDays.has(ymd)) break;
+    if (!scheduledDays.has(ymd)) {
+      break;
+    }
     daysAhead = day;
   }
 
   const missingDates: string[] = [];
   for (let day = 1; day <= rolling.targetQueueDays; day++) {
     const ymd = addDaysToYmd(todayYmd, day);
-    if (!scheduledDays.has(ymd)) missingDates.push(ymd);
+    if (!scheduledDays.has(ymd)) {
+      missingDates.push(ymd);
+    }
   }
 
   const activeScheduleRuns =
@@ -278,10 +300,16 @@ async function buildSeriesRollingStatus(params: {
   );
 
   const nextGenerationAt = (() => {
-    if (!rolling.enabled || series.status !== 'active') return null;
-    if (needsGeneration) return now.toISOString();
+    if (!rolling.enabled || series.status !== 'active') {
+      return null;
+    }
+    if (needsGeneration) {
+      return now.toISOString();
+    }
 
-    if (furthestDayOffset <= 0) return null;
+    if (furthestDayOffset <= 0) {
+      return null;
+    }
     const nextOffset = Math.max(furthestDayOffset - rolling.minQueueDays + 1, 1);
     const triggerYmd = addDaysToYmd(todayYmd, nextOffset);
     try {
@@ -353,7 +381,9 @@ class ContentSeriesRollingService {
       },
     });
 
-    if (!series) return null;
+    if (!series) {
+      return null;
+    }
     return await buildSeriesRollingStatus({
       series: {
         ...series,
@@ -562,12 +592,18 @@ class ContentSeriesRollingService {
           status: series.status as 'active' | 'paused' | 'archived',
         },
       });
-      if (!status.rolling.enabled || status.seriesStatus !== 'active') continue;
+      if (!status.rolling.enabled || status.seriesStatus !== 'active') {
+        continue;
+      }
 
       for (const placeholder of status.placeholders) {
         const date = new Date(placeholder.scheduledAt);
-        if (Number.isNaN(date.getTime())) continue;
-        if (date < params.monthStart || date > params.monthEnd) continue;
+        if (Number.isNaN(date.getTime())) {
+          continue;
+        }
+        if (date < params.monthStart || date > params.monthEnd) {
+          continue;
+        }
         placeholders.push(placeholder);
       }
     }

@@ -245,7 +245,7 @@ export async function resolveAssets(
       };
     }
 
-    const validAssets = assets.filter(Boolean) as NonNullable<(typeof assets)[number]>[];
+    const validAssets = assets.filter(Boolean) as Array<NonNullable<(typeof assets)[number]>>;
 
     const invalidAssets = validAssets.filter((asset) => asset.brandId !== brandId);
     if (invalidAssets.length > 0) {
@@ -369,7 +369,9 @@ export async function createContentInTransaction(
  * Handles AWS scheduling for content
  */
 export async function handleScheduling(contentId: string, scheduledAt?: string) {
-  if (!scheduledAt) return null;
+  if (!scheduledAt) {
+    return null;
+  }
 
   try {
     const scheduleResult = await schedulerService.scheduleContent(contentId);

@@ -17,14 +17,18 @@ export function runEngagementCorrelationFromPosts(
     return envVal === undefined || Number.isNaN(numVal) ? 0.15 : numVal;
   })()
 ): CorrelationFinding[] {
-  if (!Array.isArray(posts) || posts.length === 0) return [];
+  if (!Array.isArray(posts) || posts.length === 0) {
+    return [];
+  }
 
   const engagement = (p: { like_count?: number; comments_count?: number }): number =>
     (p.like_count || 0) + (p.comments_count || 0);
 
   const allEng = posts.map(engagement);
   const overallMean = allEng.length ? allEng.reduce((a, b) => a + b, 0) / allEng.length : 0;
-  if (overallMean <= 0) return [];
+  if (overallMean <= 0) {
+    return [];
+  }
 
   const featureDefs: Array<{ name: string; predicate: (p: (typeof posts)[number]) => boolean }> = [
     { name: 'has_hashtags', predicate: (p) => !!(p.hashtags && p.hashtags.length > 0) },
@@ -40,7 +44,9 @@ export function runEngagementCorrelationFromPosts(
   for (const f of featureDefs) {
     const withFeat = posts.filter((p) => f.predicate(p)).map(engagement);
     const withoutFeat = posts.filter((p) => !f.predicate(p)).map(engagement);
-    if (withFeat.length === 0 || withoutFeat.length === 0) continue;
+    if (withFeat.length === 0 || withoutFeat.length === 0) {
+      continue;
+    }
     const meanWith = withFeat.reduce((a, b) => a + b, 0) / withFeat.length;
     const meanWithout = withoutFeat.reduce((a, b) => a + b, 0) / withoutFeat.length;
     const delta = (meanWith - meanWithout) / (overallMean || 1);

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { SessionService } from '../services/session.service.js';
 import { RefreshTokenService } from '../services/refresh-token.js';
 import { prisma } from '../config/database.js';
@@ -24,7 +24,9 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const tokens = await RefreshTokenService.getUserTokens(userId);
       const hashes = Array.from(new Set(tokens.map((t) => hashToken(t.token))));
-      if (hashes.length === 0) return await SessionService.getUserSessions(userId);
+      if (hashes.length === 0) {
+        return await SessionService.getUserSessions(userId);
+      }
       return await SessionService.getUserSessionsByRefreshTokenHashes(userId, hashes);
     } catch (error) {
       fastify.log.debug(
@@ -298,8 +300,12 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           : null;
 
         const oauthProviders: string[] = [];
-        if (userForFallback?.googleId) oauthProviders.push('google');
-        if (userForFallback?.facebookId) oauthProviders.push('facebook');
+        if (userForFallback?.googleId) {
+          oauthProviders.push('google');
+        }
+        if (userForFallback?.facebookId) {
+          oauthProviders.push('facebook');
+        }
 
         return reply.send({
           activeSessions: sessions.length,

@@ -1,4 +1,4 @@
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { type DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import type { PublishMarker } from '../types';
 
 export async function getPublishMarker(
@@ -6,7 +6,9 @@ export async function getPublishMarker(
   scheduleId: string
 ): Promise<PublishMarker | null> {
   const table = process.env.RETRY_QUEUE_TABLE;
-  if (!table) return null;
+  if (!table) {
+    return null;
+  }
   const res = await docClient.send(
     new GetCommand({
       TableName: table,
@@ -23,7 +25,9 @@ export async function writePublishMarker(
   permalink?: string
 ): Promise<void> {
   const table = process.env.RETRY_QUEUE_TABLE;
-  if (!table) return;
+  if (!table) {
+    return;
+  }
   await docClient.send(
     new PutCommand({
       TableName: table,

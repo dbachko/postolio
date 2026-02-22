@@ -38,7 +38,9 @@ function toRegionLabel(timezone: TzdbTimezone, fallback: string): string {
 }
 
 export async function loadTimezoneOptions(): Promise<TimezoneOptions> {
-  if (cachedTimezoneOptionsPromise) return cachedTimezoneOptionsPromise;
+  if (cachedTimezoneOptionsPromise) {
+    return cachedTimezoneOptionsPromise;
+  }
 
   cachedTimezoneOptionsPromise = import('@vvo/tzdb').then(({ getTimeZones, timeZonesNames }) => {
     const wantedTimezones = new Set<string>(['UTC', ...timeZonesNames]);
@@ -50,12 +52,19 @@ export async function loadTimezoneOptions(): Promise<TimezoneOptions> {
     const ownersByMissingTimezone = new Map<string, TzdbTimezone[]>();
 
     for (const record of records) {
-      if (!record.group) continue;
+      if (!record.group) {
+        continue;
+      }
       for (const tz of record.group) {
-        if (!missingSet.has(tz)) continue;
+        if (!missingSet.has(tz)) {
+          continue;
+        }
         const owners = ownersByMissingTimezone.get(tz);
-        if (owners) owners.push(record);
-        else ownersByMissingTimezone.set(tz, [record]);
+        if (owners) {
+          owners.push(record);
+        } else {
+          ownersByMissingTimezone.set(tz, [record]);
+        }
       }
     }
 
@@ -102,7 +111,9 @@ export async function loadTimezoneOptions(): Promise<TimezoneOptions> {
         timezones: [],
       };
       region.timezones.push(timezoneName);
-      if (!existing) regionsByKey.set(regionKey, region);
+      if (!existing) {
+        regionsByKey.set(regionKey, region);
+      }
       timezoneToRegionKey[timezoneName] = regionKey;
     }
 

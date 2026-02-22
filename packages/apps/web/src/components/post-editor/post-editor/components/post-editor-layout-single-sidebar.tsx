@@ -145,7 +145,9 @@ export function PostEditorSingleSidebarLayout({
                               key={opt.id}
                               value={searchValue}
                               onSelect={() => {
-                                if (isAlreadySelected) return;
+                                if (isAlreadySelected) {
+                                  return;
+                                }
                                 state.destinations.setEditDestinationsPopoverOpen(false);
                                 void state.destinationActions.handleAddDestinationToSingle(opt.id);
                               }}
@@ -187,11 +189,15 @@ export function PostEditorSingleSidebarLayout({
         }
       >
         {(() => {
-          if (!state.destinations.selectedTargetSocialAccountId) return null;
+          if (!state.destinations.selectedTargetSocialAccountId) {
+            return null;
+          }
           const opt = state.data.platformPickerOptions.find(
             (entry) => entry.id === state.destinations.selectedTargetSocialAccountId
           );
-          if (!opt) return null;
+          if (!opt) {
+            return null;
+          }
           const platformConfig = getPlatformConfig(opt.platform);
           const platformLabel = platformConfig.displayName;
           const shortLabel = opt.label?.trim() || '';

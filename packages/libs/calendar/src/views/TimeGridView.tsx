@@ -29,13 +29,18 @@ type Props<E extends CalendarEventBase> = {
 
 function canDragCalendarEvent(event: any): boolean {
   const res = event?.resource ?? {};
-  if (res?.placeholder) return false;
-  if (res?.status === 'published') return false;
+  if (res?.placeholder) {
+    return false;
+  }
+  if (res?.status === 'published') {
+    return false;
+  }
   if (
     typeof res?.item?.optimisticAction === 'string' &&
     res.item.optimisticAction.trim().length > 0
-  )
+  ) {
     return false;
+  }
 
   const campaignStatus =
     typeof res?.item?.campaignStatus === 'string'
@@ -43,7 +48,9 @@ function canDragCalendarEvent(event: any): boolean {
       : typeof res?.campaignStatus === 'string'
         ? res.campaignStatus.trim()
         : '';
-  if (campaignStatus === 'paused') return false;
+  if (campaignStatus === 'paused') {
+    return false;
+  }
 
   const publishingQueueItemId =
     typeof res?.item?.publishingQueueItemId === 'string'
@@ -62,10 +69,13 @@ function canDragCalendarEvent(event: any): boolean {
 }
 
 function normalizeLaneKey(value: unknown): 'post' | 'reel' | 'story' | 'any' | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
   const trimmed = value.trim();
-  if (trimmed === 'post' || trimmed === 'reel' || trimmed === 'story' || trimmed === 'any')
+  if (trimmed === 'post' || trimmed === 'reel' || trimmed === 'story' || trimmed === 'any') {
     return trimmed;
+  }
   return null;
 }
 
@@ -77,8 +87,12 @@ function getDraggedLaneKey(dragged: any): 'post' | 'reel' | 'story' {
         ? dragged.resource.contentType
         : null;
   const normalized = typeof ct === 'string' ? ct.trim() : '';
-  if (normalized === 'reel') return 'reel';
-  if (normalized === 'story') return 'story';
+  if (normalized === 'reel') {
+    return 'reel';
+  }
+  if (normalized === 'story') {
+    return 'story';
+  }
   return 'post';
 }
 
@@ -261,22 +275,32 @@ function EventListItem<E extends CalendarEventBase>({
     () => ({
       accept: ITEM_TYPE,
       canDrop: (item: any) => {
-        if (!isPlaceholder) return false;
-        if (!onEventDrop) return false;
+        if (!isPlaceholder) {
+          return false;
+        }
+        if (!onEventDrop) {
+          return false;
+        }
 
         const isQueueSlot = (() => {
           const msg = event?.resource?.item?.message;
-          if (typeof msg === 'string' && msg === 'Queue slot') return true;
+          if (typeof msg === 'string' && msg === 'Queue slot') {
+            return true;
+          }
           const id = event?.resource?.item?.id ?? event?.id;
           return typeof id === 'string' && id.startsWith('queue-slot:');
         })();
-        if (!isQueueSlot) return false;
+        if (!isQueueSlot) {
+          return false;
+        }
 
         // Capacity is only relevant for enqueueing actions; dropping onto a slot always schedules.
 
         const targetKey = localizer.format(event.start, 'yyyy-LL-dd');
         const todayKey = localizer.format(new Date(), 'yyyy-LL-dd');
-        if (targetKey < todayKey) return false;
+        if (targetKey < todayKey) {
+          return false;
+        }
 
         const withinNext30Days = (() => {
           const now = new Date();
@@ -287,20 +311,30 @@ function EventListItem<E extends CalendarEventBase>({
           const endKey = localizer.format(end, 'yyyy-LL-dd');
           return targetKey >= startKey && targetKey <= endKey;
         })();
-        if (!withinNext30Days) return false;
+        if (!withinNext30Days) {
+          return false;
+        }
 
         const dragged = item?.event;
-        if (!canDragCalendarEvent(dragged)) return false;
+        if (!canDragCalendarEvent(dragged)) {
+          return false;
+        }
 
         const targetLane = normalizeLaneKey(
           event?.resource?.item?.laneKey ?? event?.resource?.laneKey
         );
-        if (!targetLane) return true;
-        if (targetLane === 'any') return true;
+        if (!targetLane) {
+          return true;
+        }
+        if (targetLane === 'any') {
+          return true;
+        }
         return getDraggedLaneKey(dragged) === targetLane;
       },
       drop(item: any) {
-        if (!isPlaceholder || !onEventDrop) return;
+        if (!isPlaceholder || !onEventDrop) {
+          return;
+        }
         const evt: E = item.event;
         const start = new Date(event.start);
         const end = evt.end
@@ -323,9 +357,15 @@ function EventListItem<E extends CalendarEventBase>({
   );
 
   const refCb = (() => {
-    if (!dragAndDrop) return undefined;
-    if (isPlaceholder) return drop;
-    if (canDrag) return drag;
+    if (!dragAndDrop) {
+      return undefined;
+    }
+    if (isPlaceholder) {
+      return drop;
+    }
+    if (canDrag) {
+      return drag;
+    }
     return undefined;
   })();
 

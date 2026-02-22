@@ -35,7 +35,9 @@ export function SelectionBar({
   deleteLabel = 'Delete',
   deleteVariant = 'destructive',
 }: SelectionBarProps) {
-  if (count === 0) return null;
+  if (count === 0) {
+    return null;
+  }
 
   const isDeleteDisabled = !!deletePending || !!deleteDisabled;
 

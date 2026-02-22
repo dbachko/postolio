@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
 import { getDefaultOpenAIModel } from './openai-client.js';
-import {
-  type ContentBatch,
-  type ContentGenerationRequest,
-  type GeneratedContent,
+import type {
+  ContentBatch,
+  ContentGenerationRequest,
+  GeneratedContent,
 } from './content-generators/types.js';
 import { generateInstagramContent } from './content-generators/instagram/index.js';
 

@@ -3,7 +3,11 @@
  * Enterprise-grade token management with comprehensive security features
  */
 
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  APIGatewayProxyEventV2,
+} from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -533,7 +537,7 @@ async function rotateToken(
     const rotatedToken: TokenData = {
       ...currentToken,
       tokenVersion: newTokenVersion,
-      rotationCount: rotationCount,
+      rotationCount,
       lastRefreshed: new Date().toISOString(),
     };
 
@@ -550,7 +554,7 @@ async function rotateToken(
         metadata: {
           ...currentToken.metadata,
           rotatedAt: new Date().toISOString(),
-          rotationCount: rotationCount,
+          rotationCount,
         },
       },
       requestContext
@@ -567,7 +571,7 @@ async function rotateToken(
       result: 'success',
       metadata: {
         newVersion: newTokenVersion,
-        rotationCount: rotationCount,
+        rotationCount,
       },
     });
 

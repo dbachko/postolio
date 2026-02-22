@@ -30,7 +30,7 @@ export class InstagramConnector implements Connector {
   async listRecentPosts(
     creds: Credentials,
     account: AccountIdentity,
-    limit: number = 25,
+    limit = 25,
     cursor?: string | null
   ): Promise<ListPostsResult> {
     try {
@@ -39,7 +39,9 @@ export class InstagramConnector implements Connector {
       let url = fbGraph(
         `${account.externalAccountId}/media?fields=${fields}&limit=${limit}&access_token=${creds.accessToken}`
       );
-      if (cursor) url += `&after=${cursor}`;
+      if (cursor) {
+        url += `&after=${cursor}`;
+      }
       const res = await axios.get(url);
       const data = Array.isArray(res.data?.data) ? (res.data.data as any[]) : [];
       const posts: PostSummary[] = data.map((m) => ({
@@ -173,7 +175,9 @@ export class InstagramConnector implements Connector {
           (s: number, v: any) => s + (typeof v?.value === 'number' ? v.value : 0),
           0
         );
-        if (typeof name === 'string') totals[name] = sum;
+        if (typeof name === 'string') {
+          totals[name] = sum;
+        }
       }
       return totals;
     };
@@ -336,8 +340,8 @@ export class InstagramConnector implements Connector {
   private async pollContainerStatus(
     containerId: string,
     accessToken: string,
-    maxAttempts: number = 30,
-    intervalMs: number = 2000
+    maxAttempts = 30,
+    intervalMs = 2000
   ): Promise<void> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const statusUrl = fbGraph(`${containerId}?fields=status_code&access_token=${accessToken}`);
@@ -365,8 +369,8 @@ export class InstagramConnector implements Connector {
     creds: Credentials,
     account: AccountIdentity,
     mediaId: string,
-    limit: number = 50
-  ): Promise<{ data: import('../types.js').CommentItem[]; total?: number }> {
+    limit = 50
+  ): Promise<{ data: Array<import('../types.js').CommentItem>; total?: number }> {
     void account;
     void creds;
     const url = fbGraph(

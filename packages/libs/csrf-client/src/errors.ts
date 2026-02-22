@@ -291,7 +291,9 @@ export class CSRFAggregateError extends Error {
 
     return this.errors.reduce(
       (mostSevere, error) => {
-        if (!mostSevere) return error;
+        if (!mostSevere) {
+          return error;
+        }
         const currentSeverity = severityOrder[error.severity];
         const mostSevereSeverity = severityOrder[mostSevere.severity];
         return currentSeverity > mostSevereSeverity ? error : mostSevere;

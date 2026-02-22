@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type AssetType } from '@/features/assets/api/client';
+import type { AssetType } from '@/features/assets/api/client';
 
 export type AssetTypeFilter = 'all' | 'image' | 'video';
 export type SortField = 'created' | 'size' | 'title';
@@ -15,8 +15,12 @@ export function useDebouncedValue<T>(value: T, delay = 300) {
 }
 
 export const formatBytes = (bytes?: number | null) => {
-  if (!bytes && bytes !== 0) return '—';
-  if (bytes === 0) return '0 B';
+  if (!bytes && bytes !== 0) {
+    return '—';
+  }
+  if (bytes === 0) {
+    return '0 B';
+  }
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`;

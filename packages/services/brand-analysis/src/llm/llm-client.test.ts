@@ -6,7 +6,9 @@ describe('invokeLLM', () => {
     let called = 0;
     __setTestResponder(async () => {
       called++;
-      if (called === 1) throw new LlmValidationError('fail once');
+      if (called === 1) {
+        throw new LlmValidationError('fail once');
+      }
       return { ok: true } as unknown;
     });
     const res = await invokeLLM({ model: 'test', prompt: 'p' });

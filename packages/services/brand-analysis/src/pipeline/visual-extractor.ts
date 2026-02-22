@@ -18,9 +18,13 @@ export interface VisualExtractorOutput {
 }
 
 function normalizeHexCandidate(input: unknown): string | null {
-  if (typeof input !== 'string') return null;
+  if (typeof input !== 'string') {
+    return null;
+  }
   let s = input.trim().toLowerCase();
-  if (s.startsWith('#')) s = s.slice(1);
+  if (s.startsWith('#')) {
+    s = s.slice(1);
+  }
   // Allow 3 or 6 hex digits
   if (/^[0-9a-f]{3}$/.test(s)) {
     s = s
@@ -28,7 +32,9 @@ function normalizeHexCandidate(input: unknown): string | null {
       .map((c) => c + c)
       .join('');
   }
-  if (!/^[0-9a-f]{6}$/.test(s)) return null;
+  if (!/^[0-9a-f]{6}$/.test(s)) {
+    return null;
+  }
   return `#${s}`;
 }
 
@@ -37,11 +43,17 @@ function shapePalette(values: unknown[], max = 12): string[] {
   const out: string[] = [];
   for (const v of values) {
     const hex = normalizeHexCandidate(v);
-    if (!hex) continue;
-    if (seen.has(hex)) continue;
+    if (!hex) {
+      continue;
+    }
+    if (seen.has(hex)) {
+      continue;
+    }
     seen.add(hex);
     out.push(hex);
-    if (out.length >= max) break;
+    if (out.length >= max) {
+      break;
+    }
   }
   return out;
 }

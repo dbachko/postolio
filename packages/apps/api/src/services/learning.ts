@@ -472,12 +472,11 @@ Focus on significant changes only. Return only JSON.`;
         return currentTone.replace(/formal|professional/gi, 'conversational');
       }
       return `${currentTone}, conversational`;
-    } else {
-      if (currentTone.includes('casual') || currentTone.includes('conversational')) {
-        return currentTone.replace(/casual|conversational/gi, 'professional');
-      }
-      return `${currentTone}, professional`;
     }
+    if (currentTone.includes('casual') || currentTone.includes('conversational')) {
+      return currentTone.replace(/casual|conversational/gi, 'professional');
+    }
+    return `${currentTone}, professional`;
   }
 
   private adjustContentThemes(
@@ -522,7 +521,9 @@ Focus on significant changes only. Return only JSON.`;
     brandId: string,
     updates: StyleProfileUpdate[]
   ): Promise<number> {
-    if (updates.length === 0) return 0;
+    if (updates.length === 0) {
+      return 0;
+    }
 
     // Estimate based on average posting frequency
     const recentContent = await prisma.content.count({

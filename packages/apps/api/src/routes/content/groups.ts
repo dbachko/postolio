@@ -3,7 +3,7 @@
  * Multi-destination posts are represented as a ContentGroup with one Content row per destination.
  */
 
-import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { Prisma } from '@postolio/database';
 import { validateContentPayload } from '@postolio/content-validation';
 import type { AssetRecord } from '@postolio/assets-client';
@@ -24,22 +24,30 @@ import { supportsScheduling, toValidationPlatform } from '../../utils/platform.j
 const prisma = getDatabaseClient();
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
 function getProfilePictureUrl(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
   const meta = metadata as Record<string, unknown>;
   const direct = meta.profile_picture_url;
-  if (typeof direct === 'string' && direct) return direct;
+  if (typeof direct === 'string' && direct) {
+    return direct;
+  }
 
   const profileData =
     meta.profileData && typeof meta.profileData === 'object' && !Array.isArray(meta.profileData)
       ? (meta.profileData as Record<string, unknown>)
       : null;
   const nested = profileData?.profile_picture_url;
-  if (typeof nested === 'string' && nested) return nested;
+  if (typeof nested === 'string' && nested) {
+    return nested;
+  }
   return null;
 }
 
@@ -66,7 +74,9 @@ function ensureMultiDestinationEnabled(
     userId: request.user?.id,
     email: request.user?.email,
   });
-  if (enabled) return true;
+  if (enabled) {
+    return true;
+  }
   void sendMultiDestinationDisabled(reply);
   return false;
 }
@@ -156,7 +166,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
             typeof b.targetSocialAccount?.sortOrder === 'number'
               ? b.targetSocialAccount.sortOrder
               : 0;
-          if (aOrder !== bOrder) return aOrder - bOrder;
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
           const aCreated =
             a.targetSocialAccount?.createdAt instanceof Date
               ? a.targetSocialAccount.createdAt.getTime()
@@ -270,7 +282,7 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const authResult = await verifyContentEditable(userId, contentId);
     if (!authResult.authorized) {
-      const isImmutable = Boolean(authResult.error && authResult.error.includes('immutable'));
+      const isImmutable = Boolean(authResult.error?.includes('immutable'));
       return reply.code(isImmutable ? 400 : 404).send({ error: authResult.error });
     }
 
@@ -307,11 +319,15 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const headers: Record<string, string> = {};
-    if (typeof request.headers.cookie === 'string') headers.cookie = request.headers.cookie;
-    if (typeof request.headers.authorization === 'string')
+    if (typeof request.headers.cookie === 'string') {
+      headers.cookie = request.headers.cookie;
+    }
+    if (typeof request.headers.authorization === 'string') {
       headers.authorization = request.headers.authorization;
-    if (typeof request.headers['csrf-token'] === 'string')
+    }
+    if (typeof request.headers['csrf-token'] === 'string') {
       headers['csrf-token'] = request.headers['csrf-token'];
+    }
 
     const delegateToGroup = async (groupId: string) => {
       const r = await fastify.inject({
@@ -549,7 +565,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
           typeof b.targetSocialAccount?.sortOrder === 'number'
             ? b.targetSocialAccount.sortOrder
             : 0;
-        if (aOrder !== bOrder) return aOrder - bOrder;
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
         const aCreated =
           a.targetSocialAccount?.createdAt instanceof Date
             ? a.targetSocialAccount.createdAt.getTime()
@@ -605,7 +623,7 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       const assetsClient = getAssetsClient();
       let resolvedAssets: AssetRecord[] = [];
       if (templateAssetIds.length > 0) {
-        let assets: (AssetRecord | null)[];
+        let assets: Array<AssetRecord | null>;
         try {
           assets = await assetsClient.getBatchAssets(templateAssetIds);
         } catch (error) {
@@ -757,11 +775,15 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
         | undefined;
       if (scheduledAtToApply && createdIds.length > 0) {
         const headers: Record<string, string> = {};
-        if (typeof request.headers.cookie === 'string') headers.cookie = request.headers.cookie;
-        if (typeof request.headers.authorization === 'string')
+        if (typeof request.headers.cookie === 'string') {
+          headers.cookie = request.headers.cookie;
+        }
+        if (typeof request.headers.authorization === 'string') {
           headers.authorization = request.headers.authorization;
-        if (typeof request.headers['csrf-token'] === 'string')
+        }
+        if (typeof request.headers['csrf-token'] === 'string') {
           headers['csrf-token'] = request.headers['csrf-token'];
+        }
 
         schedulingResults = [];
 
@@ -939,7 +961,7 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       const assetsClient = getAssetsClient();
       let resolvedAssets: AssetRecord[] = [];
       if (nextAssetIds.length > 0) {
-        let assets: (AssetRecord | null)[];
+        let assets: Array<AssetRecord | null>;
         try {
           assets = await assetsClient.getBatchAssets(nextAssetIds);
         } catch (error) {
@@ -1355,7 +1377,7 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!group || !group.brand) {
+      if (!group?.brand) {
         return reply.code(404).send({ success: false, error: 'content_group_not_found' });
       }
 
@@ -1381,7 +1403,7 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
         }))
         .filter(
           (c): c is { contentId: string; contentType: string; targetSocialAccountId: string } =>
-            Boolean(c.targetSocialAccountId && c.targetSocialAccountId.trim())
+            Boolean(c.targetSocialAccountId?.trim())
         )
         .map((c) => ({
           ...c,
@@ -1420,7 +1442,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       const maxDepth = getMaxQueueDepthForTier(tier);
 
       const normalizeLaneKey = (raw: unknown): 'post' | 'reel' | 'story' => {
-        if (raw === 'reel' || raw === 'story') return raw;
+        if (raw === 'reel' || raw === 'story') {
+          return raw;
+        }
         return 'post';
       };
 
@@ -1453,7 +1477,9 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
               select: { id: true },
               orderBy: { createdAt: 'asc' },
             });
-            if (existingDefault) return existingDefault.id;
+            if (existingDefault) {
+              return existingDefault.id;
+            }
 
             const byName = await tx.publishingQueue.findFirst({
               where: { socialAccountId, name: 'Default' },
@@ -1699,11 +1725,15 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const headers: Record<string, string> = {};
-      if (typeof request.headers.cookie === 'string') headers.cookie = request.headers.cookie;
-      if (typeof request.headers.authorization === 'string')
+      if (typeof request.headers.cookie === 'string') {
+        headers.cookie = request.headers.cookie;
+      }
+      if (typeof request.headers.authorization === 'string') {
         headers.authorization = request.headers.authorization;
-      if (typeof request.headers['csrf-token'] === 'string')
+      }
+      if (typeof request.headers['csrf-token'] === 'string') {
         headers['csrf-token'] = request.headers['csrf-token'];
+      }
 
       const results: Array<{
         contentId: string;
@@ -1794,11 +1824,15 @@ const groupsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const headers: Record<string, string> = {};
-      if (typeof request.headers.cookie === 'string') headers.cookie = request.headers.cookie;
-      if (typeof request.headers.authorization === 'string')
+      if (typeof request.headers.cookie === 'string') {
+        headers.cookie = request.headers.cookie;
+      }
+      if (typeof request.headers.authorization === 'string') {
         headers.authorization = request.headers.authorization;
-      if (typeof request.headers['csrf-token'] === 'string')
+      }
+      if (typeof request.headers['csrf-token'] === 'string') {
         headers['csrf-token'] = request.headers['csrf-token'];
+      }
 
       const results: Array<{
         contentId: string;

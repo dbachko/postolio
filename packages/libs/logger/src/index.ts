@@ -1,4 +1,4 @@
-import pino, { Logger as PinoLogger, LoggerOptions } from 'pino';
+import pino, { type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 

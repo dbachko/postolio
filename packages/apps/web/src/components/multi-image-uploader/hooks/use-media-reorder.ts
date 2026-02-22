@@ -30,12 +30,16 @@ export function useMediaReorder(params: {
     (e: DragEvent<HTMLElement>, index: number) => {
       e.preventDefault();
       const currentIndex = draggedIndexRef.current;
-      if (currentIndex === null || currentIndex === index) return;
+      if (currentIndex === null || currentIndex === index) {
+        return;
+      }
 
       setMediaItems((prev) => {
         const updated = [...prev];
         const draggedItem = updated[currentIndex];
-        if (!draggedItem) return prev;
+        if (!draggedItem) {
+          return prev;
+        }
 
         updated.splice(currentIndex, 1);
         updated.splice(index, 0, draggedItem);

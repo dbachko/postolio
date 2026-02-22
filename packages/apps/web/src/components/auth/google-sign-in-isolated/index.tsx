@@ -36,7 +36,9 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
         });
 
         const data = await apiResponse.json();
-        if (!apiResponse.ok) throw new Error(data.error || 'Google authentication failed');
+        if (!apiResponse.ok) {
+          throw new Error(data.error || 'Google authentication failed');
+        }
 
         if (mode !== 'link') {
           setUser(data.user);

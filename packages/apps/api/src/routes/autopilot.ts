@@ -14,7 +14,7 @@ interface AutopilotConfigUpdate {
   contentStrategy?: {
     themes?: string[];
     postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
-    optimalTimes?: { hour: number; minute: number }[];
+    optimalTimes?: Array<{ hour: number; minute: number }>;
   };
 }
 
@@ -129,7 +129,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
           contentStrategy?: {
             themes?: string[];
             postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
-            optimalTimes?: { hour: number; minute: number }[];
+            optimalTimes?: Array<{ hour: number; minute: number }>;
           };
         }
         const config = request.body as AutopilotConfigUpdate;
@@ -274,7 +274,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
             lastScheduled: brand.content[0]?.scheduledAt || null,
             recentContent: brand.content.map((c) => ({
               id: c.id,
-              caption: c.caption.substring(0, 100) + '...',
+              caption: `${c.caption.substring(0, 100)}...`,
               scheduledAt: c.scheduledAt,
               status: c.status,
             })),

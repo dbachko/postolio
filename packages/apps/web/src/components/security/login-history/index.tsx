@@ -11,10 +11,16 @@ interface LoginHistoryProps {
 
 export function LoginHistory({ history }: LoginHistoryProps) {
   const getLocationString = (location?: { city?: string; country?: string } | null) => {
-    if (!location) return null;
+    if (!location) {
+      return null;
+    }
     const parts = [];
-    if (location.city) parts.push(location.city);
-    if (location.country) parts.push(location.country);
+    if (location.city) {
+      parts.push(location.city);
+    }
+    if (location.country) {
+      parts.push(location.country);
+    }
     return parts.length > 0 ? parts.join(', ') : null;
   };
 
@@ -37,7 +43,9 @@ export function LoginHistory({ history }: LoginHistoryProps) {
   };
 
   const getRevokedReasonText = (reason?: string | null) => {
-    if (!reason) return null;
+    if (!reason) {
+      return null;
+    }
 
     const reasonMap: Record<string, string> = {
       user_requested: 'Logged out by user',

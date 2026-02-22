@@ -30,7 +30,9 @@ export function WriteItBar(props: WriteItBarProps) {
   };
 
   useEffect(() => {
-    if (prevModeRef.current === props.mode) return;
+    if (prevModeRef.current === props.mode) {
+      return;
+    }
     prevModeRef.current = props.mode;
     const hasSchedule = Boolean(props.scheduledAt && props.scheduledAt.trim());
     setPostingAction(hasSchedule ? 'datetime' : 'queue');
@@ -40,8 +42,12 @@ export function WriteItBar(props: WriteItBarProps) {
   }, [props.mode, props.scheduledAt]);
 
   useEffect(() => {
-    if (props.mode !== 'create') return;
-    if (postingActionManuallySetRef.current) return;
+    if (props.mode !== 'create') {
+      return;
+    }
+    if (postingActionManuallySetRef.current) {
+      return;
+    }
     const hasSchedule = Boolean(props.scheduledAt && props.scheduledAt.trim());
     setPostingAction(hasSchedule ? 'datetime' : 'queue');
   }, [props.mode, props.scheduledAt]);
@@ -53,15 +59,23 @@ export function WriteItBar(props: WriteItBarProps) {
   );
 
   const handleEditPrimaryAction = async () => {
-    if (props.mode !== 'edit') return;
+    if (props.mode !== 'edit') {
+      return;
+    }
 
     if (postingAction === 'now') {
-      if (!props.onPublishNow) return;
-      if (props.publishNowDisabled || props.isPublishingNow || !props.validationOk) return;
+      if (!props.onPublishNow) {
+        return;
+      }
+      if (props.publishNowDisabled || props.isPublishingNow || !props.validationOk) {
+        return;
+      }
 
       if (props.hasChanges) {
         const result = await props.onSave();
-        if (result === false) return;
+        if (result === false) {
+          return;
+        }
       }
 
       props.onPublishNow();

@@ -125,8 +125,12 @@ export class RunsClient {
 
   listRuns(params: { brandId: string; status?: RunStatus; limit?: number }) {
     const qp = new URLSearchParams({ brandId: params.brandId });
-    if (params.status) qp.set('status', params.status);
-    if (params.limit != null) qp.set('limit', String(params.limit));
+    if (params.status) {
+      qp.set('status', params.status);
+    }
+    if (params.limit != null) {
+      qp.set('limit', String(params.limit));
+    }
     return this.request(`/api/runs?${qp.toString()}`) as Promise<{ runs: RunSummary[] }>;
   }
 

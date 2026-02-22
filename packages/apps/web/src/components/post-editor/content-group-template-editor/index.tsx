@@ -54,19 +54,30 @@ export function ContentGroupTemplateEditor({
   }, [selectedPlatforms]);
 
   useEffect(() => {
-    if (selectedPlatforms.length === 0) return;
+    if (selectedPlatforms.length === 0) {
+      return;
+    }
     const current = value.contentType;
     let allowed = allowedContentTypes.story;
-    if (current === 'post') allowed = allowedContentTypes.post;
-    else if (current === 'reel') allowed = allowedContentTypes.reel;
+    if (current === 'post') {
+      allowed = allowedContentTypes.post;
+    } else if (current === 'reel') {
+      allowed = allowedContentTypes.reel;
+    }
 
-    if (allowed) return;
-    if (!allowedContentTypes.post) return;
+    if (allowed) {
+      return;
+    }
+    if (!allowedContentTypes.post) {
+      return;
+    }
     onChange((s) => ({ ...s, contentType: 'post' }));
   }, [allowedContentTypes, onChange, selectedPlatforms.length, value.contentType]);
 
   const allowMixedMedia = useMemo(() => {
-    if (value.contentType !== 'post') return false;
+    if (value.contentType !== 'post') {
+      return false;
+    }
     // Facebook feed posts cannot mix photos and videos.
     return selectedPlatforms.every((p) => p !== 'facebook');
   }, [selectedPlatforms, value.contentType]);

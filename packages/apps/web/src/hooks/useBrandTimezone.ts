@@ -19,15 +19,21 @@ export function useBrandTimezone(): { brandTimezone: string; brandId: string | u
     const fallbackTz = brand?.postingTimezone || userTimezone;
     setBrandTimezone(fallbackTz);
 
-    if (!brandId) return undefined;
+    if (!brandId) {
+      return undefined;
+    }
 
     const resolveBrandTimezone = async () => {
       try {
         const tz = await getBrandTimezone(brandId);
-        if (!cancelled && tz) setBrandTimezone(tz);
+        if (!cancelled && tz) {
+          setBrandTimezone(tz);
+        }
       } catch (error) {
         console.warn('[useBrandTimezone] Failed to resolve brand timezone, using fallback', error);
-        if (!cancelled) setBrandTimezone(fallbackTz);
+        if (!cancelled) {
+          setBrandTimezone(fallbackTz);
+        }
       }
     };
     void resolveBrandTimezone();

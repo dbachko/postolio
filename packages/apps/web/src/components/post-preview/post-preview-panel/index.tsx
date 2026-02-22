@@ -30,14 +30,22 @@ export function PostPreviewPanel({
   className,
   unstyled = false,
 }: PostPreviewPanelProps) {
-  if (!open && layout === 'page') return null;
+  if (!open && layout === 'page') {
+    return null;
+  }
   const showPanelHideButton = layout !== 'sidebar' && !unstyled;
 
   const previewTitle = (() => {
-    if (items.length === 0) return 'No preview';
-    if (items.length > 1) return 'All destinations';
+    if (items.length === 0) {
+      return 'No preview';
+    }
+    if (items.length > 1) {
+      return 'All destinations';
+    }
     const account = items[0]?.account;
-    if (!account) return 'Preview';
+    if (!account) {
+      return 'Preview';
+    }
     const label = (account.label || '').trim();
     if (label) {
       return account.platform === 'instagram' && label.startsWith('@') ? label.slice(1) : label;

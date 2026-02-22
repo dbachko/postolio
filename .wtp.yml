@@ -1,5 +1,5 @@
 # Worktree Plus Configuration
-version: "1.0"
+version: '1.0'
 
 # Default settings for worktrees
 defaults:

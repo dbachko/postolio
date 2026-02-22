@@ -120,7 +120,9 @@ export function PostsPerformanceTable({
   });
 
   const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'N/A';
+    if (!dateStr) {
+      return 'N/A';
+    }
     return new Date(dateStr).toLocaleDateString();
   };
 

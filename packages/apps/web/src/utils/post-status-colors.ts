@@ -25,10 +25,17 @@ export function getPostStatusTextClass(status: CalendarPostStatus): string {
 }
 
 export function getPostStatusBorderColor(status: CalendarPostStatus): string {
-  if (status === 'failed') return 'var(--destructive)';
-  if (status === 'published') return 'var(--success)';
-  if (status === 'scheduled') return 'var(--info)';
-  if (status === 'placeholder' || status === 'skipped')
+  if (status === 'failed') {
+    return 'var(--destructive)';
+  }
+  if (status === 'published') {
+    return 'var(--success)';
+  }
+  if (status === 'scheduled') {
+    return 'var(--info)';
+  }
+  if (status === 'placeholder' || status === 'skipped') {
     return 'color-mix(in oklch, var(--warning) 55%, var(--border))';
+  }
   return 'var(--border)';
 }

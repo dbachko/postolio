@@ -11,12 +11,16 @@ type ContentLaneKey = Exclude<LaneKey, 'any'>;
 const CONTENT_LANES: ContentLaneKey[] = ['post', 'reel', 'story'];
 
 function normalizeSlotLaneKey(value: unknown): LaneKey {
-  if (value === 'reel' || value === 'story' || value === 'any') return value;
+  if (value === 'reel' || value === 'story' || value === 'any') {
+    return value;
+  }
   return 'post';
 }
 
 function normalizeContentLaneKey(value: unknown): ContentLaneKey {
-  if (value === 'reel' || value === 'story') return value;
+  if (value === 'reel' || value === 'story') {
+    return value;
+  }
   return 'post';
 }
 
@@ -88,7 +92,9 @@ export class PublishingQueueSchedulerService {
     });
 
     const windowSize = (() => {
-      if (!Number.isFinite(maxAhead)) return PublishingQueueSchedulerService.MAX_WINDOW_SIZE;
+      if (!Number.isFinite(maxAhead)) {
+        return PublishingQueueSchedulerService.MAX_WINDOW_SIZE;
+      }
       const remaining = Math.max(0, (maxAhead as number) - reservedCount);
       return Math.min(PublishingQueueSchedulerService.MAX_WINDOW_SIZE, remaining);
     })();
@@ -206,7 +212,9 @@ export class PublishingQueueSchedulerService {
     const reservedTimesByAccount = new Map<string, number[]>();
     for (const r of reservedScheduled) {
       const socialAccountId = r.targetSocialAccountId;
-      if (!socialAccountId || !r.scheduledAt) continue;
+      if (!socialAccountId || !r.scheduledAt) {
+        continue;
+      }
       const ms = r.scheduledAt.getTime();
       const list = reservedTimesByAccount.get(socialAccountId) ?? [];
       list.push(ms);
@@ -282,20 +290,34 @@ export class PublishingQueueSchedulerService {
 
     for (const item of activeQueueItems) {
       const content = item.content;
-      if (!content) continue;
-      if (content.brandId !== brandId) continue;
+      if (!content) {
+        continue;
+      }
+      if (content.brandId !== brandId) {
+        continue;
+      }
       const expectedSocialAccountId = item.queue.socialAccountId;
-      if (!expectedSocialAccountId) continue;
-      if (!item.queue.isDefault) continue;
-      if (content.targetSocialAccountId !== expectedSocialAccountId) continue;
-      if (isSkippableContentStatus(content.status)) continue;
+      if (!expectedSocialAccountId) {
+        continue;
+      }
+      if (!item.queue.isDefault) {
+        continue;
+      }
+      if (content.targetSocialAccountId !== expectedSocialAccountId) {
+        continue;
+      }
+      if (isSkippableContentStatus(content.status)) {
+        continue;
+      }
 
       const laneKey = normalizeContentLaneKey(content.contentType ?? item.laneKey);
       const key = queueLaneKeyOf(item.queueId, laneKey);
       const list = itemsByQueueLane.get(key) ?? [];
       list.push(item);
       itemsByQueueLane.set(key, list);
-      if (!itemIndexByQueueLane.has(key)) itemIndexByQueueLane.set(key, 0);
+      if (!itemIndexByQueueLane.has(key)) {
+        itemIndexByQueueLane.set(key, 0);
+      }
     }
 
     // Ensure each list is position-ordered (laneKey normalization can reshuffle)
@@ -313,7 +335,9 @@ export class PublishingQueueSchedulerService {
     ): { item: QueueItemRow; index: number } | null => {
       const key = queueLaneKeyOf(queueId, laneKey);
       const list = itemsByQueueLane.get(key);
-      if (!list || list.length === 0) return null;
+      if (!list || list.length === 0) {
+        return null;
+      }
 
       let idx = itemIndexByQueueLane.get(key) ?? 0;
       while (idx < list.length) {
@@ -339,7 +363,9 @@ export class PublishingQueueSchedulerService {
     };
 
     for (const inst of candidateInstances) {
-      if (desiredSchedule.size >= windowSize) break;
+      if (desiredSchedule.size >= windowSize) {
+        break;
+      }
 
       if (inst.laneKey === 'any') {
         const candidates = CONTENT_LANES.map((lane) => ({
@@ -350,18 +376,24 @@ export class PublishingQueueSchedulerService {
             Boolean(c.peek)
         );
 
-        if (candidates.length === 0) continue;
+        if (candidates.length === 0) {
+          continue;
+        }
 
         candidates.sort((a, b) => {
           const aMs = a.peek.item.createdAt.getTime();
           const bMs = b.peek.item.createdAt.getTime();
-          if (aMs !== bMs) return aMs - bMs;
+          if (aMs !== bMs) {
+            return aMs - bMs;
+          }
           return a.peek.item.contentId.localeCompare(b.peek.item.contentId);
         });
 
         const chosen = candidates[0]!;
         const content = chosen.peek.item.content;
-        if (!content) continue;
+        if (!content) {
+          continue;
+        }
 
         desiredSchedule.set(content.id, inst.scheduledAtUtc);
         const key = queueLaneKeyOf(inst.queueId, chosen.lane);
@@ -371,9 +403,13 @@ export class PublishingQueueSchedulerService {
 
       const laneKey = inst.laneKey as ContentLaneKey;
       const peek = peekNextEligibleItem(inst.queueId, laneKey, inst.scheduledAtUtc);
-      if (!peek) continue;
+      if (!peek) {
+        continue;
+      }
       const content = peek.item.content;
-      if (!content) continue;
+      if (!content) {
+        continue;
+      }
 
       desiredSchedule.set(content.id, inst.scheduledAtUtc);
       const key = queueLaneKeyOf(inst.queueId, laneKey);
@@ -387,17 +423,27 @@ export class PublishingQueueSchedulerService {
 
     for (const item of activeQueueItems) {
       const content = item.content;
-      if (!content) continue;
-      if (content.brandId !== brandId) continue;
+      if (!content) {
+        continue;
+      }
+      if (content.brandId !== brandId) {
+        continue;
+      }
       const expectedSocialAccountId = item.queue.socialAccountId;
-      if (!expectedSocialAccountId) continue;
-      if (content.targetSocialAccountId !== expectedSocialAccountId) continue;
+      if (!expectedSocialAccountId) {
+        continue;
+      }
+      if (content.targetSocialAccountId !== expectedSocialAccountId) {
+        continue;
+      }
 
       const desired = desiredSchedule.get(content.id) ?? null;
       const isScheduled = content.status === 'scheduled' && Boolean(content.scheduledAt);
 
       if (!item.queue.isDefault) {
-        if (isScheduled) toCancel.push(content.id);
+        if (isScheduled) {
+          toCancel.push(content.id);
+        }
         continue;
       }
 

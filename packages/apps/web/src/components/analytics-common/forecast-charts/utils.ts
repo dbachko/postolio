@@ -2,7 +2,9 @@ import { formatNumber, formatPercent } from '@/utils/formatNumber';
 import type { ForecastData, MetricType } from './types';
 
 export function formatForecastValue(value: number, metric: MetricType) {
-  if (metric === 'engagementRate') return formatPercent(value, 2);
+  if (metric === 'engagementRate') {
+    return formatPercent(value, 2);
+  }
   return formatNumber(value);
 }
 
@@ -18,14 +20,22 @@ export function getTrendTextClass(trend: ForecastData['trend']) {
 }
 
 export function getConfidenceTextClass(confidence: number) {
-  if (confidence >= 75) return 'text-primary';
-  if (confidence >= 50) return 'text-foreground';
+  if (confidence >= 75) {
+    return 'text-primary';
+  }
+  if (confidence >= 50) {
+    return 'text-foreground';
+  }
   return 'text-muted-foreground';
 }
 
 export function getConfidenceLabel(confidence: number) {
-  if (confidence >= 75) return 'High Confidence';
-  if (confidence >= 50) return 'Medium Confidence';
+  if (confidence >= 75) {
+    return 'High Confidence';
+  }
+  if (confidence >= 50) {
+    return 'Medium Confidence';
+  }
   return 'Low Confidence';
 }
 

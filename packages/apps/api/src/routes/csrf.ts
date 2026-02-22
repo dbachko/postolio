@@ -4,7 +4,7 @@
  * Provides endpoints for CSRF token generation and validation.
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 const csrfRoutes: FastifyPluginAsync = async (fastify) => {
   /**

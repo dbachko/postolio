@@ -232,7 +232,9 @@ export default function Drafts() {
   const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['drafts', brandId],
     queryFn: async () => {
-      if (!brandId) return { content: [] as Content[] };
+      if (!brandId) {
+        return { content: [] as Content[] };
+      }
       const res = await contentApi.getDrafts(brandId);
       return res as { content: Content[] };
     },
@@ -246,12 +248,18 @@ export default function Drafts() {
     const drafts = (data?.content || [])
       .filter((draft) => {
         const isScheduled = Boolean(draft.scheduledAt);
-        if (typeFilter === 'scheduled' && !isScheduled) return false;
-        if (typeFilter === 'unscheduled' && isScheduled) return false;
+        if (typeFilter === 'scheduled' && !isScheduled) {
+          return false;
+        }
+        if (typeFilter === 'unscheduled' && isScheduled) {
+          return false;
+        }
         return true;
       })
       .filter((draft) => {
-        if (!normalizedSearch) return true;
+        if (!normalizedSearch) {
+          return true;
+        }
         const caption = (draft.caption || '').toLowerCase();
         return caption.includes(normalizedSearch);
       });
@@ -266,7 +274,9 @@ export default function Drafts() {
         sortField === 'created'
           ? new Date(b.createdAt).getTime()
           : new Date(b.updatedAt || b.createdAt).getTime();
-      if (aTime === bTime) return a.id.localeCompare(b.id) * multiplier;
+      if (aTime === bTime) {
+        return a.id.localeCompare(b.id) * multiplier;
+      }
       return (aTime - bTime) * multiplier;
     });
   }, [data?.content, search, sortDirection, sortField, typeFilter]);

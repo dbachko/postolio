@@ -22,7 +22,9 @@ export default function Analytics() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['connected-accounts', selectedBrand?.id],
     queryFn: async () => {
-      if (!selectedBrand?.id) return null;
+      if (!selectedBrand?.id) {
+        return null;
+      }
       return brandApi.getConnectedAccounts(selectedBrand.id);
     },
     enabled: Boolean(selectedBrand?.id),

@@ -35,7 +35,9 @@ export function PrimaryActionButton({
         barProps.isQueueing));
 
   const tooltipContent = (() => {
-    if (isDisabled) return null;
+    if (isDisabled) {
+      return null;
+    }
 
     if (barProps.hasChanges) {
       if (postingAction === 'now' && barProps.publishNowBlocker) {
@@ -113,8 +115,12 @@ export function PrimaryActionButton({
         <Button
           size="sm"
           onClick={() => {
-            if (isDisabled) return;
-            if (isBlocked) return;
+            if (isDisabled) {
+              return;
+            }
+            if (isBlocked) {
+              return;
+            }
             void onEditPrimaryAction();
           }}
           disabled={isDisabled}

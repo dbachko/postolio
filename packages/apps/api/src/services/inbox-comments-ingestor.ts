@@ -10,8 +10,8 @@ const prisma = getDatabaseClient();
  */
 export async function ingestBrandComments(
   brandId: string,
-  maxPosts: number = 50,
-  perPostLimit: number = 100,
+  maxPosts = 50,
+  perPostLimit = 100,
   options?: { minStaleMs?: number; socialAccountIds?: string[] }
 ): Promise<{ postsProcessed: number; commentsUpserted: number }> {
   // Load brand with IG connection data
@@ -19,14 +19,18 @@ export async function ingestBrandComments(
     where: { id: brandId },
     select: { id: true },
   });
-  if (!brandExists) throw new Error('Brand not found');
+  if (!brandExists) {
+    throw new Error('Brand not found');
+  }
 
   const minStaleMs = Number(options?.minStaleMs ?? 0);
   const supportedPlatforms = ['instagram', 'facebook'] as const;
   const socialAccountIds = (options?.socialAccountIds || []).map(String).filter(Boolean);
 
   const where: any = { content: { brandId }, platform: { in: supportedPlatforms as any } };
-  if (socialAccountIds.length) where.socialAccountId = { in: socialAccountIds };
+  if (socialAccountIds.length) {
+    where.socialAccountId = { in: socialAccountIds };
+  }
 
   const pubs = await prisma.contentPublication.findMany({
     where,
@@ -58,7 +62,9 @@ export async function ingestBrandComments(
   let commentsUpserted = 0;
   let postsProcessed = 0;
   for (const pub of pubs) {
-    if (!pub.externalPostId) continue;
+    if (!pub.externalPostId) {
+      continue;
+    }
     if (minStaleMs > 0) {
       const lastFetchedAt = latestFetchedAtByPublicationId.get(pub.id) ?? null;
       if (lastFetchedAt && nowMs - lastFetchedAt.getTime() < minStaleMs) {

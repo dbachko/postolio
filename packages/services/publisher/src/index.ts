@@ -8,8 +8,13 @@ import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { SchedulerClient, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
 import type { EventBridgeEvent as AwsEventBridgeEvent } from 'aws-lambda';
 
-import type { PublishEvent, ScheduleDueDetail, Schedule, Credentials } from './types';
-import { toPublishEvent } from './types';
+import {
+  toPublishEvent,
+  type PublishEvent,
+  type ScheduleDueDetail,
+  type Schedule,
+  type Credentials,
+} from './types';
 import { PlatformAdapterFactory, InstagramAdapter } from './adapters';
 import { getTokenFromTokenService } from './utils/token';
 import { getSchedule, updateScheduleStatus, updateFirstCommentStatus } from './utils/audit';
@@ -121,7 +126,7 @@ export const handler = async (
 
     try {
       const existing = await getPublishMarker(docClient, event.scheduleId);
-      if (existing && existing.platformPostId) {
+      if (existing?.platformPostId) {
         logger.warn('Idempotency marker found; skipping re-publish', {
           scheduleId: event.scheduleId,
           platformPostId: existing.platformPostId,

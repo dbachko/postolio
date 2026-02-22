@@ -50,7 +50,9 @@ function calculateEngagementRateFactor(publications: Array<{ metricsLatest: any 
   const valid = publications.filter(
     (p) => p.metricsLatest && (p.metricsLatest.impressions || 0) > 0
   );
-  if (valid.length === 0) return 50;
+  if (valid.length === 0) {
+    return 50;
+  }
 
   const avgEngagementRate =
     valid.reduce((sum, p) => sum + Number(p.metricsLatest.engagementRate || 0), 0) / valid.length;
@@ -69,7 +71,9 @@ async function calculateFollowerGrowthFactor(
     include: { accountMetricsLatest: true },
   });
 
-  if (!account) return 50;
+  if (!account) {
+    return 50;
+  }
 
   const currentFollowers = account.accountMetricsLatest?.followers || 0;
   const historicalSample = await prisma.accountMetricSample.findFirst({
@@ -82,7 +86,9 @@ async function calculateFollowerGrowthFactor(
   });
 
   const startFollowers = historicalSample ? Number(historicalSample.value) : currentFollowers;
-  if (startFollowers <= 0) return 50;
+  if (startFollowers <= 0) {
+    return 50;
+  }
 
   const growthRate = ((currentFollowers - startFollowers) / startFollowers) * 100;
   const score = Math.min(100, Math.max(0, 50 + growthRate * 10));
@@ -97,7 +103,9 @@ function calculateContentConsistencyFactor(
     .map((p) => p.publishedAt!.getTime())
     .sort((a, b) => a - b);
 
-  if (publishedDates.length < 2) return 50;
+  if (publishedDates.length < 2) {
+    return 50;
+  }
 
   const gaps: number[] = [];
   for (let i = 1; i < publishedDates.length; i++) {
@@ -119,10 +127,18 @@ function calculatePublishingFrequencyFactor(
   const weeks = Math.max(1, days / 7);
   const postsPerWeek = postCount / weeks;
 
-  if (postsPerWeek >= 5) return 100;
-  if (postsPerWeek >= 3) return 80;
-  if (postsPerWeek >= 2) return 60;
-  if (postsPerWeek >= 1) return 40;
+  if (postsPerWeek >= 5) {
+    return 100;
+  }
+  if (postsPerWeek >= 3) {
+    return 80;
+  }
+  if (postsPerWeek >= 2) {
+    return 60;
+  }
+  if (postsPerWeek >= 1) {
+    return 40;
+  }
   return 20;
 }
 

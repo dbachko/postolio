@@ -3,7 +3,7 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   QueryCommand,
-  QueryCommandInput,
+  type QueryCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { BRAND_STYLE_PROFILES_TABLE, profilePk, profileSk } from './tables';
 
@@ -51,7 +51,9 @@ export class ProfileRepository {
       })
     );
     const raw = res.Items?.[0];
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const rest = { ...(raw as Record<string, unknown>) } as Record<string, unknown>;
     delete (rest as Record<string, unknown>)['PK'];
     delete (rest as Record<string, unknown>)['SK'];
@@ -66,10 +68,11 @@ export class ProfileRepository {
       ScanIndexForward: false,
       Limit: limit,
     };
-    if (cursor)
+    if (cursor) {
       (params as Record<string, unknown>).ExclusiveStartKey = JSON.parse(
         Buffer.from(cursor, 'base64').toString('utf8')
       );
+    }
     const res = await this.doc.send(new QueryCommand(params));
     return {
       items: (res.Items || []).map((it) => {

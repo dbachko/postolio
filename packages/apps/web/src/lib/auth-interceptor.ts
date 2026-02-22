@@ -22,7 +22,9 @@ export class AuthInterceptor {
   private static listenersAttached = false;
 
   private static isNetworkError(error: unknown): boolean {
-    if (!error) return false;
+    if (!error) {
+      return false;
+    }
     const message = error instanceof Error ? error.message : String(error);
     return (
       error instanceof TypeError ||
@@ -38,12 +40,16 @@ export class AuthInterceptor {
    */
   static startAutoRefresh() {
     this.autoRefreshEnabled = true;
-    if (this.refreshTimer) return;
+    if (this.refreshTimer) {
+      return;
+    }
     console.log('[Auth] Starting automatic token refresh (every 12 minutes)');
 
     if (!this.listenersAttached) {
       document.addEventListener('visibilitychange', () => {
-        if (!this.autoRefreshEnabled) return;
+        if (!this.autoRefreshEnabled) {
+          return;
+        }
         if (document.visibilityState === 'visible') {
           void this.refreshIfNeeded('visibility').catch(() => undefined);
         }
@@ -61,7 +67,9 @@ export class AuthInterceptor {
 
     // Then refresh every 12 minutes
     this.refreshTimer = setInterval(() => {
-      if (!this.autoRefreshEnabled) return;
+      if (!this.autoRefreshEnabled) {
+        return;
+      }
       void this.refreshIfNeeded('interval').catch(() => undefined);
     }, this.REFRESH_INTERVAL);
   }
@@ -81,7 +89,9 @@ export class AuthInterceptor {
    * Start a refresh cycle with a shared promise to avoid concurrent rotations
    */
   private static startRefresh(reason: string): Promise<void> {
-    if (this.refreshPromise) return this.refreshPromise;
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
 
     // Use a shared promise to prevent concurrent refresh calls (which can invalidate tokens)
     this.refreshPromise = this.performRefresh(reason).finally(() => {
@@ -102,10 +112,14 @@ export class AuthInterceptor {
    * Read the most recent refresh timestamp shared across tabs (best-effort)
    */
   private static getSharedLastRefreshTime(): number {
-    if (typeof localStorage === 'undefined') return 0;
+    if (typeof localStorage === 'undefined') {
+      return 0;
+    }
     try {
       const raw = localStorage.getItem(this.SHARED_REFRESH_KEY);
-      if (!raw) return 0;
+      if (!raw) {
+        return 0;
+      }
       const parsed = parseInt(raw, 10);
       return Number.isFinite(parsed) ? parsed : 0;
     } catch {
@@ -117,7 +131,9 @@ export class AuthInterceptor {
    * Persist the last refresh timestamp for other tabs to observe (best-effort)
    */
   private static setSharedLastRefreshTime(timestamp: number) {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
     try {
       localStorage.setItem(this.SHARED_REFRESH_KEY, String(timestamp));
     } catch {
@@ -140,10 +156,14 @@ export class AuthInterceptor {
   }
 
   private static parseLock(raw: string | null): { id: string; expiresAt: number } | null {
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     try {
       const parsed = JSON.parse(raw) as { id?: unknown; expiresAt?: unknown };
-      if (typeof parsed?.id !== 'string' || typeof parsed?.expiresAt !== 'number') return null;
+      if (typeof parsed?.id !== 'string' || typeof parsed?.expiresAt !== 'number') {
+        return null;
+      }
       return { id: parsed.id, expiresAt: parsed.expiresAt };
     } catch {
       return null;
@@ -151,7 +171,9 @@ export class AuthInterceptor {
   }
 
   private static async withLocalStorageLock<T>(fn: () => Promise<T>): Promise<T> {
-    if (typeof localStorage === 'undefined') return fn();
+    if (typeof localStorage === 'undefined') {
+      return fn();
+    }
 
     const now = Date.now();
     const id = `${now}-${Math.random().toString(16).slice(2)}`;
@@ -159,11 +181,13 @@ export class AuthInterceptor {
 
     const tryAcquire = (): boolean => {
       const existing = this.parseLock(localStorage.getItem(this.LS_REFRESH_LOCK_KEY));
-      if (existing && existing.expiresAt > Date.now()) return false;
+      if (existing && existing.expiresAt > Date.now()) {
+        return false;
+      }
       try {
         localStorage.setItem(this.LS_REFRESH_LOCK_KEY, JSON.stringify({ id, expiresAt }));
         const confirmed = this.parseLock(localStorage.getItem(this.LS_REFRESH_LOCK_KEY));
-        return Boolean(confirmed && confirmed.id === id);
+        return Boolean(confirmed?.id === id);
       } catch {
         return false;
       }
@@ -172,7 +196,9 @@ export class AuthInterceptor {
     let acquired = false;
     for (let attempt = 0; attempt < 10; attempt++) {
       acquired = tryAcquire();
-      if (acquired) break;
+      if (acquired) {
+        break;
+      }
       await new Promise((r) => setTimeout(r, 200));
     }
 
@@ -182,7 +208,9 @@ export class AuthInterceptor {
       if (acquired) {
         try {
           const existing = this.parseLock(localStorage.getItem(this.LS_REFRESH_LOCK_KEY));
-          if (existing?.id === id) localStorage.removeItem(this.LS_REFRESH_LOCK_KEY);
+          if (existing?.id === id) {
+            localStorage.removeItem(this.LS_REFRESH_LOCK_KEY);
+          }
         } catch {
           // ignore
         }

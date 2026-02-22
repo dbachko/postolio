@@ -16,7 +16,9 @@ export function PostLearningFeedback({
   onDismiss,
   className = '',
 }: PostLearningFeedbackProps) {
-  if (!isVisible) return null;
+  if (!isVisible) {
+    return null;
+  }
 
   return (
     <div

@@ -6,7 +6,9 @@ type SamplingConfig = {
 };
 
 function parseEnvFloat(value: string | undefined): number | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const parsed = parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
 }

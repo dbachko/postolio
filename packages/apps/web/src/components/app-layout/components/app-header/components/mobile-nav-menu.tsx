@@ -21,8 +21,12 @@ export function MobileNavMenu() {
   const inboxEnabled = isInboxEnabled(user);
   const snippetsEnabled = isSnippetsEnabled(user);
   const visibleMainItems = mainNavItems.filter((item) => {
-    if (!inboxEnabled && item.path === '/inbox') return false;
-    if (!snippetsEnabled && item.path === '/snippets') return false;
+    if (!inboxEnabled && item.path === '/inbox') {
+      return false;
+    }
+    if (!snippetsEnabled && item.path === '/snippets') {
+      return false;
+    }
     return true;
   });
 
@@ -38,7 +42,9 @@ export function MobileNavMenu() {
   }, [location]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setOpen(false);

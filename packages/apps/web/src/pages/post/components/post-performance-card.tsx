@@ -10,7 +10,7 @@ import { ProfileAvatar } from '@/components/ui/profile-avatar';
 
 type PostPerformanceCardProps = {
   insights?: PostInsights;
-  comments: { username: string; text: string }[];
+  comments: Array<{ username: string; text: string }>;
   selectedPublicationId?: string;
   onRefreshMetrics?: () => void;
   onRefreshComments?: () => void;

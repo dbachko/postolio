@@ -3,7 +3,7 @@
  * Implements tiered rate limiting for different endpoint types
  */
 
-import { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
+import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { errorResponse } from '../utils/api-response.js';
 
 // Enable/disable rate limiting in non-prod. Always enabled in prod.
@@ -88,7 +88,7 @@ interface RedisLikeClient {
   multi(): {
     incr(key: string): unknown;
     expire(key: string, seconds: number): unknown;
-    exec(): Promise<unknown[]> | Promise<[unknown, number | unknown][]>;
+    exec(): Promise<unknown[]> | Promise<Array<[unknown, number | unknown]>>;
   };
 }
 
@@ -147,7 +147,7 @@ export function createRateLimiter(redisClient: RedisLikeClient, tier: keyof type
  */
 function parseTimeWindow(window: string): number {
   const match = window.match(/^(\d+)\s*(second|minute|hour)s?$/i);
-  if (!match || !match[1] || !match[2]) {
+  if (!match?.[1] || !match[2]) {
     throw new Error(`Invalid time window: ${window}`);
   }
 

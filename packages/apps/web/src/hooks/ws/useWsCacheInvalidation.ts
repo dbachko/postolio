@@ -37,7 +37,9 @@ export function useWsCacheInvalidation(
   const invalidationTimerRef = useRef<number | null>(null);
 
   const flushInvalidations = useCallback(() => {
-    if (pendingInvalidationsRef.current.size === 0) return;
+    if (pendingInvalidationsRef.current.size === 0) {
+      return;
+    }
     const entries = Array.from(pendingInvalidationsRef.current.values());
     pendingInvalidationsRef.current.clear();
     invalidationTimerRef.current = null;
@@ -60,7 +62,9 @@ export function useWsCacheInvalidation(
         pendingInvalidationsRef.current.set(key, queryKey);
       }
 
-      if (invalidationTimerRef.current !== null) return;
+      if (invalidationTimerRef.current !== null) {
+        return;
+      }
       // Debounce/merge WS bursts so we don't thrash the UI.
       invalidationTimerRef.current = window.setTimeout(() => flushInvalidations(), 1000);
     },
@@ -120,7 +124,9 @@ export function useWsCacheInvalidation(
       })();
 
       for (const { contentId, newStatus, metadata } of statusEvents) {
-        if (!contentId) continue;
+        if (!contentId) {
+          continue;
+        }
 
         const scheduledAt =
           metadata && typeof metadata.scheduledAt === 'string'
@@ -130,7 +136,9 @@ export function useWsCacheInvalidation(
         queryClient.setQueriesData(
           { queryKey: ['content'] },
           (oldData: CacheData | ContentItem[] | undefined) => {
-            if (!oldData) return oldData as any;
+            if (!oldData) {
+              return oldData as any;
+            }
 
             if (Array.isArray(oldData)) {
               return oldData.map((item: ContentItem) =>
@@ -156,7 +164,9 @@ export function useWsCacheInvalidation(
         );
 
         queryClient.setQueryData(['post', contentId], (old: any) => {
-          if (!old) return old;
+          if (!old) {
+            return old;
+          }
           return {
             ...old,
             status: newStatus,
@@ -176,9 +186,13 @@ export function useWsCacheInvalidation(
         if (scheduledAt) {
           queryClient.setQueriesData({ queryKey: ['calendar'] }, (oldData: CalendarQueryData) => {
             const content = (oldData as any)?.data?.content;
-            if (!Array.isArray(content)) return oldData;
+            if (!Array.isArray(content)) {
+              return oldData;
+            }
             const nextContent = content.map((item: any) => {
-              if (!item || String(item.id) !== contentId) return item;
+              if (!item || String(item.id) !== contentId) {
+                return item;
+              }
               return { ...item, status: newStatus, scheduledAt };
             });
             return {

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
 import { facebookService } from '../services/facebook.js';
@@ -100,7 +100,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         contentSeriesId: (post as any).contentSeriesId ?? null,
         recipeRunId: (() => {
           const direct = (post as any).recipeRunId ?? null;
-          if (typeof direct === 'string' && direct.trim()) return direct.trim();
+          if (typeof direct === 'string' && direct.trim()) {
+            return direct.trim();
+          }
           const gp = post.generationParams as any;
           const derived = typeof gp?.runId === 'string' ? gp.runId : null;
           return typeof derived === 'string' && derived.trim() ? derived.trim() : null;
@@ -386,7 +388,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         const now = new Date();
         for (const c of res.data) {
           const externalCommentId = String(c.id || '');
-          if (!externalCommentId) continue;
+          if (!externalCommentId) {
+            continue;
+          }
           const createdAt = c.timestamp ? new Date(c.timestamp) : undefined;
           try {
             await prisma.publicationComment.upsert({
@@ -478,7 +482,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       const { postId } = paramsValidation.data;
       const { commentId } = request.params as { postId: string; commentId: string };
       const { message } = (request.body || {}) as { message?: string };
-      if (!message || !message.trim()) {
+      if (!message?.trim()) {
         return reply.code(400).send(ErrorResponses.badRequest('Message must not be empty'));
       }
 
@@ -488,11 +492,15 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           where: { id: postId },
           include: { brand: true },
         });
-        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
-        if (post.brand.userId !== userId)
+        if (!post) {
+          return reply.code(404).send(ErrorResponses.notFound('Post'));
+        }
+        if (post.brand.userId !== userId) {
           return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
-        if (post.status !== 'published')
+        }
+        if (post.status !== 'published') {
           return reply.code(400).send(ErrorResponses.badRequest('Post is not published'));
+        }
 
         const publicationId =
           typeof (request.query as any)?.publicationId === 'string'
@@ -589,9 +597,12 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         where: { id: postId },
         include: { brand: true },
       });
-      if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
-      if (post.brand.userId !== userId)
+      if (!post) {
+        return reply.code(404).send(ErrorResponses.notFound('Post'));
+      }
+      if (post.brand.userId !== userId) {
         return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+      }
       const publicationId =
         typeof (request.query as any)?.publicationId === 'string'
           ? String((request.query as any).publicationId)
@@ -618,10 +629,14 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
             orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
             select: { id: true, platform: true },
           });
-      if (!pub) return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
+      if (!pub) {
+        return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
+      }
 
       const data: any = {};
-      if (status) data.status = status;
+      if (status) {
+        data.status = status;
+      }
 
       const row = await prisma.publicationComment.upsert({
         where: {
@@ -670,9 +685,12 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           where: { id: postId },
           include: { brand: true },
         });
-        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
-        if (post.brand.userId !== userId)
+        if (!post) {
+          return reply.code(404).send(ErrorResponses.notFound('Post'));
+        }
+        if (post.brand.userId !== userId) {
           return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+        }
         const publicationId =
           typeof (request.query as any)?.publicationId === 'string'
             ? String((request.query as any).publicationId)
@@ -741,11 +759,15 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           where: { id: postId },
           include: { brand: true },
         });
-        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
-        if (post.brand.userId !== userId)
+        if (!post) {
+          return reply.code(404).send(ErrorResponses.notFound('Post'));
+        }
+        if (post.brand.userId !== userId) {
           return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
-        if (post.status !== 'published')
+        }
+        if (post.status !== 'published') {
           return reply.code(400).send(ErrorResponses.badRequest('Post is not published'));
+        }
 
         const publicationId =
           typeof (request.query as any)?.publicationId === 'string'
@@ -773,7 +795,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
               orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
               select: { id: true, platform: true },
             });
-        if (!pub) return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
+        if (!pub) {
+          return reply.code(400).send(ErrorResponses.badRequest('Publication not found'));
+        }
 
         let marked = 0;
         const ids = Array.isArray(commentIds)

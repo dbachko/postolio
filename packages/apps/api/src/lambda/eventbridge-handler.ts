@@ -6,7 +6,7 @@
 import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
 import { lambdaHandler as retentionHandler } from '../services/retention-manager.js';
 import { autopilotService } from '../services/autopilot.js';
-import fastify, { FastifyInstance } from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 
 /**
  * Initialize Fastify instance for service use

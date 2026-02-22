@@ -46,13 +46,27 @@ export class NotificationsClient {
     brandId?: string;
   }) {
     const qs = new URLSearchParams();
-    if (params?.cursor) qs.set('cursor', params.cursor);
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.filter) qs.set('filter', params.filter);
-    if (params?.category) qs.set('category', params.category);
-    if (params?.type) qs.set('type', params.type);
-    if (params?.since) qs.set('since', params.since);
-    if (params?.brandId) qs.set('brandId', params.brandId);
+    if (params?.cursor) {
+      qs.set('cursor', params.cursor);
+    }
+    if (params?.limit) {
+      qs.set('limit', String(params.limit));
+    }
+    if (params?.filter) {
+      qs.set('filter', params.filter);
+    }
+    if (params?.category) {
+      qs.set('category', params.category);
+    }
+    if (params?.type) {
+      qs.set('type', params.type);
+    }
+    if (params?.since) {
+      qs.set('since', params.since);
+    }
+    if (params?.brandId) {
+      qs.set('brandId', params.brandId);
+    }
     const query = qs.toString();
     return this.request(
       `/api/notifications${query ? `?${query}` : ''}`

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import type { Prisma } from '@postolio/database';
 import { assertBrandOwnership } from '../services/ownership.js';

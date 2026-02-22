@@ -76,7 +76,9 @@ type CommentItem = { id?: string; text?: string; username?: string; timestamp?: 
 
 function matchesQuery(value: string, query: string): boolean {
   const q = query.trim().toLowerCase();
-  if (!q) return true;
+  if (!q) {
+    return true;
+  }
   return value.toLowerCase().includes(q);
 }
 
@@ -117,14 +119,18 @@ export default function Inbox() {
 
   const socialAccounts = useMemo(() => {
     const accounts = (connectedAccountsData as any)?.socialAccounts || [];
-    return (accounts as Array<any>).slice().sort((a, b) => {
+    return (accounts as any[]).slice().sort((a, b) => {
       const aDisconnected = Boolean(a?.disconnected);
       const bDisconnected = Boolean(b?.disconnected);
-      if (aDisconnected !== bDisconnected) return aDisconnected ? 1 : -1;
+      if (aDisconnected !== bDisconnected) {
+        return aDisconnected ? 1 : -1;
+      }
 
       const aOrder = typeof a?.sortOrder === 'number' ? a.sortOrder : 0;
       const bOrder = typeof b?.sortOrder === 'number' ? b.sortOrder : 0;
-      if (aOrder !== bOrder) return aOrder - bOrder;
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
 
       return String(a?.createdAt || '').localeCompare(String(b?.createdAt || ''));
     });
@@ -132,9 +138,15 @@ export default function Inbox() {
 
   // Default selection: pick the first connected account.
   useEffect(() => {
-    if (!brandId) return;
-    if (selectedAccountId) return;
-    if (socialAccounts.length === 0) return;
+    if (!brandId) {
+      return;
+    }
+    if (selectedAccountId) {
+      return;
+    }
+    if (socialAccounts.length === 0) {
+      return;
+    }
     const firstConnected = socialAccounts.find((account) => !account?.disconnected);
     setSelectedAccountId(String((firstConnected || socialAccounts[0]).id));
   }, [brandId, selectedAccountId, socialAccounts]);
@@ -168,9 +180,13 @@ export default function Inbox() {
 
   const syncInboxMutation = useMutation({
     mutationFn: async (vars: { socialAccountId: string; silent?: boolean }) => {
-      if (!brandId) throw new Error('No brand selected');
+      if (!brandId) {
+        throw new Error('No brand selected');
+      }
       const socialAccountId = String(vars.socialAccountId || '').trim();
-      if (!socialAccountId) throw new Error('No social account selected');
+      if (!socialAccountId) {
+        throw new Error('No social account selected');
+      }
 
       const [commentsRes, dmsRes] = await Promise.allSettled([
         brandApi.ingestInboxComments(brandId, {
@@ -200,22 +216,34 @@ export default function Inbox() {
       if (!vars.silent) {
         const commentsOk = Boolean((_data as any)?.commentsOk);
         const dmsOk = Boolean((_data as any)?.dmsOk);
-        if (commentsOk && dmsOk) toast.success('Inbox synced');
-        else if (commentsOk) toast.info('Synced comments. DMs may need additional permissions.');
-        else toast.info('Synced DMs. Comments may need additional permissions.');
+        if (commentsOk && dmsOk) {
+          toast.success('Inbox synced');
+        } else if (commentsOk) {
+          toast.info('Synced comments. DMs may need additional permissions.');
+        } else {
+          toast.info('Synced DMs. Comments may need additional permissions.');
+        }
       }
     },
     onError: (e: any, vars) => {
       autoSyncedAccountsRef.current.delete(String(vars?.socialAccountId || ''));
-      if (!vars?.silent) toast.error(e?.message || 'Failed to sync inbox');
+      if (!vars?.silent) {
+        toast.error(e?.message || 'Failed to sync inbox');
+      }
     },
   });
 
   // Auto-sync when switching accounts so inbox shows existing activity (comments + DMs).
   useEffect(() => {
-    if (!brandId) return;
-    if (!selectedAccountId) return;
-    if (autoSyncedAccountsRef.current.has(selectedAccountId)) return;
+    if (!brandId) {
+      return;
+    }
+    if (!selectedAccountId) {
+      return;
+    }
+    if (autoSyncedAccountsRef.current.has(selectedAccountId)) {
+      return;
+    }
     autoSyncedAccountsRef.current.add(selectedAccountId);
     syncInboxMutation.mutate({ socialAccountId: selectedAccountId, silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,11 +253,17 @@ export default function Inbox() {
     let next = items;
 
     // Channel/type filter
-    if (channel === 'comments') next = next.filter((i) => i.type === 'comment_thread');
-    if (channel === 'dms') next = next.filter((i) => i.type === 'dm_conversation');
+    if (channel === 'comments') {
+      next = next.filter((i) => i.type === 'comment_thread');
+    }
+    if (channel === 'dms') {
+      next = next.filter((i) => i.type === 'dm_conversation');
+    }
 
     // Platform filter
-    if (platform !== 'all') next = next.filter((i) => i.platform === platform);
+    if (platform !== 'all') {
+      next = next.filter((i) => i.platform === platform);
+    }
 
     return next;
   }, [channel, items, platform]);
@@ -243,7 +277,9 @@ export default function Inbox() {
     }
 
     const q = itemQuery.trim().toLowerCase();
-    if (!q) return next;
+    if (!q) {
+      return next;
+    }
     return next.filter((item) => {
       if (item.type === 'dm_conversation') {
         return (
@@ -295,7 +331,9 @@ export default function Inbox() {
   }, [filteredItems, selectedItemKey]);
 
   const selectedItem = useMemo(() => {
-    if (!selectedItemKey) return null;
+    if (!selectedItemKey) {
+      return null;
+    }
     if (selectedItemKey.startsWith('dm:')) {
       const id = selectedItemKey.slice('dm:'.length);
       return (
@@ -315,7 +353,9 @@ export default function Inbox() {
     selectedItem?.type === 'comment_thread' ? selectedItem.primaryAssetId : null;
   const { data: selectedAssetsById } = useAssetsByIds([selectedAssetId]);
   const selectedPreviewUrl = useMemo(() => {
-    if (!selectedAssetId) return null;
+    if (!selectedAssetId) {
+      return null;
+    }
     const asset = selectedAssetsById?.[selectedAssetId] ?? null;
     return asset?.thumbnailUrl || asset?.url || null;
   }, [selectedAssetId, selectedAssetsById]);
@@ -384,7 +424,9 @@ export default function Inbox() {
   }>({
     queryKey: ['post-comments', selectedPublicationId],
     queryFn: async () => {
-      if (!selectedPostId || !selectedPublicationId) throw new Error('No thread selected');
+      if (!selectedPostId || !selectedPublicationId) {
+        throw new Error('No thread selected');
+      }
       return (await contentApi.getPostComments(selectedPostId, 1, 50, {
         publicationId: selectedPublicationId,
       })) as any;
@@ -394,7 +436,9 @@ export default function Inbox() {
 
   const replyMutation = useMutation({
     mutationFn: async (vars: { commentId: string; message: string }) => {
-      if (!selectedPostId || !selectedPublicationId) throw new Error('No thread selected');
+      if (!selectedPostId || !selectedPublicationId) {
+        throw new Error('No thread selected');
+      }
       return contentApi.replyToComment(selectedPostId, vars.commentId, vars.message, {
         publicationId: selectedPublicationId,
       });
@@ -411,7 +455,9 @@ export default function Inbox() {
 
   const likeMutation = useMutation({
     mutationFn: async (vars: { commentId: string }) => {
-      if (!selectedPostId || !selectedPublicationId) throw new Error('No thread selected');
+      if (!selectedPostId || !selectedPublicationId) {
+        throw new Error('No thread selected');
+      }
       return contentApi.likeComment(selectedPostId, vars.commentId, {
         publicationId: selectedPublicationId,
       });
@@ -422,7 +468,9 @@ export default function Inbox() {
 
   const workflowMutation = useMutation({
     mutationFn: async (vars: { commentId: string; status?: 'open' | 'resolved' | 'archived' }) => {
-      if (!selectedPostId || !selectedPublicationId) throw new Error('No thread selected');
+      if (!selectedPostId || !selectedPublicationId) {
+        throw new Error('No thread selected');
+      }
       return contentApi.setCommentWorkflow(selectedPostId, vars.commentId, vars, {
         publicationId: selectedPublicationId,
       });
@@ -450,7 +498,9 @@ export default function Inbox() {
 
   const markAllRead = useCallback(async () => {
     const cs = commentsData?.data || [];
-    if (!selectedPostId || !selectedPublicationId || !cs.length) return;
+    if (!selectedPostId || !selectedPublicationId || !cs.length) {
+      return;
+    }
     try {
       const ids = cs.map((c) => String(c.id || '')).filter(Boolean);
       await contentApi.markAllCommentsRead(selectedPostId, ids, {
@@ -464,7 +514,9 @@ export default function Inbox() {
   }, [commentsData?.data, refetchComments, refetchInbox, selectedPostId, selectedPublicationId]);
 
   const refreshSelectedThread = useCallback(() => {
-    if (!selectedPostId || !selectedPublicationId) return;
+    if (!selectedPostId || !selectedPublicationId) {
+      return;
+    }
     refreshCommentsMutation.mutate({
       postId: selectedPostId,
       publicationId: selectedPublicationId,
@@ -473,7 +525,9 @@ export default function Inbox() {
 
   const saveReply = useCallback(
     async (title: string, body: string) => {
-      if (!brandId) return;
+      if (!brandId) {
+        return;
+      }
       try {
         await savedReplies.createSavedReply(brandId, { title, body });
         toast.success('Saved reply added');
@@ -488,7 +542,9 @@ export default function Inbox() {
   // WebSocket for DM updates
   // -----------------------
   const connectWebSocket = useCallback(() => {
-    if (!brandId) return;
+    if (!brandId) {
+      return;
+    }
 
     const current = wsRef.current;
     if (
@@ -570,11 +626,17 @@ export default function Inbox() {
   }, [brandId, queryClient]);
 
   useEffect(() => {
-    if (!brandId) return;
+    if (!brandId) {
+      return;
+    }
     connectWebSocket();
     return () => {
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
       wsRef.current = null;
     };
   }, [brandId, connectWebSocket]);
@@ -709,7 +771,9 @@ export default function Inbox() {
                       key={id}
                       type="button"
                       onClick={() => {
-                        if (disabled) return;
+                        if (disabled) {
+                          return;
+                        }
                         setSelectedAccountId(id);
                       }}
                       className={cn(
@@ -882,9 +946,12 @@ export default function Inbox() {
                 brandId={brandId}
                 disabled={selectedItem.state !== 'active'}
                 placeholder={(() => {
-                  if (selectedItem.state === 'archived')
+                  if (selectedItem.state === 'archived') {
                     return 'Cannot reply to archived conversation';
-                  if (selectedItem.state === 'spam') return 'Cannot reply to spam conversation';
+                  }
+                  if (selectedItem.state === 'spam') {
+                    return 'Cannot reply to spam conversation';
+                  }
                   return 'Type your message...';
                 })()}
               />
@@ -972,10 +1039,16 @@ export default function Inbox() {
                           onStartReply={() => setActiveReplyFor(c.id || null)}
                           onCancelReply={() => setActiveReplyFor(null)}
                           onSendReply={() => {
-                            if (replyMutation.isPending) return;
+                            if (replyMutation.isPending) {
+                              return;
+                            }
                             const msg = replyText.trim();
-                            if (!msg) return;
-                            if (c.id) replyMutation.mutate({ commentId: c.id, message: msg });
+                            if (!msg) {
+                              return;
+                            }
+                            if (c.id) {
+                              replyMutation.mutate({ commentId: c.id, message: msg });
+                            }
                           }}
                           onLike={() => c.id && likeMutation.mutate({ commentId: c.id })}
                           onResolve={() =>

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { aiInsightsService } from '../services/ai-insights.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 
@@ -14,7 +14,7 @@ function ensureAuth(
   request: FastifyRequest,
   reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string; email: string } } {
-  if (!request.user || !request.user.id) {
+  if (!request.user?.id) {
     reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
@@ -31,7 +31,9 @@ const aiInsightsRoutes: FastifyPluginAsync = async function (fastify) {
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
 
         const { brandId } = request.params;
         const { days } = request.query;
@@ -66,7 +68,9 @@ const aiInsightsRoutes: FastifyPluginAsync = async function (fastify) {
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
 
         const { brandId } = request.params;
 

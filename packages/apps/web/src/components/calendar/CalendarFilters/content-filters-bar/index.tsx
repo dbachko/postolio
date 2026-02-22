@@ -65,15 +65,21 @@ export function ContentFiltersBar({ brandId }: ContentFiltersBarProps) {
 
   const toggleSeries = (seriesId: string) => {
     const clean = seriesId.trim();
-    if (!clean) return;
+    if (!clean) {
+      return;
+    }
     const next = series.includes(clean) ? series.filter((s) => s !== clean) : [...series, clean];
     setSeries(next);
   };
 
   const seriesColorById = (id: string): string => {
-    if (id === 'none') return 'hsl(var(--muted-foreground))';
+    if (id === 'none') {
+      return 'hsl(var(--muted-foreground))';
+    }
     let hash = 0;
-    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    }
     const hue = hash % 360;
     return `hsl(${hue} 68% 48%)`;
   };

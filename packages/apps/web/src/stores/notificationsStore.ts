@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { notifications as notificationsApi } from '@/lib/api';
-import type { Notification } from '@/lib/api';
+import { notifications as notificationsApi, type Notification } from '@/lib/api';
 
 interface NotificationsState {
   items: Notification[];
@@ -31,7 +30,9 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
   fetchMore: async () => {
     const cursor = get().nextCursor;
-    if (!cursor) return;
+    if (!cursor) {
+      return;
+    }
     const res = await notificationsApi.list({ cursor, limit: 20 });
     set((state) => ({ items: [...state.items, ...res.items], nextCursor: res.nextCursor }));
   },

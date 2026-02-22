@@ -46,8 +46,11 @@ export function KPICard({
   // Auto-determine trend if not provided
   let determinedTrend: 'up' | 'down' | 'neutral' = trend || 'neutral';
   if (!trend && typeof change === 'number') {
-    if (change > 0) determinedTrend = 'up';
-    else if (change < 0) determinedTrend = 'down';
+    if (change > 0) {
+      determinedTrend = 'up';
+    } else if (change < 0) {
+      determinedTrend = 'down';
+    }
   }
 
   const trendConfig = {

@@ -30,7 +30,9 @@ export function useImageFilesHandler({
 }: UseImageFilesHandlerParams) {
   return useCallback(
     async (files: FileList | File[] | null, options?: { allowMixed?: boolean }) => {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) {
+        return;
+      }
 
       // Prevent mixing media types if a video is already selected
       if (!options?.allowMixed && hasVideo) {

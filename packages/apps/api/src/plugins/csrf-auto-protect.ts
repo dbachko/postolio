@@ -5,7 +5,7 @@
  * except for explicitly skipped paths (OAuth callbacks, health checks, etc.)
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
 // Routes that should NEVER have CSRF protection
@@ -71,7 +71,9 @@ const csrfAutoProtectPlugin: FastifyPluginAsync = async (fastify) => {
       Array.isArray(routeOptions.method) ? routeOptions.method[0] : routeOptions.method
     );
 
-    if (!needsProtection) return;
+    if (!needsProtection) {
+      return;
+    }
 
     // Check if this path should be skipped
     const shouldSkip = CSRF_SKIP_PATHS.some(

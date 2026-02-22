@@ -53,8 +53,8 @@ export class ForecastingService {
    */
   async generateForecast(
     brandId: string,
-    forecastDays: number = 30,
-    historicalDays: number = 90,
+    forecastDays = 30,
+    historicalDays = 90,
     options?: { socialAccountId?: string }
   ): Promise<ForecastReport> {
     // Fetch historical data
@@ -162,7 +162,9 @@ export class ForecastingService {
     const groupedByDay = new Map<string, any[]>();
 
     publications.forEach((pub) => {
-      if (!pub.publishedAt || !pub.metricsLatest) return;
+      if (!pub.publishedAt || !pub.metricsLatest) {
+        return;
+      }
       const dateKey = pub.publishedAt.toISOString().split('T')[0];
       if (!groupedByDay.has(dateKey)) {
         groupedByDay.set(dateKey, []);
@@ -242,9 +244,13 @@ export class ForecastingService {
     // Protect against divide-by-zero
     const changeRate = olderAvg !== 0 ? (recentAvg - olderAvg) / olderAvg : 0;
 
-    if (changeRate > 0.05) trend = 'increasing';
-    else if (changeRate < -0.05) trend = 'decreasing';
-    else trend = 'stable';
+    if (changeRate > 0.05) {
+      trend = 'increasing';
+    } else if (changeRate < -0.05) {
+      trend = 'decreasing';
+    } else {
+      trend = 'stable';
+    }
 
     // Calculate confidence based on variance
     const variance = this.calculateVariance(historicalValues);
@@ -351,9 +357,13 @@ export class ForecastingService {
         : 0;
 
     let trend: 'increasing' | 'decreasing' | 'stable';
-    if (avgRecentGrowth > 0.001) trend = 'increasing';
-    else if (avgRecentGrowth < -0.001) trend = 'decreasing';
-    else trend = 'stable';
+    if (avgRecentGrowth > 0.001) {
+      trend = 'increasing';
+    } else if (avgRecentGrowth < -0.001) {
+      trend = 'decreasing';
+    } else {
+      trend = 'stable';
+    }
 
     // Calculate confidence
     const variance = this.calculateVariance(growthRates);
@@ -398,7 +408,9 @@ export class ForecastingService {
   private calculateMovingAverage(values: number[], windowSize: number): number[] {
     const result: number[] = [];
     // Protect against invalid window size
-    if (windowSize <= 0 || values.length === 0) return result;
+    if (windowSize <= 0 || values.length === 0) {
+      return result;
+    }
 
     for (let i = windowSize - 1; i < values.length; i++) {
       const window = values.slice(i - windowSize + 1, i + 1);
@@ -413,7 +425,9 @@ export class ForecastingService {
    */
   private calculateVariance(values: number[]): number {
     // Protect against empty array
-    if (values.length === 0) return 0;
+    if (values.length === 0) {
+      return 0;
+    }
 
     const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
     const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));

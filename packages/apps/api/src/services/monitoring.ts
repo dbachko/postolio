@@ -50,7 +50,9 @@ export class MonitoringService {
   // Get error rate for endpoint
   getErrorRate(endpoint: string): number {
     const endpointMetrics = this.metrics.filter((m) => m.endpoint === endpoint);
-    if (endpointMetrics.length === 0) return 0;
+    if (endpointMetrics.length === 0) {
+      return 0;
+    }
 
     const errors = endpointMetrics.filter((m) => m.statusCode >= 400);
     return errors.length / endpointMetrics.length;
@@ -62,7 +64,9 @@ export class MonitoringService {
       ? this.metrics.filter((m) => m.endpoint === endpoint)
       : this.metrics;
 
-    if (relevantMetrics.length === 0) return 0;
+    if (relevantMetrics.length === 0) {
+      return 0;
+    }
 
     const totalTime = relevantMetrics.reduce((sum, m) => sum + m.responseTime, 0);
     return totalTime / relevantMetrics.length;

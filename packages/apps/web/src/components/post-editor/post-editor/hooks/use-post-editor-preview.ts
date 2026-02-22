@@ -69,7 +69,9 @@ export function usePostEditorPreview(params: {
   const showPreviewInline = previewOpen && previewLayout === 'page' && !showPreviewAsBody;
 
   useEffect(() => {
-    if (!rightSidebarLayout) return;
+    if (!rightSidebarLayout) {
+      return;
+    }
     if (!showPreviewInColumn) {
       rightSidebarLayout.setExtraWidthPx(0);
       return;
@@ -141,9 +143,15 @@ export function usePostEditorPreview(params: {
   }, [platformPickerOptions, selectedPlatformAccountIds]);
 
   const fallbackPreviewAccount = useMemo<PostPreviewAccount | null>(() => {
-    if (isMultiDestinationGroup) return null;
-    if (previewAccounts.length > 0) return null;
-    if (!post) return null;
+    if (isMultiDestinationGroup) {
+      return null;
+    }
+    if (previewAccounts.length > 0) {
+      return null;
+    }
+    if (!post) {
+      return null;
+    }
 
     const targetId =
       typeof post.targetSocialAccountId === 'string' ? post.targetSocialAccountId.trim() : '';
@@ -152,13 +160,17 @@ export function usePostEditorPreview(params: {
         ? platformPickerOptions.find((option) => option.id === targetId) || null
         : null;
     const fallback = preferred || platformPickerOptions[0] || null;
-    if (!fallback) return null;
+    if (!fallback) {
+      return null;
+    }
     return toPreviewAccountFromOption(fallback);
   }, [isMultiDestinationGroup, platformPickerOptions, post, previewAccounts.length]);
 
   const previewItems = useMemo<PostPreviewItem[]>(() => {
     if (isMultiDestinationGroup) {
-      if (groupDestinationPreviewData.length === 0) return [];
+      if (groupDestinationPreviewData.length === 0) {
+        return [];
+      }
       if (isTemplateTab) {
         return groupDestinationPreviewData.map((dest) => ({
           account: dest.account,
@@ -168,7 +180,9 @@ export function usePostEditorPreview(params: {
       }
 
       const activeDestination = groupDestinationPreviewData.find((dest) => dest.contentId === id);
-      if (!activeDestination) return [];
+      if (!activeDestination) {
+        return [];
+      }
       return [
         {
           account: activeDestination.account,
@@ -185,7 +199,9 @@ export function usePostEditorPreview(params: {
           ? [fallbackPreviewAccount]
           : [];
 
-    if (effectivePreviewAccounts.length === 0) return [];
+    if (effectivePreviewAccounts.length === 0) {
+      return [];
+    }
     return effectivePreviewAccounts.map((account) => ({
       account,
       content: formPreviewContent,
@@ -228,7 +244,9 @@ export function usePostEditorPreview(params: {
   ]);
 
   const primaryEditCtaLabel = useMemo(() => {
-    if (disabled) return 'Save';
+    if (disabled) {
+      return 'Save';
+    }
     const hadScheduled = isMultiDestinationGroup
       ? contentGroupSchedule.kind !== 'none'
       : Boolean(post?.scheduledAt);

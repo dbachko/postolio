@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Session } from '@/lib/api';
-import { session as sessionApi } from '@/lib/api';
+import { type Session, session as sessionApi } from '@/lib/api';
 import { SessionCard } from '../session-card';
 import { RevokeSessionDialog } from '../revoke-session-dialog';
 import { RevokeAllSessionsDialog } from '../revoke-all-sessions-dialog';
@@ -49,14 +48,18 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
 
   const handleRevoke = async (sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId);
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     setSelectedSession(session);
     setRevokeDialogOpen(true);
   };
 
   const confirmRevoke = async () => {
-    if (!selectedSession) return;
+    if (!selectedSession) {
+      return;
+    }
 
     setIsRevoking(true);
     try {
@@ -75,14 +78,18 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
 
   const handleEditDeviceName = async (sessionId: string, _currentName: string) => {
     const session = sessions.find((s) => s.id === sessionId);
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     setSelectedSession(session);
     setEditDialogOpen(true);
   };
 
   const confirmEditDeviceName = async (newName: string) => {
-    if (!selectedSession) return;
+    if (!selectedSession) {
+      return;
+    }
 
     setIsUpdating(true);
     try {

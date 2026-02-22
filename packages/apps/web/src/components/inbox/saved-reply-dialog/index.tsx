@@ -51,7 +51,9 @@ export function SavedReplyDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !body.trim()) return;
+    if (!title.trim() || !body.trim()) {
+      return;
+    }
 
     await onSave({
       title: title.trim(),

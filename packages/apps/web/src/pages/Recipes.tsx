@@ -28,9 +28,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { recipes as recipesApi, runs as runsApi } from '@/lib/api';
-import { skills as skillsApi } from '@/lib/api';
-import { brand as brandApi } from '@/lib/api';
+import {
+  recipes as recipesApi,
+  runs as runsApi,
+  skills as skillsApi,
+  brand as brandApi,
+} from '@/lib/api';
 import type { RecipeCategory, RecipeInputField, RecipeSummary } from '@/lib/api/recipes-client';
 import type { SkillSummary } from '@/lib/api/skills-client';
 import { isMultiDestinationEnabled, isRecipeDestinationUiEnabled } from '@/lib/feature-flags';
@@ -47,21 +50,29 @@ import { useAuthStore } from '@/stores/authStore';
 
 function toHumanLabel(raw: string): string {
   const s = String(raw || '').trim();
-  if (!s) return '';
+  if (!s) {
+    return '';
+  }
   const cleaned = s.replace(/[_-]+/g, ' ');
   return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function fieldKind(name: string): 'textarea' | 'input' {
   const key = name.toLowerCase();
-  if (key.includes('brief') || key.includes('caption')) return 'textarea';
+  if (key.includes('brief') || key.includes('caption')) {
+    return 'textarea';
+  }
   return 'input';
 }
 
 function fieldInputType(name: string): React.HTMLInputTypeAttribute {
   const key = name.toLowerCase();
-  if (key.includes('date')) return 'date';
-  if (key.includes('url')) return 'url';
+  if (key.includes('date')) {
+    return 'date';
+  }
+  if (key.includes('url')) {
+    return 'url';
+  }
   return 'text';
 }
 
@@ -159,7 +170,9 @@ function buildLegacyInputFields(recipe: RecipeSummary): RecipeInputField[] {
 }
 
 function getRecipeInputFields(recipe: RecipeSummary | null): RecipeInputField[] {
-  if (!recipe) return [];
+  if (!recipe) {
+    return [];
+  }
   const fields = Array.isArray(recipe.inputSchema?.fields) ? recipe.inputSchema.fields : [];
   if (fields.length > 0) {
     return fields.map((field) => ({
@@ -173,8 +186,12 @@ function getRecipeInputFields(recipe: RecipeSummary | null): RecipeInputField[] 
 }
 
 function isMissingFieldValue(value: unknown): boolean {
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+  if (typeof value === 'string') {
+    return value.trim().length === 0;
+  }
   return value == null;
 }
 
@@ -186,21 +203,31 @@ function getRecipeReadiness(
   skillById: Map<string, SkillSummary>
 ): RecipeReadiness {
   const requiredSkills = Array.isArray(recipe.skillsRequired) ? recipe.skillsRequired : [];
-  if (requiredSkills.length === 0) return 'ready';
+  if (requiredSkills.length === 0) {
+    return 'ready';
+  }
 
   let hasDisabledSkill = false;
   for (const skillId of requiredSkills) {
     const skill = skillById.get(skillId) || null;
-    if (!skill?.installation) return 'missing_skills';
-    if (skill.installation.enabled !== true) hasDisabledSkill = true;
+    if (!skill?.installation) {
+      return 'missing_skills';
+    }
+    if (skill.installation.enabled !== true) {
+      hasDisabledSkill = true;
+    }
   }
 
   return hasDisabledSkill ? 'disabled_skills' : 'ready';
 }
 
 function readinessLabel(readiness: RecipeReadiness): string {
-  if (readiness === 'ready') return 'Ready to run';
-  if (readiness === 'missing_skills') return 'Missing required skills';
+  if (readiness === 'ready') {
+    return 'Ready to run';
+  }
+  if (readiness === 'missing_skills') {
+    return 'Missing required skills';
+  }
   return 'Required skills disabled';
 }
 
@@ -261,10 +288,14 @@ export function Recipes() {
       .sort((a: any, b: any) => {
         const aOrder = typeof a?.sortOrder === 'number' ? a.sortOrder : 0;
         const bOrder = typeof b?.sortOrder === 'number' ? b.sortOrder : 0;
-        if (aOrder !== bOrder) return aOrder - bOrder;
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
         const aCreated = typeof a?.createdAt === 'string' ? a.createdAt : '';
         const bCreated = typeof b?.createdAt === 'string' ? b.createdAt : '';
-        if (aCreated !== bCreated) return aCreated.localeCompare(bCreated);
+        if (aCreated !== bCreated) {
+          return aCreated.localeCompare(bCreated);
+        }
         return String(a?.id || '').localeCompare(String(b?.id || ''));
       });
 
@@ -297,18 +328,26 @@ export function Recipes() {
       .filter((id: any) => typeof id === 'string')
       .map((id: string) => id.trim())
       .filter((id: string) => Boolean(id) && byId.has(id));
-    if (defaults.length === 1) return defaults[0];
+    if (defaults.length === 1) {
+      return defaults[0];
+    }
 
     const primary =
       typeof payload?.primarySocialAccountId === 'string' ? payload.primarySocialAccountId : null;
-    if (primary && byId.has(primary)) return primary;
+    if (primary && byId.has(primary)) {
+      return primary;
+    }
 
     return destinationPickerOptions[0]?.id ?? null;
   }, [connectedAccountsQuery.data, destinationPickerOptions]);
 
   useEffect(() => {
-    if (!runOpen) return;
-    if (!preferredDestinationId) return;
+    if (!runOpen) {
+      return;
+    }
+    if (!preferredDestinationId) {
+      return;
+    }
 
     if (!multiDestinationEnabled) {
       if (runDestinationIds.length === 1 && runDestinationIds[0] === preferredDestinationId) {
@@ -318,13 +357,17 @@ export function Recipes() {
       return;
     }
 
-    if (runDestinationIds.length > 0) return;
+    if (runDestinationIds.length > 0) {
+      return;
+    }
     setRunDestinationIds([preferredDestinationId]);
   }, [multiDestinationEnabled, preferredDestinationId, runDestinationIds, runOpen]);
 
   const selectedRunDestination = useMemo(() => {
     const selectedId = runDestinationIds[0];
-    if (!selectedId) return null;
+    if (!selectedId) {
+      return null;
+    }
     return destinationPickerOptions.find((option) => option.id === selectedId) || null;
   }, [destinationPickerOptions, runDestinationIds]);
 
@@ -339,23 +382,33 @@ export function Recipes() {
 
   const createRunMutation = useMutation({
     mutationFn: async (params: { recipe: RecipeSummary; input: Record<string, unknown> }) => {
-      if (!brandId) throw new Error('Brand required');
+      if (!brandId) {
+        throw new Error('Brand required');
+      }
       const versionId = params.recipe.publishedVersion?.id;
-      if (!versionId) throw new Error('Recipe is not published');
+      if (!versionId) {
+        throw new Error('Recipe is not published');
+      }
       const input: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(params.input)) {
-        if (v == null) continue;
+        if (v == null) {
+          continue;
+        }
         if (Array.isArray(v)) {
           const normalized = v
             .map((item) => String(item || '').trim())
             .filter((item) => item.length > 0);
-          if (normalized.length === 0) continue;
+          if (normalized.length === 0) {
+            continue;
+          }
           input[k] = normalized;
           continue;
         }
         if (typeof v === 'string') {
           const trimmed = v.trim();
-          if (trimmed.length === 0) continue;
+          if (trimmed.length === 0) {
+            continue;
+          }
           input[k] = trimmed;
           continue;
         }
@@ -424,7 +477,9 @@ export function Recipes() {
 
   const topUpMutation = useMutation({
     mutationFn: async () => {
-      if (!brandId) throw new Error('Brand required');
+      if (!brandId) {
+        throw new Error('Brand required');
+      }
       return await runsApi.topUpCredits({ brandId, credits: 1000 });
     },
     onSuccess: async () => {
@@ -473,7 +528,9 @@ export function Recipes() {
       const req = Array.isArray(recipe.skillsRequired) ? recipe.skillsRequired : [];
       req.forEach((id) => {
         const key = String(id || '').trim();
-        if (key) ids.add(key);
+        if (key) {
+          ids.add(key);
+        }
       });
     });
     return Array.from(ids)
@@ -490,17 +547,25 @@ export function Recipes() {
 
   const filteredRecipes = useMemo(() => {
     return recipes.filter((recipe) => {
-      if (categoryFilters.length > 0 && !categoryFilters.includes(recipe.category)) return false;
+      if (categoryFilters.length > 0 && !categoryFilters.includes(recipe.category)) {
+        return false;
+      }
 
       if (requiredSkillFilters.length > 0) {
         const required = Array.isArray(recipe.skillsRequired) ? recipe.skillsRequired : [];
-        if (!requiredSkillFilters.some((skillId) => required.includes(skillId))) return false;
+        if (!requiredSkillFilters.some((skillId) => required.includes(skillId))) {
+          return false;
+        }
       }
 
       if (readinessFilters.length > 0) {
-        if (!canFilterByReadiness) return false;
+        if (!canFilterByReadiness) {
+          return false;
+        }
         const readiness = getRecipeReadiness(recipe, skillById);
-        if (!readinessFilters.includes(readiness)) return false;
+        if (!readinessFilters.includes(readiness)) {
+          return false;
+        }
       }
 
       return true;
@@ -545,7 +610,9 @@ export function Recipes() {
     [runInputFields]
   );
   const activeAssetPickerField = useMemo(() => {
-    if (!assetPickerFieldKey) return null;
+    if (!assetPickerFieldKey) {
+      return null;
+    }
     return runInputFields.find((field) => field.key === assetPickerFieldKey) || null;
   }, [assetPickerFieldKey, runInputFields]);
 
@@ -959,11 +1026,15 @@ export function Recipes() {
             tabIndex={recipe.publishedVersion?.id ? 0 : -1}
             aria-disabled={!recipe.publishedVersion?.id}
             onClick={() => {
-              if (!recipe.publishedVersion?.id) return;
+              if (!recipe.publishedVersion?.id) {
+                return;
+              }
               openRunDialog(recipe);
             }}
             onKeyDown={(e) => {
-              if (!recipe.publishedVersion?.id) return;
+              if (!recipe.publishedVersion?.id) {
+                return;
+              }
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 openRunDialog(recipe);
@@ -1391,7 +1462,9 @@ export function Recipes() {
             </Button>
             <Button
               onClick={() => {
-                if (!runRecipe) return;
+                if (!runRecipe) {
+                  return;
+                }
                 if (runDestinationIds.length === 0) {
                   toast.error(
                     multiDestinationEnabled

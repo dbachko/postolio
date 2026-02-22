@@ -54,7 +54,9 @@ export function ReplyBox({
   const replies = savedRepliesData?.savedReplies || [];
 
   const handleSend = async () => {
-    if (!message.trim() || isSending) return;
+    if (!message.trim() || isSending) {
+      return;
+    }
 
     try {
       setIsSending(true);
@@ -77,7 +79,9 @@ export function ReplyBox({
   };
 
   const handleInsert = (text: string) => {
-    if (!textareaRef.current) return;
+    if (!textareaRef.current) {
+      return;
+    }
 
     const textarea = textareaRef.current;
     const start = textarea.selectionStart;

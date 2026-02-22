@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
@@ -10,7 +10,9 @@ const publicationsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/publications', async (request, reply) => {
     try {
       const contentId = String((request.query as any)?.contentId || '');
-      if (!contentId) return reply.code(400).send({ error: 'contentId is required' });
+      if (!contentId) {
+        return reply.code(400).send({ error: 'contentId is required' });
+      }
 
       const pubs = await prisma.contentPublication.findMany({
         where: { contentId },

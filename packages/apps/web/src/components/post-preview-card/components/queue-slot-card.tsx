@@ -15,7 +15,9 @@ type QueueSlotCardProps = {
 
 export function QueueSlotCard({ queueSlot, onCreate }: QueueSlotCardProps) {
   const handleCreate = () => {
-    if (queueSlot.isPast) return;
+    if (queueSlot.isPast) {
+      return;
+    }
     onCreate();
   };
 

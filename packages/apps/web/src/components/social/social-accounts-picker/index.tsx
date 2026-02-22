@@ -48,15 +48,24 @@ export function SocialAccountsPicker({
   }, [options, value]);
 
   const toggle = (id: string) => {
-    if (disabled) return;
+    if (disabled) {
+      return;
+    }
     const option = options.find((o) => o.id === id);
     const isSelected = value.includes(id);
-    if (!option) return;
-    if (option.disabled && !isSelected) return;
+    if (!option) {
+      return;
+    }
+    if (option.disabled && !isSelected) {
+      return;
+    }
 
     const next = new Set(value);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
     onChange(Array.from(next));
   };
 

@@ -16,7 +16,9 @@ export function formatGmtOffset(hours: number): string {
 }
 
 export function toWallTimeDate(iso: string | null | undefined, _timezone?: string): Date | null {
-  if (!iso) return null;
+  if (!iso) {
+    return null;
+  }
   const trimmed = iso.trim();
   const hasOffset = /[zZ]|[+-]\d{2}:\d{2}$/.test(trimmed);
 
@@ -44,7 +46,9 @@ export function getEventBounds(
       : getContentIso(item, ['postedAt', 'scheduledAt', 'createdAt']);
 
   const start = toWallTimeDate(baseIso ?? null, timezone);
-  if (!start) return null;
+  if (!start) {
+    return null;
+  }
 
   const endIso = item.type === 'content' ? getContentIso(item, ['endAt']) : undefined;
   const end =
@@ -62,7 +66,9 @@ function getContentIso(
   item: Extract<CalendarDataItem, { type: 'content' }> | CalendarDataItem,
   keys: Array<'postedAt' | 'scheduledAt' | 'createdAt' | 'endAt'>
 ): string | null | undefined {
-  if (item.type !== 'content') return null;
+  if (item.type !== 'content') {
+    return null;
+  }
 
   const candidate = item as unknown as Record<string, unknown>;
 

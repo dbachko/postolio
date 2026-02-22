@@ -13,9 +13,15 @@ import type { RunStatus, RunArtifact, RunStep } from '@/lib/api/runs-client';
 function statusBadgeVariant(
   status: RunStatus
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'success') return 'secondary';
-  if (status === 'failed') return 'destructive';
-  if (status === 'running' || status === 'queued') return 'outline';
+  if (status === 'success') {
+    return 'secondary';
+  }
+  if (status === 'failed') {
+    return 'destructive';
+  }
+  if (status === 'running' || status === 'queued') {
+    return 'outline';
+  }
   return 'outline';
 }
 
@@ -28,7 +34,9 @@ function jsonPretty(value: unknown): string {
 }
 
 function artifactTitle(a: RunArtifact): string {
-  if (a.kind === 'asset') return a.assetId ? `${a.name} (${a.assetId})` : a.name;
+  if (a.kind === 'asset') {
+    return a.assetId ? `${a.name} (${a.assetId})` : a.name;
+  }
   return a.name;
 }
 
@@ -37,7 +45,9 @@ function parseCreatedContent(artifacts: RunArtifact[]): null | {
   contentIds: string[];
 } {
   const a = artifacts.find((x) => x.kind === 'json' && x.name === 'created_content.json');
-  if (!a?.contentText) return null;
+  if (!a?.contentText) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(a.contentText) as any;
     const contentSeriesId =
@@ -45,7 +55,9 @@ function parseCreatedContent(artifacts: RunArtifact[]): null | {
     const contentIds = Array.isArray(parsed?.contentIds)
       ? parsed.contentIds.filter((id: any) => typeof id === 'string')
       : [];
-    if (!contentSeriesId && contentIds.length === 0) return null;
+    if (!contentSeriesId && contentIds.length === 0) {
+      return null;
+    }
     return { contentSeriesId, contentIds };
   } catch {
     return null;
@@ -53,10 +65,16 @@ function parseCreatedContent(artifacts: RunArtifact[]): null | {
 }
 
 function stepDuration(step: RunStep): string | null {
-  if (!step.startedAt || !step.finishedAt) return null;
+  if (!step.startedAt || !step.finishedAt) {
+    return null;
+  }
   const ms = new Date(step.finishedAt).getTime() - new Date(step.startedAt).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  if (ms < 1000) return `${ms}ms`;
+  if (!Number.isFinite(ms) || ms < 0) {
+    return null;
+  }
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
@@ -71,7 +89,9 @@ export function RunDetail() {
     queryFn: async () => await runsApi.getRun(runId!),
     refetchInterval: (query) => {
       const status = (query.state.data as any)?.run?.status as RunStatus | undefined;
-      if (status === 'queued' || status === 'running') return 1500;
+      if (status === 'queued' || status === 'running') {
+        return 1500;
+      }
       return false;
     },
   });
@@ -110,10 +130,18 @@ export function RunDetail() {
   const didInvalidateCalendarRef = useRef(false);
 
   useEffect(() => {
-    if (didInvalidateCalendarRef.current) return;
-    if (!data) return;
-    if (data.run.status !== 'success') return;
-    if (!createdContent) return;
+    if (didInvalidateCalendarRef.current) {
+      return;
+    }
+    if (!data) {
+      return;
+    }
+    if (data.run.status !== 'success') {
+      return;
+    }
+    if (!createdContent) {
+      return;
+    }
 
     didInvalidateCalendarRef.current = true;
     // Refresh calendar + series list so created posts appear immediately without waiting for staleTime.

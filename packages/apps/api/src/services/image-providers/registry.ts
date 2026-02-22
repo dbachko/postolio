@@ -73,7 +73,9 @@ export class ImageProviderRegistry {
         .map((p) => p.trim() as ImageProvider)
         .filter((p) => configuredNames.has(p));
 
-      if (ordered.length > 0) return ordered;
+      if (ordered.length > 0) {
+        return ordered;
+      }
     }
 
     return Array.from(configuredNames.values());
@@ -86,13 +88,17 @@ export class ImageProviderRegistry {
   getProviderWithFallback(preferred?: ImageProvider | null): IImageProvider {
     if (preferred) {
       const provider = this.getProvider(preferred);
-      if (provider?.isConfigured) return provider;
+      if (provider?.isConfigured) {
+        return provider;
+      }
     }
 
     const defaultProvider = this.getDefaultProvider();
     if (defaultProvider) {
       const provider = this.getProvider(defaultProvider);
-      if (provider?.isConfigured) return provider;
+      if (provider?.isConfigured) {
+        return provider;
+      }
     }
 
     throw new Error(

@@ -55,8 +55,12 @@ export function usePostEditorTemplateForm(params: {
       setTemplateHasChanges(false);
       return;
     }
-    if (!contentGroupTemplate) return;
-    if (templateAssetIds.length > 0 && !templateAssetsById) return;
+    if (!contentGroupTemplate) {
+      return;
+    }
+    if (templateAssetIds.length > 0 && !templateAssetsById) {
+      return;
+    }
 
     const normalizedContentType =
       (contentGroupTemplate.contentType as InstagramContentType) || 'post';
@@ -88,10 +92,12 @@ export function usePostEditorTemplateForm(params: {
   }, [templateFormData.carouselAssets, templateFormData.contentType]);
 
   const templateValidation = useMemo(() => {
-    if (!isMultiDestinationGroup) return { ok: true, errors: [] as any[] };
+    if (!isMultiDestinationGroup) {
+      return { ok: true, errors: [] as any[] };
+    }
 
     const isStory = templateFormData.contentType === 'story';
-    const mediaAssets: { key: string; type: InstagramMediaType }[] = (
+    const mediaAssets: Array<{ key: string; type: InstagramMediaType }> = (
       templateFormData.carouselAssets || []
     )
       .filter((asset) => typeof asset.id === 'string' && asset.id.trim().length > 0)
@@ -159,7 +165,9 @@ export function usePostEditorTemplateForm(params: {
 
   useEffect(() => {
     if (!isMultiDestinationGroup || !contentGroupTemplate || !templateInitializedRef.current) {
-      if (!isMultiDestinationGroup) setTemplateHasChanges(false);
+      if (!isMultiDestinationGroup) {
+        setTemplateHasChanges(false);
+      }
       return;
     }
 
@@ -206,7 +214,9 @@ export function usePostEditorTemplateForm(params: {
   }, [groupPlatforms, templateFormData.contentType]);
 
   const templateQueueSupported = useMemo(() => {
-    if (!isMultiDestinationGroup) return false;
+    if (!isMultiDestinationGroup) {
+      return false;
+    }
     const platforms = groupPlatforms.length ? groupPlatforms : (['instagram'] as Platform[]);
     return platforms.every((p) => {
       try {

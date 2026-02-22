@@ -34,7 +34,9 @@ function now(): Date {
 
 function truncateText(value: string, maxLen = 32_000): string {
   const v = String(value ?? '');
-  if (v.length <= maxLen) return v;
+  if (v.length <= maxLen) {
+    return v;
+  }
   return `${v.slice(0, maxLen)}…`;
 }
 
@@ -59,8 +61,12 @@ function extractHashtagsFromCaption(caption: string): string[] {
   const out: string[] = [];
   for (const raw of matches) {
     const h = raw.replace(/^#/, '').trim();
-    if (!h) continue;
-    if (seen.has(h)) continue;
+    if (!h) {
+      continue;
+    }
+    if (seen.has(h)) {
+      continue;
+    }
     seen.add(h);
     out.push(h);
   }
@@ -69,15 +75,21 @@ function extractHashtagsFromCaption(caption: string): string[] {
 
 function stripMarkdownCodeFence(input: string): string {
   const raw = String(input || '').trim();
-  if (!raw.startsWith('```')) return raw;
+  if (!raw.startsWith('```')) {
+    return raw;
+  }
 
   // Common LLM behavior: wrap JSON in ```json ... ``` fences.
   // Only strip when the fence is at the beginning to avoid mangling legitimate content.
   const firstNewline = raw.indexOf('\n');
-  if (firstNewline < 0) return raw;
+  if (firstNewline < 0) {
+    return raw;
+  }
   const withoutHeader = raw.slice(firstNewline + 1);
   const fenceEnd = withoutHeader.lastIndexOf('```');
-  if (fenceEnd < 0) return raw;
+  if (fenceEnd < 0) {
+    return raw;
+  }
   return withoutHeader.slice(0, fenceEnd).trim();
 }
 
@@ -85,20 +97,30 @@ function extractJsonArraySubstring(input: string): string | null {
   const raw = String(input || '');
   const start = raw.indexOf('[');
   const end = raw.lastIndexOf(']');
-  if (start < 0 || end < 0 || end <= start) return null;
+  if (start < 0 || end < 0 || end <= start) {
+    return null;
+  }
   return raw.slice(start, end + 1).trim();
 }
 
 function parsePostsJsonCandidate(value: unknown): any[] {
-  if (Array.isArray(value)) return value;
+  if (Array.isArray(value)) {
+    return value;
+  }
   if (value && typeof value === 'object') {
     const maybePosts = (value as any).posts;
-    if (Array.isArray(maybePosts)) return maybePosts;
+    if (Array.isArray(maybePosts)) {
+      return maybePosts;
+    }
   }
-  if (typeof value !== 'string') return [];
+  if (typeof value !== 'string') {
+    return [];
+  }
 
   const raw = value.trim();
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
 
   const candidates = Array.from(
     new Set(
@@ -114,10 +136,14 @@ function parsePostsJsonCandidate(value: unknown): any[] {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
       if (parsed && typeof parsed === 'object') {
         const maybePosts = (parsed as any).posts;
-        if (Array.isArray(maybePosts)) return maybePosts;
+        if (Array.isArray(maybePosts)) {
+          return maybePosts;
+        }
       }
     } catch {
       // keep trying other candidates
@@ -128,17 +154,27 @@ function parsePostsJsonCandidate(value: unknown): any[] {
 }
 
 function parseJsonArrayCandidate(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
+  if (Array.isArray(value)) {
+    return value;
+  }
   if (value && typeof value === 'object') {
     const maybeItems = (value as any).items;
-    if (Array.isArray(maybeItems)) return maybeItems;
+    if (Array.isArray(maybeItems)) {
+      return maybeItems;
+    }
     const maybePosts = (value as any).posts;
-    if (Array.isArray(maybePosts)) return maybePosts;
+    if (Array.isArray(maybePosts)) {
+      return maybePosts;
+    }
   }
-  if (typeof value !== 'string') return [];
+  if (typeof value !== 'string') {
+    return [];
+  }
 
   const raw = value.trim();
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
 
   const candidates = Array.from(
     new Set(
@@ -154,12 +190,18 @@ function parseJsonArrayCandidate(value: unknown): unknown[] {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
       if (parsed && typeof parsed === 'object') {
         const maybeItems = (parsed as any).items;
-        if (Array.isArray(maybeItems)) return maybeItems;
+        if (Array.isArray(maybeItems)) {
+          return maybeItems;
+        }
         const maybePosts = (parsed as any).posts;
-        if (Array.isArray(maybePosts)) return maybePosts;
+        if (Array.isArray(maybePosts)) {
+          return maybePosts;
+        }
       }
     } catch {
       // keep trying other candidates
@@ -172,8 +214,12 @@ function parseJsonArrayCandidate(value: unknown): unknown[] {
 async function loadPromptTemplate(relativePath: string): Promise<string> {
   let raw = String(relativePath || '').trim();
   raw = raw.replace(/^prompts[\\/]/, '');
-  if (raw.startsWith('./')) raw = raw.slice(2);
-  if (!raw) throw new Error('prompt_template is empty');
+  if (raw.startsWith('./')) {
+    raw = raw.slice(2);
+  }
+  if (!raw) {
+    throw new Error('prompt_template is empty');
+  }
   if (raw.includes('..') || raw.startsWith('/') || raw.startsWith('\\')) {
     throw new Error('prompt_template must be a safe relative path');
   }
@@ -193,7 +239,9 @@ function isStructuredOutputStep(step: unknown): step is { structured_output: any
 function toPersistedStepType(
   step: RecipeStep
 ): 'llm' | 'skill_call' | 'transform' | 'content_create' | 'export' {
-  if (step.type === 'foreach') return 'transform';
+  if (step.type === 'foreach') {
+    return 'transform';
+  }
   return step.type;
 }
 
@@ -382,12 +430,18 @@ async function execLlmStep(params: {
   const model = preset?.model?.trim() || openai.defaultModel;
 
   const responseFormat = (() => {
-    if (!structured) return undefined;
+    if (!structured) {
+      return undefined;
+    }
     const spec = (params.step as any).structured_output || null;
-    if (!spec || typeof spec !== 'object') return undefined;
+    if (!spec || typeof spec !== 'object') {
+      return undefined;
+    }
 
     const schema = (spec as any).schema;
-    if (!schema) return undefined;
+    if (!schema) {
+      return undefined;
+    }
 
     const nameRaw = (spec as any).name;
     const name =
@@ -449,8 +503,12 @@ type ExecuteStepContext = {
 };
 
 function resolveStepInput(step: RecipeStep, state: RunState): unknown {
-  if (step.type === 'export') return null;
-  if (step.type === 'foreach') return interpolateUnknown((step as any).items, state);
+  if (step.type === 'export') {
+    return null;
+  }
+  if (step.type === 'foreach') {
+    return interpolateUnknown((step as any).items, state);
+  }
   return interpolateUnknown((step as any).input, state);
 }
 
@@ -716,7 +774,9 @@ async function executeRuntimeStep(params: {
       for (let i = 0; i < posts.length; i++) {
         const p = posts[i] && typeof posts[i] === 'object' ? (posts[i] as any) : {};
         const caption = typeof p.caption === 'string' ? p.caption : '';
-        if (!caption.trim()) continue;
+        if (!caption.trim()) {
+          continue;
+        }
 
         const hashtags =
           Array.isArray(p.hashtags) && p.hashtags.every((h: any) => typeof h === 'string')
@@ -844,7 +904,9 @@ async function executeRuntimeStep(params: {
 
         for (let childIndex = 0; childIndex < step.do.length; childIndex++) {
           const childStep = step.do[childIndex] as RecipeStep;
-          if (!evalWhen(childStep.when, state)) continue;
+          if (!evalWhen(childStep.when, state)) {
+            continue;
+          }
 
           const childOutput = await executeRuntimeStep({
             ctx,
@@ -864,10 +926,16 @@ async function executeRuntimeStep(params: {
         iterationOutputs.push(iterOutput);
       }
     } finally {
-      if (hadPrevItem) state[itemKey] = prevItem;
-      else delete state[itemKey];
-      if (hadPrevIndex) state[indexKey] = prevIndex;
-      else delete state[indexKey];
+      if (hadPrevItem) {
+        state[itemKey] = prevItem;
+      } else {
+        delete state[itemKey];
+      }
+      if (hadPrevIndex) {
+        state[indexKey] = prevIndex;
+      } else {
+        delete state[indexKey];
+      }
     }
 
     if (step.output_key) {

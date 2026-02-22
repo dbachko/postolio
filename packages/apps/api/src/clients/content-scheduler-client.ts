@@ -5,11 +5,10 @@
 
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
+import axios, { type AxiosInstance, type AxiosError, type AxiosRequestConfig } from 'axios';
 import { aws4Interceptor } from 'aws4-axios';
 import * as https from 'https';
-import CircuitBreaker from 'opossum';
-import type { Options as CircuitBreakerOptions } from 'opossum';
+import CircuitBreaker, { type Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
 import { resolveAwsServiceTarget } from '@postolio/aws';
@@ -580,8 +579,10 @@ export class ContentSchedulerClient {
   async deleteSchedule(id: string, options?: { userId?: string }): Promise<void> {
     return this.executeWithCircuitBreaker(async () => {
       const headers: Record<string, string> = {};
-      const userId = options?.userId && options.userId.trim().length ? options.userId.trim() : null;
-      if (userId) headers['X-User-Context'] = userId;
+      const userId = options?.userId?.trim().length ? options.userId.trim() : null;
+      if (userId) {
+        headers['X-User-Context'] = userId;
+      }
 
       await this.retryWithBackoff(() =>
         this.client.delete(`schedules/${id}`, Object.keys(headers).length ? { headers } : undefined)
@@ -678,7 +679,7 @@ export class ContentSchedulerClient {
   /**
    * Get upcoming schedules
    */
-  async getUpcomingSchedules(brandId: string, limit: number = 10): Promise<Schedule[]> {
+  async getUpcomingSchedules(brandId: string, limit = 10): Promise<Schedule[]> {
     const now = new Date();
     const result = await this.listSchedules({
       brandId,
@@ -819,7 +820,7 @@ export class ContentSchedulerClient {
   /**
    * Retry logic with exponential backoff
    */
-  private async retryWithBackoff<T>(fn: () => Promise<T>, attempt: number = 0): Promise<T> {
+  private async retryWithBackoff<T>(fn: () => Promise<T>, attempt = 0): Promise<T> {
     try {
       return await fn();
     } catch (error) {
@@ -1153,7 +1154,7 @@ export class ContentSchedulerClient {
       (headers['x-user-id'] as string | undefined) ||
       (headers['User-Id'] as string | undefined) ||
       (headers['user-id'] as string | undefined);
-    if (headerUser && headerUser.trim()) {
+    if (headerUser?.trim()) {
       return headerUser.trim();
     }
 
@@ -1167,7 +1168,7 @@ export class ContentSchedulerClient {
       config.params && typeof (config.params as { userId?: unknown }).userId === 'string'
         ? ((config.params as { userId?: string }).userId as string)
         : undefined;
-    if (paramsUser && paramsUser.trim()) {
+    if (paramsUser?.trim()) {
       return paramsUser.trim();
     }
 
@@ -1191,14 +1192,21 @@ export class ContentSchedulerClient {
     details: ErrorDetails
   ): void {
     const message = String(event);
-    if (level === 'error') this.logger.error(message, details);
-    else if (level === 'warn') this.logger.warn(message, details);
-    else if (level === 'debug') this.logger.debug(message, details);
-    else this.logger.info(message, details);
+    if (level === 'error') {
+      this.logger.error(message, details);
+    } else if (level === 'warn') {
+      this.logger.warn(message, details);
+    } else if (level === 'debug') {
+      this.logger.debug(message, details);
+    } else {
+      this.logger.info(message, details);
+    }
   }
 
   private summarizeError(err: unknown): Record<string, unknown> {
-    if (!err) return { type: 'unknown' };
+    if (!err) {
+      return { type: 'unknown' };
+    }
     if (axios.isAxiosError(err)) {
       return {
         type: 'AxiosError',
@@ -1211,20 +1219,30 @@ export class ContentSchedulerClient {
             : undefined,
       };
     }
-    if (err instanceof Error) return { type: err.name, message: err.message };
+    if (err instanceof Error) {
+      return { type: err.name, message: err.message };
+    }
     return { type: typeof err, value: String(err) };
   }
 
   private composeFullUrl(base: string, path: string): string {
-    if (!base.endsWith('/') && !path.startsWith('/')) return base + '/' + path;
-    if (base.endsWith('/') && path.startsWith('/')) return base + path.substring(1);
+    if (!base.endsWith('/') && !path.startsWith('/')) {
+      return `${base}/${path}`;
+    }
+    if (base.endsWith('/') && path.startsWith('/')) {
+      return base + path.substring(1);
+    }
     return base + path;
   }
 
   private safeSize(data: unknown): number {
     try {
-      if (data == null) return 0;
-      if (typeof data === 'string') return data.length;
+      if (data == null) {
+        return 0;
+      }
+      if (typeof data === 'string') {
+        return data.length;
+      }
       return JSON.stringify(data).length;
     } catch {
       return 0;
@@ -1266,7 +1284,9 @@ export class ContentSchedulerClient {
    */
   private getCachedResponse(key: string): CacheValue | null {
     const cached = this.cache.get(key);
-    if (!cached) return null;
+    if (!cached) {
+      return null;
+    }
 
     // Check if cache is still valid (5 minutes TTL)
     const now = Date.now();

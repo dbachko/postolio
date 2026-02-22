@@ -6,8 +6,10 @@ import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { Pool } from 'pg';
-import { createLambdaPrismaClient } from '@postolio/database/lambda';
-import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lambda';
+import {
+  createLambdaPrismaClient,
+  type PrismaClient as LambdaPrismaClient,
+} from '@postolio/database/lambda';
 import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'brand-analysis-projection' });
@@ -43,7 +45,9 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
     const ep = await ssm.send(
       new GetParameterCommand({ Name: `/postolio/${environment}/database/endpoint` })
     );
-    if (ep.Parameter?.Value) result.endpoint = ep.Parameter.Value;
+    if (ep.Parameter?.Value) {
+      result.endpoint = ep.Parameter.Value;
+    }
   } catch {
     logger.debug('SSM database endpoint not available at synth/runtime lookup');
   }
@@ -51,7 +55,9 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
     const px = await ssm.send(
       new GetParameterCommand({ Name: `/postolio/${environment}/database/proxy-endpoint` })
     );
-    if (px.Parameter?.Value) result.proxy = px.Parameter.Value;
+    if (px.Parameter?.Value) {
+      result.proxy = px.Parameter.Value;
+    }
   } catch {
     logger.debug('SSM database proxy endpoint not available at synth/runtime lookup');
   }
@@ -59,7 +65,9 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
 }
 
 async function getClient(): Promise<LambdaPrismaClient> {
-  if (prisma) return prisma;
+  if (prisma) {
+    return prisma;
+  }
   // Prefer DATABASE_URL when present (local/dev)
   if (process.env.DATABASE_URL) {
     const url = process.env.DATABASE_URL;
@@ -79,7 +87,9 @@ async function getClient(): Promise<LambdaPrismaClient> {
 
   const secrets = new SecretsManagerClient({});
   const { proxy } = await getDatabaseEndpoints();
-  if (!proxy) throw new Error('RDS Proxy endpoint not available');
+  if (!proxy) {
+    throw new Error('RDS Proxy endpoint not available');
+  }
   const dbName = process.env.DB_NAME || 'postolio';
   const secretArn =
     process.env.DB_SECRET_ARN ||
@@ -90,11 +100,15 @@ async function getClient(): Promise<LambdaPrismaClient> {
         new GetParameterCommand({ Name: `/postolio/${environment}/database/secret-arn` })
       );
       const value = param.Parameter?.Value;
-      if (!value) throw new Error('Database secret ARN parameter is empty');
+      if (!value) {
+        throw new Error('Database secret ARN parameter is empty');
+      }
       return value;
     })());
   const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));
-  if (!res.SecretString) throw new Error('Empty database secret');
+  if (!res.SecretString) {
+    throw new Error('Empty database secret');
+  }
   const credentials = JSON.parse(res.SecretString);
   const username: string = credentials.username;
   const password: string = credentials.password;

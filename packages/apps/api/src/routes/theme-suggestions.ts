@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { suggestThemes } from '../services/theme-suggester.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 

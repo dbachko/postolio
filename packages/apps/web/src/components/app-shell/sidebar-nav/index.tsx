@@ -14,8 +14,7 @@ import { cn } from '@/lib/utils';
 import { useNotificationsStore } from '@/stores/notificationsStore';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { ChevronDown } from 'lucide-react';
-import type { NavigationItem } from '../nav-config';
-import { isRouteActive } from '../nav-config';
+import { type NavigationItem, isRouteActive } from '../nav-config';
 import { getSectionNavItems } from '../section-nav';
 import type { SidebarNavProps } from './types';
 import { AccountMenu } from './components/account-menu';
@@ -52,7 +51,9 @@ export function SidebarNav({
 
   useEffect(() => {
     const el = contentRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const { scrollTop } = el;
     setIsContentScrolled(scrollTop > 0);
   }, [currentPath, mainItems, secondaryItems]);
@@ -66,14 +67,14 @@ export function SidebarNav({
     const hasChildren = children.length > 0;
     const activeChildPath = hasChildren
       ? (children
-          .filter((child) => currentPath === child.path || currentPath.startsWith(child.path + '/'))
+          .filter((child) => currentPath === child.path || currentPath.startsWith(`${child.path}/`))
           .sort((a, b) => b.path.length - a.path.length)[0]?.path ?? null)
       : null;
     const childrenActive = activeChildPath !== null;
     const active = isRouteActive(item, currentPath) || childrenActive;
 
     const forcedOpen =
-      childrenActive || currentPath === item.path || currentPath.startsWith(item.path + '/');
+      childrenActive || currentPath === item.path || currentPath.startsWith(`${item.path}/`);
     const derivedOpen = expandedParents[item.path];
     const isOpen = derivedOpen !== undefined ? derivedOpen : forcedOpen;
 

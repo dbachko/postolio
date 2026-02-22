@@ -9,45 +9,81 @@ type WebFetchResult = {
 
 function parseIPv4(ip: string): number[] | null {
   const parts = ip.split('.');
-  if (parts.length !== 4) return null;
+  if (parts.length !== 4) {
+    return null;
+  }
   const bytes = parts.map((p) => Number(p));
-  if (bytes.some((b) => !Number.isInteger(b) || b < 0 || b > 255)) return null;
+  if (bytes.some((b) => !Number.isInteger(b) || b < 0 || b > 255)) {
+    return null;
+  }
   return bytes;
 }
 
 function isPrivateIPv4(ip: string): boolean {
   const b = parseIPv4(ip);
-  if (!b) return false;
+  if (!b) {
+    return false;
+  }
   const [a, c] = b;
 
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 0) return true;
-  if (a === 169 && c === 254) return true;
-  if (a === 172 && c >= 16 && c <= 31) return true;
-  if (a === 192 && c === 168) return true;
-  if (a === 100 && c >= 64 && c <= 127) return true; // CGNAT
-  if (a >= 224) return true; // multicast/reserved
+  if (a === 10) {
+    return true;
+  }
+  if (a === 127) {
+    return true;
+  }
+  if (a === 0) {
+    return true;
+  }
+  if (a === 169 && c === 254) {
+    return true;
+  }
+  if (a === 172 && c >= 16 && c <= 31) {
+    return true;
+  }
+  if (a === 192 && c === 168) {
+    return true;
+  }
+  if (a === 100 && c >= 64 && c <= 127) {
+    return true;
+  } // CGNAT
+  if (a >= 224) {
+    return true;
+  } // multicast/reserved
   return false;
 }
 
 function isPrivateIPv6(ip: string): boolean {
   const normalized = ip.toLowerCase();
-  if (normalized === '::' || normalized === '::1') return true;
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // unique local
-  if (normalized.startsWith('fe80')) return true; // link-local
-  if (normalized.startsWith('ff')) return true; // multicast
-  if (normalized.startsWith('2001:db8')) return true; // documentation range
+  if (normalized === '::' || normalized === '::1') {
+    return true;
+  }
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
+    return true;
+  } // unique local
+  if (normalized.startsWith('fe80')) {
+    return true;
+  } // link-local
+  if (normalized.startsWith('ff')) {
+    return true;
+  } // multicast
+  if (normalized.startsWith('2001:db8')) {
+    return true;
+  } // documentation range
 
   // IPv4-mapped IPv6
   const v4mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (v4mapped) return isPrivateIPv4(v4mapped[1]);
+  if (v4mapped) {
+    return isPrivateIPv4(v4mapped[1]);
+  }
 
   return false;
 }
 
 function isPrivateIp(ip: string): boolean {
-  if (ip.includes(':')) return isPrivateIPv6(ip);
+  if (ip.includes(':')) {
+    return isPrivateIPv6(ip);
+  }
   return isPrivateIPv4(ip);
 }
 
@@ -68,7 +104,9 @@ function htmlToText(html: string): string {
     .replace(/&#39;/g, "'");
   out = out.replace(/&#(\d+);/g, (_m, code) => {
     const n = Number(code);
-    if (!Number.isFinite(n) || n < 0) return '';
+    if (!Number.isFinite(n) || n < 0) {
+      return '';
+    }
     try {
       return String.fromCodePoint(n);
     } catch {
@@ -92,8 +130,12 @@ async function readStreamWithLimit(
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
+    if (done) {
+      break;
+    }
+    if (!value) {
+      continue;
+    }
     total += value.byteLength;
     if (total > maxBytes) {
       throw new Error(`Web fetch response exceeded maxBytes (${maxBytes})`);

@@ -22,9 +22,11 @@ export type Platform =
  */
 export function getPlatformIcon(
   platform: string | undefined | null,
-  className: string = 'h-4 w-4'
+  className = 'h-4 w-4'
 ): ReactNode {
-  if (!platform) return null;
+  if (!platform) {
+    return null;
+  }
 
   const platformLower = platform.toLowerCase();
 

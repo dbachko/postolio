@@ -5,7 +5,9 @@
  * - Lowercases and de-duplicates
  */
 export function extractHashtagsFromCaption(caption: string | null | undefined): string[] {
-  if (!caption) return [];
+  if (!caption) {
+    return [];
+  }
 
   const matches = caption.match(/#([^\s#]+)/g) || [];
   const tags = matches

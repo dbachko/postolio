@@ -3,7 +3,7 @@
  * CRUD operations for managing quick response templates
  */
 
-import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { isInboxEnabledForUser } from '../utils/feature-flags.js';
@@ -99,11 +99,11 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Validate input
-        if (!title || !title.trim()) {
+        if (!title?.trim()) {
           return reply.code(400).send({ error: 'Title is required' });
         }
 
-        if (!body || !body.trim()) {
+        if (!body?.trim()) {
           return reply.code(400).send({ error: 'Message body is required' });
         }
 

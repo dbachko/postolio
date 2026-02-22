@@ -8,7 +8,9 @@ const prisma = getDatabaseClient();
 const logger = baseLogger.child({ module: 'inbox-dm-ingestor' });
 
 function safeDate(value: unknown): Date | null {
-  if (value instanceof Date) return value;
+  if (value instanceof Date) {
+    return value;
+  }
   if (typeof value === 'string') {
     const d = new Date(value);
     return Number.isFinite(d.getTime()) ? d : null;
@@ -23,7 +25,9 @@ function pickExternalParticipant(
   const rows = Array.isArray(participants) ? participants : [];
   for (const p of rows) {
     const id = String((p as any)?.id || '').trim();
-    if (!id || selfIds.has(id)) continue;
+    if (!id || selfIds.has(id)) {
+      continue;
+    }
     const usernameRaw = (p as any)?.username ?? (p as any)?.name ?? null;
     const participantUsername =
       typeof usernameRaw === 'string' && usernameRaw.trim() ? usernameRaw : id;
@@ -39,8 +43,8 @@ function pickExternalParticipant(
  */
 export async function ingestBrandDMs(
   brandId: string,
-  maxThreads: number = 25,
-  perThreadLimit: number = 30,
+  maxThreads = 25,
+  perThreadLimit = 30,
   options?: { socialAccountIds?: string[]; minStaleMs?: number }
 ): Promise<{
   accountsProcessed: number;
@@ -52,7 +56,9 @@ export async function ingestBrandDMs(
     where: { id: brandId },
     select: { id: true },
   });
-  if (!brandExists) throw new Error('Brand not found');
+  if (!brandExists) {
+    throw new Error('Brand not found');
+  }
 
   const socialAccountIds = (options?.socialAccountIds || []).map(String).filter(Boolean);
   const minStaleMs = Number(options?.minStaleMs ?? 0);
@@ -126,10 +132,14 @@ export async function ingestBrandDMs(
 
     for (const t of threadsRes.threads) {
       const threadId = String(t.id || '').trim();
-      if (!threadId) continue;
+      if (!threadId) {
+        continue;
+      }
 
       const picked = pickExternalParticipant(t.participants || [], selfIds);
-      if (!picked) continue;
+      if (!picked) {
+        continue;
+      }
 
       threadsProcessed++;
       const threadUpdatedAt = safeDate((t as any)?.updated_time) ?? new Date();
@@ -193,10 +203,14 @@ export async function ingestBrandDMs(
         const externalMessageId = String((m as any)?.id || '').trim();
         const messageTextRaw = (m as any)?.message;
         const messageText = typeof messageTextRaw === 'string' ? messageTextRaw : null;
-        if (!externalMessageId || !messageText) continue;
+        if (!externalMessageId || !messageText) {
+          continue;
+        }
 
         const createdAt = safeDate((m as any)?.created_time) ?? new Date();
-        if (!latestMessageAt || createdAt > latestMessageAt) latestMessageAt = createdAt;
+        if (!latestMessageAt || createdAt > latestMessageAt) {
+          latestMessageAt = createdAt;
+        }
 
         const fromId = String((m as any)?.from?.id || '').trim();
         const direction = fromId && selfIds.has(fromId) ? 'outbound' : 'inbound';

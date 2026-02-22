@@ -80,7 +80,9 @@ export function SocialAccountQueueSettingsPanel({
   }, [account?.id]);
   const setDefaultNewSlotLaneKey = (laneKey: PublishingQueueLaneKey) => {
     setNewSlotLaneKey(laneKey);
-    if (!account?.id) return;
+    if (!account?.id) {
+      return;
+    }
     persistDefaultNewSlotLaneKey(account.id, laneKey);
   };
   const queuesQuery = useQuery({
@@ -93,13 +95,19 @@ export function SocialAccountQueueSettingsPanel({
   });
   const queues = useMemo(() => getQueuesFromQueryData(queuesQuery.data), [queuesQuery.data]);
   const selectedQueue = useMemo(() => {
-    if (!queues.length) return null;
+    if (!queues.length) {
+      return null;
+    }
     const found = selectedQueueId ? queues.find((q) => q.id === selectedQueueId) : null;
     return found || queues.find((q) => q.isDefault) || queues[0] || null;
   }, [queues, selectedQueueId]);
   useEffect(() => {
-    if (!selectedQueue) return;
-    if (selectedQueueId !== selectedQueue.id) setSelectedQueueId(selectedQueue.id);
+    if (!selectedQueue) {
+      return;
+    }
+    if (selectedQueueId !== selectedQueue.id) {
+      setSelectedQueueId(selectedQueue.id);
+    }
     setQueueNameDraft(selectedQueue.name);
   }, [selectedQueue, selectedQueueId, setSelectedQueueId]);
   const slotsQuery = useQuery({
@@ -112,16 +120,24 @@ export function SocialAccountQueueSettingsPanel({
   });
 
   useEffect(() => {
-    if (!slotsQuery.data) return;
-    if (slotsDirty) return;
+    if (!slotsQuery.data) {
+      return;
+    }
+    if (slotsDirty) {
+      return;
+    }
     setDraftSlots(normalizeSlots(getSlotsFromQueryData(slotsQuery.data)));
   }, [slotsQuery.data, slotsDirty]);
 
   const createQueueMutation = useMutation({
     mutationFn: async () => {
-      if (!account?.id) throw new Error('Missing social account');
+      if (!account?.id) {
+        throw new Error('Missing social account');
+      }
       const name = newQueueName.trim();
-      if (!name) throw new Error('Queue name is required');
+      if (!name) {
+        throw new Error('Queue name is required');
+      }
       return await publishingQueuesApi.createQueue(account.id, name);
     },
     onSuccess: async (res) => {
@@ -198,7 +214,9 @@ export function SocialAccountQueueSettingsPanel({
     : 'Queue settings';
 
   const handleSaveAllChanges = async () => {
-    if (!selectedQueue) return;
+    if (!selectedQueue) {
+      return;
+    }
     try {
       await saveQueueChanges({
         selectedQueueName: selectedQueue.name,
@@ -236,7 +254,9 @@ export function SocialAccountQueueSettingsPanel({
               createQueueOpen={createQueueOpen}
               onCreateQueueOpenChange={(open) => {
                 setCreateQueueOpen(open);
-                if (open) setNewQueueName('');
+                if (open) {
+                  setNewQueueName('');
+                }
               }}
               newQueueName={newQueueName}
               onNewQueueNameChange={setNewQueueName}

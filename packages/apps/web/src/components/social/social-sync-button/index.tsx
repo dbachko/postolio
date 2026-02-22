@@ -54,7 +54,9 @@ export function SocialSyncButton({
     refetchInterval: (q) => {
       const data = q.state.data as any;
       // Only poll when sync is actively running; cooldown handled client-side
-      if (data?.inProgress) return REFETCH_INTERVALS.FAST;
+      if (data?.inProgress) {
+        return REFETCH_INTERVALS.FAST;
+      }
       return false;
     },
   });
@@ -168,7 +170,9 @@ export function SocialSyncButton({
   const disabled = isLoading || !!inProgress || cooldownSeconds > 0;
 
   const buttonText = useMemo(() => {
-    if (isLoading || inProgress) return 'Syncing...';
+    if (isLoading || inProgress) {
+      return 'Syncing...';
+    }
     if (cooldownSeconds > 0) {
       const mins = Math.floor(cooldownSeconds / 60);
       const secs = cooldownSeconds % 60;

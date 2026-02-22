@@ -7,13 +7,19 @@ type ItemVariant = 'default' | 'outline' | 'muted';
 type ItemSize = 'default' | 'sm';
 
 function itemVariantClasses(variant: ItemVariant): string {
-  if (variant === 'outline') return 'border-border';
-  if (variant === 'muted') return 'border-transparent bg-muted/50';
+  if (variant === 'outline') {
+    return 'border-border';
+  }
+  if (variant === 'muted') {
+    return 'border-transparent bg-muted/50';
+  }
   return 'border-transparent bg-transparent';
 }
 
 function itemSizeClasses(size: ItemSize): string {
-  if (size === 'sm') return 'py-3 px-4 gap-2.5';
+  if (size === 'sm') {
+    return 'py-3 px-4 gap-2.5';
+  }
   return 'p-4 gap-4';
 }
 
@@ -91,10 +97,12 @@ type ItemMediaProps = React.ComponentPropsWithoutRef<'div'> & {
 };
 
 function itemMediaVariantClasses(variant: ItemMediaVariant): string {
-  if (variant === 'icon')
+  if (variant === 'icon') {
     return "size-8 border rounded-sm bg-muted [&_svg:not([class*='size-'])]:size-4";
-  if (variant === 'image')
+  }
+  if (variant === 'image') {
     return 'size-10 rounded-sm overflow-hidden [&_img]:size-full [&_img]:object-cover';
+  }
   return 'bg-transparent';
 }
 

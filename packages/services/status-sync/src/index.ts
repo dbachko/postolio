@@ -4,8 +4,13 @@
  * Handles: post.published, post.failed, schedule.created, schedule.updated, schedule.canceled
  */
 
-import type { PrismaClient as LambdaPrismaClient, Prisma } from '@postolio/database/lambda';
-import { createLambdaPrismaClient, ContentStatus, Platform } from '@postolio/database/lambda';
+import {
+  createLambdaPrismaClient,
+  type PrismaClient as LambdaPrismaClient,
+  type Prisma,
+  type ContentStatus,
+  type Platform,
+} from '@postolio/database/lambda';
 import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
@@ -49,8 +54,12 @@ let cachedDbUrl: string | null = null; // kept for local/dev connection string
 
 function toDatabasePlatform(platform: string | undefined): Platform | null {
   const normalized = (platform || '').toLowerCase().trim();
-  if (!normalized) return null;
-  if (normalized === 'twitter') return 'x';
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'twitter') {
+    return 'x';
+  }
   if (
     normalized === 'instagram' ||
     normalized === 'facebook' ||
@@ -97,7 +106,9 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
     const ep = await ssm.send(
       new GetParameterCommand({ Name: `/postolio/${environment}/database/endpoint` })
     );
-    if (ep.Parameter?.Value) result.endpoint = ep.Parameter.Value; // host:port
+    if (ep.Parameter?.Value) {
+      result.endpoint = ep.Parameter.Value;
+    } // host:port
   } catch (e) {
     logger.warn('Could not read DB endpoint from SSM', { error: e, environment });
   }
@@ -105,7 +116,9 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
     const px = await ssm.send(
       new GetParameterCommand({ Name: `/postolio/${environment}/database/proxy-endpoint` })
     );
-    if (px.Parameter?.Value) result.proxy = px.Parameter.Value; // host:port
+    if (px.Parameter?.Value) {
+      result.proxy = px.Parameter.Value;
+    } // host:port
   } catch (e) {
     logger.warn('Could not read DB proxy endpoint from SSM', { error: e, environment });
   }
@@ -126,7 +139,9 @@ async function getSecretArn(): Promise<string> {
       new GetParameterCommand({ Name: `/postolio/${environment}/database/secret-arn` })
     );
     const value = param.Parameter?.Value;
-    if (!value) throw new Error('Database secret ARN parameter is empty');
+    if (!value) {
+      throw new Error('Database secret ARN parameter is empty');
+    }
     return value;
   } catch (err) {
     logger.warn('Failed to resolve DB secret ARN from SSM', { error: err, environment });
@@ -135,7 +150,9 @@ async function getSecretArn(): Promise<string> {
 }
 
 async function getDatabaseUrl(): Promise<string> {
-  if (cachedDbUrl) return cachedDbUrl;
+  if (cachedDbUrl) {
+    return cachedDbUrl;
+  }
 
   // For local development, use DATABASE_URL if provided
   if (process.env.DATABASE_URL) {
@@ -149,7 +166,9 @@ async function getDatabaseUrl(): Promise<string> {
 }
 
 async function getClient(): Promise<LambdaPrismaClient> {
-  if (prisma) return prisma;
+  if (prisma) {
+    return prisma;
+  }
 
   // Local/dev path uses DATABASE_URL with static credentials
   if (process.env.DATABASE_URL) {
@@ -170,17 +189,23 @@ async function getClient(): Promise<LambdaPrismaClient> {
 
   // AWS path: create Pool with password auth from Secrets Manager
   const { proxy } = await getDatabaseEndpoints();
-  if (!proxy) throw new Error('RDS Proxy endpoint not available');
+  if (!proxy) {
+    throw new Error('RDS Proxy endpoint not available');
+  }
   const dbName = process.env.DB_NAME || 'postolio';
 
   const secretId = await getSecretArn();
   const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
-  if (!res.SecretString) throw new Error('Empty database secret');
+  if (!res.SecretString) {
+    throw new Error('Empty database secret');
+  }
   const credentials = JSON.parse(res.SecretString);
 
   const username: string = credentials.username;
   const password: string = credentials.password;
-  if (!username || !password) throw new Error('Missing credentials in database secret');
+  if (!username || !password) {
+    throw new Error('Missing credentials in database secret');
+  }
 
   const [host, portStr] = proxy.split(':');
   const port = parseInt(portStr || '5432', 10);
@@ -221,7 +246,9 @@ async function getClient(): Promise<LambdaPrismaClient> {
 }
 
 function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return normalizeErrorMessage(error.message);
+  if (error instanceof Error) {
+    return normalizeErrorMessage(error.message);
+  }
   let text = '';
   if (typeof error === 'string') {
     text = error;
@@ -229,7 +256,9 @@ function normalizeErrorMessage(error: unknown): string {
     text = String(error);
   }
   const trimmed = text.trim();
-  if (!trimmed) return 'Unknown error';
+  if (!trimmed) {
+    return 'Unknown error';
+  }
   return trimmed.length > 500 ? `${trimmed.slice(0, 497)}...` : trimmed;
 }
 
@@ -350,7 +379,9 @@ async function createPostFailureNotification(
   errorMessage: string
 ): Promise<void> {
   const contentId = detail.contentId;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
 
   const content = await client.content.findUnique({
     where: { id: contentId },
@@ -375,7 +406,7 @@ async function createPostFailureNotification(
     },
   });
 
-  if (!content || !content.brand || !content.brand.user) {
+  if (!content?.brand?.user) {
     logger.warn('Skipping notification creation; content or brand missing', { contentId });
     return;
   }
@@ -394,7 +425,7 @@ async function createPostFailureNotification(
     orderBy: { brandId: 'desc' },
   });
 
-  if (masterPreference && masterPreference.enabled === false) {
+  if (masterPreference?.enabled === false) {
     logger.info('Notification suppressed by master preference', { contentId, userId });
     return;
   }
@@ -477,7 +508,9 @@ async function createPostFailureNotification(
 
 async function handlePostPublished(detail: EventDetail) {
   const { contentId, brandId, publishedAt, platformPostId, permalink, platform } = detail;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
 
   // Always mark content as published with postedAt timestamp
@@ -582,7 +615,9 @@ async function handlePostPublished(detail: EventDetail) {
 
 async function handlePostFailed(detail: EventDetail) {
   const { contentId } = detail;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
   const errorMessage = normalizeErrorMessage(detail.error);
 
@@ -607,7 +642,9 @@ async function handlePostFailed(detail: EventDetail) {
 
 async function handlePostSkipped(detail: EventDetail) {
   const { contentId, reason } = detail;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
   await client.content.update({
     where: { id: contentId },
@@ -620,7 +657,9 @@ async function handlePostSkipped(detail: EventDetail) {
 
 async function handleScheduleFailed(detail: EventDetail) {
   const { contentId, error } = detail;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
 
   // Get current generationParams to preserve existing data
@@ -649,7 +688,9 @@ async function handleScheduleFailed(detail: EventDetail) {
 
 async function handleScheduleCreated(detail: EventDetail) {
   const { contentId, scheduledAt, scheduleId } = detail;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
 
   // Get current generationParams to preserve existing data
@@ -668,10 +709,10 @@ async function handleScheduleCreated(detail: EventDetail) {
       schedulingError: null, // Clear any previous errors
       generationParams: {
         ...existingParams,
-        scheduleId: scheduleId, // Store the AWS schedule ID
+        scheduleId, // Store the AWS schedule ID
         awsScheduleCreated: true, // Mark as properly scheduled
         processing: null, // Clear processing state - scheduling completed
-        scheduledAt: scheduledAt, // Store for reference
+        scheduledAt, // Store for reference
         scheduledTimestamp: new Date().toISOString(), // When it was scheduled
       },
     },
@@ -681,7 +722,9 @@ async function handleScheduleCreated(detail: EventDetail) {
 async function handleScheduleUpdated(detail: EventDetail) {
   const { scheduleId, updates, contentId } = detail;
   const scheduledAt = updates?.scheduledAt;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
 
   // Get current generationParams to preserve existing data
@@ -709,7 +752,9 @@ async function handleScheduleUpdated(detail: EventDetail) {
 
 async function handleScheduleCanceled(detail: EventDetail) {
   const { contentId } = detail;
-  if (!contentId) return;
+  if (!contentId) {
+    return;
+  }
   const client = await getClient();
 
   // Get current generationParams to preserve existing data

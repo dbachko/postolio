@@ -3,7 +3,7 @@
  * Registers all content-related sub-routes
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 import generationRoutes from './generation.js';
 import groupsRoutes from './groups.js';

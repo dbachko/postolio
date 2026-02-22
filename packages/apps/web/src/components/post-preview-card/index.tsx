@@ -70,10 +70,14 @@ export function PostPreviewCard({
     }
 
     const params = new URLSearchParams();
-    if (item.caption) params.set('caption', item.caption);
+    if (item.caption) {
+      params.set('caption', item.caption);
+    }
 
     const hashtags = extractHashtags(item);
-    if (hashtags.length > 0) params.set('hashtags', hashtags.join(' '));
+    if (hashtags.length > 0) {
+      params.set('hashtags', hashtags.join(' '));
+    }
 
     navigate(`/posts/create?${params.toString()}`);
   }, [handleOpen, item, navigate]);

@@ -66,8 +66,12 @@ export function GrowthProjectionCard({
   }
 
   const getTrendIcon = (trend: string) => {
-    if (trend === 'increasing') return TrendingUp;
-    if (trend === 'decreasing') return TrendingDown;
+    if (trend === 'increasing') {
+      return TrendingUp;
+    }
+    if (trend === 'decreasing') {
+      return TrendingDown;
+    }
     return ArrowRight;
   };
 
@@ -83,8 +87,12 @@ export function GrowthProjectionCard({
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 75) return 'bg-green-500 dark:bg-green-600';
-    if (confidence >= 50) return 'bg-yellow-500 dark:bg-yellow-600';
+    if (confidence >= 75) {
+      return 'bg-green-500 dark:bg-green-600';
+    }
+    if (confidence >= 50) {
+      return 'bg-yellow-500 dark:bg-yellow-600';
+    }
     return 'bg-orange-500 dark:bg-orange-600';
   };
 

@@ -4,11 +4,11 @@
  */
 
 import { randomUUID } from 'crypto';
-import { ContentStatus } from '@postolio/database';
+import type { ContentStatus } from '@postolio/database';
 import { AssetsServiceClient } from '@postolio/assets-client';
 import {
   ContentSchedulerClient,
-  ContentSchedulerConfig,
+  type ContentSchedulerConfig,
   type CreateScheduleInput,
   type UpdateScheduleInput,
 } from '../clients/content-scheduler-client.js';
@@ -47,7 +47,9 @@ let cachedAssetsClient: AssetsServiceClient | null = null;
 const assetTypeCache = new Map<string, { info: AssetMetadataInfo; expiresAt: number }>();
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
@@ -63,7 +65,9 @@ function getAssetsServiceClient(): AssetsServiceClient {
 
 function getCachedAssetType(assetId: string, now: number): AssetMetadataInfo | null {
   const entry = assetTypeCache.get(assetId);
-  if (!entry) return null;
+  if (!entry) {
+    return null;
+  }
   if (entry.expiresAt <= now) {
     assetTypeCache.delete(assetId);
     return null;
@@ -79,7 +83,9 @@ function pruneAssetTypeCache(now: number) {
   }
   while (assetTypeCache.size > ASSET_TYPE_CACHE_MAX_ENTRIES) {
     const oldestKey = assetTypeCache.keys().next().value as string | undefined;
-    if (!oldestKey) break;
+    if (!oldestKey) {
+      break;
+    }
     assetTypeCache.delete(oldestKey);
   }
 }
@@ -113,7 +119,9 @@ async function getAssetMetadataByIds(assetIds: string[]): Promise<Map<string, As
     const fetched = await assetsClient.getBatchAssets(idsToFetch);
     fetched.forEach((asset, idx) => {
       const assetId = idsToFetch[idx];
-      if (!asset) return;
+      if (!asset) {
+        return;
+      }
       const info: AssetMetadataInfo = {
         fileType: asset.fileType === 'video' ? 'video' : 'image',
         s3Key: asset.s3Key,
@@ -143,8 +151,12 @@ export function deriveScheduleMediaType(
   mediaAssets: Array<{ type: 'image' | 'video' }>
 ): 'image' | 'video' {
   const normalizedContentType = (contentType || '').toLowerCase();
-  if (normalizedContentType === 'reel') return 'video';
-  if (mediaAssets.length === 1 && mediaAssets[0]?.type === 'video') return 'video';
+  if (normalizedContentType === 'reel') {
+    return 'video';
+  }
+  if (mediaAssets.length === 1 && mediaAssets[0]?.type === 'video') {
+    return 'video';
+  }
   return 'image';
 }
 
@@ -162,7 +174,7 @@ export class SchedulerAdapter {
   private static instance: SchedulerAdapter | null = null;
   private broadcaster: StatusBroadcaster | null = null;
 
-  private schedulerEnabled: boolean = true;
+  private schedulerEnabled = true;
 
   private constructor(private config?: Partial<ContentSchedulerConfig>) {
     // Configuration stored for lazy initialization
@@ -797,7 +809,7 @@ export class SchedulerAdapter {
               startedAt: new Date().toISOString(),
               operationId,
             },
-            scheduleId: scheduleId,
+            scheduleId,
             awsScheduleCreated: true,
           } as GenerationParams;
 
@@ -828,7 +840,7 @@ export class SchedulerAdapter {
           originalStatus,
           'scheduled',
           {
-            scheduleId: scheduleId,
+            scheduleId,
             scheduledAt: scheduledTimeUTC.toISOString(),
             timezone: brandTimezone,
           }
@@ -1401,7 +1413,7 @@ export class SchedulerAdapter {
   async rescheduleContent(
     contentId: string,
     newTime: Date,
-    isLocalTime: boolean = true
+    isLocalTime = true
   ): Promise<{ success: boolean; error?: string }> {
     try {
       // Get content to find schedule ID
@@ -1497,13 +1509,13 @@ export class SchedulerAdapter {
             }
 
             return { success: true };
-          } else {
-            return {
-              success: false,
-              error: `Failed to schedule content: ${scheduleResult.error}`,
-            };
           }
-        } else if (content.status === 'scheduled') {
+          return {
+            success: false,
+            error: `Failed to schedule content: ${scheduleResult.error}`,
+          };
+        }
+        if (content.status === 'scheduled') {
           // Edge case: Content is marked as scheduled but has no scheduledAt or scheduleId
           // This shouldn't happen but handle it gracefully
           logger.error(
@@ -1525,20 +1537,17 @@ export class SchedulerAdapter {
           if (scheduleResult.success) {
             logger.info('Successfully created schedule for inconsistent content', { contentId });
             return { success: true };
-          } else {
-            return {
-              success: false,
-              error: `Failed to create schedule: ${scheduleResult.error}`,
-            };
           }
-        } else {
-          // Content is truly not scheduled (draft with no scheduledAt)
           return {
             success: false,
-            error:
-              'Content is not scheduled. Please use the schedule action instead of reschedule.',
+            error: `Failed to create schedule: ${scheduleResult.error}`,
           };
         }
+        // Content is truly not scheduled (draft with no scheduledAt)
+        return {
+          success: false,
+          error: 'Content is not scheduled. Please use the schedule action instead of reschedule.',
+        };
       }
 
       // Reschedule in AWS FIRST - only update local DB if this succeeds
@@ -1714,26 +1723,27 @@ export class SchedulerAdapter {
             success: false,
             error: 'AWS scheduler temporarily unavailable. Please try again in a few minutes.',
           };
-        } else if (errObj?.code === 'NETWORK_ERROR' || errObj?.code === 'TIMEOUT') {
+        }
+        if (errObj?.code === 'NETWORK_ERROR' || errObj?.code === 'TIMEOUT') {
           logger.error('Network or timeout error connecting to AWS scheduler. Reschedule failed.');
           return {
             success: false,
             error:
               'Network error connecting to scheduler service. Please check your connection and try again.',
           };
-        } else if (errObj?.code === 'SERVICE_BUSY') {
+        }
+        if (errObj?.code === 'SERVICE_BUSY') {
           logger.error('Scheduler service busy. Reschedule failed.');
           return {
             success: false,
             error: 'Scheduler service is busy. Please retry shortly.',
           };
-        } else {
-          logger.error('Failed to reschedule in AWS', { error });
-          return {
-            success: false,
-            error: `Failed to reschedule: ${detailsMessage || errObj?.message || 'Unknown AWS scheduler error'}`,
-          };
         }
+        logger.error('Failed to reschedule in AWS', { error });
+        return {
+          success: false,
+          error: `Failed to reschedule: ${detailsMessage || errObj?.message || 'Unknown AWS scheduler error'}`,
+        };
       }
 
       // Only update local database if AWS reschedule succeeded
@@ -1820,7 +1830,7 @@ export class SchedulerAdapter {
         },
       });
 
-      if (!content || !content.brand) {
+      if (!content?.brand) {
         return { success: false, error: 'Content not found' };
       }
 
@@ -1990,7 +2000,7 @@ export class SchedulerAdapter {
    */
   async getScheduledContent(
     brandId: string,
-    limit: number = 10
+    limit = 10
   ): Promise<
     Array<{
       id: string;
@@ -2163,7 +2173,7 @@ export class SchedulerAdapter {
 
       if (content) {
         const generationParams = (content.generationParams as GenerationParams | null) || {};
-        const inconsistencies = (generationParams.inconsistencies as Array<unknown>) || [];
+        const inconsistencies = (generationParams.inconsistencies as unknown[]) || [];
 
         inconsistencies.push({
           type,
@@ -2285,7 +2295,9 @@ export class SchedulerAdapter {
       published: number;
     }
   ): boolean {
-    if (!awsStats || !localStats) return false;
+    if (!awsStats || !localStats) {
+      return false;
+    }
 
     // Check if key metrics are within acceptable range (allow small differences)
     return (

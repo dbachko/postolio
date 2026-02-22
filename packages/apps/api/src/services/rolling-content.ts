@@ -73,7 +73,7 @@ class RollingContentService {
         },
       });
 
-      if (!content || !content.brand) {
+      if (!content?.brand) {
         rollingLogger.info(`Content ${contentId} or brand not found for rolling generation`);
         return;
       }

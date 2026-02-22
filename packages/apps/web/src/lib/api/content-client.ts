@@ -6,10 +6,9 @@ export class ContentClient {
   constructor(private request: HttpRequest) {}
 
   publishToPlatform(contentId: string, platform: string, options?: { socialAccountId?: string }) {
-    const body =
-      options && options.socialAccountId
-        ? JSON.stringify({ socialAccountId: options.socialAccountId })
-        : undefined;
+    const body = options?.socialAccountId
+      ? JSON.stringify({ socialAccountId: options.socialAccountId })
+      : undefined;
     return this.request(
       `/api/social/${encodeURIComponent(platform)}/publish/${encodeURIComponent(contentId)}`,
       {
@@ -48,16 +47,27 @@ export class ContentClient {
       brandId: data.brandId,
       caption: data.caption,
     };
-    if (data.scheduledAt) body.scheduledAt = data.scheduledAt;
-    if (data.contentType) body.contentType = data.contentType;
-    if (data.assetIds) body.assetIds = data.assetIds;
-    if (data.shareToFeed !== undefined) body.shareToFeed = data.shareToFeed;
-    if (data.firstComment) body.firstComment = data.firstComment;
+    if (data.scheduledAt) {
+      body.scheduledAt = data.scheduledAt;
+    }
+    if (data.contentType) {
+      body.contentType = data.contentType;
+    }
+    if (data.assetIds) {
+      body.assetIds = data.assetIds;
+    }
+    if (data.shareToFeed !== undefined) {
+      body.shareToFeed = data.shareToFeed;
+    }
+    if (data.firstComment) {
+      body.firstComment = data.firstComment;
+    }
     if (data.targetSocialAccountIds && data.targetSocialAccountIds.length > 0) {
       body.targetSocialAccountIds = data.targetSocialAccountIds;
     }
-    if (data.targetSocialAccountId !== undefined)
+    if (data.targetSocialAccountId !== undefined) {
       body.targetSocialAccountId = data.targetSocialAccountId;
+    }
     if (data.imageFile) {
       const uploadInfo = await assetsApi.getUploadUrl({
         brandId: data.brandId,
@@ -288,8 +298,12 @@ export class ContentClient {
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('limit', String(limit));
-    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
-    if (opts?.refresh) params.set('refresh', 'true');
+    if (opts?.publicationId) {
+      params.set('publicationId', opts.publicationId);
+    }
+    if (opts?.refresh) {
+      params.set('refresh', 'true');
+    }
     return this.request(`/api/posts/${postId}/comments?${params.toString()}`);
   }
 
@@ -300,7 +314,9 @@ export class ContentClient {
     opts?: { publicationId?: string }
   ) {
     const params = new URLSearchParams();
-    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    if (opts?.publicationId) {
+      params.set('publicationId', opts.publicationId);
+    }
     const qs = params.toString();
     return this.request(`/api/posts/${postId}/comments/${commentId}/reply${qs ? `?${qs}` : ''}`, {
       method: 'POST',
@@ -312,7 +328,9 @@ export class ContentClient {
 
   likeComment(postId: string, commentId: string, opts?: { publicationId?: string }) {
     const params = new URLSearchParams();
-    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    if (opts?.publicationId) {
+      params.set('publicationId', opts.publicationId);
+    }
     const qs = params.toString();
     return this.request(`/api/posts/${postId}/comments/${commentId}/like${qs ? `?${qs}` : ''}`, {
       method: 'POST',
@@ -326,7 +344,9 @@ export class ContentClient {
     opts?: { publicationId?: string }
   ) {
     const params = new URLSearchParams();
-    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    if (opts?.publicationId) {
+      params.set('publicationId', opts.publicationId);
+    }
     const qs = params.toString();
     return this.request(
       `/api/posts/${postId}/comments/${commentId}/workflow${qs ? `?${qs}` : ''}`,
@@ -339,7 +359,9 @@ export class ContentClient {
 
   markAllCommentsRead(postId: string, commentIds?: string[], opts?: { publicationId?: string }) {
     const params = new URLSearchParams();
-    if (opts?.publicationId) params.set('publicationId', opts.publicationId);
+    if (opts?.publicationId) {
+      params.set('publicationId', opts.publicationId);
+    }
     const qs = params.toString();
     return this.request(`/api/posts/${postId}/comments/mark-all-read${qs ? `?${qs}` : ''}`, {
       method: 'POST',

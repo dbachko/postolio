@@ -38,7 +38,9 @@ export function DMTemplateEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleInsert = (text: string) => {
-    if (!textareaRef.current) return;
+    if (!textareaRef.current) {
+      return;
+    }
 
     const textarea = textareaRef.current;
     const start = textarea.selectionStart;

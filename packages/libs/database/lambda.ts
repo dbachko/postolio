@@ -1,4 +1,4 @@
-import { Pool, PoolConfig } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { Prisma } from './lambda-client';
 import { PrismaClient as LambdaPrismaClient } from './lambda-client';

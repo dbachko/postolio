@@ -69,14 +69,21 @@ export function PostingScheduleOptimizer({ postingTimes, loading }: PostingSched
   const formatTime = (hour: number) => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     let displayHour = hour;
-    if (hour === 0) displayHour = 12;
-    else if (hour > 12) displayHour = hour - 12;
+    if (hour === 0) {
+      displayHour = 12;
+    } else if (hour > 12) {
+      displayHour = hour - 12;
+    }
     return `${displayHour}:00 ${ampm}`;
   };
 
   const getConfidenceLabel = (confidence: number) => {
-    if (confidence >= 75) return 'High';
-    if (confidence >= 50) return 'Medium';
+    if (confidence >= 75) {
+      return 'High';
+    }
+    if (confidence >= 50) {
+      return 'Medium';
+    }
     return 'Low';
   };
 
@@ -211,7 +218,9 @@ export function PostingScheduleOptimizer({ postingTimes, loading }: PostingSched
               <div className="space-y-2">
                 {dayOrder.map((day) => {
                   const dayTimes = groupedByDay.get(day);
-                  if (!dayTimes || dayTimes.length === 0) return null;
+                  if (!dayTimes || dayTimes.length === 0) {
+                    return null;
+                  }
 
                   const bestTime = dayTimes[0];
 

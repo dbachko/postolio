@@ -110,7 +110,9 @@ export function usePostEditor(props: PostEditorProps) {
   });
 
   const queueActionAccountIds = useMemo(() => {
-    if (!id) return destinations.selectedPlatformAccountIds;
+    if (!id) {
+      return destinations.selectedPlatformAccountIds;
+    }
 
     if (data.isMultiDestinationGroup) {
       return Array.from(
@@ -130,7 +132,9 @@ export function usePostEditor(props: PostEditorProps) {
       typeof data.post?.targetSocialAccountId === 'string'
         ? data.post.targetSocialAccountId.trim()
         : '';
-    if (targetSocialAccountId) return [targetSocialAccountId];
+    if (targetSocialAccountId) {
+      return [targetSocialAccountId];
+    }
 
     return destinations.selectedPlatformAccountIds;
   }, [

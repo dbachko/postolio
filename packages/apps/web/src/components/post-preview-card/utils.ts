@@ -12,11 +12,17 @@ export const invalidateCalendarQueries = (queryClient: QueryClient) => {
 };
 
 export const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
   if (error && typeof error === 'object' && 'message' in error) {
     const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
   }
   return fallback;
 };
@@ -24,13 +30,19 @@ export const getErrorMessage = (error: unknown, fallback: string) => {
 export const getOptimisticLabel = (item: CalendarItem) => {
   const record = item as unknown as { optimisticAction?: unknown };
   const action = record.optimisticAction;
-  if (action === 'queueing') return 'Queueing…';
-  if (action === 'rescheduling') return 'Rescheduling…';
+  if (action === 'queueing') {
+    return 'Queueing…';
+  }
+  if (action === 'rescheduling') {
+    return 'Rescheduling…';
+  }
   return null;
 };
 
 export const getGroupMeta = (item: CalendarItem): GroupMeta | null => {
-  if (item.type !== 'content') return null;
+  if (item.type !== 'content') {
+    return null;
+  }
 
   const contentGroupId =
     typeof item.contentGroupId === 'string' && item.contentGroupId.trim().length > 0
@@ -78,14 +90,18 @@ export const getStatusTimeInfo = (item: CalendarItem, timezone: string) => {
         return 'Empty slot';
       default: {
         const raw = String(status || '');
-        if (!raw) return 'Status';
+        if (!raw) {
+          return 'Status';
+        }
         return raw.charAt(0).toUpperCase() + raw.slice(1);
       }
     }
   })();
 
   const statusTooltip = (() => {
-    if (!timestamp) return statusLabel;
+    if (!timestamp) {
+      return statusLabel;
+    }
     try {
       return `${statusLabel} • ${formatInTimeZone(new Date(timestamp), timezone, 'MMM d, yyyy h:mm a')}`;
     } catch {
@@ -97,7 +113,9 @@ export const getStatusTimeInfo = (item: CalendarItem, timezone: string) => {
 };
 
 export const getPreviewUrl = (primaryAsset?: PrimaryAsset | null) => {
-  if (!primaryAsset) return null;
+  if (!primaryAsset) {
+    return null;
+  }
   if (primaryAsset.fileType === 'video') {
     return primaryAsset.thumbnailUrl || null;
   }
@@ -107,7 +125,9 @@ export const getPreviewUrl = (primaryAsset?: PrimaryAsset | null) => {
 export const extractHashtags = (item: CalendarItem): string[] => {
   const record = item as unknown as Record<string, unknown>;
   const raw = record.hashtags;
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   return raw
     .filter((v): v is string => typeof v === 'string')
     .map((v) => v.trim())
@@ -117,12 +137,16 @@ export const extractHashtags = (item: CalendarItem): string[] => {
 export const getPlaceholderCreateParams = (
   item: CalendarItem
 ): Record<string, string | null | undefined> => {
-  if (item.type !== 'placeholder') return {};
+  if (item.type !== 'placeholder') {
+    return {};
+  }
   const record = item as unknown as Record<string, unknown>;
   const params: Record<string, string | null | undefined> = {};
 
   const scheduledAt = typeof item.scheduledAt === 'string' ? item.scheduledAt.trim() : '';
-  if (scheduledAt) params.scheduledAt = scheduledAt;
+  if (scheduledAt) {
+    params.scheduledAt = scheduledAt;
+  }
 
   const targetSocialAccountId =
     typeof record.targetSocialAccountId === 'string' && record.targetSocialAccountId.trim()
@@ -147,8 +171,11 @@ export const getPlaceholderCreateParams = (
       : [];
   if (!targetSocialAccountId && targetSocialAccountIds.length > 0) {
     const unique = Array.from(new Set(targetSocialAccountIds));
-    if (unique.length === 1) params.targetSocialAccountId = unique[0];
-    else params.targetSocialAccountIds = unique.join(',');
+    if (unique.length === 1) {
+      params.targetSocialAccountId = unique[0];
+    } else {
+      params.targetSocialAccountIds = unique.join(',');
+    }
   }
 
   const laneKey = typeof record.laneKey === 'string' ? record.laneKey : null;
@@ -165,7 +192,9 @@ export const isQueueSlotPlaceholder = (item: CalendarItem) =>
   item.type === 'placeholder' && item.message === QUEUE_SLOT_PLACEHOLDER_MESSAGE;
 
 export const getQueueSlotMeta = (item: CalendarItem, timezone: string): QueueSlotMeta | null => {
-  if (!isQueueSlotPlaceholder(item)) return null;
+  if (!isQueueSlotPlaceholder(item)) {
+    return null;
+  }
 
   const record = item as unknown as Record<string, unknown>;
 

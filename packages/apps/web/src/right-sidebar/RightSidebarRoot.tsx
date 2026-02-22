@@ -50,7 +50,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   );
 
   const setGlobalDragging = useCallback((active: boolean) => {
-    if (typeof document === 'undefined') return;
+    if (typeof document === 'undefined') {
+      return;
+    }
     const b = document.body as HTMLBodyElement;
     if (active) {
       b.style.userSelect = 'none';
@@ -66,7 +68,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
 
   // Apply localStorage width (or default) before paint to avoid flicker
   useLayoutEffect(() => {
-    if (!open || !persistedType) return;
+    if (!open || !persistedType) {
+      return;
+    }
     let applied = false;
     try {
       const ls = storageKey
@@ -89,7 +93,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
     const syncWidth = async () => {
-      if (!open || !persistedType) return;
+      if (!open || !persistedType) {
+        return;
+      }
       // LocalStorage first for instant UX
       try {
         const ls = storageKey
@@ -97,7 +103,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
               | number
               | undefined)
           : undefined;
-        if (typeof ls === 'number') setWidthPx(clamp(ls));
+        if (typeof ls === 'number') {
+          setWidthPx(clamp(ls));
+        }
       } catch {}
       try {
         const me = await authApi.getProfile();
@@ -123,7 +131,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
             // No LS; apply server and store to LS
             const next = applyWidth(saved);
             try {
-              if (storageKey) setNumberSetting(storageKey, next);
+              if (storageKey) {
+                setNumberSetting(storageKey, next);
+              }
             } catch {}
           }
         } else if (hasLs) {
@@ -147,10 +157,14 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
 
   // Global hotkeys to close sidebar (desktop)
   useEffect(() => {
-    if (!open || isSmall) return;
+    if (!open || isSmall) {
+      return;
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return;
+      }
 
       const doc = document;
 
@@ -234,7 +248,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
                 const nextBase = typeof domW === 'number' ? domW - extraWidthPx : widthRef.current;
                 const finalW = clamp(nextBase);
                 widthRef.current = finalW;
-                if (storageKey) setNumberSetting(storageKey, finalW);
+                if (storageKey) {
+                  setNumberSetting(storageKey, finalW);
+                }
               } catch {}
               if (persistedType) {
                 try {
@@ -279,7 +295,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
                   dragStartWidthRef.current = widthRef.current;
                   setGlobalDragging(true);
                   const onMove = (ev: MouseEvent) => {
-                    if (!nativeActiveRef.current) return;
+                    if (!nativeActiveRef.current) {
+                      return;
+                    }
                     const dx = (ev.clientX || 0) - nativeStartXRef.current;
                     // Right-anchored: moving RIGHT decreases width
                     applyWidth(dragStartWidthRef.current - dx);
@@ -296,7 +314,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
                           typeof domW === 'number' ? domW - extraWidthPx : widthRef.current;
                         const finalW = clamp(nextBase);
                         widthRef.current = finalW;
-                        if (storageKey) setNumberSetting(storageKey, finalW);
+                        if (storageKey) {
+                          setNumberSetting(storageKey, finalW);
+                        }
                         await authApi.updateRightSidebarWidth({
                           type: persistedType,
                           width: finalW,
@@ -311,15 +331,21 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
                 }}
                 onTouchStart={(e) => {
                   // Native touch fallback
-                  if (!e.touches || e.touches.length === 0) return;
+                  if (!e.touches || e.touches.length === 0) {
+                    return;
+                  }
                   nativeActiveRef.current = true;
                   nativeStartXRef.current = e.touches[0].clientX;
                   dragStartWidthRef.current = widthRef.current;
                   setGlobalDragging(true);
                   const onMove = (ev: TouchEvent) => {
-                    if (!nativeActiveRef.current) return;
+                    if (!nativeActiveRef.current) {
+                      return;
+                    }
                     const t = ev.touches && ev.touches[0];
-                    if (!t) return;
+                    if (!t) {
+                      return;
+                    }
                     const dx = t.clientX - nativeStartXRef.current;
                     // Right-anchored: moving RIGHT decreases width
                     applyWidth(dragStartWidthRef.current - dx);
@@ -336,7 +362,9 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
                           typeof domW === 'number' ? domW - extraWidthPx : widthRef.current;
                         const finalW = clamp(nextBase);
                         widthRef.current = finalW;
-                        if (storageKey) setNumberSetting(storageKey, finalW);
+                        if (storageKey) {
+                          setNumberSetting(storageKey, finalW);
+                        }
                         await authApi.updateRightSidebarWidth({
                           type: persistedType,
                           width: finalW,

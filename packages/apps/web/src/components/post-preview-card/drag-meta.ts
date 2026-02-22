@@ -7,7 +7,9 @@ export type PostCardDragMeta = {
 };
 
 export function getPostCardDragMeta(item: CalendarItem): PostCardDragMeta {
-  if (item.type === 'placeholder') return { show: false, canDrag: false, tooltip: '' };
+  if (item.type === 'placeholder') {
+    return { show: false, canDrag: false, tooltip: '' };
+  }
 
   const record = item as unknown as Record<string, unknown>;
 

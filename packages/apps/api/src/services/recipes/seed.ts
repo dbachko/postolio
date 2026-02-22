@@ -1,4 +1,4 @@
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../config/database.js';
 import { acquireDistributedLock } from '../distributed-lock.js';
@@ -84,7 +84,9 @@ function buildInputs(fields: InputFieldSeed[]) {
 
   for (const field of fields) {
     properties[field.key] = fieldSchema(field);
-    if (field.required) required.push(field.key);
+    if (field.required) {
+      required.push(field.key);
+    }
   }
 
   return {
@@ -1441,10 +1443,14 @@ function assertCuratedRecipePack(recipes: CuratedRecipeSeed[]) {
         ? (recipe.config.inputs as Record<string, unknown>)
         : null;
     const ui = typedInputs?.ui;
-    if (!Array.isArray(ui)) return false;
+    if (!Array.isArray(ui)) {
+      return false;
+    }
 
     return ui.some((field) => {
-      if (!field || typeof field !== 'object') return false;
+      if (!field || typeof field !== 'object') {
+        return false;
+      }
       return (field as Record<string, unknown>).type === 'asset_picker';
     });
   }).length;
@@ -1459,9 +1465,15 @@ function assertCuratedRecipePack(recipes: CuratedRecipeSeed[]) {
 assertCuratedRecipePack(CURATED_RECIPES);
 
 function stableStringify(value: unknown): string {
-  if (value == null) return 'null';
-  if (typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value == null) {
+    return 'null';
+  }
+  if (typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj).sort();
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;

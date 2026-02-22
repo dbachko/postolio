@@ -105,7 +105,9 @@ export function QueueSlotPickerDialog({
                 variant="outline"
                 disabled={!firstAvailable}
                 onClick={() => {
-                  if (!firstAvailable) return;
+                  if (!firstAvailable) {
+                    return;
+                  }
                   onPick(firstAvailable.scheduledAt);
                   onOpenChange(false);
                 }}

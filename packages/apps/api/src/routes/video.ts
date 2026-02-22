@@ -3,7 +3,7 @@
  * Proxies uploads through the assets service (no direct S3 from the API)
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { AssetsServiceClient } from '@postolio/assets-client';
 import { config } from '../config/env-validation.js';
 import { formatError } from '../utils/logging.js';

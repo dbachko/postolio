@@ -1,7 +1,11 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  QueryCommand,
+  type QueryCommandInput,
+} from '@aws-sdk/lib-dynamodb';
 import { getDatabaseClient } from '../config/database.js';
 import { assertBrandOwnership } from '../services/ownership.js';
 import { instagramService } from '../services/instagram.js';
@@ -159,7 +163,9 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
           })
         );
         const item = res.Items?.[0];
-        if (!item) return reply.send({ jobId: null, status: 'none' });
+        if (!item) {
+          return reply.send({ jobId: null, status: 'none' });
+        }
         return reply.send({
           jobId: item.jobId,
           status: item.status,
@@ -188,7 +194,7 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
           const projection = await prisma.brandStyleProfileProjection.findUnique({
             where: { brandId },
           });
-          if (!projection || !projection.summaryProjection) {
+          if (!projection?.summaryProjection) {
             return reply.code(404).send({ error: 'No profile found' });
           }
           return reply.send(projection.summaryProjection);
@@ -280,10 +286,11 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
           ScanIndexForward: false,
           Limit: limit,
         };
-        if (cursor)
+        if (cursor) {
           (params as Record<string, unknown>).ExclusiveStartKey = JSON.parse(
             Buffer.from(cursor, 'base64').toString('utf8')
           );
+        }
         const res = await doc.send(new QueryCommand(params));
         const items = (res.Items || []).map((it) => (it as { profile?: unknown }).profile ?? it);
         const nextCursor = res.LastEvaluatedKey
@@ -331,12 +338,16 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
           (resA.Items?.[0] as { profile?: unknown } | undefined)?.profile ?? resA.Items?.[0];
         const itemB =
           (resB.Items?.[0] as { profile?: unknown } | undefined)?.profile ?? resB.Items?.[0];
-        if (!itemA || !itemB) return reply.code(404).send({ error: 'Profiles not found' });
+        if (!itemA || !itemB) {
+          return reply.code(404).send({ error: 'Profiles not found' });
+        }
         const changedFields: string[] = [];
         const objA = itemA as Record<string, unknown>;
         const objB = itemB as Record<string, unknown>;
         for (const key of new Set([...Object.keys(objA), ...Object.keys(objB)])) {
-          if (JSON.stringify(objA[key]) !== JSON.stringify(objB[key])) changedFields.push(key);
+          if (JSON.stringify(objA[key]) !== JSON.stringify(objB[key])) {
+            changedFields.push(key);
+          }
         }
         return reply.send({ changedFields });
       } catch (e) {

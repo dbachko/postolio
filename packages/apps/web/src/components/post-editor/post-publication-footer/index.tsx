@@ -25,8 +25,12 @@ function isKnownPlatform(value: string): value is Platform {
 
 function formatPlatformLabel(platform: string): string {
   const normalized = platform.trim().toLowerCase();
-  if (!normalized) return 'Platform';
-  if (isKnownPlatform(normalized)) return getPlatformConfig(normalized).displayName;
+  if (!normalized) {
+    return 'Platform';
+  }
+  if (isKnownPlatform(normalized)) {
+    return getPlatformConfig(normalized).displayName;
+  }
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
@@ -71,7 +75,9 @@ function PublicationPreview({
   const media = preview?.media || [];
   const contentType = String(preview?.contentType || '').toLowerCase();
 
-  if (media.length === 0) return <PreviewFallback kind="generic" />;
+  if (media.length === 0) {
+    return <PreviewFallback kind="generic" />;
+  }
 
   const tiles = media.slice(0, 4).map((item) => {
     const src = item.type === 'video' ? item.thumbnailUrl || null : item.url;
@@ -121,9 +127,13 @@ function PublicationPreview({
   }
 
   const tile = tiles[0];
-  if (!tile) return <PreviewFallback kind={carouselKind} />;
+  if (!tile) {
+    return <PreviewFallback kind={carouselKind} />;
+  }
 
-  if (!tile.src) return <PreviewFallback kind={carouselKind} />;
+  if (!tile.src) {
+    return <PreviewFallback kind={carouselKind} />;
+  }
 
   return (
     <div className="relative">
@@ -146,7 +156,9 @@ export function PostPublicationFooter({
   preview,
   links,
 }: PostPublicationFooterProps) {
-  if (!publishedAt && links.length === 0) return null;
+  if (!publishedAt && links.length === 0) {
+    return null;
+  }
 
   const outerClass = cn(
     'border-border bg-card border-t px-4 py-3',

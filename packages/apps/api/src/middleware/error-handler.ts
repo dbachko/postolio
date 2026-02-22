@@ -1,5 +1,10 @@
-import { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import { APIError, APIErrorResponse, InternalServerError, ValidationError } from '@postolio/errors';
+import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  APIError,
+  type APIErrorResponse,
+  InternalServerError,
+  ValidationError,
+} from '@postolio/errors';
 import { logger } from '@postolio/logger';
 import { captureException } from '@postolio/observability';
 

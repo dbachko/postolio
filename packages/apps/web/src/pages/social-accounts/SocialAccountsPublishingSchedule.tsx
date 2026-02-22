@@ -72,8 +72,12 @@ function accountTitle(account: AccountOption): string {
 }
 
 function accountSubtitle(account: AccountOption): string | null {
-  if (account.username) return formatSocialAccountHandle(account.platform, account.username);
-  if (account.externalAccountId) return account.externalAccountId;
+  if (account.username) {
+    return formatSocialAccountHandle(account.platform, account.username);
+  }
+  if (account.externalAccountId) {
+    return account.externalAccountId;
+  }
   return null;
 }
 
@@ -133,7 +137,9 @@ export function SocialAccountsPublishingSchedule() {
       setSelectedAccountId('');
       return;
     }
-    if (selectedAccountId && connectedAccounts.some((a) => a.id === selectedAccountId)) return;
+    if (selectedAccountId && connectedAccounts.some((a) => a.id === selectedAccountId)) {
+      return;
+    }
     setSelectedAccountId(connectedAccounts[0]!.id);
   }, [connectedAccounts, selectedAccountId]);
 
@@ -146,7 +152,9 @@ export function SocialAccountsPublishingSchedule() {
   }, [selectedAccountId]);
 
   const selectedAccount = useMemo(() => {
-    if (!selectedAccountId) return null;
+    if (!selectedAccountId) {
+      return null;
+    }
     return allAccountOptions.find((a) => a.id === selectedAccountId) || null;
   }, [allAccountOptions, selectedAccountId]);
 
@@ -168,7 +176,9 @@ export function SocialAccountsPublishingSchedule() {
     ? selectedQueueIdsByAccount[selectedAccount.id] || null
     : null;
   const selectedQueue = useMemo(() => {
-    if (!selectedAccountQueues.length) return null;
+    if (!selectedAccountQueues.length) {
+      return null;
+    }
     const explicit = selectedQueueId
       ? selectedAccountQueues.find((queue) => queue.id === selectedQueueId) || null
       : null;
@@ -188,18 +198,30 @@ export function SocialAccountsPublishingSchedule() {
   const selectedPostingGoalPerWeek = useMemo(() => {
     const raw =
       postingGoalValue === 'custom' ? postingGoalCustomValue.trim() : postingGoalValue.trim();
-    if (!/^\d+$/.test(raw)) return null;
+    if (!/^\d+$/.test(raw)) {
+      return null;
+    }
     const parsed = Number(raw);
-    if (parsed < 1 || parsed > 21) return null;
+    if (parsed < 1 || parsed > 21) {
+      return null;
+    }
     return parsed;
   }, [postingGoalCustomValue, postingGoalValue]);
   const postingGoalCustomError = useMemo(() => {
-    if (postingGoalValue !== 'custom') return null;
+    if (postingGoalValue !== 'custom') {
+      return null;
+    }
     const raw = postingGoalCustomValue.trim();
-    if (!raw) return 'Enter a value between 1 and 21.';
-    if (!/^\d+$/.test(raw)) return 'Use whole numbers only.';
+    if (!raw) {
+      return 'Enter a value between 1 and 21.';
+    }
+    if (!/^\d+$/.test(raw)) {
+      return 'Use whole numbers only.';
+    }
     const parsed = Number(raw);
-    if (parsed < 1 || parsed > 21) return 'Pick a value from 1 to 21.';
+    if (parsed < 1 || parsed > 21) {
+      return 'Pick a value from 1 to 21.';
+    }
     return null;
   }, [postingGoalCustomValue, postingGoalValue]);
   const selectedQueueSlotCount =
@@ -207,18 +229,28 @@ export function SocialAccountsPublishingSchedule() {
   const requiresPostingGoalReplaceConfirm = selectedQueueSlotCount > 0;
 
   useEffect(() => {
-    if (!selectedAccount?.id) return;
-    if (selectedAccountQueuesQuery.isLoading) return;
+    if (!selectedAccount?.id) {
+      return;
+    }
+    if (selectedAccountQueuesQuery.isLoading) {
+      return;
+    }
     const currentQueueId = selectedQueueIdsByAccount[selectedAccount.id] || null;
     const exists =
       typeof currentQueueId === 'string' &&
       selectedAccountQueues.some((queue) => queue.id === currentQueueId);
-    if (exists) return;
+    if (exists) {
+      return;
+    }
     const fallback = preferredQueueId(selectedAccountQueues);
-    if (currentQueueId === fallback) return;
+    if (currentQueueId === fallback) {
+      return;
+    }
     setSelectedQueueIdsByAccount((prev) => {
       const prevValue = prev[selectedAccount.id] ?? null;
-      if (prevValue === fallback) return prev;
+      if (prevValue === fallback) {
+        return prev;
+      }
       return { ...prev, [selectedAccount.id]: fallback };
     });
   }, [
@@ -230,9 +262,13 @@ export function SocialAccountsPublishingSchedule() {
 
   const createQueueMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedAccount?.id) throw new Error('Select a social account first');
+      if (!selectedAccount?.id) {
+        throw new Error('Select a social account first');
+      }
       const name = newQueueName.trim();
-      if (!name) throw new Error('Queue name is required');
+      if (!name) {
+        throw new Error('Queue name is required');
+      }
       return await publishingQueuesApi.createQueue(selectedAccount.id, name);
     },
     onSuccess: async (res) => {
@@ -243,7 +279,9 @@ export function SocialAccountsPublishingSchedule() {
 
       queryClient.setQueryData(['publishing-queues', selectedAccount.id], (prev: any) => {
         const prevQueues = Array.isArray(prev?.data?.queues) ? prev.data.queues : [];
-        if (prevQueues.some((queue: any) => queue?.id === res.data?.id)) return prev;
+        if (prevQueues.some((queue: any) => queue?.id === res.data?.id)) {
+          return prev;
+        }
         const createdQueue = { ...res.data, slotCount: 0, itemCount: 0 };
         return {
           ...(prev || { success: true }),
@@ -261,7 +299,9 @@ export function SocialAccountsPublishingSchedule() {
       setSelectedQueueIdsByAccount((prev) => {
         const nextQueueId = res.data!.id;
         const prevValue = prev[selectedAccount.id] ?? null;
-        if (prevValue === nextQueueId) return prev;
+        if (prevValue === nextQueueId) {
+          return prev;
+        }
         return { ...prev, [selectedAccount.id]: nextQueueId };
       });
       await queryClient.invalidateQueries({ queryKey: ['publishing-queues', selectedAccount.id] });
@@ -296,7 +336,9 @@ export function SocialAccountsPublishingSchedule() {
       return await publishingQueuesApi.applyPostingGoal(payload.queueId, payload.postsPerWeek);
     },
     onSuccess: async (res, payload) => {
-      if (!selectedAccount?.id) return;
+      if (!selectedAccount?.id) {
+        return;
+      }
       if (!res.success) {
         toast.error('Failed to apply cadence');
         return;
@@ -379,7 +421,9 @@ export function SocialAccountsPublishingSchedule() {
 
       setSelectedQueueIdsByAccount((prev) => {
         const current = prev[accountId] ?? null;
-        if (current !== queueId) return prev;
+        if (current !== queueId) {
+          return prev;
+        }
         return { ...prev, [accountId]: fallbackQueueId };
       });
       setQueueToDelete(null);
@@ -486,7 +530,9 @@ export function SocialAccountsPublishingSchedule() {
                                     variant="ghost"
                                     onClick={() =>
                                       setSelectedQueueIdsByAccount((prev) => {
-                                        if (prev[account.id] === queue.id) return prev;
+                                        if (prev[account.id] === queue.id) {
+                                          return prev;
+                                        }
                                         return { ...prev, [account.id]: queue.id };
                                       })
                                     }
@@ -553,10 +599,16 @@ export function SocialAccountsPublishingSchedule() {
                                       placeholder="e.g. Evergreen"
                                       autoFocus
                                       onKeyDown={(e) => {
-                                        if (e.key !== 'Enter') return;
+                                        if (e.key !== 'Enter') {
+                                          return;
+                                        }
                                         e.preventDefault();
-                                        if (createQueueMutation.isPending) return;
-                                        if (!newQueueName.trim()) return;
+                                        if (createQueueMutation.isPending) {
+                                          return;
+                                        }
+                                        if (!newQueueName.trim()) {
+                                          return;
+                                        }
                                         createQueueMutation.mutate();
                                       }}
                                     />
@@ -634,10 +686,14 @@ export function SocialAccountsPublishingSchedule() {
                 hideHeader
                 selectedQueueId={selectedQueueId}
                 onSelectedQueueIdChange={(queueId) => {
-                  if (!selectedAccount?.id) return;
+                  if (!selectedAccount?.id) {
+                    return;
+                  }
                   setSelectedQueueIdsByAccount((prev) => {
                     const prevValue = prev[selectedAccount.id] ?? null;
-                    if (prevValue === queueId) return prev;
+                    if (prevValue === queueId) {
+                      return prev;
+                    }
                     return { ...prev, [selectedAccount.id]: queueId };
                   });
                 }}
@@ -649,7 +705,9 @@ export function SocialAccountsPublishingSchedule() {
       <AlertDialog
         open={Boolean(queueToDelete)}
         onOpenChange={(open) => {
-          if (!open) setQueueToDelete(null);
+          if (!open) {
+            setQueueToDelete(null);
+          }
         }}
       >
         <AlertDialogContent>
@@ -668,7 +726,9 @@ export function SocialAccountsPublishingSchedule() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteQueueMutation.isPending || !queueToDelete}
               onClick={() => {
-                if (!queueToDelete) return;
+                if (!queueToDelete) {
+                  return;
+                }
                 deleteQueueMutation.mutate(queueToDelete);
               }}
             >
@@ -829,7 +889,9 @@ export function SocialAccountsPublishingSchedule() {
                 (requiresPostingGoalReplaceConfirm && !postingGoalConfirmReplace)
               }
               onClick={() => {
-                if (!selectedQueue?.id || selectedPostingGoalPerWeek === null) return;
+                if (!selectedQueue?.id || selectedPostingGoalPerWeek === null) {
+                  return;
+                }
                 setPostingGoalMutation.mutate({
                   queueId: selectedQueue.id,
                   postsPerWeek: selectedPostingGoalPerWeek,

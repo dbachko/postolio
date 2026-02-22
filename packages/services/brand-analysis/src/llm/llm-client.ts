@@ -43,7 +43,9 @@ function schedule(): Promise<void> {
 function release() {
   active = Math.max(0, active - 1);
   const next = queue.shift();
-  if (next) setTimeout(next, MIN_INTERVAL_MS);
+  if (next) {
+    setTimeout(next, MIN_INTERVAL_MS);
+  }
 }
 
 // Usage aggregator
@@ -123,8 +125,9 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
   }> => {
     if (!process.env.OPENAI_API_KEY) {
       const fakeResponse = JSON.stringify({});
-      if (fakeResponse.length > maxResponseChars)
+      if (fakeResponse.length > maxResponseChars) {
         throw new LlmValidationError('Response exceeds size guard');
+      }
       return { data: {} as unknown as T };
     }
     if (opts.mode === 'vision' && opts.images && opts.images.length > 0) {
@@ -191,54 +194,57 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
         );
         const parsed = outText && typeof outText === 'string' ? JSON.parse(outText) : {};
         const resultStr = JSON.stringify(parsed);
-        if (resultStr.length > maxResponseChars)
+        if (resultStr.length > maxResponseChars) {
           throw new LlmValidationError('Response exceeds size guard');
-        return { data: parsed as T, usage: json?.usage };
-      } else {
-        const content: Array<
-          { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
-        > = [{ type: 'text', text: opts.prompt }];
-        for (const url of opts.images) content.push({ type: 'image_url', image_url: { url } });
-        const body = {
-          model: opts.model,
-          messages: [{ role: 'user', content }],
-          response_format: { type: 'json_object' },
-          temperature: 0,
-        } as const;
-        dbg('chat body preview', { model: opts.model, blocks: content.length });
-        const resp = await fetchWithTimeout(
-          'https://api.openai.com/v1/chat/completions',
-          {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            },
-            body: JSON.stringify(body),
-          },
-          timeoutMs
-        );
-        if (!resp.ok) {
-          const text = await resp.text();
-          console.error('[LLM] OpenAI Chat error', {
-            status: resp.status,
-            model: opts.model,
-            body: text?.slice(0, 2000),
-          });
-          throw new Error(`OpenAI HTTP ${resp.status}`);
         }
-        const json = await resp.json();
-        const contentOut = json?.choices?.[0]?.message?.content ?? '';
-        dbg(
-          'chat contentOut preview',
-          typeof contentOut === 'string' ? contentOut.slice(0, 200) : typeof contentOut
-        );
-        const parsed = contentOut && typeof contentOut === 'string' ? JSON.parse(contentOut) : {};
-        const resultStr = JSON.stringify(parsed);
-        if (resultStr.length > maxResponseChars)
-          throw new LlmValidationError('Response exceeds size guard');
         return { data: parsed as T, usage: json?.usage };
       }
+      const content: Array<
+        { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
+      > = [{ type: 'text', text: opts.prompt }];
+      for (const url of opts.images) {
+        content.push({ type: 'image_url', image_url: { url } });
+      }
+      const body = {
+        model: opts.model,
+        messages: [{ role: 'user', content }],
+        response_format: { type: 'json_object' },
+        temperature: 0,
+      } as const;
+      dbg('chat body preview', { model: opts.model, blocks: content.length });
+      const resp = await fetchWithTimeout(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify(body),
+        },
+        timeoutMs
+      );
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.error('[LLM] OpenAI Chat error', {
+          status: resp.status,
+          model: opts.model,
+          body: text?.slice(0, 2000),
+        });
+        throw new Error(`OpenAI HTTP ${resp.status}`);
+      }
+      const json = await resp.json();
+      const contentOut = json?.choices?.[0]?.message?.content ?? '';
+      dbg(
+        'chat contentOut preview',
+        typeof contentOut === 'string' ? contentOut.slice(0, 200) : typeof contentOut
+      );
+      const parsed = contentOut && typeof contentOut === 'string' ? JSON.parse(contentOut) : {};
+      const resultStr = JSON.stringify(parsed);
+      if (resultStr.length > maxResponseChars) {
+        throw new LlmValidationError('Response exceeds size guard');
+      }
+      return { data: parsed as T, usage: json?.usage };
     }
     const body = {
       model: opts.model,
@@ -264,14 +270,17 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
       },
       timeoutMs
     );
-    if (!resp.ok) throw new Error(`OpenAI HTTP ${resp.status}`);
+    if (!resp.ok) {
+      throw new Error(`OpenAI HTTP ${resp.status}`);
+    }
     const json = await resp.json();
     const content = json?.choices?.[0]?.message?.content ?? '';
     if (opts.mode === 'json') {
       const parsed = content && typeof content === 'string' ? JSON.parse(content) : {};
       const resultStr = JSON.stringify(parsed);
-      if (resultStr.length > maxResponseChars)
+      if (resultStr.length > maxResponseChars) {
         throw new LlmValidationError('Response exceeds size guard');
+      }
       return { data: parsed as T, usage: json?.usage };
     }
     return { data: content as unknown as T, usage: json?.usage };
@@ -301,7 +310,9 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
         lastError = err;
 
         if (err instanceof LlmValidationError) {
-          if (attempt === 0) continue;
+          if (attempt === 0) {
+            continue;
+          }
           throw err;
         }
         const status = (err as Error)?.message?.match(/HTTP\s(\d{3})/)?.[1];

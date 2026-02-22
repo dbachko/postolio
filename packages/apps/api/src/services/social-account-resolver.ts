@@ -1,7 +1,9 @@
 import { prisma } from '../config/database.js';
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
@@ -41,7 +43,9 @@ export async function resolvePrimarySocialAccount(
   });
 
   const firstConnected = candidates.find((sa) => !isDisconnected(sa.metadata));
-  if (!firstConnected) return null;
+  if (!firstConnected) {
+    return null;
+  }
 
   return {
     id: firstConnected.id,

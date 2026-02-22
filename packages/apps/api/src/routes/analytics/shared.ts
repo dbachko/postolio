@@ -11,7 +11,7 @@ export function ensureAuth(
   request: FastifyRequest,
   reply: FastifyReply
 ): request is AuthenticatedRequest {
-  if (!request.user || !request.user.id) {
+  if (!request.user?.id) {
     reply.code(401).send({ error: 'Authentication required' });
     return false;
   }

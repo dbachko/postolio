@@ -8,13 +8,17 @@ const PLACEHOLDER_BASE = (
 const DEFAULT_SIZE = process.env.PLACEHOLDER_IMAGE_SIZE || '1024x1024';
 
 function toBoolean(value: string | undefined): boolean {
-  if (!value) return false;
+  if (!value) {
+    return false;
+  }
   const normalized = value.trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
 export function shouldUsePlaceholderImages(): boolean {
-  if (toBoolean(process.env.SKIP_IMAGE_GENERATION)) return true;
+  if (toBoolean(process.env.SKIP_IMAGE_GENERATION)) {
+    return true;
+  }
   return false;
 }
 

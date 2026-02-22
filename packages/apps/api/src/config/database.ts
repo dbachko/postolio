@@ -3,7 +3,7 @@
  * Centralized database client management with test support
  */
 
-import { PrismaClient, Prisma, createPrismaClient } from '@postolio/database';
+import { type PrismaClient, type Prisma, createPrismaClient } from '@postolio/database';
 
 interface QueryEventLike {
   query: string;
@@ -45,7 +45,7 @@ export function getDatabaseClient(): PrismaClient {
     // Reduce noisy query logs in all environments unless explicitly enabled.
     const enableQueryLogging = (process.env.LOG_QUERIES || '').toLowerCase() === 'true';
 
-    const logLevels: (Prisma.LogLevel | Prisma.LogDefinition)[] = [
+    const logLevels: Array<Prisma.LogLevel | Prisma.LogDefinition> = [
       'warn',
       'error',
       // Keep 'info' only for local dev
@@ -67,8 +67,8 @@ export function getDatabaseClient(): PrismaClient {
     // Connection event handlers
     if (enableQueryLogging) {
       prismaInstance.$on('query' as never, (e: QueryEventLike) => {
-        console.log('Query: ' + e.query);
-        console.log('Duration: ' + e.duration + 'ms');
+        console.log(`Query: ${e.query}`);
+        console.log(`Duration: ${e.duration}ms`);
       });
     }
 

@@ -18,12 +18,16 @@ export function useOptimisticCalendarSync({
   useEffect(() => {
     const serverById = new Map<string, Content>();
     for (const c of content) {
-      if (c?.id) serverById.set(c.id, c);
+      if (c?.id) {
+        serverById.set(c.id, c);
+      }
     }
 
     setOptimisticByContentId((prev) => {
       const entries = Object.entries(prev);
-      if (entries.length === 0) return prev;
+      if (entries.length === 0) {
+        return prev;
+      }
 
       let removedAny = false;
       const next: Record<string, OptimisticCalendarOp> = {};

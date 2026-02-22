@@ -106,7 +106,9 @@ async function deriveFromBrandStyleProfile(brandId: string): Promise<BrandProfil
       where: { id: brandId },
       select: { name: true, styleProfile: true, createdAt: true },
     });
-    if (!brand) return null;
+    if (!brand) {
+      return null;
+    }
 
     const sp = brand.styleProfile as unknown as {
       text?: { tone?: string[] };

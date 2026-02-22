@@ -100,7 +100,9 @@ export class JobRepository {
       })
     );
     const raw = res.Item as Record<string, unknown> | undefined;
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const rest = { ...raw } as Record<string, unknown>;
     delete rest['PK'];
     delete rest['SK'];
@@ -119,7 +121,9 @@ export class JobRepository {
       })
     );
     const raw = res.Items?.[0] as Record<string, unknown> | undefined;
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const rest = { ...raw } as Record<string, unknown>;
     delete rest['PK'];
     delete rest['SK'];

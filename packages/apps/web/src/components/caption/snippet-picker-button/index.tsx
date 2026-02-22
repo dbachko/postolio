@@ -19,7 +19,9 @@ export function SnippetPickerButton({
 
   // Keyboard shortcut: Cmd/Ctrl + ; to open snippet picker
   useEffect(() => {
-    if (!brandId || disabled) return;
+    if (!brandId || disabled) {
+      return;
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // Check for Cmd (Mac) or Ctrl (Windows/Linux) + ;
@@ -33,7 +35,9 @@ export function SnippetPickerButton({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [brandId, disabled]);
 
-  if (!brandId) return null;
+  if (!brandId) {
+    return null;
+  }
 
   return (
     <>

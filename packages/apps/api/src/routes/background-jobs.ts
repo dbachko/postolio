@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { deletionQueueService } from '../services/deletion-queue.js';
 

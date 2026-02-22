@@ -1,5 +1,5 @@
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { FastifyRequest } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import {
   DEFAULT_TIMEZONE,
@@ -185,7 +185,7 @@ export class TimezoneService {
   static formatWithTimezone(
     date: Date | string,
     timezone: string,
-    format: string = 'yyyy-MM-dd HH:mm:ss zzz'
+    format = 'yyyy-MM-dd HH:mm:ss zzz'
   ): string {
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     return formatInTimeZone(dateObj, timezone, format);
@@ -395,7 +395,9 @@ export class TimezoneService {
       const currentTz = current.split(' ').pop();
 
       // If timezone names are the same, no DST is observed
-      if (janTz === julyTz) return false;
+      if (janTz === julyTz) {
+        return false;
+      }
 
       // Compare current timezone with January and July
       // Works for both Northern and Southern hemispheres

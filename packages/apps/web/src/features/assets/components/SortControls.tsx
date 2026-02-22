@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { type SortDirection, type SortField } from './asset-utils';
+import type { SortDirection, SortField } from './asset-utils';
 import { cn } from '@/lib/utils';
 
 type SortOption<TField extends string> = {
@@ -36,7 +36,9 @@ const DEFAULT_TRIGGER_WIDTH_CLASS = 'sm:w-[200px]';
 function getOptions<TField extends string>(
   options: Array<SortOption<TField>> | undefined
 ): Array<SortOption<TField>> {
-  if (options && options.length > 0) return options;
+  if (options && options.length > 0) {
+    return options;
+  }
   return DEFAULT_ASSET_SORT_OPTIONS as unknown as Array<SortOption<TField>>;
 }
 

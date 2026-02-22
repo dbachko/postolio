@@ -47,7 +47,7 @@ export const facebookService = {
   async getPostCommentsForSocialAccount(
     socialAccountId: string,
     postId: string,
-    limit: number = 25
+    limit = 25
   ): Promise<{ data: PlatformComment[]; total: number }> {
     try {
       const credentials = await getCredentialsOrThrowForSocialAccount(socialAccountId);
@@ -67,7 +67,9 @@ export const facebookService = {
       const data = raw
         .map((c) => {
           const id = typeof c.id === 'string' ? c.id : String(c.id || '');
-          if (!id) return null;
+          if (!id) {
+            return null;
+          }
           return {
             id,
             text: typeof c.message === 'string' ? c.message : undefined,
@@ -92,7 +94,9 @@ export const facebookService = {
     commentId: string,
     message: string
   ): Promise<{ id: string }> {
-    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+    if (!message?.trim()) {
+      throw new Error('Reply message must not be empty');
+    }
 
     try {
       const credentials = await getCredentialsOrThrowForSocialAccount(socialAccountId);
@@ -101,7 +105,9 @@ export const facebookService = {
         access_token: credentials.accessToken,
       });
       const id = String((res.data as any)?.id || '');
-      if (!id) throw new Error('Facebook did not return a comment id');
+      if (!id) {
+        throw new Error('Facebook did not return a comment id');
+      }
       return { id };
     } catch (error) {
       facebookLogger.error('Failed to reply to Facebook comment', formatError(error));

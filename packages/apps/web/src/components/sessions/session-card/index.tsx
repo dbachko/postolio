@@ -36,10 +36,16 @@ export function SessionCard({ session, onRevoke, onEditDeviceName }: SessionCard
   };
 
   const getLocationString = () => {
-    if (!session.location) return null;
+    if (!session.location) {
+      return null;
+    }
     const parts = [];
-    if (session.location.city) parts.push(session.location.city);
-    if (session.location.country) parts.push(session.location.country);
+    if (session.location.city) {
+      parts.push(session.location.city);
+    }
+    if (session.location.country) {
+      parts.push(session.location.country);
+    }
     return parts.length > 0 ? parts.join(', ') : null;
   };
 

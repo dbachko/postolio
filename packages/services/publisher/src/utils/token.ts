@@ -94,10 +94,14 @@ export async function getTokenFromTokenService(
           : `Token Service error: ${response.status} ${response.statusText}`;
       const err = new Error(baseMessage) as Error & { meta?: Record<string, unknown> };
       const retryable = response.status === 429 || response.status >= 500;
-      let errorCode: string = 'REQUEST_FAILED';
-      if (response.status === 404) errorCode = 'TOKEN_NOT_FOUND';
-      else if (response.status === 401 || response.status === 403) errorCode = 'UNAUTHORIZED';
-      else if (retryable) errorCode = 'SERVICE_UNAVAILABLE';
+      let errorCode = 'REQUEST_FAILED';
+      if (response.status === 404) {
+        errorCode = 'TOKEN_NOT_FOUND';
+      } else if (response.status === 401 || response.status === 403) {
+        errorCode = 'UNAUTHORIZED';
+      } else if (retryable) {
+        errorCode = 'SERVICE_UNAVAILABLE';
+      }
       err.meta = {
         service: 'token-service',
         httpStatus: response.status,

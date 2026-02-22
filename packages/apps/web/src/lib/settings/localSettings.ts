@@ -3,10 +3,14 @@ export function isBrowser(): boolean {
 }
 
 export function getLocalSetting<T = unknown>(key: string, fallback?: T): T | undefined {
-  if (!isBrowser()) return fallback;
+  if (!isBrowser()) {
+    return fallback;
+  }
   try {
     const raw = window.localStorage.getItem(key);
-    if (raw == null) return fallback;
+    if (raw == null) {
+      return fallback;
+    }
     try {
       return JSON.parse(raw) as T;
     } catch {
@@ -19,7 +23,9 @@ export function getLocalSetting<T = unknown>(key: string, fallback?: T): T | und
 }
 
 export function setLocalSetting<T = unknown>(key: string, value: T): void {
-  if (!isBrowser()) return;
+  if (!isBrowser()) {
+    return;
+  }
   try {
     const serialized = JSON.stringify(value);
     window.localStorage.setItem(key, serialized);
@@ -29,7 +35,9 @@ export function setLocalSetting<T = unknown>(key: string, value: T): void {
 }
 
 export function removeLocalSetting(key: string): void {
-  if (!isBrowser()) return;
+  if (!isBrowser()) {
+    return;
+  }
   try {
     window.localStorage.removeItem(key);
   } catch {
@@ -43,20 +51,31 @@ export function getNumberSetting(
 ): number | undefined {
   const raw = getLocalSetting<unknown>(key);
   let n: number | undefined;
-  if (typeof raw === 'number') n = raw;
-  else if (typeof raw === 'string') {
+  if (typeof raw === 'number') {
+    n = raw;
+  } else if (typeof raw === 'string') {
     const parsed = Number(raw);
     n = Number.isFinite(parsed) ? parsed : undefined;
   }
-  if (n === undefined || !Number.isFinite(n)) return undefined;
-  if (opts.positive && n <= 0) return undefined;
-  if (typeof opts.min === 'number' && n < opts.min) n = opts.min;
-  if (typeof opts.max === 'number' && n > opts.max) n = opts.max;
+  if (n === undefined || !Number.isFinite(n)) {
+    return undefined;
+  }
+  if (opts.positive && n <= 0) {
+    return undefined;
+  }
+  if (typeof opts.min === 'number' && n < opts.min) {
+    n = opts.min;
+  }
+  if (typeof opts.max === 'number' && n > opts.max) {
+    n = opts.max;
+  }
   return n;
 }
 
 export function setNumberSetting(key: string, value: number): void {
-  if (!Number.isFinite(value)) return;
+  if (!Number.isFinite(value)) {
+    return;
+  }
   setLocalSetting<number>(key, value);
 }
 
@@ -68,22 +87,32 @@ export function useLocalSetting<T = unknown>(
   options: { syncAcrossTabs?: boolean } = {}
 ): [T, (v: T) => void] {
   const [value, setValue] = useState<T>(() => {
-    if (!key) return initialValue;
+    if (!key) {
+      return initialValue;
+    }
     const stored = getLocalSetting<T>(key);
     return stored !== undefined ? stored : initialValue;
   });
 
   useEffect(() => {
-    if (!key) return;
+    if (!key) {
+      return;
+    }
     setLocalSetting<T>(key, value);
   }, [key, value]);
 
   useEffect(() => {
-    if (!options.syncAcrossTabs || !key || !isBrowser()) return;
+    if (!options.syncAcrossTabs || !key || !isBrowser()) {
+      return;
+    }
     const handler = (e: StorageEvent) => {
-      if (e.storageArea !== window.localStorage || e.key !== key) return;
+      if (e.storageArea !== window.localStorage || e.key !== key) {
+        return;
+      }
       const next = getLocalSetting<T>(key);
-      if (next !== undefined) setValue(next);
+      if (next !== undefined) {
+        setValue(next);
+      }
     };
     window.addEventListener('storage', handler);
     return () => window.removeEventListener('storage', handler);

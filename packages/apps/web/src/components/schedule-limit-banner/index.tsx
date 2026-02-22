@@ -12,7 +12,9 @@ export function ScheduleLimitBanner() {
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
       const ts = getLocalSetting<number>(DISMISS_KEY);
-      if (!ts || !Number.isFinite(ts)) return false;
+      if (!ts || !Number.isFinite(ts)) {
+        return false;
+      }
       const ageMs = Date.now() - ts;
       return ageMs < DISMISS_TTL_DAYS * 24 * 60 * 60 * 1000;
     } catch {
@@ -33,7 +35,9 @@ export function ScheduleLimitBanner() {
   const atCapacity =
     !!limits && Number.isFinite(limits.maxAllowed) && limits.currentCount >= limits.maxAllowed;
 
-  if (!atCapacity || dismissed) return null;
+  if (!atCapacity || dismissed) {
+    return null;
+  }
 
   return (
     <div className="bg-muted border-b shadow-sm">

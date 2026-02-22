@@ -13,14 +13,20 @@ export function redactSensitive(value: unknown, options: RedactOptions = {}): un
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
 
   const walk = (v: unknown, depth: number): unknown => {
-    if (depth > maxDepth) return '[TRUNCATED_DEPTH]';
+    if (depth > maxDepth) {
+      return '[TRUNCATED_DEPTH]';
+    }
 
     if (typeof v === 'string') {
-      if (v.length <= maxStringLength) return v;
+      if (v.length <= maxStringLength) {
+        return v;
+      }
       return `${v.slice(0, maxStringLength)}…`;
     }
 
-    if (v == null || typeof v === 'number' || typeof v === 'boolean') return v;
+    if (v == null || typeof v === 'number' || typeof v === 'boolean') {
+      return v;
+    }
 
     if (Array.isArray(v)) {
       return v.map((item) => walk(item, depth + 1));

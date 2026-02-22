@@ -6,28 +6,48 @@ import { convertLocalToUTC } from '@/lib/timezone';
 import type { PublishingQueueLaneKey } from '@/lib/api/publishing-queues-client';
 
 export function normalizeLaneKey(value: unknown): PublishingQueueLaneKey {
-  if (value === 'reel' || value === 'story' || value === 'any') return value;
+  if (value === 'reel' || value === 'story' || value === 'any') {
+    return value;
+  }
   return 'post';
 }
 
 export function getLanePillLabel(laneKey: PublishingQueueLaneKey): string {
-  if (laneKey === 'any') return 'Any post';
-  if (laneKey === 'reel') return 'Reel';
-  if (laneKey === 'story') return 'Story';
+  if (laneKey === 'any') {
+    return 'Any post';
+  }
+  if (laneKey === 'reel') {
+    return 'Reel';
+  }
+  if (laneKey === 'story') {
+    return 'Story';
+  }
   return 'Post';
 }
 
 export function getLaneCreateLabel(laneKey: PublishingQueueLaneKey): string {
-  if (laneKey === 'reel') return 'Create reel';
-  if (laneKey === 'story') return 'Create story';
-  if (laneKey === 'any') return 'Create content';
+  if (laneKey === 'reel') {
+    return 'Create reel';
+  }
+  if (laneKey === 'story') {
+    return 'Create story';
+  }
+  if (laneKey === 'any') {
+    return 'Create content';
+  }
   return 'Create post';
 }
 
 export function laneIcon(laneKey: PublishingQueueLaneKey, className = 'h-3.5 w-3.5') {
-  if (laneKey === 'any') return <Asterisk className={className} />;
-  if (laneKey === 'reel') return <Film className={className} />;
-  if (laneKey === 'story') return <CircleFadingPlus className={className} />;
+  if (laneKey === 'any') {
+    return <Asterisk className={className} />;
+  }
+  if (laneKey === 'reel') {
+    return <Film className={className} />;
+  }
+  if (laneKey === 'story') {
+    return <CircleFadingPlus className={className} />;
+  }
   return <ImageIcon className={className} />;
 }
 

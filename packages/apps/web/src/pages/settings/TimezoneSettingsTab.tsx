@@ -34,7 +34,9 @@ export default function TimezoneSettingsTab() {
 
   // Load brand-specific timezone if a brand is selected
   useEffect(() => {
-    if (!selectedBrand) return;
+    if (!selectedBrand) {
+      return;
+    }
 
     const fetchBrandTimezone = async () => {
       try {
@@ -50,7 +52,9 @@ export default function TimezoneSettingsTab() {
 
   // Load brand-specific image provider if a brand is selected
   useEffect(() => {
-    if (!selectedBrand) return;
+    if (!selectedBrand) {
+      return;
+    }
 
     const fetchBrandImageProvider = async () => {
       try {
@@ -91,7 +95,9 @@ export default function TimezoneSettingsTab() {
   };
 
   const handleSaveBrandTimezone = async () => {
-    if (!selectedBrand) return;
+    if (!selectedBrand) {
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -106,7 +112,9 @@ export default function TimezoneSettingsTab() {
   };
 
   const handleSaveBrandImageProvider = async () => {
-    if (!selectedBrand) return;
+    if (!selectedBrand) {
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -131,7 +139,9 @@ export default function TimezoneSettingsTab() {
     setIsSaving(true);
     try {
       await authApi.updateUserWeekStart({ weekStart });
-      if (user) setUser({ ...user, weekStart });
+      if (user) {
+        setUser({ ...user, weekStart });
+      }
       toast.success('Calendar preference saved');
     } catch (_e) {
       toast.error('Failed to save calendar preference');

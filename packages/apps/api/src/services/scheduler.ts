@@ -102,10 +102,12 @@ class SchedulerService {
   /**
    * Get upcoming scheduled posts for a brand
    */
-  async getUpcomingPosts(brandId: string, limit: number = 10): Promise<ScheduledPost[]> {
+  async getUpcomingPosts(brandId: string, limit = 10): Promise<ScheduledPost[]> {
     const data = await schedulerAdapter.getScheduledContent(brandId, limit);
     // Best effort structural validation
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) {
+      return [];
+    }
     return data
       .filter((d) => d && typeof d === 'object')
       .map((d) => {
@@ -134,7 +136,9 @@ class SchedulerService {
     lastScheduledAt?: Date;
   }> {
     const raw = await schedulerAdapter.getSchedulingStats(brandId);
-    if (!raw || typeof raw !== 'object') return { totalScheduled: 0, upcoming: 0 };
+    if (!raw || typeof raw !== 'object') {
+      return { totalScheduled: 0, upcoming: 0 };
+    }
     const rec = raw as Record<string, unknown>;
     const totalScheduled = typeof rec.totalScheduled === 'number' ? rec.totalScheduled : 0;
     const upcoming = typeof rec.upcoming === 'number' ? rec.upcoming : 0;

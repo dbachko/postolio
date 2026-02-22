@@ -72,7 +72,9 @@ export function PostingPopoverContent({
           mode="single"
           selected={selectedDate}
           onSelect={(d) => {
-            if (!d) return;
+            if (!d) {
+              return;
+            }
             const nextDate = format(d, 'yyyy-MM-dd');
             onScheduledAtChange(`${nextDate}T${parts.timePart}`);
           }}
@@ -97,7 +99,9 @@ export function PostingPopoverContent({
                 value={parts.timePart}
                 onChange={(e) => {
                   const nextTime = e.target.value;
-                  if (!/^\d{2}:\d{2}$/.test(nextTime)) return;
+                  if (!/^\d{2}:\d{2}$/.test(nextTime)) {
+                    return;
+                  }
                   onScheduledAtChange(`${parts.datePart}T${nextTime}`);
                 }}
                 className="h-8 border-none bg-transparent p-0 shadow-none focus-visible:ring-0"
@@ -145,7 +149,9 @@ export function PostingPopoverContent({
                 )}
                 disabled={Boolean(queueDisabled)}
                 onClick={() => {
-                  if (queueDisabled) return;
+                  if (queueDisabled) {
+                    return;
+                  }
                   onSelectQueue();
                 }}
               >
@@ -238,7 +244,9 @@ export function PostingPopoverContent({
                   )}
                   disabled={Boolean(pickSlotDisabled)}
                   onClick={() => {
-                    if (pickSlotDisabled) return;
+                    if (pickSlotDisabled) {
+                      return;
+                    }
                     onPickSlot();
                   }}
                 >

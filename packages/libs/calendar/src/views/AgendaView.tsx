@@ -60,7 +60,7 @@ export function AgendaView<E extends CalendarEventBase>({
       .sort((a, b) => +a.start - +b.start);
 
     // Group by day, including empty days
-    const result: { date: Date; items: E[] }[] = days.map((d) => ({
+    const result: Array<{ date: Date; items: E[] }> = days.map((d) => ({
       date: new Date(d),
       items: [],
     }));
@@ -70,7 +70,9 @@ export function AgendaView<E extends CalendarEventBase>({
       const d = new Date(e.start.getFullYear(), e.start.getMonth(), e.start.getDate());
       const k = DAY_KEY(d);
       const idx = indexByKey.get(k);
-      if (idx != null) result[idx].items.push(e);
+      if (idx != null) {
+        result[idx].items.push(e);
+      }
     }
     if (filtered.length > 0) {
       return result;
@@ -89,7 +91,9 @@ export function AgendaView<E extends CalendarEventBase>({
       {byDay.map((g) => {
         const isToday = DAY_KEY(g.date) === todayKey;
         const dateClasses = ['pc-agenda-date'];
-        if (isToday) dateClasses.push('pc-agenda-date--today');
+        if (isToday) {
+          dateClasses.push('pc-agenda-date--today');
+        }
         return (
           <div
             key={g.date.toISOString()}

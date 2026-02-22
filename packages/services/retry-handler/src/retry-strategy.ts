@@ -10,7 +10,7 @@
  */
 
 import { Logger } from '@aws-lambda-powertools/logger';
-import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+import { type Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 
 const logger = new Logger({ serviceName: 'retry-strategy' });
 
@@ -153,7 +153,9 @@ export class RetryStrategy {
         httpStatusCode = statusRaw;
       } else if (typeof statusRaw === 'string') {
         const parsed = parseInt(statusRaw, 10);
-        if (!Number.isNaN(parsed)) httpStatusCode = parsed;
+        if (!Number.isNaN(parsed)) {
+          httpStatusCode = parsed;
+        }
       }
       if (typeof obj.errorCode === 'string') {
         structuredCode = obj.errorCode;

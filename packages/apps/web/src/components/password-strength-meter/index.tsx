@@ -6,7 +6,9 @@ interface PasswordStrengthMeterProps {
 }
 
 export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) {
-  if (!password) return null;
+  if (!password) {
+    return null;
+  }
 
   const strength = getPasswordStrength(password);
   const color = getStrengthColor(strength.level);

@@ -110,7 +110,9 @@ export const assetsApi = {
       headers: { 'Content-Type': file.type },
       body: file,
     });
-    if (!response.ok) throw new Error('Failed to upload file to S3');
+    if (!response.ok) {
+      throw new Error('Failed to upload file to S3');
+    }
   },
 
   // Create asset metadata
@@ -157,29 +159,65 @@ export const assetsApi = {
     usage?: 'used' | 'unused' | 'any';
   }): Promise<PaginatedAssets> {
     const queryParams = new URLSearchParams();
-    if (params.brandId) queryParams.set('brandId', params.brandId);
-    if (params.type) queryParams.set('type', params.type);
-    if (params.search) queryParams.set('search', params.search);
-    if (params.page) queryParams.set('page', String(params.page));
-    if (params.limit) queryParams.set('limit', String(params.limit));
-    if (params.collectionId) queryParams.set('collectionId', params.collectionId);
-    if (params.includeSubcollections) queryParams.set('includeSubcollections', 'true');
-    if (params.labelIds) params.labelIds.forEach((id) => queryParams.append('labelIds', id));
-    if (params.labelMode) queryParams.set('labelMode', params.labelMode);
+    if (params.brandId) {
+      queryParams.set('brandId', params.brandId);
+    }
+    if (params.type) {
+      queryParams.set('type', params.type);
+    }
+    if (params.search) {
+      queryParams.set('search', params.search);
+    }
+    if (params.page) {
+      queryParams.set('page', String(params.page));
+    }
+    if (params.limit) {
+      queryParams.set('limit', String(params.limit));
+    }
+    if (params.collectionId) {
+      queryParams.set('collectionId', params.collectionId);
+    }
+    if (params.includeSubcollections) {
+      queryParams.set('includeSubcollections', 'true');
+    }
+    if (params.labelIds) {
+      params.labelIds.forEach((id) => queryParams.append('labelIds', id));
+    }
+    if (params.labelMode) {
+      queryParams.set('labelMode', params.labelMode);
+    }
 
     // New filter parameters
-    if (params.aspectRatio) queryParams.set('aspectRatio', params.aspectRatio);
-    if (params.aspectRatios)
+    if (params.aspectRatio) {
+      queryParams.set('aspectRatio', params.aspectRatio);
+    }
+    if (params.aspectRatios) {
       params.aspectRatios.forEach((r) => queryParams.append('aspectRatios', r));
-    if (params.orientationTypes)
+    }
+    if (params.orientationTypes) {
       params.orientationTypes.forEach((o) => queryParams.append('orientationTypes', o));
-    if (params.minWidth) queryParams.set('minWidth', String(params.minWidth));
-    if (params.maxWidth) queryParams.set('maxWidth', String(params.maxWidth));
-    if (params.minHeight) queryParams.set('minHeight', String(params.minHeight));
-    if (params.maxHeight) queryParams.set('maxHeight', String(params.maxHeight));
-    if (params.uploadedAfter) queryParams.set('uploadedAfter', params.uploadedAfter);
-    if (params.uploadedBefore) queryParams.set('uploadedBefore', params.uploadedBefore);
-    if (params.usage) queryParams.set('usage', params.usage);
+    }
+    if (params.minWidth) {
+      queryParams.set('minWidth', String(params.minWidth));
+    }
+    if (params.maxWidth) {
+      queryParams.set('maxWidth', String(params.maxWidth));
+    }
+    if (params.minHeight) {
+      queryParams.set('minHeight', String(params.minHeight));
+    }
+    if (params.maxHeight) {
+      queryParams.set('maxHeight', String(params.maxHeight));
+    }
+    if (params.uploadedAfter) {
+      queryParams.set('uploadedAfter', params.uploadedAfter);
+    }
+    if (params.uploadedBefore) {
+      queryParams.set('uploadedBefore', params.uploadedBefore);
+    }
+    if (params.usage) {
+      queryParams.set('usage', params.usage);
+    }
 
     return httpGet(`${API_BASE_URL}?${queryParams.toString()}`);
   },
@@ -210,8 +248,12 @@ export const assetsApi = {
     const queryParams = new URLSearchParams();
     queryParams.set('brandId', params.brandId);
     queryParams.set('type', params.type);
-    if (params.format) queryParams.set('format', params.format);
-    if (params.includeArchived) queryParams.set('includeArchived', 'true');
+    if (params.format) {
+      queryParams.set('format', params.format);
+    }
+    if (params.includeArchived) {
+      queryParams.set('includeArchived', 'true');
+    }
     return httpGet(`${API_BASE_URL}/taxonomy?${queryParams.toString()}`);
   },
 

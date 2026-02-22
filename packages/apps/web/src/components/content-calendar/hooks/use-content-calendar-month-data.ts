@@ -61,12 +61,18 @@ export function useContentCalendarMonthData({
     const sources = [prevCalendarQuery.data, calendarQuery.data, nextCalendarQuery.data];
     for (const source of sources) {
       const list = (source as any)?.data?.content;
-      if (Array.isArray(list)) collected.push(...(list as Content[]));
+      if (Array.isArray(list)) {
+        collected.push(...(list as Content[]));
+      }
     }
     const seen = new Set<string>();
     return collected.filter((item) => {
-      if (!item || typeof item.id !== 'string') return false;
-      if (seen.has(item.id)) return false;
+      if (!item || typeof item.id !== 'string') {
+        return false;
+      }
+      if (seen.has(item.id)) {
+        return false;
+      }
       seen.add(item.id);
       return true;
     });
@@ -77,12 +83,18 @@ export function useContentCalendarMonthData({
     const sources = [prevCalendarQuery.data, calendarQuery.data, nextCalendarQuery.data];
     for (const source of sources) {
       const list = (source as any)?.data?.placeholders;
-      if (Array.isArray(list)) collected.push(...(list as Placeholder[]));
+      if (Array.isArray(list)) {
+        collected.push(...(list as Placeholder[]));
+      }
     }
     const seen = new Set<string>();
     return collected.filter((p) => {
-      if (!p || typeof p.id !== 'string') return false;
-      if (seen.has(p.id)) return false;
+      if (!p || typeof p.id !== 'string') {
+        return false;
+      }
+      if (seen.has(p.id)) {
+        return false;
+      }
       seen.add(p.id);
       return true;
     });

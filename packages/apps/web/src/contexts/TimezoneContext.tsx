@@ -73,7 +73,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   };
 
   // Update timezone and sync with backend
-  const setTimezone = async (newTimezone: string, isAuto: boolean = false) => {
+  const setTimezone = async (newTimezone: string, isAuto = false) => {
     // Validate timezone before setting
     if (!isAuto && !isValidTimezone(newTimezone)) {
       throw new Error('Invalid timezone provided');
@@ -98,8 +98,11 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
       // Rollback local state on failure
       setTimezoneState(previousTimezone);
       setIsAutoDetected(previousIsAutoDetected);
-      if (previousLocalStorage) setLocalSetting('userTimezone', previousLocalStorage);
-      else removeLocalSetting('userTimezone');
+      if (previousLocalStorage) {
+        setLocalSetting('userTimezone', previousLocalStorage);
+      } else {
+        removeLocalSetting('userTimezone');
+      }
 
       // Re-throw error for caller to handle
       throw error instanceof Error ? error : new Error('Failed to update timezone');

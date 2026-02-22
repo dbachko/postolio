@@ -105,7 +105,7 @@ export class StatusBroadcaster {
   /**
    * Get recent events for a brand (for catch-up on reconnection)
    */
-  async getRecentEvents(brandId: string, limit: number = 100): Promise<StatusChangeEvent[]> {
+  async getRecentEvents(brandId: string, limit = 100): Promise<StatusChangeEvent[]> {
     try {
       // Get events from Redis Stream in reverse order (newest first)
       const events = await this.redis.xrevrange(

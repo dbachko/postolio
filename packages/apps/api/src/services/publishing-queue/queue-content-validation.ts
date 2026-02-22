@@ -22,12 +22,16 @@ type QueueContentValidationErrorCode =
   | 'invalid_content';
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
 function normalizeContentType(raw: unknown): ValidationContentType {
-  if (raw === 'reel' || raw === 'story') return raw;
+  if (raw === 'reel' || raw === 'story') {
+    return raw;
+  }
   return 'post';
 }
 

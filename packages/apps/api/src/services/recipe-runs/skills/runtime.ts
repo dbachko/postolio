@@ -40,7 +40,7 @@ export async function resolveInstalledSkillRuntime(
   if (!definition) {
     throw new Error(`Unknown skill: ${skillId}`);
   }
-  if (!installation || !installation.enabled) {
+  if (!installation?.enabled) {
     throw new Error(`Skill is not enabled for this brand: ${skillId}`);
   }
 

@@ -61,18 +61,24 @@ export function Brands() {
       );
       setProfileAvailable(Object.fromEntries(entries));
     };
-    if (brands.length > 0) void load();
+    if (brands.length > 0) {
+      void load();
+    }
   }, [brands]);
 
   useEffect(() => {
     const fetchSummaries = async () => {
       const toFetch = brands.filter((b) => profileAvailable[b.id] && !profileSummaries[b.id]);
-      if (toFetch.length === 0) return;
+      if (toFetch.length === 0) {
+        return;
+      }
       const results = await Promise.all(
         toFetch.map(async (b) => {
           try {
             const prof = await brandApi.getBrandAnalysisProfile(b.id);
-            if ('error' in prof) return [b.id, null] as const;
+            if ('error' in prof) {
+              return [b.id, null] as const;
+            }
             const tones = Array.isArray(prof.text?.tone) ? prof.text!.tone.slice(0, 3) : [];
             const palette = Array.isArray(prof.visual?.palette)
               ? prof.visual!.palette.slice(0, 3)
@@ -85,11 +91,17 @@ export function Brands() {
       );
       const map: Record<string, { tones: string[]; palette: string[] }> = {};
       for (const [id, data] of results) {
-        if (data) map[id] = data;
+        if (data) {
+          map[id] = data;
+        }
       }
-      if (Object.keys(map).length > 0) setProfileSummaries((s) => ({ ...s, ...map }));
+      if (Object.keys(map).length > 0) {
+        setProfileSummaries((s) => ({ ...s, ...map }));
+      }
     };
-    if (brands.length > 0) void fetchSummaries();
+    if (brands.length > 0) {
+      void fetchSummaries();
+    }
   }, [brands, profileAvailable, profileSummaries]);
 
   const createBrandMutation = useMutation({
@@ -172,7 +184,9 @@ export function Brands() {
   const handleEditSubmit = (e: React.FormEvent, brandId: string) => {
     e.preventDefault();
     const data = editFormData[brandId];
-    if (!data) return;
+    if (!data) {
+      return;
+    }
     updateBrandMutation.mutate({
       brandId,
       data: {

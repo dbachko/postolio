@@ -52,7 +52,7 @@ export class DMAutomationClient {
   /**
    * Get analytics for automation rules
    */
-  getAnalytics(brandId: string, days: number = 30): Promise<DMAutomationAnalytics> {
+  getAnalytics(brandId: string, days = 30): Promise<DMAutomationAnalytics> {
     return this.request(`/api/brands/${brandId}/dm-automation/analytics?days=${days}`);
   }
 

@@ -41,7 +41,9 @@ export default function PostPage() {
 
   const contentGroupId = useMemo(() => {
     const raw = post?.contentGroupId;
-    if (typeof raw !== 'string') return null;
+    if (typeof raw !== 'string') {
+      return null;
+    }
     const trimmed = raw.trim();
     return trimmed.length ? trimmed : null;
   }, [post?.contentGroupId]);
@@ -54,7 +56,9 @@ export default function PostPage() {
   });
 
   const isMultiDestinationGroup = useMemo(() => {
-    if (!contentGroupId || !multiDestinationEnabled) return false;
+    if (!contentGroupId || !multiDestinationEnabled) {
+      return false;
+    }
     const raw = contentGroupQuery.data as any;
     const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
     return destinations.length > 1;
@@ -71,9 +75,15 @@ export default function PostPage() {
 
     const title = isPosted ? 'View Post' : 'Edit Post';
     const description = (() => {
-      if (!post) return undefined;
-      if (isPosted) return 'Published posts are read-only.';
-      if (post.status === 'scheduled') return 'Tip: Update the time or unschedule to draft.';
+      if (!post) {
+        return undefined;
+      }
+      if (isPosted) {
+        return 'Published posts are read-only.';
+      }
+      if (post.status === 'scheduled') {
+        return 'Tip: Update the time or unschedule to draft.';
+      }
       return 'Tip: Set a time below to schedule when ready.';
     })();
     setPageMetaOverride({
@@ -87,12 +97,18 @@ export default function PostPage() {
     let mounted = true;
     const resolveBrandTimezone = async () => {
       const brandId = post?.brand?.id;
-      if (!brandId) return;
+      if (!brandId) {
+        return;
+      }
       try {
         const tz = await getBrandTimezone(brandId);
-        if (mounted && tz) setBrandTimezone(tz);
+        if (mounted && tz) {
+          setBrandTimezone(tz);
+        }
       } catch {
-        if (mounted) setBrandTimezone(timezone);
+        if (mounted) {
+          setBrandTimezone(timezone);
+        }
       }
     };
     void resolveBrandTimezone();
@@ -101,7 +117,7 @@ export default function PostPage() {
     };
   }, [getBrandTimezone, post?.brand?.id, timezone]);
 
-  const publicationsQuery = useQuery<{ success: boolean; data: Array<any> }>({
+  const publicationsQuery = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['v2-publications', postId],
     queryFn: async () => analytics.getPublicationsByContent(resolvedPostId),
     enabled: Boolean(postId) && post?.status === 'published',
@@ -110,7 +126,9 @@ export default function PostPage() {
 
   const selectedPublicationId = useMemo(() => {
     const pubs = publicationsQuery.data?.data || [];
-    if (!pubs.length) return undefined;
+    if (!pubs.length) {
+      return undefined;
+    }
     const preferred = pubs.find((p: any) => p.platform === 'instagram');
     return (preferred || pubs[0])?.id as string | undefined;
   }, [publicationsQuery.data?.data]);
@@ -128,7 +146,9 @@ export default function PostPage() {
 
   const insights = useMemo<PostInsights | undefined>(() => {
     const latest = latestQuery.data?.data;
-    if (!latest) return undefined;
+    if (!latest) {
+      return undefined;
+    }
     return {
       metrics: {
         reach: Number(latest.reach || 0),
@@ -143,7 +163,7 @@ export default function PostPage() {
   }, [latestQuery.data?.data]);
 
   const { data: commentsData } = useQuery<{
-    comments: { username: string; text: string }[];
+    comments: Array<{ username: string; text: string }>;
   }>({
     queryKey: ['post-comments', postId],
     queryFn: async () => (await contentApi.getPostComments(resolvedPostId)).data,
@@ -152,7 +172,9 @@ export default function PostPage() {
   });
 
   const refreshPublication = async (successMessage: string) => {
-    if (!selectedPublicationId) return;
+    if (!selectedPublicationId) {
+      return;
+    }
     try {
       await analytics.refreshPublication(selectedPublicationId);
       toast.success(successMessage);
@@ -173,8 +195,9 @@ export default function PostPage() {
         isMultiDestinationGroup ? 'Publishing started for all destinations' : 'Publishing started'
       );
       queryClient.invalidateQueries({ queryKey: ['post', postId] });
-      if (contentGroupId)
+      if (contentGroupId) {
         queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
+      }
     },
     onError: () => toast.error('Failed to publish post'),
   });
@@ -205,8 +228,12 @@ export default function PostPage() {
         threads: 'Threads',
         x: 'X',
       };
-      if (labels[normalized]) return labels[normalized];
-      if (!platform) return 'Link';
+      if (labels[normalized]) {
+        return labels[normalized];
+      }
+      if (!platform) {
+        return 'Link';
+      }
       return platform.charAt(0).toUpperCase() + platform.slice(1);
     };
 
@@ -230,8 +257,12 @@ export default function PostPage() {
     const seen = new Set<string>();
     const deduped = links.filter((link) => {
       const permalink = String(link.permalink || '').trim();
-      if (!permalink) return false;
-      if (seen.has(permalink)) return false;
+      if (!permalink) {
+        return false;
+      }
+      if (seen.has(permalink)) {
+        return false;
+      }
       seen.add(permalink);
       return true;
     });
@@ -239,7 +270,9 @@ export default function PostPage() {
     deduped.sort((a, b) => {
       const aIsIg = a.platform === 'instagram';
       const bIsIg = b.platform === 'instagram';
-      if (aIsIg === bIsIg) return 0;
+      if (aIsIg === bIsIg) {
+        return 0;
+      }
       return aIsIg ? -1 : 1;
     });
 

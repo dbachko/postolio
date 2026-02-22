@@ -1,4 +1,4 @@
-import { FastifyRequest } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
 
 export type OAuthPlatform = 'instagram' | 'facebook' | 'google';

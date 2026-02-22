@@ -1,9 +1,9 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import {
   normalizeAssetLabelName,
   prismaAssets,
-  Prisma as AssetsPrisma,
+  type Prisma as AssetsPrisma,
 } from '@postolio/database-assets';
 import sharp from 'sharp';
 import { customAlphabet } from 'nanoid';
@@ -30,7 +30,7 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
-function guessExtension(mimeType: string, fallback: string = 'bin'): string {
+function guessExtension(mimeType: string, fallback = 'bin'): string {
   return MIME_EXTENSION_MAP[mimeType.toLowerCase()] || fallback;
 }
 
@@ -246,7 +246,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             query.includeSubcollections === 'true' || query.includeSubcollections === '1';
           const collectionIds = includeSub
             ? (
-                await prismaAssets.$queryRaw<{ id: string }[]>`
+                await prismaAssets.$queryRaw<Array<{ id: string }>>`
               WITH RECURSIVE subcollections AS (
                 SELECT "id"
                 FROM "asset_taxonomy_items"
@@ -641,7 +641,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             where: { id: body.collectionId },
             select: { id: true, brandId: true, type: true },
           });
-          if (!collection || collection.type !== 'COLLECTION') {
+          if (collection?.type !== 'COLLECTION') {
             return reply.code(400).send({ error: 'Invalid collection selection' });
           }
           resolvedCollectionId = collection.id;
@@ -734,8 +734,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             select: { id: true, brandId: true, type: true },
           });
           if (
-            !collection ||
-            collection.type !== 'COLLECTION' ||
+            collection?.type !== 'COLLECTION' ||
             (body.brandId && collection.brandId !== body.brandId)
           ) {
             return reply.code(400).send({ error: 'Invalid collection selection' });
@@ -756,7 +755,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (action.add_labels.labelIds) {
           action.add_labels.labelIds.forEach((id) => {
-            if (id) labelIds.add(id);
+            if (id) {
+              labelIds.add(id);
+            }
           });
         }
 

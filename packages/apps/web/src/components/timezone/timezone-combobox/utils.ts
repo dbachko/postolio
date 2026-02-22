@@ -1,7 +1,9 @@
 import { formatInTimeZone } from 'date-fns-tz';
 
 export function matchesQuery(timezone: string, query: string): boolean {
-  if (!query) return true;
+  if (!query) {
+    return true;
+  }
   const q = query.toLowerCase();
   const raw = timezone.toLowerCase();
   const spaced = timezone.replace(/_/g, ' ').toLowerCase();
@@ -9,7 +11,9 @@ export function matchesQuery(timezone: string, query: string): boolean {
 }
 
 export function formatTimezoneLabel(timezone: string): string {
-  if (timezone === 'UTC') return 'UTC';
+  if (timezone === 'UTC') {
+    return 'UTC';
+  }
   const parts = timezone.split('/');
   const lastPart = parts[parts.length - 1] || timezone;
   return lastPart.replace(/_/g, ' ');

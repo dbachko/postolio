@@ -22,7 +22,9 @@ export function useFilteredEvents(
 
     for (const item of filtered) {
       const bounds = getEventBounds(item, timezone);
-      if (!bounds) continue;
+      if (!bounds) {
+        continue;
+      }
 
       const record = item as unknown as Record<string, unknown>;
       const isPlaceholder = item.type === 'placeholder';
@@ -53,11 +55,15 @@ export function useFilteredEvents(
     events.sort((a, b) => {
       const ta = a.start?.getTime?.() ?? 0;
       const tb = b.start?.getTime?.() ?? 0;
-      if (ta !== tb) return ta - tb;
+      if (ta !== tb) {
+        return ta - tb;
+      }
 
       const aPlaceholder = Boolean((a as any)?.resource?.placeholder);
       const bPlaceholder = Boolean((b as any)?.resource?.placeholder);
-      if (aPlaceholder !== bPlaceholder) return aPlaceholder ? 1 : -1;
+      if (aPlaceholder !== bPlaceholder) {
+        return aPlaceholder ? 1 : -1;
+      }
 
       return String(a.title ?? '').localeCompare(String(b.title ?? ''));
     });
@@ -72,7 +78,9 @@ function buildTitle(item: CalendarDataItem, record: Record<string, unknown>): st
   }
 
   const caption = readString(record.caption);
-  if (!caption) return '';
+  if (!caption) {
+    return '';
+  }
 
   return caption.slice(0, 60);
 }

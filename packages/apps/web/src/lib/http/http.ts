@@ -26,13 +26,17 @@ export function createHttp(): HttpRequest {
     const url = `${API_BASE_URL}${endpoint}`;
     const headers: Record<string, string> = { ...(options.headers as any) };
 
-    if (options.body) headers['Content-Type'] = 'application/json';
+    if (options.body) {
+      headers['Content-Type'] = 'application/json';
+    }
     headers['X-Timezone'] = getTimezone();
 
     const method = (options.method || 'GET').toUpperCase();
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const csrfToken = await csrf.ensureToken();
-      if (csrfToken) headers['csrf-token'] = csrfToken;
+      if (csrfToken) {
+        headers['csrf-token'] = csrfToken;
+      }
     }
 
     const exec = () =>
@@ -49,7 +53,9 @@ export function createHttp(): HttpRequest {
       let errorData: any = null;
       try {
         errorText = await response.text();
-        if (errorText) errorData = JSON.parse(errorText);
+        if (errorText) {
+          errorData = JSON.parse(errorText);
+        }
       } catch {
         // ignore JSON parse errors for error bodies
       }
@@ -66,7 +72,9 @@ export function createHttp(): HttpRequest {
           if (newToken) {
             headers['csrf-token'] = newToken;
             const retryResponse = await fetch(url, { ...options, headers, credentials: 'include' });
-            if (retryResponse.ok) return retryResponse.json();
+            if (retryResponse.ok) {
+              return retryResponse.json();
+            }
           }
         }
       }
@@ -95,7 +103,9 @@ export function createHttp(): HttpRequest {
             hasResult: Boolean(retryResult.result),
           });
         }
-        if (retryResult.shouldRetry && retryResult.result) return retryResult.result;
+        if (retryResult.shouldRetry && retryResult.result) {
+          return retryResult.result;
+        }
 
         // If refresh failed due to network issues, surface an offline error instead of forcing logout
         if (retryResult.isOffline) {
@@ -107,11 +117,14 @@ export function createHttp(): HttpRequest {
         if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
           console.debug('[AuthDebug] /api/auth/me refresh failed, redirecting to /login');
         }
-        if (!window.location.pathname.startsWith('/login')) window.location.href = '/login';
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
 
-      if (response.status === 413)
+      if (response.status === 413) {
         throw new Error('Image too large. Please optimize your image to be under 10MB.');
+      }
       if (errorData) {
         const primaryMessage =
           errorData.error ||
@@ -124,9 +137,15 @@ export function createHttp(): HttpRequest {
         (err as any).data = errorData;
         throw err;
       }
-      if (response.status === 404) throw new Error('Resource not found');
-      if (response.status === 500) throw new Error('Server error. Please try again later.');
-      if (errorText) throw new Error(errorText);
+      if (response.status === 404) {
+        throw new Error('Resource not found');
+      }
+      if (response.status === 500) {
+        throw new Error('Server error. Please try again later.');
+      }
+      if (errorText) {
+        throw new Error(errorText);
+      }
       throw new Error(`Request failed with status ${response.status}`);
     }
 

@@ -74,7 +74,9 @@ export function AppHeader() {
         if (!inboxEnabled && (item.path === '/inbox' || item.path === '/dm-automation')) {
           return false;
         }
-        if (!snippetsEnabled && item.path === '/snippets') return false;
+        if (!snippetsEnabled && item.path === '/snippets') {
+          return false;
+        }
         return true;
       }),
     [inboxEnabled, snippetsEnabled]
@@ -102,13 +104,13 @@ export function AppHeader() {
 
     const matchedPrimary =
       visibleNavItems.find((item) => isRouteActiveForItem(item, path)) ??
-      visibleNavItems.find((item) => path.startsWith(item.path + '/'));
+      visibleNavItems.find((item) => path.startsWith(`${item.path}/`));
 
     if (matchedPrimary) {
       const sectionChildren = getSectionNavItems(matchedPrimary);
       const matchedChild =
         sectionChildren.find((child) => path === child.path) ??
-        sectionChildren.find((child) => path.startsWith(child.path + '/'));
+        sectionChildren.find((child) => path.startsWith(`${child.path}/`));
 
       if (matchedChild) {
         if (matchedChild.path === matchedPrimary.path) {
@@ -130,7 +132,9 @@ export function AppHeader() {
   }, [location.pathname, visibleNavItems]);
 
   const effectivePageMeta = useMemo(() => {
-    if (!pageMetaOverride) return pageMeta;
+    if (!pageMetaOverride) {
+      return pageMeta;
+    }
     return {
       title: pageMetaOverride.title ?? pageMeta.title,
       description: pageMetaOverride.description ?? pageMeta.description,

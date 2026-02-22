@@ -267,7 +267,9 @@ export class PublisherCredentialsService {
    */
   static async invalidateCredentialsCache(brandId: string): Promise<void> {
     const redis = getRedisClient();
-    if (!redis) return;
+    if (!redis) {
+      return;
+    }
 
     const cacheKey = `publisher:credentials:${brandId}`;
     try {

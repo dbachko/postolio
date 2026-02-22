@@ -3,7 +3,9 @@ import type { Platform as SchedulerPlatform } from '../clients/content-scheduler
 
 export function toSchedulerPlatform(platform: string): SchedulerPlatform | null {
   const normalized = (platform || '').toLowerCase();
-  if (normalized === 'x') return 'twitter';
+  if (normalized === 'x') {
+    return 'twitter';
+  }
 
   if (
     normalized === 'instagram' ||
@@ -20,7 +22,9 @@ export function toSchedulerPlatform(platform: string): SchedulerPlatform | null 
 
 export function toValidationPlatform(platform: string): ValidationPlatform | null {
   const normalized = (platform || '').toLowerCase();
-  if (normalized === 'x') return 'twitter';
+  if (normalized === 'x') {
+    return 'twitter';
+  }
 
   if (
     normalized === 'instagram' ||
@@ -39,6 +43,8 @@ const SCHEDULING_SUPPORTED_PLATFORMS = new Set<SchedulerPlatform>(['instagram', 
 
 export function supportsScheduling(platform: string): boolean {
   const schedulerPlatform = toSchedulerPlatform(platform);
-  if (!schedulerPlatform) return false;
+  if (!schedulerPlatform) {
+    return false;
+  }
   return SCHEDULING_SUPPORTED_PLATFORMS.has(schedulerPlatform);
 }

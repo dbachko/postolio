@@ -3,8 +3,8 @@
  * Handles content updates including caption and scheduling changes
  */
 
-import { FastifyPluginAsync } from 'fastify';
-import { Prisma } from '@postolio/database';
+import type { FastifyPluginAsync } from 'fastify';
+import type { Prisma } from '@postolio/database';
 
 import learningService from '../../services/learning.js';
 import { schedulerService } from '../../services/scheduler.js';
@@ -27,7 +27,9 @@ import { supportsScheduling, toValidationPlatform } from '../../utils/platform.j
 const prisma = getDatabaseClient();
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
@@ -89,7 +91,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!content || !content.brand) {
+      if (!content?.brand) {
         return reply.code(404).send({ error: 'Content not found' });
       }
 
@@ -125,9 +127,15 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
 
       const normalizedTargetSocialAccountId = (() => {
-        if (targetSocialAccountId === undefined) return undefined;
-        if (targetSocialAccountId === null || targetSocialAccountId === '') return null;
-        if (typeof targetSocialAccountId !== 'string') return '__invalid__';
+        if (targetSocialAccountId === undefined) {
+          return undefined;
+        }
+        if (targetSocialAccountId === null || targetSocialAccountId === '') {
+          return null;
+        }
+        if (typeof targetSocialAccountId !== 'string') {
+          return '__invalid__';
+        }
         const trimmed = targetSocialAccountId.trim();
         return trimmed.length ? trimmed : null;
       })() as string | null | undefined;
@@ -248,7 +256,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           (scheduledAt !== undefined && Boolean(scheduledAt)));
 
       if (requiresPublishableValidation) {
-        let resolvedAssets: (AssetRecord | null)[] = [];
+        let resolvedAssets: Array<AssetRecord | null> = [];
         if (assetIds.length > 0) {
           try {
             const assetsClient = getAssetsClient();
@@ -277,16 +285,19 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         const resolvedById = new Map(
           (resolvedAssets.filter(Boolean) as AssetRecord[]).map((asset) => [asset.id, asset])
         );
-        const mediaAssetsForValidation: { key: string; type: 'image' | 'video' }[] = joinMediaAssets
-          .map((asset) => {
-            const resolved = resolvedById.get(asset.assetId);
-            if (!resolved) return null;
-            return {
-              key: resolved.id,
-              type: resolved.fileType === 'video' ? 'video' : 'image',
-            };
-          })
-          .filter((asset): asset is { key: string; type: 'image' | 'video' } => Boolean(asset));
+        const mediaAssetsForValidation: Array<{ key: string; type: 'image' | 'video' }> =
+          joinMediaAssets
+            .map((asset) => {
+              const resolved = resolvedById.get(asset.assetId);
+              if (!resolved) {
+                return null;
+              }
+              return {
+                key: resolved.id,
+                type: resolved.fileType === 'video' ? 'video' : 'image',
+              };
+            })
+            .filter((asset): asset is { key: string; type: 'image' | 'video' } => Boolean(asset));
 
         const mediaTypeHint: ValidationMediaType | undefined =
           effectiveContentType === 'reel'
@@ -620,13 +631,12 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
               // return error to user with helpful message
               // Do NOT return 500 here; degrade gracefully like initial scheduling
               // The DB reflects the requested scheduled time; adapter stored schedulingError
-            } else {
-              console.log(`Content ${contentId} scheduled successfully in AWS`);
-              if (needsNewSchedule) {
-                console.log(
-                  `Auto-recovery successful - created new schedule after failed reschedule`
-                );
-              }
+            }
+            console.log(`Content ${contentId} scheduled successfully in AWS`);
+            if (needsNewSchedule) {
+              console.log(
+                `Auto-recovery successful - created new schedule after failed reschedule`
+              );
             }
           } catch (scheduleError) {
             console.error('Error creating schedule:', scheduleError);
@@ -839,11 +849,15 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const scheduledAt = request.body?.scheduledAt;
 
       const headers: Record<string, string> = { 'content-type': 'application/json' };
-      if (typeof request.headers.cookie === 'string') headers.cookie = request.headers.cookie;
-      if (typeof request.headers.authorization === 'string')
+      if (typeof request.headers.cookie === 'string') {
+        headers.cookie = request.headers.cookie;
+      }
+      if (typeof request.headers.authorization === 'string') {
         headers.authorization = request.headers.authorization;
-      if (typeof request.headers['csrf-token'] === 'string')
+      }
+      if (typeof request.headers['csrf-token'] === 'string') {
         headers['csrf-token'] = request.headers['csrf-token'];
+      }
 
       const r = await fastify.inject({
         method: 'PUT',

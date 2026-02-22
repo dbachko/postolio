@@ -99,7 +99,9 @@ export class RedisTokenStore {
 
     // Get token data to find associated sets
     const tokenData = await this.getToken(token);
-    if (!tokenData) return;
+    if (!tokenData) {
+      return;
+    }
 
     const userSetKey = `${RedisTokenStore.USER_TOKENS_SET}${tokenData.userId}`;
     const familySetKey = `${RedisTokenStore.FAMILY_TOKENS_SET}${tokenData.family}`;
@@ -130,7 +132,9 @@ export class RedisTokenStore {
     const tokenKey = `${RedisTokenStore.TOKEN_PREFIX}${token}`;
 
     const tokenData = await this.getToken(token);
-    if (!tokenData) return;
+    if (!tokenData) {
+      return;
+    }
 
     const userSetKey = `${RedisTokenStore.USER_TOKENS_SET}${tokenData.userId}`;
     const familySetKey = `${RedisTokenStore.FAMILY_TOKENS_SET}${tokenData.family}`;
@@ -157,7 +161,9 @@ export class RedisTokenStore {
     const userSetKey = `${RedisTokenStore.USER_TOKENS_SET}${userId}`;
     const tokenIds = await this.redis.smembers(userSetKey);
 
-    if (tokenIds.length === 0) return [];
+    if (tokenIds.length === 0) {
+      return [];
+    }
 
     // Use pipeline to fetch all tokens efficiently
     const pipeline = this.redis.pipeline();
@@ -187,7 +193,9 @@ export class RedisTokenStore {
     const familySetKey = `${RedisTokenStore.FAMILY_TOKENS_SET}${family}`;
     const tokenIds = await this.redis.smembers(familySetKey);
 
-    if (tokenIds.length === 0) return [];
+    if (tokenIds.length === 0) {
+      return [];
+    }
 
     // Use pipeline to fetch all tokens efficiently
     const pipeline = this.redis.pipeline();
@@ -217,7 +225,9 @@ export class RedisTokenStore {
     const userSetKey = `${RedisTokenStore.USER_TOKENS_SET}${userId}`;
     const tokenIds = await this.redis.smembers(userSetKey);
 
-    if (tokenIds.length === 0) return;
+    if (tokenIds.length === 0) {
+      return;
+    }
 
     // Use pipeline for atomic deletion
     const pipeline = this.redis.pipeline();

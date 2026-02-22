@@ -59,7 +59,9 @@ export function useQueueSchedulesQueries({
     const connectedAccounts = list.filter(
       (account) => account?.disconnected !== true && typeof account?.id === 'string'
     );
-    if (!connectedAccounts.length) return null;
+    if (!connectedAccounts.length) {
+      return null;
+    }
 
     const rawPrimary = raw?.primarySocialAccountId;
     const primaryId = typeof rawPrimary === 'string' ? rawPrimary : null;
@@ -91,13 +93,17 @@ export function useQueueSchedulesQueries({
   });
 
   const queueId = useMemo(() => {
-    if (selectedQueueId) return selectedQueueId;
+    if (selectedQueueId) {
+      return selectedQueueId;
+    }
     const fallback = getDefaultQueueId(queuesQuery.data as any);
     return fallback;
   }, [queuesQuery.data, selectedQueueId]);
 
   useEffect(() => {
-    if (!queueId) return;
+    if (!queueId) {
+      return;
+    }
     setSelectedQueueId(queueId);
   }, [queueId, setSelectedQueueId]);
 
@@ -157,12 +163,16 @@ export function useQueueSchedulesQueries({
   const queueItems = useMemo(() => {
     const raw = itemsQuery.data as any;
     const lanes = raw?.data?.lanes;
-    if (!Array.isArray(lanes)) return [] as PublishingQueueItem[];
+    if (!Array.isArray(lanes)) {
+      return [] as PublishingQueueItem[];
+    }
     if (selectedLane === 'all') {
       const collected: PublishingQueueItem[] = [];
       for (const lane of lanes) {
         const items = lane?.items;
-        if (Array.isArray(items)) collected.push(...(items as PublishingQueueItem[]));
+        if (Array.isArray(items)) {
+          collected.push(...(items as PublishingQueueItem[]));
+        }
       }
       return collected;
     }
@@ -174,10 +184,16 @@ export function useQueueSchedulesQueries({
   const itemsByEstimatedMs = useMemo(() => {
     const map = new Map<number, PublishingQueueItem>();
     for (const item of queueItems) {
-      if (!item.estimatedScheduledAt) continue;
+      if (!item.estimatedScheduledAt) {
+        continue;
+      }
       const ms = new Date(item.estimatedScheduledAt).getTime();
-      if (!Number.isFinite(ms)) continue;
-      if (!map.has(ms)) map.set(ms, item);
+      if (!Number.isFinite(ms)) {
+        continue;
+      }
+      if (!map.has(ms)) {
+        map.set(ms, item);
+      }
     }
     return map;
   }, [queueItems]);
@@ -185,7 +201,9 @@ export function useQueueSchedulesQueries({
   const calendarContentById = useMemo(() => {
     const map = new Map<string, Content>();
     for (const item of calendarContent) {
-      if (item && typeof item.id === 'string') map.set(item.id, item);
+      if (item && typeof item.id === 'string') {
+        map.set(item.id, item);
+      }
     }
     return map;
   }, [calendarContent]);

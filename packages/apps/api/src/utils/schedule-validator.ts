@@ -124,7 +124,9 @@ export class ScheduleValidator {
 
   private static validateMonth(field: string): boolean {
     // Month can be *, 1-12, or JAN-DEC
-    if (field === '*') return true;
+    if (field === '*') {
+      return true;
+    }
 
     const months = [
       'JAN',
@@ -163,10 +165,14 @@ export class ScheduleValidator {
 
   private static validateYear(field: string): boolean {
     // Year can be * or 1970-2199
-    if (field === '*') return true;
+    if (field === '*') {
+      return true;
+    }
 
     const year = parseInt(field, 10);
-    if (isNaN(year)) return false;
+    if (isNaN(year)) {
+      return false;
+    }
 
     return year >= 1970 && year <= 2199;
   }
@@ -180,7 +186,9 @@ export class ScheduleValidator {
     // Handle ranges (e.g., "1-5")
     if (field.includes('-')) {
       const parts = field.split('-');
-      if (parts.length !== 2) return false;
+      if (parts.length !== 2) {
+        return false;
+      }
       const start = Number(parts[0]);
       const end = Number(parts[1]);
       return !isNaN(start) && !isNaN(end) && start >= min && end <= max && start <= end;
@@ -189,7 +197,9 @@ export class ScheduleValidator {
     // Handle step values (e.g., "*/5")
     if (field.includes('/')) {
       const parts = field.split('/');
-      if (parts.length !== 2) return false;
+      if (parts.length !== 2) {
+        return false;
+      }
       const range = parts[0]!;
       const step = parts[1]!;
       const stepNum = parseInt(step, 10);

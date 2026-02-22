@@ -1,4 +1,4 @@
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 import { prisma } from '../../config/database.js';
 import { encryptSecret } from './secret-crypto.js';
 import { ensureSkillDefinitionsSeeded } from './seed.js';
@@ -61,7 +61,9 @@ export async function ensureDefaultSkillInstallations(brandId: string, userId?: 
   // Bootstrap defaults once for brands that have no installations yet.
   // This avoids silently re-creating user-uninstalled skills on every list request.
   const existingCount = await prisma.skillInstallation.count({ where: { brandId } });
-  if (existingCount > 0) return;
+  if (existingCount > 0) {
+    return;
+  }
 
   await prisma.$transaction(
     defaults.map((d) =>
@@ -297,7 +299,9 @@ export async function getSkill(
     }),
   ]);
 
-  if (!definition) return null;
+  if (!definition) {
+    return null;
+  }
 
   return {
     id: definition.id,
@@ -325,7 +329,9 @@ export async function getSkill(
 
 async function cleanupUnusedSecret(secretId: string, tx: Prisma.TransactionClient): Promise<void> {
   const stillUsed = await tx.skillInstallation.count({ where: { secretId } });
-  if (stillUsed > 0) return;
+  if (stillUsed > 0) {
+    return;
+  }
   await tx.encryptedSecret.deleteMany({ where: { id: secretId } });
 }
 
@@ -340,7 +346,9 @@ export async function uninstallSkillBySkillId(params: {
       },
       select: { id: true, secretId: true },
     });
-    if (!existing) return { uninstalled: false };
+    if (!existing) {
+      return { uninstalled: false };
+    }
 
     await tx.skillInstallation.delete({ where: { id: existing.id } });
     if (existing.secretId) {
@@ -358,7 +366,9 @@ export async function uninstallSkillByInstallationId(params: {
       where: { id: params.installationId },
       select: { id: true, secretId: true },
     });
-    if (!existing) return { uninstalled: false };
+    if (!existing) {
+      return { uninstalled: false };
+    }
 
     await tx.skillInstallation.delete({ where: { id: existing.id } });
     if (existing.secretId) {
@@ -392,7 +402,7 @@ export async function trySkill(params: {
     throw new Error(`Unknown skill: ${params.skillId}`);
   }
 
-  if (!installation || !installation.enabled) {
+  if (!installation?.enabled) {
     throw new Error(`Skill is not enabled for this brand: ${params.skillId}`);
   }
 

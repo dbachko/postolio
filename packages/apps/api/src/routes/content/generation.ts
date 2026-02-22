@@ -3,7 +3,7 @@
  * Handles AI-powered content generation for brands
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 import {
   generateInstagramContent,

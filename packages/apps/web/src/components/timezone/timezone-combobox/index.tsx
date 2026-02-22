@@ -27,31 +27,45 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   const allowClear = props.allowClear === true;
 
   const regionByKey = useMemo(() => {
-    if (!options) return new Map<string, TimezoneRegion>();
+    if (!options) {
+      return new Map<string, TimezoneRegion>();
+    }
     return new Map(options.regions.map((region) => [region.key, region]));
   }, [options]);
 
   const selectedRegionKey = useMemo(() => {
-    if (!options || selectedValue == null) return null;
+    if (!options || selectedValue == null) {
+      return null;
+    }
     return options.timezoneToRegionKey[selectedValue] || null;
   }, [options, selectedValue]);
 
   const activeRegion = useMemo(() => {
-    if (!activeRegionKey) return null;
+    if (!activeRegionKey) {
+      return null;
+    }
     return regionByKey.get(activeRegionKey) || null;
   }, [activeRegionKey, regionByKey]);
 
   const matchedRegions = useMemo(() => {
-    if (!options || !query) return [];
+    if (!options || !query) {
+      return [];
+    }
     const q = query.trim().toLowerCase();
-    if (!q) return [];
+    if (!q) {
+      return [];
+    }
     return options.regions.filter((region) => region.label.toLowerCase().includes(q));
   }, [options, query]);
 
   const matchedTimezones = useMemo(() => {
-    if (!options || !query) return [];
+    if (!options || !query) {
+      return [];
+    }
     const q = query.trim();
-    if (!q) return [];
+    if (!q) {
+      return [];
+    }
     return options.allTimezones
       .filter((tz) => matchesQuery(tz, q))
       .sort((a, b) => formatTimezoneLabel(a).localeCompare(formatTimezoneLabel(b)));
@@ -60,12 +74,16 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   const timezoneOffsets = useMemo(() => {
     const labelByName = new Map<string, string>();
     const minutesByName = new Map<string, number>();
-    if (!options) return { labelByName, minutesByName };
+    if (!options) {
+      return { labelByName, minutesByName };
+    }
     const now = new Date();
 
     for (const timezoneName of options.allTimezones) {
       const label = formatTimezoneOffsetLabel(timezoneName, now);
-      if (label) labelByName.set(timezoneName, label);
+      if (label) {
+        labelByName.set(timezoneName, label);
+      }
       try {
         minutesByName.set(timezoneName, getTimezoneOffset(timezoneName, now) / 60_000);
       } catch {
@@ -77,17 +95,23 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   }, [options]);
 
   const activeRegionTimezones = useMemo(() => {
-    if (!activeRegion) return [];
+    if (!activeRegion) {
+      return [];
+    }
     return [...activeRegion.timezones].sort((a, b) => {
       const offsetA = timezoneOffsets.minutesByName.get(a) ?? 0;
       const offsetB = timezoneOffsets.minutesByName.get(b) ?? 0;
-      if (offsetA !== offsetB) return offsetA - offsetB;
+      if (offsetA !== offsetB) {
+        return offsetA - offsetB;
+      }
       return formatTimezoneLabel(a).localeCompare(formatTimezoneLabel(b));
     });
   }, [activeRegion, timezoneOffsets.minutesByName]);
 
   const ensureLoaded = useCallback(async () => {
-    if (options || isLoading) return;
+    if (options || isLoading) {
+      return;
+    }
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -114,8 +138,12 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   }, [ensureLoaded, open]);
 
   useEffect(() => {
-    if (!open || !options) return;
-    if (didInitOpenRef.current) return;
+    if (!open || !options) {
+      return;
+    }
+    if (didInitOpenRef.current) {
+      return;
+    }
     didInitOpenRef.current = true;
 
     if (selectedRegionKey) {
@@ -131,7 +159,9 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   }, [open, options, regionByKey, selectedRegionKey]);
 
   const selectedLabel = useMemo(() => {
-    if (selectedValue == null) return null;
+    if (selectedValue == null) {
+      return null;
+    }
     return formatTimezoneLabel(selectedValue);
   }, [selectedValue]);
 
@@ -151,9 +181,13 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   const hasSearchResults = matchedRegions.length > 0 || matchedTimezones.length > 0;
 
   const handleSelectRegion = (regionKey: string) => {
-    if (!options) return;
+    if (!options) {
+      return;
+    }
     const region = regionByKey.get(regionKey);
-    if (!region) return;
+    if (!region) {
+      return;
+    }
 
     if (region.timezones.length === 1) {
       props.onValueChange(region.timezones[0]);
@@ -172,7 +206,9 @@ export function TimezoneCombobox(props: TimezoneComboboxProps) {
   };
 
   const handleClear = () => {
-    if (!allowClear) return;
+    if (!allowClear) {
+      return;
+    }
     props.onValueChange(null);
     setOpen(false);
   };

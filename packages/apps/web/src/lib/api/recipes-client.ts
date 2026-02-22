@@ -57,9 +57,15 @@ export class RecipesClient {
     status?: RecipeStatus;
   }) {
     const qp = new URLSearchParams({ brandId: params.brandId });
-    if (params.q) qp.set('q', params.q);
-    if (params.category) qp.set('category', params.category);
-    if (params.status) qp.set('status', params.status);
+    if (params.q) {
+      qp.set('q', params.q);
+    }
+    if (params.category) {
+      qp.set('category', params.category);
+    }
+    if (params.status) {
+      qp.set('status', params.status);
+    }
 
     return this.request(`/api/recipes?${qp.toString()}`) as Promise<{ recipes: RecipeSummary[] }>;
   }

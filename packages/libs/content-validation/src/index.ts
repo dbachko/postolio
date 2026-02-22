@@ -76,7 +76,7 @@ function getMediaCounts(
   mediaTypeHint?: string | null | undefined
 ): { total: number; images: number; videos: number } {
   const assets = Array.isArray(mediaAssets)
-    ? (mediaAssets.filter((a) => a && typeof a === 'object') as { type?: string | null }[])
+    ? (mediaAssets.filter((a) => a && typeof a === 'object') as Array<{ type?: string | null }>)
     : [];
 
   if (assets.length > 0) {
@@ -202,11 +202,21 @@ function validateFacebook(payload: ValidateContentPayload): ValidationResult {
 
   const explicitMediaType = typeof data.mediaType === 'string' ? data.mediaType.toLowerCase() : '';
   const effectiveMediaType: 'image' | 'video' | 'mixed' | null = (() => {
-    if (explicitMediaType === 'image' || explicitMediaType === 'video') return explicitMediaType;
-    if (data.videoUrl) return 'video';
-    if (counts.videos > 0 && counts.images === 0) return 'video';
-    if (counts.images > 0 && counts.videos === 0) return 'image';
-    if (counts.images > 0 && counts.videos > 0) return 'mixed';
+    if (explicitMediaType === 'image' || explicitMediaType === 'video') {
+      return explicitMediaType;
+    }
+    if (data.videoUrl) {
+      return 'video';
+    }
+    if (counts.videos > 0 && counts.images === 0) {
+      return 'video';
+    }
+    if (counts.images > 0 && counts.videos === 0) {
+      return 'image';
+    }
+    if (counts.images > 0 && counts.videos > 0) {
+      return 'mixed';
+    }
     return null;
   })();
 

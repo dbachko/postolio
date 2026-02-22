@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fastifyPlugin from 'fastify-plugin';
 import fastifyWebsocket from '@fastify/websocket';
 import { WebSocket } from 'ws';
@@ -48,7 +48,9 @@ let heartbeatInterval: NodeJS.Timeout | null = null;
  * Parse cookies from HTTP request header
  */
 function parseCookies(cookieHeader: string | undefined): Record<string, string> {
-  if (!cookieHeader) return {};
+  if (!cookieHeader) {
+    return {};
+  }
 
   return cookieHeader.split(';').reduce(
     (cookies, cookie) => {
@@ -77,7 +79,9 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
     'broadcastToRoom',
     (room: string, message: OutboundPayload | Record<string, unknown>) => {
       const sockets = connections.get(room);
-      if (!sockets || sockets.size === 0) return;
+      if (!sockets || sockets.size === 0) {
+        return;
+      }
 
       const data = JSON.stringify(message);
       const BATCH_SIZE = 100; // Send to 100 sockets at a time

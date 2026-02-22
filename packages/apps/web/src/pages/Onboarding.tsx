@@ -54,16 +54,22 @@ export function OnboardingPage() {
   });
 
   const targetBrand: Brand | null = useMemo(() => {
-    if (!brands.length) return null;
+    if (!brands.length) {
+      return null;
+    }
     if (onboarding?.activeBrandId) {
       const match = brands.find((b) => b.id === onboarding.activeBrandId);
-      if (match) return match;
+      if (match) {
+        return match;
+      }
     }
     return brands[0] ?? null;
   }, [brands, onboarding?.activeBrandId]);
 
   useEffect(() => {
-    if (!onboarding || onboardingLoading) return;
+    if (!onboarding || onboardingLoading) {
+      return;
+    }
     if (onboarding.status === 'complete') {
       setRedirectingToDashboard(true);
       const t = setTimeout(() => navigate('/dashboard', { replace: true }), 350);
@@ -92,7 +98,9 @@ export function OnboardingPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createFormData.name.trim()) return;
+    if (!createFormData.name.trim()) {
+      return;
+    }
     createBrandMutation.mutate(createFormData);
   };
 
@@ -200,7 +208,9 @@ export function OnboardingPage() {
                           const connected = (res.socialAccounts || []).some(
                             (a: any) => !a.disconnected
                           );
-                          if (!connected) return;
+                          if (!connected) {
+                            return;
+                          }
                           await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
                           setRedirectingToDashboard(true);
                           navigate('/dashboard', { replace: true });

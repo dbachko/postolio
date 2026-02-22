@@ -1,5 +1,5 @@
-import { FastifyRequest } from 'fastify';
-import { Prisma } from '@postolio/database';
+import type { FastifyRequest } from 'fastify';
+import type { Prisma } from '@postolio/database';
 import { logger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 
@@ -187,7 +187,8 @@ export class AuditLogger {
     const forwarded = request.headers['x-forwarded-for'];
     if (forwarded && typeof forwarded === 'string') {
       return forwarded.split(',')[0]?.trim() || 'unknown';
-    } else if (forwarded && Array.isArray(forwarded) && forwarded[0]) {
+    }
+    if (forwarded && Array.isArray(forwarded) && forwarded[0]) {
       return forwarded[0].split(',')[0]?.trim() || 'unknown';
     }
 
@@ -217,15 +218,27 @@ export class AuditLogger {
 
     const where: Prisma.AuditLogWhereInput = {};
 
-    if (userId) where.userId = userId;
-    if (email) where.email = email;
-    if (eventType) where.eventType = eventType;
-    if (success !== undefined) where.success = success;
+    if (userId) {
+      where.userId = userId;
+    }
+    if (email) {
+      where.email = email;
+    }
+    if (eventType) {
+      where.eventType = eventType;
+    }
+    if (success !== undefined) {
+      where.success = success;
+    }
 
     if (startDate || endDate) {
       where.createdAt = {};
-      if (startDate) (where.createdAt as Prisma.DateTimeFilter).gte = startDate;
-      if (endDate) (where.createdAt as Prisma.DateTimeFilter).lte = endDate;
+      if (startDate) {
+        (where.createdAt as Prisma.DateTimeFilter).gte = startDate;
+      }
+      if (endDate) {
+        (where.createdAt as Prisma.DateTimeFilter).lte = endDate;
+      }
     }
 
     return prisma.auditLog.findMany({
@@ -238,7 +251,7 @@ export class AuditLogger {
   /**
    * Get failed login attempts for an email
    */
-  static async getFailedLoginAttempts(email: string, sinceMinutes: number = 60): Promise<number> {
+  static async getFailedLoginAttempts(email: string, sinceMinutes = 60): Promise<number> {
     const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
 
     const count = await prisma.auditLog.count({
@@ -258,8 +271,8 @@ export class AuditLogger {
    */
   static async checkAccountLockout(
     email: string,
-    maxAttempts: number = 5,
-    windowMinutes: number = 15
+    maxAttempts = 5,
+    windowMinutes = 15
   ): Promise<boolean> {
     // First check if account is already locked
     const isAlreadyLocked = await this.isAccountLocked(email);
@@ -408,7 +421,7 @@ export class AuditLogger {
   /**
    * Clean up old audit logs
    */
-  static async cleanup(daysToKeep: number = 90): Promise<number> {
+  static async cleanup(daysToKeep = 90): Promise<number> {
     const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
 
     const result = await prisma.auditLog.deleteMany({

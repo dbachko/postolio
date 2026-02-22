@@ -46,7 +46,9 @@ async function csrfFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const method = (init.method || 'GET').toUpperCase();
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     const token = await csrf.ensureToken();
-    if (token) headers['csrf-token'] = token;
+    if (token) {
+      headers['csrf-token'] = token;
+    }
   }
 
   const exec = () =>
@@ -125,7 +127,9 @@ export class VideoUploadClient {
       xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
 
       xhr.upload.onprogress = (event) => {
-        if (!onProgress || !event.lengthComputable) return;
+        if (!onProgress || !event.lengthComputable) {
+          return;
+        }
         const uploadedBytes = event.loaded;
         const totalBytes = event.total || file.size;
         onProgress({

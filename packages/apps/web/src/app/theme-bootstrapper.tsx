@@ -9,9 +9,13 @@ export function ThemeBootstrapper() {
   const didInit = useRef(false);
   useEffect(() => {
     // Only set theme from user once when the user data becomes available
-    if (!user || didInit.current) return;
+    if (!user || didInit.current) {
+      return;
+    }
     didInit.current = true;
-    if (user.theme) setTheme(user.theme);
+    if (user.theme) {
+      setTheme(user.theme);
+    }
   }, [user, setTheme]);
   return null;
 }

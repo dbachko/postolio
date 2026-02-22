@@ -318,7 +318,9 @@ export class ParameterManager {
    */
   private getFromCache(key: string): string | null {
     const entry = this.cache.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      return null;
+    }
 
     const now = Date.now();
     if (now - entry.timestamp > entry.ttl) {

@@ -3,7 +3,7 @@
  * CRUD operations for managing reusable text snippets for social media captions
  */
 
-import { FastifyPluginAsync, type FastifyReply, type FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { isSnippetsEnabledForUser } from '../utils/feature-flags.js';

@@ -29,7 +29,9 @@ export function applyFilters(
 }
 
 function isQueueSlotPlaceholder(item: CalendarDataItem): boolean {
-  if (item.type !== 'placeholder') return false;
+  if (item.type !== 'placeholder') {
+    return false;
+  }
   return item.message === 'Queue slot';
 }
 
@@ -57,7 +59,9 @@ function matchesSeries(item: CalendarDataItem, series: string[]): boolean {
 
   // Special filter value: "none" = items with no series attached.
   if (series.includes('none')) {
-    if (!contentSeriesId) return true;
+    if (!contentSeriesId) {
+      return true;
+    }
   }
 
   if (!contentSeriesId) {

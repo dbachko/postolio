@@ -72,9 +72,15 @@ export function AccountHealthScore({ healthScore, loading }: AccountHealthScoreP
   const progress = circumference - (score / 100) * circumference;
 
   const getFactorColor = (value: number) => {
-    if (value >= 80) return 'bg-emerald-500 dark:bg-emerald-600';
-    if (value >= 60) return 'bg-blue-500 dark:bg-blue-600';
-    if (value >= 40) return 'bg-amber-500 dark:bg-amber-600';
+    if (value >= 80) {
+      return 'bg-emerald-500 dark:bg-emerald-600';
+    }
+    if (value >= 60) {
+      return 'bg-blue-500 dark:bg-blue-600';
+    }
+    if (value >= 40) {
+      return 'bg-amber-500 dark:bg-amber-600';
+    }
     return 'bg-red-500 dark:bg-red-600';
   };
 

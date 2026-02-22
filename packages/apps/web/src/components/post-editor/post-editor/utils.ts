@@ -16,8 +16,12 @@ import type {
 } from '@postolio/content-validation';
 
 export function toValidationPlatform(platform: Platform): ValidationPlatform | null {
-  if (platform === 'x') return 'twitter';
-  if (platform === 'tiktok') return null;
+  if (platform === 'x') {
+    return 'twitter';
+  }
+  if (platform === 'tiktok') {
+    return null;
+  }
   return platform;
 }
 
@@ -45,9 +49,15 @@ export function getScheduleBlockerMessage(params: {
   if (!schedulingSupported) {
     return 'Scheduling is not available for one or more selected destinations. Save as a draft instead.';
   }
-  if (atCapacity) return limitMessage || 'You have reached your scheduling limit.';
-  if (!validationOk) return validationError || 'Please fix validation errors before continuing.';
-  if (!hasScheduleTime) return 'Pick a time before scheduling.';
+  if (atCapacity) {
+    return limitMessage || 'You have reached your scheduling limit.';
+  }
+  if (!validationOk) {
+    return validationError || 'Please fix validation errors before continuing.';
+  }
+  if (!hasScheduleTime) {
+    return 'Pick a time before scheduling.';
+  }
   return null;
 }
 
@@ -73,7 +83,9 @@ export function createEmptyTemplateFormState(): ContentGroupTemplateFormState {
 }
 
 export function formatScheduledInput(value?: string | null, timezone?: string) {
-  if (!value) return '';
+  if (!value) {
+    return '';
+  }
   const effectiveTimezone = timezone || getUserTimezone();
   return formatInTimeZone(new Date(value), effectiveTimezone, "yyyy-MM-dd'T'HH:mm");
 }
@@ -82,8 +94,12 @@ export function deriveMediaTypeFromAssets(
   assets: AssetReference[],
   contentType: InstagramContentType
 ): InstagramMediaType {
-  if (contentType === 'reel') return 'video';
-  if (assets.length > 1) return 'image';
+  if (contentType === 'reel') {
+    return 'video';
+  }
+  if (assets.length > 1) {
+    return 'image';
+  }
   if (assets.length === 1) {
     return assets[0]?.type === 'video' ? 'video' : 'image';
   }
@@ -95,17 +111,21 @@ export function mergeUniqueAssets(items: AssetReference[], limit: number): Asset
   const result: AssetReference[] = [];
   for (const item of items) {
     const key = item.id || item.url;
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     result.push(item);
-    if (result.length >= limit) break;
+    if (result.length >= limit) {
+      break;
+    }
   }
   return result;
 }
 
 export function getScheduleErrorMessage(
   error: unknown,
-  fallback: string = 'Failed to schedule post. Please try again.'
+  fallback = 'Failed to schedule post. Please try again.'
 ): string {
   const normalized = error as any;
   if (
@@ -118,14 +138,18 @@ export function getScheduleErrorMessage(
   if (typeof normalized?.data?.message === 'string' && normalized.data.message) {
     return normalized.data.message;
   }
-  if (normalized?.data?.error) return normalized.data.error;
-  if (typeof normalized?.message === 'string' && normalized.message) return normalized.message;
+  if (normalized?.data?.error) {
+    return normalized.data.error;
+  }
+  if (typeof normalized?.message === 'string' && normalized.message) {
+    return normalized.message;
+  }
   return fallback;
 }
 
 export function getQueueErrorMessage(
   error: unknown,
-  fallback: string = 'Failed to add to queue. Please try again.'
+  fallback = 'Failed to add to queue. Please try again.'
 ): string {
   const normalized = error as any;
   const code =

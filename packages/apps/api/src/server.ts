@@ -1,7 +1,7 @@
 import './dotenv-init.js';
 import { isProductionEnv } from './utils/env-mode.js';
 import { validateEnvironment } from './config/validation.js';
-import fastify, { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -128,7 +128,9 @@ export function buildFastify(): FastifyInstance {
 
   const normalizeOrigin = (value: string): string | null => {
     const trimmed = String(value || '').trim();
-    if (!trimmed) return null;
+    if (!trimmed) {
+      return null;
+    }
 
     try {
       return new URL(trimmed).origin;
@@ -149,9 +151,13 @@ export function buildFastify(): FastifyInstance {
   };
 
   const addCorsOrigin = (value: string | undefined) => {
-    if (!value) return;
+    if (!value) {
+      return;
+    }
     const origin = normalizeOrigin(value);
-    if (origin && origin !== '*') corsOrigins.add(origin);
+    if (origin && origin !== '*') {
+      corsOrigins.add(origin);
+    }
   };
 
   // Env-driven origins (recommended)
@@ -543,6 +549,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   };
 
   // Start the server using promise-based API to avoid mixed callback/async patterns
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
   start();
 }

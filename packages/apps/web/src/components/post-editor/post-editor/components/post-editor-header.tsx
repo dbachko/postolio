@@ -15,7 +15,9 @@ import type { PostEditorState } from '../hooks/use-post-editor';
 
 export function PostEditorHeader({ state }: { state: PostEditorState }) {
   const { id, layout, showHeader } = state;
-  if (!showHeader) return null;
+  if (!showHeader) {
+    return null;
+  }
 
   return (
     <div className={state.derived.headerClass}>

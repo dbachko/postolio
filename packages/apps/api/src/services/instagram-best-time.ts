@@ -46,7 +46,9 @@ function getGraphError(err: unknown): {
 } | null {
   const maybeAny = err as any;
   const graphError = maybeAny?.response?.data?.error;
-  if (!graphError || typeof graphError !== 'object') return null;
+  if (!graphError || typeof graphError !== 'object') {
+    return null;
+  }
 
   return {
     code: typeof graphError.code === 'number' ? graphError.code : undefined,
@@ -95,8 +97,16 @@ function emptyHeatmap(): Heatmap {
 
 function normalizeHeatmap(hm: Heatmap): Heatmap {
   let max = 0;
-  for (const row of hm) for (const v of row) if (v > max) max = v;
-  if (max <= 0) return hm.map((r) => r.map(() => 0));
+  for (const row of hm) {
+    for (const v of row) {
+      if (v > max) {
+        max = v;
+      }
+    }
+  }
+  if (max <= 0) {
+    return hm.map((r) => r.map(() => 0));
+  }
   return hm.map((r) => r.map((v) => +(v / max).toFixed(4)));
 }
 
@@ -171,9 +181,13 @@ export class InstagramBestTimeService {
         },
       },
     });
-    if (!brand) throw new Error('Brand not found');
+    if (!brand) {
+      throw new Error('Brand not found');
+    }
     const instagramAccount = brand.socialAccounts?.[0];
-    if (!instagramAccount) throw new Error('Instagram account not connected');
+    if (!instagramAccount) {
+      throw new Error('Instagram account not connected');
+    }
 
     const timezone = await TimezoneService.getBrandTimezone(brandId);
     const cacheKey = this.key(brandId);
@@ -239,7 +253,9 @@ export class InstagramBestTimeService {
       typeof topWindowsLimit === 'number' && Number.isFinite(topWindowsLimit)
         ? Math.floor(topWindowsLimit)
         : undefined;
-    if (!limit || limit <= 0) return payload;
+    if (!limit || limit <= 0) {
+      return payload;
+    }
     return {
       ...payload,
       topWindows: payload.topWindows.slice(0, limit),
@@ -268,7 +284,7 @@ export class InstagramBestTimeService {
       access_token: credentials.accessToken,
     });
 
-    const resp = await axios.get(url + '?' + params.toString());
+    const resp = await axios.get(`${url}?${params.toString()}`);
     type InsightValueItem = { end_time?: string; value: Record<string, number> | number[] };
     type InsightMetricEntry = { name: string; values?: InsightValueItem[] };
     const data: InsightMetricEntry[] | undefined = resp.data?.data;
@@ -282,7 +298,9 @@ export class InstagramBestTimeService {
     // Shape B: values: [ { end_time, value: [n0..n23] }, ...]
     const entry = data.find((d) => d.name === 'online_followers') || data[0];
     const values = entry?.values as InsightValueItem[] | undefined;
-    if (!Array.isArray(values) || values.length === 0) return null;
+    if (!Array.isArray(values) || values.length === 0) {
+      return null;
+    }
 
     // Build weekday heatmap using end_time to group values by day-of-week.
     // `end_time` is the end of the period; subtract a small delta to land inside that day.
@@ -294,14 +312,22 @@ export class InstagramBestTimeService {
 
     for (const v of values) {
       const parsed = parseOnlineFollowersDayValue(v?.value);
-      if (!parsed) continue;
+      if (!parsed) {
+        continue;
+      }
 
-      for (let h = 0; h < 24; h++) overallHours[h] += parsed[h];
+      for (let h = 0; h < 24; h++) {
+        overallHours[h] += parsed[h];
+      }
       overallCountDays++;
 
-      if (!v?.end_time) continue;
+      if (!v?.end_time) {
+        continue;
+      }
       const endTime = new Date(v.end_time);
-      if (Number.isNaN(endTime.getTime())) continue;
+      if (Number.isNaN(endTime.getTime())) {
+        continue;
+      }
       const local = TimezoneService.toLocal(new Date(endTime.getTime() - 1000), timezone);
       const day = local.getDay(); // 0=Sun..6=Sat
 
@@ -311,8 +337,12 @@ export class InstagramBestTimeService {
       }
     }
 
-    if (overallCountDays === 0) return null;
-    for (let h = 0; h < 24; h++) overallHours[h] = overallHours[h] / overallCountDays;
+    if (overallCountDays === 0) {
+      return null;
+    }
+    for (let h = 0; h < 24; h++) {
+      overallHours[h] = overallHours[h] / overallCountDays;
+    }
 
     // Average per weekday bucket; fill missing weekdays with the overall profile.
     for (let d = 0; d < 7; d++) {
@@ -324,7 +354,9 @@ export class InstagramBestTimeService {
         }
       }
       if (!hasAny) {
-        for (let h = 0; h < 24; h++) hm[d][h] = overallHours[h];
+        for (let h = 0; h < 24; h++) {
+          hm[d][h] = overallHours[h];
+        }
       }
     }
 
@@ -370,13 +402,17 @@ export class InstagramBestTimeService {
       orderBy: { publishedAt: 'desc' },
       take: 500,
     });
-    if (!rows.length) return null;
+    if (!rows.length) {
+      return null;
+    }
 
     const hm = emptyHeatmap();
     const counts = emptyHeatmap();
 
     for (const r of rows) {
-      if (!r.publishedAt) continue;
+      if (!r.publishedAt) {
+        continue;
+      }
       const local = TimezoneService.toLocal(r.publishedAt, timezone);
       const day = local.getDay(); // 0=Sun..6=Sat
       const hour = local.getHours();
@@ -392,12 +428,23 @@ export class InstagramBestTimeService {
       counts[day][hour] += 1;
     }
     // Average per bucket and smooth/normalize
-    for (let d = 0; d < 7; d++)
-      for (let h = 0; h < 24; h++) if (counts[d][h] > 0) hm[d][h] = hm[d][h] / counts[d][h];
+    for (let d = 0; d < 7; d++) {
+      for (let h = 0; h < 24; h++) {
+        if (counts[d][h] > 0) {
+          hm[d][h] = hm[d][h] / counts[d][h];
+        }
+      }
+    }
 
     // If very sparse, back off to daypart (morning/afternoon/evening) by distributing
     let nonZeroBuckets = 0;
-    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) if (hm[d][h] > 0) nonZeroBuckets++;
+    for (let d = 0; d < 7; d++) {
+      for (let h = 0; h < 24; h++) {
+        if (hm[d][h] > 0) {
+          nonZeroBuckets++;
+        }
+      }
+    }
     if (nonZeroBuckets < 10) {
       const dayparts = [
         [6, 11],
@@ -405,7 +452,7 @@ export class InstagramBestTimeService {
         [18, 22],
       ];
       const hm2 = emptyHeatmap();
-      for (let d = 0; d < 7; d++)
+      for (let d = 0; d < 7; d++) {
         for (const [s, e] of dayparts) {
           let sum = 0,
             cnt = 0;
@@ -418,9 +465,17 @@ export class InstagramBestTimeService {
             hm2[d][h] = avg;
           }
         }
-      for (let d = 0; d < 7; d++)
-        for (let h = 0; h < 24; h++) if (hm2[d][h] === 0) hm2[d][h] = hm[d][h];
-      for (let d = 0; d < 7; d++) hm[d] = hm2[d];
+      }
+      for (let d = 0; d < 7; d++) {
+        for (let h = 0; h < 24; h++) {
+          if (hm2[d][h] === 0) {
+            hm2[d][h] = hm[d][h];
+          }
+        }
+      }
+      for (let d = 0; d < 7; d++) {
+        hm[d] = hm2[d];
+      }
     }
 
     const smoothed = smoothHeatmap(hm);
@@ -456,8 +511,11 @@ export class InstagramBestTimeService {
     for (let d = 0; d < 7; d++) {
       for (let h = 0; h < 24; h++) {
         let base = 0.3;
-        if ((h >= 10 && h <= 12) || (h >= 18 && h <= 20)) base = 1.0;
-        else if ((h >= 8 && h <= 9) || (h >= 21 && h <= 22)) base = 0.6;
+        if ((h >= 10 && h <= 12) || (h >= 18 && h <= 20)) {
+          base = 1.0;
+        } else if ((h >= 8 && h <= 9) || (h >= 21 && h <= 22)) {
+          base = 0.6;
+        }
         hm[d][h] = base;
       }
     }
@@ -524,8 +582,12 @@ export class InstagramBestTimeService {
         });
       }
       hours.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        if (a.minute !== b.minute) return b.minute - a.minute; // prefer :30 over :00 when tied
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        if (a.minute !== b.minute) {
+          return b.minute - a.minute;
+        } // prefer :30 over :00 when tied
         return a.hour - b.hour;
       });
       dayHourRanks[d] = hours;
@@ -543,14 +605,22 @@ export class InstagramBestTimeService {
       const already = pickedByDay.get(day) || [];
       const ranks = dayHourRanks[day] || [];
       for (const c of ranks) {
-        if (preferUnusedGlobalHour && usedHoursGlobal.has(c.hour)) continue;
-        if (already.some((p) => isTooClose(p.minuteOfDay, c.minuteOfDay))) continue;
+        if (preferUnusedGlobalHour && usedHoursGlobal.has(c.hour)) {
+          continue;
+        }
+        if (already.some((p) => isTooClose(p.minuteOfDay, c.minuteOfDay))) {
+          continue;
+        }
         return c;
       }
-      if (!preferUnusedGlobalHour) return null;
+      if (!preferUnusedGlobalHour) {
+        return null;
+      }
       // Relax global uniqueness if needed.
       for (const c of ranks) {
-        if (already.some((p) => isTooClose(p.minuteOfDay, c.minuteOfDay))) continue;
+        if (already.some((p) => isTooClose(p.minuteOfDay, c.minuteOfDay))) {
+          continue;
+        }
         return c;
       }
       return null;
@@ -563,7 +633,9 @@ export class InstagramBestTimeService {
 
     for (const { day } of dayBest) {
       const chosen = pickForDay(day, true);
-      if (!chosen) continue;
+      if (!chosen) {
+        continue;
+      }
       pickedByDay.set(day, [chosen]);
       usedHoursGlobal.add(chosen.hour);
     }
@@ -572,7 +644,9 @@ export class InstagramBestTimeService {
     for (let slot = 2; slot <= slotsPerDay; slot++) {
       for (let day = 0; day < 7; day++) {
         const chosen = pickForDay(day, false);
-        if (!chosen) continue;
+        if (!chosen) {
+          continue;
+        }
         const list = pickedByDay.get(day) || [];
         list.push(chosen);
         pickedByDay.set(day, list);

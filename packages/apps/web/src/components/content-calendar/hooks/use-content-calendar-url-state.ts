@@ -5,20 +5,30 @@ import type { ContentCalendarViewMode } from '../types';
 
 function parseInitialViewMode(searchParams: URLSearchParams): ContentCalendarViewMode {
   const v = searchParams.get('view');
-  if (v === 'month' || v === 'week' || v === 'queue') return v;
-  if (typeof window !== 'undefined' && window.innerWidth < 640) return 'week';
+  if (v === 'month' || v === 'week' || v === 'queue') {
+    return v;
+  }
+  if (typeof window !== 'undefined' && window.innerWidth < 640) {
+    return 'week';
+  }
   return 'month';
 }
 
 function parseInitialDate(searchParams: URLSearchParams, viewMode: ContentCalendarViewMode): Date {
   const dateParam = searchParams.get('date');
-  if (!dateParam) return new Date();
+  if (!dateParam) {
+    return new Date();
+  }
 
   const isYm = /\d{4}-\d{2}$/.test(dateParam);
   const d = isYm ? new Date(`${dateParam}-01T00:00:00`) : new Date(dateParam);
-  if (Number.isNaN(d.getTime())) return new Date();
+  if (Number.isNaN(d.getTime())) {
+    return new Date();
+  }
 
-  if ((viewMode === 'week' || viewMode === 'queue') && isYm) return new Date();
+  if ((viewMode === 'week' || viewMode === 'queue') && isYm) {
+    return new Date();
+  }
   return d;
 }
 
@@ -34,8 +44,11 @@ export function useContentCalendarUrlState() {
   const setParam = useCallback(
     (key: string, value: string | null) => {
       const next = new URLSearchParams(searchParams);
-      if (value == null || value === '') next.delete(key);
-      else next.set(key, value);
+      if (value == null || value === '') {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
       setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams]
@@ -52,8 +65,11 @@ export function useContentCalendarUrlState() {
   const handlePrevious = useCallback(() => {
     setCurrentDate((prev) => {
       let next = prev;
-      if (viewMode === 'month') next = subMonths(prev, 1);
-      else next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
+      if (viewMode === 'month') {
+        next = subMonths(prev, 1);
+      } else {
+        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
+      }
       setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });
@@ -62,8 +78,11 @@ export function useContentCalendarUrlState() {
   const handleNext = useCallback(() => {
     setCurrentDate((prev) => {
       let next = prev;
-      if (viewMode === 'month') next = addMonths(prev, 1);
-      else next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
+      if (viewMode === 'month') {
+        next = addMonths(prev, 1);
+      } else {
+        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
+      }
       setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });

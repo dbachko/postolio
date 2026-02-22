@@ -1,9 +1,9 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { imageProviderRegistry } from '../services/image-providers/registry.js';
 import { getDatabaseClient } from '../config/database.js';
 import { IMAGE_PROVIDERS, type ImageProvider } from '../services/image-providers/types.js';
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 
 const prisma = getDatabaseClient();
 

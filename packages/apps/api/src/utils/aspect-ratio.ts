@@ -10,7 +10,7 @@ export interface HasDimensions {
  * Tolerance is expressed as an absolute difference between ratios
  * (e.g., 0.01 ≈ 1%).
  */
-export function haveUniformAspectRatio(items: HasDimensions[], tolerance: number = 0.01): boolean {
+export function haveUniformAspectRatio(items: HasDimensions[], tolerance = 0.01): boolean {
   const ratios: number[] = [];
 
   for (const item of items) {

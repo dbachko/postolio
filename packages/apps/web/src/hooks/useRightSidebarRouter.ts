@@ -18,12 +18,18 @@ export function useRightSidebarRouter() {
   ) => {
     const next = new URLSearchParams(searchParams);
     next.set('sidebar', t);
-    if (opts?.id) next.set('sidebarId', opts.id);
-    else next.delete('sidebarId');
+    if (opts?.id) {
+      next.set('sidebarId', opts.id);
+    } else {
+      next.delete('sidebarId');
+    }
     if (opts?.params) {
       for (const [k, v] of Object.entries(opts.params)) {
-        if (v == null || v === '') next.delete(k);
-        else next.set(k, String(v));
+        if (v == null || v === '') {
+          next.delete(k);
+        } else {
+          next.set(k, String(v));
+        }
       }
     }
     setSearchParams(next, { replace: false });

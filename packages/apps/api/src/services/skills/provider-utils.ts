@@ -1,5 +1,7 @@
 function normalizeProvider(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
   const normalized = value.trim().toLowerCase();
   return normalized.length > 0 ? normalized : null;
 }
@@ -16,7 +18,9 @@ function getSupportedProviders(scopesJson: unknown): string[] {
         .map((item) => normalizeProvider(item))
         .filter((item): item is string => Boolean(item))
     : [];
-  if (providers.length > 0) return Array.from(new Set(providers));
+  if (providers.length > 0) {
+    return Array.from(new Set(providers));
+  }
 
   const fallbackProvider = normalizeProvider(scopes.provider);
   return fallbackProvider ? [fallbackProvider] : [];
@@ -25,7 +29,9 @@ function getSupportedProviders(scopesJson: unknown): string[] {
 function getSelectedProvider(args: { configJson: unknown; scopesJson: unknown }): string | null {
   const config = asRecord(args.configJson);
   const selected = normalizeProvider(config.provider);
-  if (selected) return selected;
+  if (selected) {
+    return selected;
+  }
 
   const supported = getSupportedProviders(args.scopesJson);
   return supported[0] || null;

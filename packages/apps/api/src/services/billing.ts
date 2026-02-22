@@ -1,4 +1,4 @@
-import { Prisma } from '@postolio/database';
+import type { Prisma } from '@postolio/database';
 import type Stripe from 'stripe';
 import { logger as baseLogger } from '@postolio/logger';
 import { prisma } from '../config/database.js';
@@ -208,7 +208,7 @@ class BillingService {
   }
 
   private async syncCatalogForPrice(price: Stripe.Price | null | undefined) {
-    if (!price || !price.id) {
+    if (!price?.id) {
       return null;
     }
 

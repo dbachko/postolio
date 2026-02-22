@@ -4,8 +4,11 @@ import { Badge } from '@/components/ui/badge';
 export function QuickLensChips({ text }: { text: string }) {
   const res: QuickLensResult = analyzeText(text || '');
   let sentimentColor: 'success' | 'destructive' | 'secondary' = 'secondary';
-  if (res.sentiment.label === 'positive') sentimentColor = 'success';
-  else if (res.sentiment.label === 'negative') sentimentColor = 'destructive';
+  if (res.sentiment.label === 'positive') {
+    sentimentColor = 'success';
+  } else if (res.sentiment.label === 'negative') {
+    sentimentColor = 'destructive';
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">

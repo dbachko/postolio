@@ -30,7 +30,9 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
     // but also keep "unassigned" drafts (targetSocialAccountId=null) so runs that create drafts
     // still appear in the calendar.
     return mergedContent.filter((item) => {
-      if (!item.targetSocialAccountId) return true;
+      if (!item.targetSocialAccountId) {
+        return true;
+      }
       return allowed.has(item.targetSocialAccountId);
     });
   }, [mergedContent, selectedSocialAccountIds]);

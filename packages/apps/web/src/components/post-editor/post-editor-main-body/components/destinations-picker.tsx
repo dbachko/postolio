@@ -24,7 +24,9 @@ export function DestinationsPicker({
   onSelectedPlatformAccountIdsChange,
   show,
 }: DestinationsPickerProps) {
-  if (!show) return null;
+  if (!show) {
+    return null;
+  }
 
   return (
     <div className="space-y-2">

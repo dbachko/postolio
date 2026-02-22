@@ -93,7 +93,9 @@ export function MultiImageUploader({
   const isUploadInProgress = isUploadingVideo || hasUploadingMedia;
 
   const handleFiles = async (files: FileList | File[] | null) => {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      return;
+    }
 
     resetError();
 
@@ -161,14 +163,18 @@ export function MultiImageUploader({
   const isUploadDisabled = isUploadInProgress || (!allowMixedMedia && hasVideo) || !enableUpload;
 
   const handleDropzoneClick = () => {
-    if (isUploadDisabled) return;
+    if (isUploadDisabled) {
+      return;
+    }
     fileInputRef.current?.click();
   };
 
   const handleDropzoneDragOver = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isUploadDisabled) return;
+    if (isUploadDisabled) {
+      return;
+    }
     setIsDragging(true);
   };
 

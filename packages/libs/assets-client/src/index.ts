@@ -266,7 +266,7 @@ export interface UploadUrlParams {
 export interface UploadUrlResponse {
   uploadId: string;
   key: string;
-  presignedUrls: { partNumber: number; url: string }[];
+  presignedUrls: Array<{ partNumber: number; url: string }>;
   partCount: number;
   message?: string;
 }
@@ -360,13 +360,13 @@ export class AssetsServiceClient {
     return result.asset;
   }
 
-  async getBatchAssets(assetIds: string[]): Promise<(AssetRecord | null)[]> {
+  async getBatchAssets(assetIds: string[]): Promise<Array<AssetRecord | null>> {
     if (assetIds.length === 0) {
       return [];
     }
 
     try {
-      const result = await this.post<{ assets: (AssetRecord | null)[] }>('/assets/batch', {
+      const result = await this.post<{ assets: Array<AssetRecord | null> }>('/assets/batch', {
         assetIds,
       });
       return result.assets;
@@ -402,18 +402,34 @@ export class AssetsServiceClient {
   async listAssets(params: ListAssetsParams): Promise<ListAssetsResponse> {
     const query = new URLSearchParams();
     query.set('brandId', params.brandId);
-    if (params.type) query.set('type', params.type);
-    if (params.search) query.set('search', params.search);
-    if (params.page) query.set('page', String(params.page));
-    if (params.limit) query.set('limit', String(params.limit));
-    if (params.collectionId) query.set('collectionId', params.collectionId);
-    if (params.includeSubcollections) query.set('includeSubcollections', 'true');
+    if (params.type) {
+      query.set('type', params.type);
+    }
+    if (params.search) {
+      query.set('search', params.search);
+    }
+    if (params.page) {
+      query.set('page', String(params.page));
+    }
+    if (params.limit) {
+      query.set('limit', String(params.limit));
+    }
+    if (params.collectionId) {
+      query.set('collectionId', params.collectionId);
+    }
+    if (params.includeSubcollections) {
+      query.set('includeSubcollections', 'true');
+    }
     if (params.labelIds) {
       const labelIds = Array.isArray(params.labelIds) ? params.labelIds : [params.labelIds];
       labelIds.forEach((id) => query.append('labelIds', id));
     }
-    if (params.labelMode) query.set('labelMode', params.labelMode);
-    if (params.aspectRatio) query.set('aspectRatio', params.aspectRatio);
+    if (params.labelMode) {
+      query.set('labelMode', params.labelMode);
+    }
+    if (params.aspectRatio) {
+      query.set('aspectRatio', params.aspectRatio);
+    }
     if (params.aspectRatios) {
       const ratios = Array.isArray(params.aspectRatios)
         ? params.aspectRatios
@@ -426,13 +442,27 @@ export class AssetsServiceClient {
         : [params.orientationTypes];
       orientations.forEach((o) => query.append('orientationTypes', o));
     }
-    if (params.minWidth) query.set('minWidth', String(params.minWidth));
-    if (params.maxWidth) query.set('maxWidth', String(params.maxWidth));
-    if (params.minHeight) query.set('minHeight', String(params.minHeight));
-    if (params.maxHeight) query.set('maxHeight', String(params.maxHeight));
-    if (params.uploadedAfter) query.set('uploadedAfter', params.uploadedAfter);
-    if (params.uploadedBefore) query.set('uploadedBefore', params.uploadedBefore);
-    if (params.usage) query.set('usage', params.usage);
+    if (params.minWidth) {
+      query.set('minWidth', String(params.minWidth));
+    }
+    if (params.maxWidth) {
+      query.set('maxWidth', String(params.maxWidth));
+    }
+    if (params.minHeight) {
+      query.set('minHeight', String(params.minHeight));
+    }
+    if (params.maxHeight) {
+      query.set('maxHeight', String(params.maxHeight));
+    }
+    if (params.uploadedAfter) {
+      query.set('uploadedAfter', params.uploadedAfter);
+    }
+    if (params.uploadedBefore) {
+      query.set('uploadedBefore', params.uploadedBefore);
+    }
+    if (params.usage) {
+      query.set('usage', params.usage);
+    }
 
     return this.get<ListAssetsResponse>(`/assets?${query.toString()}`);
   }
@@ -460,8 +490,12 @@ export class AssetsServiceClient {
     const query = new URLSearchParams();
     query.set('brandId', params.brandId);
     query.set('type', params.type);
-    if (params.format) query.set('format', params.format);
-    if (params.includeArchived) query.set('includeArchived', 'true');
+    if (params.format) {
+      query.set('format', params.format);
+    }
+    if (params.includeArchived) {
+      query.set('includeArchived', 'true');
+    }
     return this.get<ListTaxonomyResponse>(`/taxonomy?${query.toString()}`);
   }
 
@@ -582,9 +616,13 @@ export class AssetsServiceClient {
   }
 
   private isRetryable(error?: Error): boolean {
-    if (!error) return false;
+    if (!error) {
+      return false;
+    }
     if (error instanceof AssetsClientError) {
-      if (!error.status) return true;
+      if (!error.status) {
+        return true;
+      }
       return error.status >= 500;
     }
 

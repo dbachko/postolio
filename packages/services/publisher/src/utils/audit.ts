@@ -1,6 +1,6 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import {
-  DynamoDBDocumentClient,
+  type DynamoDBDocumentClient,
   PutCommand,
   UpdateCommand,
   QueryCommand,
@@ -62,8 +62,10 @@ export async function getSchedule(
     })
   );
 
-  const item = (result.Items && result.Items[0]) as Record<string, unknown> | undefined;
-  if (!item) return undefined;
+  const item = result.Items?.[0] as Record<string, unknown> | undefined;
+  if (!item) {
+    return undefined;
+  }
   if (typeof item.platform !== 'string') {
     logger.warn('Schedule item missing platform field', { scheduleId });
     return undefined;
@@ -98,8 +100,12 @@ export async function updateScheduleStatus(
 
       if (status === 'published') {
         setParts.push('#publishedAt = :publishedAt');
-        if (platformPostId) setParts.push('#platformPostId = :platformPostId');
-        if (platformUrl) setParts.push('#platformUrl = :platformUrl');
+        if (platformPostId) {
+          setParts.push('#platformPostId = :platformPostId');
+        }
+        if (platformUrl) {
+          setParts.push('#platformUrl = :platformUrl');
+        }
       }
     }
 
@@ -148,8 +154,12 @@ export async function updateScheduleStatus(
       expressionAttributeValues[':error'] = errorMessage;
     } else if (status === 'published') {
       expressionAttributeValues[':publishedAt'] = new Date().toISOString();
-      if (platformPostId) expressionAttributeValues[':platformPostId'] = platformPostId;
-      if (platformUrl) expressionAttributeValues[':platformUrl'] = platformUrl;
+      if (platformPostId) {
+        expressionAttributeValues[':platformPostId'] = platformPostId;
+      }
+      if (platformUrl) {
+        expressionAttributeValues[':platformUrl'] = platformUrl;
+      }
     }
 
     await docClient.send(
@@ -160,7 +170,7 @@ export async function updateScheduleStatus(
           sk: schedule.sk,
         },
         UpdateExpression: `SET ${setParts.join(', ')}${
-          removeParts.length ? ' REMOVE ' + removeParts.join(', ') : ''
+          removeParts.length ? ` REMOVE ${removeParts.join(', ')}` : ''
         }`,
         ExpressionAttributeNames: expressionAttributeNames,
         ExpressionAttributeValues: expressionAttributeValues,

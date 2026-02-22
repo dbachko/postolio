@@ -129,7 +129,9 @@ export function AudienceInsights({ audienceData, loading }: AudienceInsightsProp
   const countryName = (code: string) => {
     try {
       const DisplayNames: any = (Intl as any).DisplayNames;
-      if (typeof DisplayNames !== 'function') return code;
+      if (typeof DisplayNames !== 'function') {
+        return code;
+      }
       const dn = new DisplayNames(['en'], { type: 'region' });
       return dn.of(code) || code;
     } catch {
@@ -138,7 +140,9 @@ export function AudienceInsights({ audienceData, loading }: AudienceInsightsProp
   };
 
   const demographicsMessage = (() => {
-    if (demographicsStatus === 'available' && demographics) return null;
+    if (demographicsStatus === 'available' && demographics) {
+      return null;
+    }
     if (demographicsStatus === 'insufficient_permissions') {
       return 'Demographics are unavailable. Reconnect Instagram and grant Insights permissions.';
     }

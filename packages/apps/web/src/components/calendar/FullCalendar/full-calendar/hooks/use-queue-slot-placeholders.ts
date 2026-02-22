@@ -25,8 +25,12 @@ export function useQueueSlotPlaceholders({
   queueAtCapacity,
 }: UseQueueSlotPlaceholdersParams) {
   return useMemo(() => {
-    if (!effectiveSingleDestinationId) return [] as PlaceholderItem[];
-    if (!slotRange) return [] as PlaceholderItem[];
+    if (!effectiveSingleDestinationId) {
+      return [] as PlaceholderItem[];
+    }
+    if (!slotRange) {
+      return [] as PlaceholderItem[];
+    }
     const raw = slotInstancesData as any;
     const list = raw?.data?.instances;
     const instances = Array.isArray(list) ? (list as PublishingQueueSlotInstance[]) : [];
@@ -37,10 +41,16 @@ export function useQueueSlotPlaceholders({
     return instances
       .filter((i) => {
         const ms = new Date(i.scheduledAt).getTime();
-        if (!Number.isFinite(ms)) return false;
+        if (!Number.isFinite(ms)) {
+          return false;
+        }
         // Hide occupied slots (server-occupied OR occupied by queue estimation/content within 1 min).
-        if (i.occupied) return false;
-        if (isTimeOccupied({ candidateUtcMs: ms, occupiedUtcMsSorted })) return false;
+        if (i.occupied) {
+          return false;
+        }
+        if (isTimeOccupied({ candidateUtcMs: ms, occupiedUtcMsSorted })) {
+          return false;
+        }
         return true;
       })
       .filter((i) => {

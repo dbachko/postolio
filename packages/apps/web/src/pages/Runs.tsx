@@ -20,9 +20,15 @@ import type { RunStatus } from '@/lib/api/runs-client';
 function statusBadgeVariant(
   status: RunStatus
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'success') return 'secondary';
-  if (status === 'failed') return 'destructive';
-  if (status === 'running' || status === 'queued') return 'outline';
+  if (status === 'success') {
+    return 'secondary';
+  }
+  if (status === 'failed') {
+    return 'destructive';
+  }
+  if (status === 'running' || status === 'queued') {
+    return 'outline';
+  }
   return 'outline';
 }
 

@@ -40,7 +40,9 @@ async function fetchPostsFromInternalApi(
 ): Promise<MinimalPost[] | null> {
   const base = process.env.INTERNAL_API_URL;
   const key = process.env.INTERNAL_API_KEY;
-  if (!base || !key) return null;
+  if (!base || !key) {
+    return null;
+  }
   const url = `${base.replace(/\/$/, '')}/api/instagram/posts/${encodeURIComponent(
     brandId
   )}?limit=${limit}`;
@@ -53,7 +55,9 @@ async function fetchPostsFromInternalApi(
       signal: ac.signal,
     } as RequestInit);
     clearTimeout(t);
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      return null;
+    }
     const json = (await resp.json()) as { posts?: MinimalPost[] };
     return Array.isArray(json?.posts) ? json.posts : null;
   } catch {
@@ -74,7 +78,7 @@ export class BrandAnalysisOrchestrator {
   ): Promise<{ jobId: string; profile?: unknown }> {
     // Concurrency guard: if a job is currently running and force is not set, reuse it
     const latest = await this.jobs.latestForBrand(brandId);
-    if (latest && latest.status === 'running' && !options.force) {
+    if (latest?.status === 'running' && !options.force) {
       return { jobId: latest.jobId };
     }
     const jobId = randomUUID();
@@ -95,14 +99,16 @@ export class BrandAnalysisOrchestrator {
       if (!posts || posts.length === 0) {
         const desired = typeof options?.maxPosts === 'number' ? options.maxPosts : 20;
         const fetched = await fetchPostsFromInternalApi(brandId, desired);
-        if (fetched && fetched.length) posts = fetched;
+        if (fetched && fetched.length) {
+          posts = fetched;
+        }
       }
 
       // Classify posts into core/seasonal/trending and filter out generated posts
       const countryCode =
         (options as any)?.brandInfo?.countryCode || (undefined as string | undefined);
       let freezeCore = true; // Smart Freeze default ON
-      if ((options as any)?.brandInfo && (options as any).brandInfo.freezeCore !== undefined) {
+      if ((options as any)?.brandInfo?.freezeCore !== undefined) {
         freezeCore = Boolean((options as any).brandInfo.freezeCore);
       } else if (process.env.BRAND_ANALYSIS_DEFAULT_FREEZE_CORE) {
         freezeCore = /^true$/i.test(process.env.BRAND_ANALYSIS_DEFAULT_FREEZE_CORE);
@@ -183,12 +189,16 @@ export class BrandAnalysisOrchestrator {
 
       function addToneToken(token: string, weight: number) {
         const key = token.trim().toLowerCase();
-        if (!key || key.length < 3 || STOPWORDS.has(key)) return;
+        if (!key || key.length < 3 || STOPWORDS.has(key)) {
+          return;
+        }
         toneWeights.set(key, (toneWeights.get(key) || 0) + weight);
       }
       function addTopicToken(token: string, weight: number) {
         const key = token.trim().toLowerCase();
-        if (!key || key.length < 2 || STOPWORDS.has(key)) return;
+        if (!key || key.length < 2 || STOPWORDS.has(key)) {
+          return;
+        }
         topicWeights.set(key, (topicWeights.get(key) || 0) + weight);
       }
 
@@ -206,11 +216,15 @@ export class BrandAnalysisOrchestrator {
               .split(/[^a-z0-9]+/i)
               .map((s) => s.trim().toLowerCase())
               .filter(Boolean);
-            for (const p of parts) addToneToken(p, weight);
+            for (const p of parts) {
+              addToneToken(p, weight);
+            }
           }
           if (upd.field === 'contentThemes' && Array.isArray(upd.newValue)) {
             for (const t of upd.newValue as unknown[]) {
-              if (typeof t === 'string' && t.length > 0) addTopicToken(t, 2 * weight); // topics slightly higher
+              if (typeof t === 'string' && t.length > 0) {
+                addTopicToken(t, 2 * weight);
+              } // topics slightly higher
             }
           }
         }
@@ -223,7 +237,9 @@ export class BrandAnalysisOrchestrator {
               .toLowerCase()
               .split(/[^a-z0-9]+/)
               .filter((x) => x.length > 2);
-            for (const t of tokens.slice(0, 5)) addToneToken(t, 0.5 * weight);
+            for (const t of tokens.slice(0, 5)) {
+              addToneToken(t, 0.5 * weight);
+            }
           }
           if (ins.category === 'hashtag_preference' && typeof ins.recommendation === 'string') {
             const rec = ins.recommendation.toLowerCase();
@@ -233,7 +249,9 @@ export class BrandAnalysisOrchestrator {
                 .split(/\s+and\s+|,\s*/)
                 .map((s) => s.trim())
                 .filter(Boolean);
-              for (const p of parts) addTopicToken(p, 1.5 * weight);
+              for (const p of parts) {
+                addTopicToken(p, 1.5 * weight);
+              }
             }
           }
         }
@@ -251,7 +269,9 @@ export class BrandAnalysisOrchestrator {
       // Build biased topics: start with extracted counts, add weighted hints (scale weight into counts)
       const topicMap = new Map<string, number>();
       for (const t of topicOut.topics || []) {
-        if (t && typeof t.value === 'string') topicMap.set(t.value.toLowerCase(), t.count);
+        if (t && typeof t.value === 'string') {
+          topicMap.set(t.value.toLowerCase(), t.count);
+        }
       }
       for (const [k, w] of topicWeights.entries()) {
         const inc = Math.max(1, Math.round(w * TOPIC_HINT_SCALE));

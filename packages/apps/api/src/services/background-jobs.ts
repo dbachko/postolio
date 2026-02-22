@@ -723,7 +723,7 @@ export class BackgroundJobQueue {
   /**
    * Get recent jobs
    */
-  async getRecentJobs(limit = 10): Promise<Bull.Job<JobData>[]> {
+  async getRecentJobs(limit = 10): Promise<Array<Bull.Job<JobData>>> {
     const jobs = await this.queue.getJobs(
       ['completed', 'failed', 'active', 'waiting', 'delayed'],
       0,

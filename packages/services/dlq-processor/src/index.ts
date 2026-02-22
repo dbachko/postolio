@@ -3,7 +3,7 @@
  * Handles failed messages by forwarding them back to the original queue
  */
 
-import { SQSClient, SendMessageCommand, MessageAttributeValue } from '@aws-sdk/client-sqs';
+import { SQSClient, SendMessageCommand, type MessageAttributeValue } from '@aws-sdk/client-sqs';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import type { SQSEvent } from 'aws-lambda';
 import { initSentry, captureException } from '@postolio/observability';

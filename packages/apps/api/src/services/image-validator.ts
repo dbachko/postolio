@@ -37,7 +37,7 @@ export function parseBase64ImageData(imageData: string): Base64ParseResult {
   // Extract base64 data and mime type from data URI
   const base64Match = imageData.match(/^data:([^;]+);base64,(.+)$/);
 
-  if (!base64Match || !base64Match[2]) {
+  if (!base64Match?.[2]) {
     return {
       valid: false,
       error: 'Invalid image data format. Expected data URI format (data:image/type;base64,...)',

@@ -49,10 +49,12 @@ export function formatNumber(
  * formatPercent(12.345) // "12.3%"
  * formatPercent(12.345, 2) // "12.35%"
  */
-export function formatPercent(value: number | string | unknown, decimals: number = 1): string {
+export function formatPercent(value: number | string | unknown, decimals = 1): string {
   let numValue = Number(value);
 
-  if (!isFinite(numValue) || isNaN(numValue)) return '0%';
+  if (!isFinite(numValue) || isNaN(numValue)) {
+    return '0%';
+  }
 
   // Treat small fractional values as ratios (e.g., 0.12 => 12%)
   if (Math.abs(numValue) > 0 && Math.abs(numValue) < 1) {
@@ -61,8 +63,12 @@ export function formatPercent(value: number | string | unknown, decimals: number
 
   // Clamp to a sane display range to avoid scientific notation
   const cap = 10000; // 10k%
-  if (numValue > cap) numValue = cap;
-  if (numValue < -cap) numValue = -cap;
+  if (numValue > cap) {
+    numValue = cap;
+  }
+  if (numValue < -cap) {
+    numValue = -cap;
+  }
 
   // Handle extremely tiny numbers that would round to 0 but are non-zero
   const fixed =
@@ -87,8 +93,8 @@ export function formatPercent(value: number | string | unknown, decimals: number
  */
 export function formatCurrency(
   value: number | string | unknown,
-  decimals: number = 2,
-  currency: string = '$'
+  decimals = 2,
+  currency = '$'
 ): string {
   const numValue = Number(value);
 
@@ -116,7 +122,7 @@ export function formatCurrency(
  * formatGrowth(12.345) // "+12.3%"
  * formatGrowth(-5.432) // "-5.4%"
  */
-export function formatGrowth(value: number | string | unknown, decimals: number = 1): string {
+export function formatGrowth(value: number | string | unknown, decimals = 1): string {
   const numValue = Number(value);
 
   if (isNaN(numValue) || !isFinite(numValue)) {

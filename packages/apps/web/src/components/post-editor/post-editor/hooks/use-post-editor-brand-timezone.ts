@@ -13,12 +13,18 @@ export function usePostEditorBrandTimezone(params: {
     let mounted = true;
     const resolveBrandTimezone = async () => {
       const brandId = postBrandId ?? selectedBrandId;
-      if (!brandId) return;
+      if (!brandId) {
+        return;
+      }
       try {
         const tz = await getBrandTimezone(brandId);
-        if (mounted && tz) setBrandTimezone(tz);
+        if (mounted && tz) {
+          setBrandTimezone(tz);
+        }
       } catch {
-        if (mounted) setBrandTimezone(timezone);
+        if (mounted) {
+          setBrandTimezone(timezone);
+        }
       }
     };
     void resolveBrandTimezone();

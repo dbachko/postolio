@@ -1,11 +1,10 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import fastify, { FastifyReply, FastifyRequest } from 'fastify';
+import fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
-import jwt from '@fastify/jwt';
-import type { FastifyJWT } from '@fastify/jwt';
+import jwt, { type FastifyJWT } from '@fastify/jwt';
 import { prismaAssets, prismaAssetsPool } from '@postolio/database-assets';
 import assetsRoutes from './routes/assets.js';
 import taxonomyRoutes from './routes/taxonomy.js';
@@ -118,7 +117,7 @@ export function buildFastify() {
 
       if (cookieToken) {
         decoded = await verifyToken(cookieToken);
-      } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      } else if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
         decoded = await verifyToken(token);
       }

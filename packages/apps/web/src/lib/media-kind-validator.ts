@@ -8,7 +8,9 @@ export function validateMediaKind(
   files: FileList | File[] | null | undefined,
   kind: MediaKind
 ): string | null {
-  if (!files || (Array.isArray(files) && files.length === 0)) return null;
+  if (!files || (Array.isArray(files) && files.length === 0)) {
+    return null;
+  }
 
   const arr = Array.from(files as any as File[]);
   const hasImage = arr.some((f) => f.type.startsWith('image/'));

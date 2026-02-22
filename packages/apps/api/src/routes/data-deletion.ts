@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -289,7 +289,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       // Schedule permanent deletion job for GDPR compliance
       await deletionQueueService.scheduleDeletion(
         {
-          userId: userId,
+          userId,
           scheduledDeletionDate: scheduledDeletion,
           email: user.email,
         },
@@ -323,7 +323,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
         where: { email },
       });
 
-      if (!user || !user.deletedAt) {
+      if (!user?.deletedAt) {
         return reply.code(404).send({ error: 'No deleted account found' });
       }
 

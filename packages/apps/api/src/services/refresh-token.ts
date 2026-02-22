@@ -2,8 +2,8 @@ import { randomBytes, createHash } from 'crypto';
 import { getDatabaseClient } from '../config/database.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
 import { RedisTokenStore } from './redis-token-store.js';
-import { SessionService, SessionMetadata } from './session.service.js';
-import { FastifyInstance } from 'fastify';
+import { SessionService, type SessionMetadata } from './session.service.js';
+import type { FastifyInstance } from 'fastify';
 
 const prisma = getDatabaseClient();
 const tokenStore = new RedisTokenStore();
@@ -218,7 +218,9 @@ export class RefreshTokenService {
               where: { id: oldTokenParsed.userId },
               select: { id: true, email: true },
             });
-            if (!user) throw new Error('User not found');
+            if (!user) {
+              throw new Error('User not found');
+            }
 
             const accessToken = fastify.jwt.sign({
               id: user.id,

@@ -3,7 +3,7 @@
  * Handles content CRUD operations: create, read, approve, reject, delete
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@postolio/database';
 
 import { schedulerService } from '../../services/scheduler.js';
@@ -34,7 +34,9 @@ import { supportsScheduling, toValidationPlatform } from '../../utils/platform.j
 const prisma = getDatabaseClient();
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
@@ -88,9 +90,15 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         // - Fall back to targetSocialAccountId (single destination)
         // - Fall back to brand primary Instagram account (legacy behavior)
         const destinationAccounts = (() => {
-          if (requestedTargetIds) return requestedTargetIds;
-          if (body.targetSocialAccountId === undefined) return null;
-          if (body.targetSocialAccountId === null || body.targetSocialAccountId === '') return [];
+          if (requestedTargetIds) {
+            return requestedTargetIds;
+          }
+          if (body.targetSocialAccountId === undefined) {
+            return null;
+          }
+          if (body.targetSocialAccountId === null || body.targetSocialAccountId === '') {
+            return [];
+          }
           return [body.targetSocialAccountId];
         })();
 
@@ -379,7 +387,9 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         if (body.scheduledAt) {
           for (const content of created.contents) {
             const u = await handleScheduling(content.id, body.scheduledAt);
-            if (u && !upsell) upsell = u;
+            if (u && !upsell) {
+              upsell = u;
+            }
           }
         }
 
@@ -634,7 +644,9 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         select: { status: true },
       });
-      if (!item) return reply.code(404).send({ error: 'Content not found' });
+      if (!item) {
+        return reply.code(404).send({ error: 'Content not found' });
+      }
 
       // Best-effort cancel schedule
       try {

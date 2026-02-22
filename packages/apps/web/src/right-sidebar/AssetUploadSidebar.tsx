@@ -55,7 +55,9 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
   const pluralize = (count: number) => (count === 1 ? 0 : 1);
 
   const uppy = useMemo(() => {
-    if (!brandId) return null;
+    if (!brandId) {
+      return null;
+    }
     const instance = new Uppy({
       autoProceed: false,
       debug: !!import.meta.env.DEV,
@@ -128,7 +130,9 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
   }, [brandId]);
 
   useEffect(() => {
-    if (!uppy || !brandId) return;
+    if (!uppy || !brandId) {
+      return;
+    }
     if (dashboardContainerRef.current && !dashboardPluginRef.current) {
       const opts: any = {
         inline: true,
@@ -159,7 +163,9 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
     }
 
     function inferS3KeyFromUploadURL(url?: string | null): string | undefined {
-      if (!url) return undefined;
+      if (!url) {
+        return undefined;
+      }
       try {
         const u = new URL(url);
         return decodeURIComponent(u.pathname.replace(/^\//, ''));
@@ -169,7 +175,9 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
     }
 
     function probeDimensions(file: any): Promise<{ width?: number; height?: number }> {
-      if (!file.type?.startsWith('image/') || !file.data) return Promise.resolve({});
+      if (!file.type?.startsWith('image/') || !file.data) {
+        return Promise.resolve({});
+      }
       return new Promise((resolve) => {
         const url = URL.createObjectURL(file.data as Blob);
         const img = new Image();
@@ -195,7 +203,9 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
         s3KeyById.current.get(file.id) ||
         inferS3KeyFromUploadURL(file?.response?.uploadURL) ||
         (file?.uploadURL ? inferS3KeyFromUploadURL(file.uploadURL) : undefined);
-      if (!s3Key) return;
+      if (!s3Key) {
+        return;
+      }
       const dims = await probeDimensions(file);
       const videoMeta = videoMetaById.current.get(file.id);
       try {

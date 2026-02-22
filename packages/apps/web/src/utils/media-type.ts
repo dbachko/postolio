@@ -2,7 +2,7 @@ export type MediaBadgeType = 'image' | 'video' | 'reel' | 'carousel' | 'text';
 
 export function getMediaBadgeType(input: {
   contentType?: string | null;
-  mediaAssets?: Array<unknown> | null;
+  mediaAssets?: unknown[] | null;
   primaryAssetFileType?: 'image' | 'video' | null;
   mediaAssetCount?: number | null;
 }): MediaBadgeType {
@@ -13,9 +13,17 @@ export function getMediaBadgeType(input: {
     assetCount = input.mediaAssets.length;
   }
 
-  if (input.contentType === 'reel') return 'reel';
-  if (assetCount > 1) return 'carousel';
-  if (input.primaryAssetFileType === 'video') return 'video';
-  if (input.primaryAssetFileType === 'image' || assetCount === 1) return 'image';
+  if (input.contentType === 'reel') {
+    return 'reel';
+  }
+  if (assetCount > 1) {
+    return 'carousel';
+  }
+  if (input.primaryAssetFileType === 'video') {
+    return 'video';
+  }
+  if (input.primaryAssetFileType === 'image' || assetCount === 1) {
+    return 'image';
+  }
   return 'text';
 }

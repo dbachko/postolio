@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { cn } from '@/lib/utils';
 import type { CalendarItem } from '@/types/calendar';
 import type { SocialAccountsById } from '@/types/social-accounts';
 import type { MediaBadgeType } from '@/utils/media-type';
-import type { KeyboardEvent } from 'react';
 import type { PostCardDragMeta } from '../drag-meta';
 import { POST_PREVIEW_WIDE_MIN_WIDTH_PX } from '../constants';
 import type { PostStatus } from '../types';
@@ -50,7 +49,9 @@ export function PostPreviewCardContent({
   const [isWide, setIsWide] = useState(false);
 
   useEffect(() => {
-    if (!cardRef.current) return;
+    if (!cardRef.current) {
+      return;
+    }
     const el = cardRef.current;
     const ro = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect?.width ?? 0;
@@ -61,7 +62,9 @@ export function PostPreviewCardContent({
   }, []);
 
   const indicators = useMemo(() => {
-    if (item.type === 'placeholder') return null;
+    if (item.type === 'placeholder') {
+      return null;
+    }
     return (
       <div className="flex items-center gap-1">
         <SeriesIndicator item={item} />

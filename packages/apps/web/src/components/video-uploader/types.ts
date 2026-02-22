@@ -11,7 +11,7 @@ export interface VideoUploaderProps {
   minHeight?: number;
   maxWidth?: number;
   maxHeight?: number;
-  allowedAspectRatios?: { label: string; width: number; height: number }[];
+  allowedAspectRatios?: Array<{ label: string; width: number; height: number }>;
   headline?: string;
   subtext?: string;
 }

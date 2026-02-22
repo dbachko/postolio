@@ -68,8 +68,12 @@ export function startMetaOAuthPopup(params: {
   let didOpenDialog = false;
 
   const handleMessage = (event: MessageEvent) => {
-    if (!allowedOrigins.includes(event.origin)) return;
-    if (!event.data || typeof event.data.type !== 'string') return;
+    if (!allowedOrigins.includes(event.origin)) {
+      return;
+    }
+    if (!event.data || typeof event.data.type !== 'string') {
+      return;
+    }
 
     if (event.data.type === 'META_OAUTH_SUCCESS') {
       const id = event.data?.data?.connectSessionId;
@@ -87,7 +91,9 @@ export function startMetaOAuthPopup(params: {
   };
 
   const finish = () => {
-    if (isFinished) return;
+    if (isFinished) {
+      return;
+    }
     isFinished = true;
     onClose();
     window.removeEventListener('message', handleMessage);
@@ -95,7 +101,9 @@ export function startMetaOAuthPopup(params: {
   };
 
   const checkClosed = window.setInterval(() => {
-    if (!popup?.closed) return;
+    if (!popup?.closed) {
+      return;
+    }
 
     if (!didOpenDialog && initialConnectSessionId) {
       didOpenDialog = true;

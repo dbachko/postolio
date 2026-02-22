@@ -43,8 +43,14 @@ import { SortControls } from './SortControls';
 import { SelectionBar, type SelectionCollectionOption } from './SelectionBar';
 import { DeleteAssetsDialog } from './DeleteAssetsDialog';
 import { FilterPanel, type AssetFilters } from './FilterPanel';
-import { groupByMonth, sortAssets, useDebouncedValue } from './asset-utils';
-import type { AssetTypeFilter, SortDirection, SortField } from './asset-utils';
+import {
+  groupByMonth,
+  sortAssets,
+  useDebouncedValue,
+  type AssetTypeFilter,
+  type SortDirection,
+  type SortField,
+} from './asset-utils';
 import { cn } from '@/lib/utils';
 import { getLocalSetting, setLocalSetting } from '@/lib/settings/localSettings';
 
@@ -199,12 +205,18 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   const findCollectionById = useCallback(
     (nodes: CollectionNode[], id: string | null): CollectionNode | null => {
-      if (!id) return null;
+      if (!id) {
+        return null;
+      }
       for (const node of nodes) {
-        if (node.id === id) return node;
+        if (node.id === id) {
+          return node;
+        }
         if (node.children?.length) {
           const found = findCollectionById(node.children, id);
-          if (found) return found;
+          if (found) {
+            return found;
+          }
         }
       }
       return null;
@@ -251,8 +263,11 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   const setCollectionExpanded = useCallback((id: string, open: boolean) => {
     setExpandedCollections((prev) => {
       const next = new Set(prev);
-      if (open) next.add(id);
-      else next.delete(id);
+      if (open) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
       return next;
     });
   }, []);
@@ -274,19 +289,26 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   }, [collectionExpansionStorageKey]);
 
   useEffect(() => {
-    if (!collectionExpansionStorageKey) return;
+    if (!collectionExpansionStorageKey) {
+      return;
+    }
     setLocalSetting(collectionExpansionStorageKey, Array.from(expandedCollections));
   }, [collectionExpansionStorageKey, expandedCollections]);
 
   useEffect(() => {
-    if (!collectionsQuery.isFetched) return;
+    if (!collectionsQuery.isFetched) {
+      return;
+    }
     const validIds = collectCollectionIds(collections);
     setExpandedCollections((prev) => {
       let changed = false;
       const next = new Set<string>();
       prev.forEach((id) => {
-        if (validIds.has(id)) next.add(id);
-        else changed = true;
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
       });
       return changed ? next : prev;
     });
@@ -312,7 +334,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   }, []);
 
   const submitInlineRenameCollection = useCallback(async () => {
-    if (!brandId || !inlineRenameId) return;
+    if (!brandId || !inlineRenameId) {
+      return;
+    }
     const nextName = inlineRenameValue.trim();
     if (!nextName) {
       toast.error('Collection name is required');
@@ -355,7 +379,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   }, []);
 
   const submitInlineCreateCollection = useCallback(async () => {
-    if (!brandId || !inlineCreateParentId) return;
+    if (!brandId || !inlineCreateParentId) {
+      return;
+    }
     const nextName = inlineCreateValue.trim();
     if (!nextName) {
       toast.error('Collection name is required');
@@ -398,11 +424,15 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   const handleDeleteCollection = useCallback(
     async (collection: CollectionNode) => {
-      if (!brandId) return;
+      if (!brandId) {
+        return;
+      }
       const confirmed = window.confirm(
         'Delete this collection? Assets inside will be moved to Unsorted.'
       );
-      if (!confirmed) return;
+      if (!confirmed) {
+        return;
+      }
       try {
         await assetsApi.deleteTaxonomy(collection.id, {
           brandId,
@@ -470,7 +500,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   const handleMoveSelectedToCollection = useCallback(
     async (targetCollectionId: string | null) => {
-      if (!brandId || selectedAssetIds.length === 0 || isMovingSelected) return;
+      if (!brandId || selectedAssetIds.length === 0 || isMovingSelected) {
+        return;
+      }
       setIsMovingSelected(true);
       try {
         await assetsApi.bulkAssets({
@@ -506,7 +538,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
             const next = new Map(prev);
             for (let i = from; i <= to; i += 1) {
               const current = sortedAssets[i];
-              if (current) next.set(current.id, current);
+              if (current) {
+                next.set(current.id, current);
+              }
             }
             return next;
           });
@@ -517,8 +551,11 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
       setSelected((prev) => {
         const next = new Map(prev);
-        if (next.has(asset.id)) next.delete(asset.id);
-        else next.set(asset.id, asset);
+        if (next.has(asset.id)) {
+          next.delete(asset.id);
+        } else {
+          next.set(asset.id, asset);
+        }
         return next;
       });
       setLastSelectedId(asset.id);
@@ -577,7 +614,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   const deleteSelected = useMutation({
     mutationFn: async (ids: string[]) => {
-      if (!brandId) throw new Error('Missing brand');
+      if (!brandId) {
+        throw new Error('Missing brand');
+      }
       await assetsApi.bulkAssets({
         brandId,
         assetIds: ids,
@@ -601,7 +640,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   });
 
   const handleDeleteSelected = () => {
-    if (selectedAssets.length === 0) return;
+    if (selectedAssets.length === 0) {
+      return;
+    }
     if (deleteBlockedReason) {
       toast.info(deleteBlockedReason);
       return;
@@ -610,7 +651,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   };
 
   const handleCreatePostFromSelection = () => {
-    if (selectedAssets.length === 0) return;
+    if (selectedAssets.length === 0) {
+      return;
+    }
     const images = selectedAssets.filter((a) => a.fileType === 'image');
     const videos = selectedAssets.filter((a) => a.fileType === 'video');
     const maxImages = 10;
@@ -697,9 +740,15 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!collectionId || !collectionsQuery.isFetched) return;
-    if (collectionId === UNSORTED_COLLECTION_PARAM) return;
-    if (findCollectionById(collections, collectionId)) return;
+    if (!collectionId || !collectionsQuery.isFetched) {
+      return;
+    }
+    if (collectionId === UNSORTED_COLLECTION_PARAM) {
+      return;
+    }
+    if (findCollectionById(collections, collectionId)) {
+      return;
+    }
     setCollectionId(null);
     const next = new URLSearchParams(searchParams);
     next.delete('collection');
@@ -715,7 +764,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasNextPage) return;
+    if (!sentinel || !hasNextPage) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -753,7 +804,9 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
           key={node.id}
           open={hasChildren ? isExpanded : false}
           onOpenChange={(open) => {
-            if (hasChildren) setCollectionExpanded(node.id, open);
+            if (hasChildren) {
+              setCollectionExpanded(node.id, open);
+            }
           }}
         >
           <div className={rowClass}>

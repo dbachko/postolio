@@ -88,14 +88,26 @@ function normalizeTokens(s: string): string[] {
 
 function inferSeasonalLabel(post: MinimalPost, countryCode?: string): string | undefined {
   const tokens = new Set<string>();
-  if (post.caption) for (const t of normalizeTokens(post.caption)) tokens.add(t);
-  for (const h of post.hashtags || []) for (const t of normalizeTokens(h)) tokens.add(t);
+  if (post.caption) {
+    for (const t of normalizeTokens(post.caption)) {
+      tokens.add(t);
+    }
+  }
+  for (const h of post.hashtags || []) {
+    for (const t of normalizeTokens(h)) {
+      tokens.add(t);
+    }
+  }
   let best: { label: string; hits: number } | undefined;
   for (const [label, kws] of Object.entries(SEASONAL_KEYWORDS)) {
     const hits = kws.reduce((acc, kw) => acc + (tokens.has(kw) ? 1 : 0), 0);
-    if (hits > 0 && (!best || hits > best.hits)) best = { label, hits };
+    if (hits > 0 && (!best || hits > best.hits)) {
+      best = { label, hits };
+    }
   }
-  if (best?.label) return best.label;
+  if (best?.label) {
+    return best.label;
+  }
   // Calendar-based heuristic for markets (if no keyword match)
   if (post.timestamp && countryCode) {
     const dt = new Date(post.timestamp);
@@ -105,10 +117,16 @@ function inferSeasonalLabel(post: MinimalPost, countryCode?: string): string | u
     const events = PER_MARKET_CALENDAR[market];
     if (events && events.length > 0) {
       for (const ev of events) {
-        if (ev.month !== month) continue;
-        if (!ev.day) continue;
+        if (ev.month !== month) {
+          continue;
+        }
+        if (!ev.day) {
+          continue;
+        }
         const diff = Math.abs(day - ev.day);
-        if (diff <= (ev.windowDays || 3)) return ev.label;
+        if (diff <= (ev.windowDays || 3)) {
+          return ev.label;
+        }
       }
     }
   }
@@ -116,10 +134,18 @@ function inferSeasonalLabel(post: MinimalPost, countryCode?: string): string | u
 }
 
 function isExcludedFromCore(p: MinimalPost): boolean {
-  if (p.generated === true) return true;
-  if (typeof p.generated_by === 'string' && p.generated_by.length > 0) return true;
-  if (typeof p.origin === 'string' && /postolio/i.test(p.origin)) return true;
-  if (typeof p.caption === 'string' && /postolio/i.test(p.caption)) return true;
+  if (p.generated === true) {
+    return true;
+  }
+  if (typeof p.generated_by === 'string' && p.generated_by.length > 0) {
+    return true;
+  }
+  if (typeof p.origin === 'string' && /postolio/i.test(p.origin)) {
+    return true;
+  }
+  if (typeof p.caption === 'string' && /postolio/i.test(p.caption)) {
+    return true;
+  }
   return false;
 }
 

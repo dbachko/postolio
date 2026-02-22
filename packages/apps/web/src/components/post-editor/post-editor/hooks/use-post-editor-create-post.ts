@@ -39,7 +39,9 @@ export function usePostEditorCreatePost(params: {
 
   const { mutate: createPost, isPending: isCreatingPost } = useMutation({
     mutationFn: async (mode: 'draft' | 'schedule' | 'queue' | 'now') => {
-      if (!selectedBrand) throw new Error('No brand selected');
+      if (!selectedBrand) {
+        throw new Error('No brand selected');
+      }
 
       const isStory = formData.contentType === 'story';
       const scheduledUtc =
@@ -48,7 +50,9 @@ export function usePostEditorCreatePost(params: {
           : null;
 
       if (mode === 'schedule') {
-        if (!scheduledUtc) throw new Error('Scheduled time required');
+        if (!scheduledUtc) {
+          throw new Error('Scheduled time required');
+        }
         if (scheduledUtc.getTime() <= Date.now()) {
           throw new Error('Scheduled time must be in the future');
         }

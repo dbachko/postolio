@@ -35,7 +35,9 @@ export function QueueScheduleLane({
     const byDay = new Map<string, typeof instances>();
     for (const inst of instances) {
       const dayKey = formatInTimeZone(new Date(inst.scheduledAt), brandTimezone, 'yyyy-MM-dd');
-      if (!byDay.has(dayKey)) byDay.set(dayKey, []);
+      if (!byDay.has(dayKey)) {
+        byDay.set(dayKey, []);
+      }
       byDay.get(dayKey)!.push(inst);
     }
     return Array.from(byDay.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -48,7 +50,9 @@ export function QueueScheduleLane({
   }, [brandId, queryClient]);
 
   const scheduleLimitMessage = useMemo(() => {
-    if (!scheduleAheadLimits) return 'Scheduling limit reached. Upgrade to add more.';
+    if (!scheduleAheadLimits) {
+      return 'Scheduling limit reached. Upgrade to add more.';
+    }
     return `Scheduling limit reached (${scheduleAheadLimits.currentCount}/${scheduleAheadLimits.maxAllowed}). Upgrade to add more.`;
   }, [scheduleAheadLimits]);
 

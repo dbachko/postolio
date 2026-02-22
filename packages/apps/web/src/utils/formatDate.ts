@@ -21,7 +21,9 @@ export function formatDate(
     year: 'numeric',
   }
 ): string {
-  if (!dateString) return '—';
+  if (!dateString) {
+    return '—';
+  }
 
   try {
     const date = new Date(dateString);
@@ -49,7 +51,9 @@ export function formatDate(
  * formatTime(null) // "—"
  */
 export function formatTime(dateString?: string | null): string {
-  if (!dateString) return '—';
+  if (!dateString) {
+    return '—';
+  }
 
   try {
     const date = new Date(dateString);
@@ -79,12 +83,16 @@ export function formatTime(dateString?: string | null): string {
  * formatDateTime('2025-01-15T14:30:00Z') // "Jan 15, 2025 at 2:30 PM"
  */
 export function formatDateTime(dateString?: string | null): string {
-  if (!dateString) return '—';
+  if (!dateString) {
+    return '—';
+  }
 
   const datePart = formatDate(dateString);
   const timePart = formatTime(dateString);
 
-  if (datePart === '—' || timePart === '—') return '—';
+  if (datePart === '—' || timePart === '—') {
+    return '—';
+  }
 
   return `${datePart} at ${timePart}`;
 }
@@ -98,11 +106,15 @@ export function formatDateTime(dateString?: string | null): string {
  * formatRelativeTime('2025-01-15T10:00:00Z') // "2 hours ago"
  */
 export function formatRelativeTime(dateString?: string | null): string {
-  if (!dateString) return '—';
+  if (!dateString) {
+    return '—';
+  }
 
   try {
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '—';
+    if (isNaN(date.getTime())) {
+      return '—';
+    }
 
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -117,12 +129,24 @@ export function formatRelativeTime(dateString?: string | null): string {
     const past = diffMs > 0;
     const suffix = past ? 'ago' : 'from now';
 
-    if (diffSec < 60) return `just now`;
-    if (diffMin < 60) return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ${suffix}`;
-    if (diffHour < 24) return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ${suffix}`;
-    if (diffDay < 7) return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ${suffix}`;
-    if (diffWeek < 4) return `${diffWeek} ${diffWeek === 1 ? 'week' : 'weeks'} ${suffix}`;
-    if (diffMonth < 12) return `${diffMonth} ${diffMonth === 1 ? 'month' : 'months'} ${suffix}`;
+    if (diffSec < 60) {
+      return `just now`;
+    }
+    if (diffMin < 60) {
+      return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ${suffix}`;
+    }
+    if (diffHour < 24) {
+      return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ${suffix}`;
+    }
+    if (diffDay < 7) {
+      return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ${suffix}`;
+    }
+    if (diffWeek < 4) {
+      return `${diffWeek} ${diffWeek === 1 ? 'week' : 'weeks'} ${suffix}`;
+    }
+    if (diffMonth < 12) {
+      return `${diffMonth} ${diffMonth === 1 ? 'month' : 'months'} ${suffix}`;
+    }
     return `${diffYear} ${diffYear === 1 ? 'year' : 'years'} ${suffix}`;
   } catch (error) {
     console.error(`Error formatting relative time: ${dateString}`, error);

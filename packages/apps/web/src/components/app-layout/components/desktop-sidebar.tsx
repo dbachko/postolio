@@ -17,7 +17,9 @@ export function DesktopSidebar() {
   const location = useLocation();
 
   useEffect(() => {
-    if (!selectedBrand?.id) return;
+    if (!selectedBrand?.id) {
+      return;
+    }
     queryClient.prefetchQuery({
       queryKey: ['brand-social-accounts', selectedBrand.id],
       queryFn: () => brandApi.getConnectedAccounts(selectedBrand.id),
@@ -34,8 +36,12 @@ export function DesktopSidebar() {
   const inboxEnabled = isInboxEnabled(user);
   const snippetsEnabled = isSnippetsEnabled(user);
   const visibleMainItems = mainNavItems.filter((item) => {
-    if (!inboxEnabled && item.path === '/inbox') return false;
-    if (!snippetsEnabled && item.path === '/snippets') return false;
+    if (!inboxEnabled && item.path === '/inbox') {
+      return false;
+    }
+    if (!snippetsEnabled && item.path === '/snippets') {
+      return false;
+    }
     return true;
   });
 

@@ -50,9 +50,15 @@ export function BacklogRow({
   const blockedByStatus = contentStatus === 'published';
   const canDrag = !scheduleAheadAtCapacity && !blockedByStatus;
   const dragTooltip = (() => {
-    if (canDrag) return 'Drag to schedule.';
-    if (scheduleAheadAtCapacity) return scheduleLimitMessage;
-    if (blockedByStatus) return 'Published posts cannot be moved.';
+    if (canDrag) {
+      return 'Drag to schedule.';
+    }
+    if (scheduleAheadAtCapacity) {
+      return scheduleLimitMessage;
+    }
+    if (blockedByStatus) {
+      return 'Published posts cannot be moved.';
+    }
     return 'Dragging is disabled.';
   })();
   const [, dragRef] = useDrag(

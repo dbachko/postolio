@@ -10,9 +10,13 @@ export function useBrandTimezone(brandId: string) {
     const resolveBrandTimezone = async () => {
       try {
         const tz = await getBrandTimezone(brandId);
-        if (mounted && tz) setBrandTimezone(tz);
+        if (mounted && tz) {
+          setBrandTimezone(tz);
+        }
       } catch {
-        if (mounted) setBrandTimezone(userTz);
+        if (mounted) {
+          setBrandTimezone(userTz);
+        }
       }
     };
     void resolveBrandTimezone();

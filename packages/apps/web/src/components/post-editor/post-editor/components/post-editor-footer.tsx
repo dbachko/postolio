@@ -25,12 +25,16 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
   const isCreating = !state.id;
 
   const showFooter = !(state.template.isTemplateTab && state.data.isMultiDestinationGroup);
-  if (!showFooter) return null;
+  if (!showFooter) {
+    return null;
+  }
 
   const post = state.data.post;
 
   const handleCreateMode = () => {
-    if (!state.selectedBrand) return null;
+    if (!state.selectedBrand) {
+      return null;
+    }
     return (
       <WriteItBar
         mode="create"
@@ -71,7 +75,9 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
   };
 
   const handleDisabledPublished = () => {
-    if (!post) return null;
+    if (!post) {
+      return null;
+    }
     return (
       <PostPublicationFooter
         layout={state.layout}
@@ -84,8 +90,12 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
   };
 
   const handleEditMode = () => {
-    if (state.data.isPostLoading || !post) return null;
-    if (state.derived.disabled) return handleDisabledPublished();
+    if (state.data.isPostLoading || !post) {
+      return null;
+    }
+    if (state.derived.disabled) {
+      return handleDisabledPublished();
+    }
 
     return (
       <WriteItBar
@@ -139,8 +149,12 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
                         !post?.scheduledAt
                       }
                       onClick={() => {
-                        if (!state.id) return;
-                        if (!post?.scheduledAt) return;
+                        if (!state.id) {
+                          return;
+                        }
+                        if (!post?.scheduledAt) {
+                          return;
+                        }
                         state.mutations.unschedulePost(state.id);
                       }}
                     >
@@ -187,7 +201,9 @@ export function PostEditorFooter({ state }: { state: PostEditorState }) {
             void state.mutations.scheduleContentGroup(null);
             return;
           }
-          if (state.id) state.mutations.unschedulePost(state.id);
+          if (state.id) {
+            state.mutations.unschedulePost(state.id);
+          }
         }}
         onSave={state.saveActions.handleSaveChanges}
         onAddToQueue={() => void state.saveActions.moveToQueue()}

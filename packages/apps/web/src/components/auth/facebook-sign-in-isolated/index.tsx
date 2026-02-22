@@ -26,7 +26,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
 
   const handleFacebookResponse = useCallback(
     async (authResponse: FacebookAuthResponse) => {
-      if (!authResponse || !authResponse.accessToken) {
+      if (!authResponse?.accessToken) {
         const errorMsg = 'No access token received from Facebook';
         onError?.(errorMsg);
         toast.error('Facebook sign-in failed', {
@@ -132,7 +132,9 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
   }, [isSDKLoaded, handleFacebookResponse]);
 
   useEffect(() => {
-    if (!isConfigured || sdkLoadedRef.current) return;
+    if (!isConfigured || sdkLoadedRef.current) {
+      return;
+    }
 
     // Check if SDK is already loaded
     if (window.FB) {

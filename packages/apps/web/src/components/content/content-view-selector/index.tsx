@@ -52,7 +52,9 @@ function toSocialAccountOptions(raw: unknown): SocialAccountOption[] {
     .map((account) => {
       const id = typeof account?.id === 'string' ? account.id : null;
       const platformRaw = typeof account?.platform === 'string' ? account.platform : null;
-      if (!id || !platformRaw || !PLATFORM_SET.has(platformRaw)) return null;
+      if (!id || !platformRaw || !PLATFORM_SET.has(platformRaw)) {
+        return null;
+      }
       const platform = platformRaw as Platform;
 
       const username = typeof account?.username === 'string' ? account.username : null;
@@ -68,7 +70,9 @@ function toSocialAccountOptions(raw: unknown): SocialAccountOption[] {
     })
     .filter((a): a is SocialAccountOption => Boolean(a))
     .sort((a, b) => {
-      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder;
+      }
       return a.label.localeCompare(b.label);
     });
 }
@@ -97,14 +101,22 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
   const options = useMemo(() => toSocialAccountOptions(accountsQuery.data), [accountsQuery.data]);
 
   const selectedSocialAccountIds = useMemo(() => {
-    if (storeEntry === undefined) return undefined;
-    if (storeEntry == null) return null;
+    if (storeEntry === undefined) {
+      return undefined;
+    }
+    if (storeEntry == null) {
+      return null;
+    }
     return storeEntry.filter((id) => typeof id === 'string' && id.trim().length > 0);
   }, [storeEntry]);
 
   useEffect(() => {
-    if (!brandId) return;
-    if (accountsQuery.isLoading) return;
+    if (!brandId) {
+      return;
+    }
+    if (accountsQuery.isLoading) {
+      return;
+    }
 
     const defaultId =
       (primarySocialAccountId && options.some((o) => o.id === primarySocialAccountId)
@@ -123,7 +135,9 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
       return;
     }
 
-    if (selectedSocialAccountIds !== undefined) return;
+    if (selectedSocialAccountIds !== undefined) {
+      return;
+    }
 
     setSelectedSocialAccountIds(brandId, defaultId ? [defaultId] : null);
   }, [
@@ -137,8 +151,9 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
   ]);
 
   const selectedOption = useMemo(() => {
-    if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length !== 1)
+    if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length !== 1) {
       return null;
+    }
     return options.find((o) => o.id === selectedSocialAccountIds[0]) || null;
   }, [options, selectedSocialAccountIds]);
 
@@ -241,8 +256,11 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
                       const nextSet = new Set<string>(
                         Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : []
                       );
-                      if (nextSet.has(account.id)) nextSet.delete(account.id);
-                      else nextSet.add(account.id);
+                      if (nextSet.has(account.id)) {
+                        nextSet.delete(account.id);
+                      } else {
+                        nextSet.add(account.id);
+                      }
                       const next = Array.from(nextSet);
                       setSelectedSocialAccountIds(brandId, next.length ? next : null);
                     }}

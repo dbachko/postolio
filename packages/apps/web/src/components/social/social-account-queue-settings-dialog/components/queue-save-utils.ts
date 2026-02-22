@@ -32,16 +32,22 @@ export async function saveQueueChanges({
   const queueNameDraftTrimmed = queueNameDraft.trim();
   const queueNameDirty =
     queueNameDraftTrimmed.length > 0 && queueNameDraftTrimmed !== selectedQueueName;
-  if (!queueNameDirty && !slotsDirty) return;
+  if (!queueNameDirty && !slotsDirty) {
+    return;
+  }
 
   if (queueNameDirty) {
     const queueRes = await updateQueue({ name: queueNameDraftTrimmed });
-    if (!queueRes.success) return;
+    if (!queueRes.success) {
+      return;
+    }
   }
 
   if (slotsDirty) {
     const slotsRes = await saveSlots();
-    if (!slotsRes.success) return;
+    if (!slotsRes.success) {
+      return;
+    }
   } else {
     toast.success('Queue updated');
   }

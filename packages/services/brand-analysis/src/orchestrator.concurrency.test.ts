@@ -23,7 +23,9 @@ class MemJobs {
   }
   async updateStatus(jobId: string, brandId: string, status: string, patch: any) {
     const j = this.jobs.find((j) => j.jobId === jobId && j.brandId === brandId);
-    if (j) Object.assign(j, { status }, patch);
+    if (j) {
+      Object.assign(j, { status }, patch);
+    }
   }
   async latestForBrand(_brandId: string) {
     return this.latest;

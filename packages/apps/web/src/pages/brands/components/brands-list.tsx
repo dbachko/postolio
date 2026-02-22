@@ -41,7 +41,9 @@ function BrandAnalysisSummary({
   profileAvailable: Record<string, boolean>;
   profileSummaries: Record<string, { tones: string[]; palette: string[] }>;
 }) {
-  if (!profileAvailable[brandId]) return null;
+  if (!profileAvailable[brandId]) {
+    return null;
+  }
   const summary = profileSummaries[brandId];
   if (!summary) {
     return (

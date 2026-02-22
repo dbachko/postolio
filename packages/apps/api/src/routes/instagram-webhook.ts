@@ -3,7 +3,7 @@
  * Handles webhook events from Instagram (comments, DMs) for DM automation
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { dmAutomation } from '../services/dm-automation.js';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
@@ -28,11 +28,12 @@ function isUniqueConstraintError(
  * Verify webhook signature to ensure request is from Facebook/Instagram
  */
 function verifyWebhookSignature(payload: string, signature: string, appSecret: string): boolean {
-  if (!signature) return false;
+  if (!signature) {
+    return false;
+  }
 
   try {
-    const expectedSignature =
-      'sha256=' + crypto.createHmac('sha256', appSecret).update(payload).digest('hex');
+    const expectedSignature = `sha256=${crypto.createHmac('sha256', appSecret).update(payload).digest('hex')}`;
 
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
   } catch (error) {
@@ -96,7 +97,9 @@ async function findPublicationByInstagramMediaId(mediaId: string): Promise<{
     },
   });
 
-  if (!pub?.id || !pub.content?.brandId) return null;
+  if (!pub?.id || !pub.content?.brandId) {
+    return null;
+  }
   return {
     publicationId: pub.id,
     brandId: pub.content.brandId,

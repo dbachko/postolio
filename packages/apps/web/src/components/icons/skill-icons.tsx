@@ -22,13 +22,17 @@ type SkillIconSource = {
 };
 
 function normalizeProvider(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
   const normalized = value.trim().toLowerCase();
   return normalized.length > 0 ? normalized : null;
 }
 
 function parseProvider(scopesJson: unknown): string | null {
-  if (!scopesJson || typeof scopesJson !== 'object') return null;
+  if (!scopesJson || typeof scopesJson !== 'object') {
+    return null;
+  }
   const provider = (scopesJson as Record<string, unknown>).provider;
   return normalizeProvider(provider);
 }
@@ -42,37 +46,75 @@ function humanize(value: string): string {
 
 function iconFromKey(keyRaw: string): LucideIcon | null {
   const key = keyRaw.trim().toLowerCase();
-  if (!key) return null;
+  if (!key) {
+    return null;
+  }
 
-  if (key === 'text_generation') return Sparkles;
-  if (key === 'image_generation') return ImageIcon;
-  if (key === 'video_gen') return Video;
-  if (key === 'audio_gen') return AudioLines;
-  if (key === 'web_fetch') return Globe;
+  if (key === 'text_generation') {
+    return Sparkles;
+  }
+  if (key === 'image_generation') {
+    return ImageIcon;
+  }
+  if (key === 'video_gen') {
+    return Video;
+  }
+  if (key === 'audio_gen') {
+    return AudioLines;
+  }
+  if (key === 'web_fetch') {
+    return Globe;
+  }
 
-  if (key.includes('openai')) return Bot;
-  if (key.includes('video')) return Video;
-  if (key.includes('audio') || key.includes('tts') || key.includes('voice')) return AudioLines;
-  if (key.includes('image')) return ImageIcon;
-  if (key.includes('fetch') || key.includes('web') || key.includes('http')) return Globe;
-  if (key.includes('internal')) return Wrench;
-  if (key.includes('replicate')) return Cpu;
+  if (key.includes('openai')) {
+    return Bot;
+  }
+  if (key.includes('video')) {
+    return Video;
+  }
+  if (key.includes('audio') || key.includes('tts') || key.includes('voice')) {
+    return AudioLines;
+  }
+  if (key.includes('image')) {
+    return ImageIcon;
+  }
+  if (key.includes('fetch') || key.includes('web') || key.includes('http')) {
+    return Globe;
+  }
+  if (key.includes('internal')) {
+    return Wrench;
+  }
+  if (key.includes('replicate')) {
+    return Cpu;
+  }
 
   return null;
 }
 
 export function resolveSkillIcon(source: SkillIconSource): LucideIcon {
   const fromIconField = source.icon ? iconFromKey(source.icon) : null;
-  if (fromIconField) return fromIconField;
+  if (fromIconField) {
+    return fromIconField;
+  }
 
   const fromId = source.id ? iconFromKey(source.id) : null;
-  if (fromId) return fromId;
+  if (fromId) {
+    return fromId;
+  }
 
   const provider = normalizeProvider(source.provider) || parseProvider(source.scopesJson);
-  if (provider === 'openai') return Bot;
-  if (provider === 'internal') return Wrench;
-  if (provider === 'replicate') return Cpu;
-  if (provider) return Cpu;
+  if (provider === 'openai') {
+    return Bot;
+  }
+  if (provider === 'internal') {
+    return Wrench;
+  }
+  if (provider === 'replicate') {
+    return Cpu;
+  }
+  if (provider) {
+    return Cpu;
+  }
 
   return Sparkles;
 }

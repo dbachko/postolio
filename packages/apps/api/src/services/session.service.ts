@@ -151,7 +151,9 @@ export class SessionService {
     userId: string,
     refreshTokenHashes: string[]
   ): Promise<Session[]> {
-    if (refreshTokenHashes.length === 0) return [];
+    if (refreshTokenHashes.length === 0) {
+      return [];
+    }
 
     return prisma.session.findMany({
       where: {
@@ -186,7 +188,7 @@ export class SessionService {
       where: { id: sessionId },
     });
 
-    if (!session || session.userId !== userId) {
+    if (session?.userId !== userId) {
       throw new Error('Session not found or unauthorized');
     }
 
@@ -216,7 +218,7 @@ export class SessionService {
     return result.count;
   }
 
-  static async deleteOldSessions(daysToKeep: number = 180) {
+  static async deleteOldSessions(daysToKeep = 180) {
     const cutoffDate = addDays(new Date(), -daysToKeep);
 
     const result = await prisma.session.deleteMany({

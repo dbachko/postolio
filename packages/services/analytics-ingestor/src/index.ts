@@ -15,7 +15,9 @@ registerGlobalErrorHandlers();
 
 // Ensure DATABASE_URL is available (fallback to discrete DB_* vars when running in ECS)
 function ensureDatabaseUrl() {
-  if (process.env.DATABASE_URL) return;
+  if (process.env.DATABASE_URL) {
+    return;
+  }
   const { DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME } = process.env as Record<
     string,
     string | undefined
@@ -85,16 +87,24 @@ async function getCredentialsForSocialAccount(
       where: { id: socialAccountId },
       include: { brand: { select: { id: true, userId: true } } },
     });
-    if (!sa || !sa.brand) throw new Error('SocialAccount not found for credentials lookup');
+    if (!sa?.brand) {
+      throw new Error('SocialAccount not found for credentials lookup');
+    }
 
     const path = `${tokenServiceUrl}/tokens/${sa.brand.userId}/${platform}/${sa.brand.id}/social-accounts/${socialAccountId}`;
     const url = new URL(path);
     const signed = await signRequest({ method: 'GET', url, headers: {} });
     const res = await fetch(path, { method: 'GET', headers: signed });
-    if (res.status === 404) throw new Error('No token in Token Service');
-    if (!res.ok) throw new Error(`Token Service error: ${res.status}`);
+    if (res.status === 404) {
+      throw new Error('No token in Token Service');
+    }
+    if (!res.ok) {
+      throw new Error(`Token Service error: ${res.status}`);
+    }
     const data = (await res.json()) as { accessToken: string; expiresAt?: string };
-    if (!data?.accessToken) throw new Error('Token Service returned no accessToken');
+    if (!data?.accessToken) {
+      throw new Error('Token Service returned no accessToken');
+    }
     return { accessToken: data.accessToken, expiresAt: data.expiresAt } as Credentials;
   }
 
@@ -220,12 +230,20 @@ async function recordMetricSamples(
 }
 
 function computeRefreshThresholdMs(publishedAt?: Date | null): number {
-  if (!publishedAt) return 30 * 24 * 60 * 60 * 1000; // default 30 days
+  if (!publishedAt) {
+    return 30 * 24 * 60 * 60 * 1000;
+  } // default 30 days
   const ageMs = Date.now() - publishedAt.getTime();
   const ageDays = ageMs / (24 * 60 * 60 * 1000);
-  if (ageDays < 2) return 45 * 60 * 1000; // 45 minutes
-  if (ageDays < 7) return 24 * 60 * 60 * 1000; // 1 day
-  if (ageDays < 30) return 3 * 24 * 60 * 60 * 1000; // 3 days
+  if (ageDays < 2) {
+    return 45 * 60 * 1000;
+  } // 45 minutes
+  if (ageDays < 7) {
+    return 24 * 60 * 60 * 1000;
+  } // 1 day
+  if (ageDays < 30) {
+    return 3 * 24 * 60 * 60 * 1000;
+  } // 3 days
   return 30 * 24 * 60 * 60 * 1000; // 30 days
 }
 
@@ -242,9 +260,13 @@ async function checkAndConsumeRate(platform: string, socialAccountId: string, li
   }
   const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
   const key = `rate:${platform}:${socialAccountId}:${hourBucket}`;
-  if (!redis) return true;
+  if (!redis) {
+    return true;
+  }
   const count = await redis.incr(key);
-  if (count === 1) await redis.expire(key, 3600);
+  if (count === 1) {
+    await redis.expire(key, 3600);
+  }
   return count <= limit;
 }
 
@@ -267,17 +289,25 @@ async function getBackoffRemainingMs(
   platform: string,
   socialAccountId: string
 ): Promise<number | null> {
-  if (!redis) return null;
+  if (!redis) {
+    return null;
+  }
   const raw = await redis.get(getBackoffKey(platform, socialAccountId));
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const until = Number(raw);
-  if (Number.isNaN(until)) return null;
+  if (Number.isNaN(until)) {
+    return null;
+  }
   const remaining = until - Date.now();
   return remaining > 0 ? remaining : null;
 }
 
 async function clearBackoff(platform: string, socialAccountId: string): Promise<void> {
-  if (!redis) return;
+  if (!redis) {
+    return;
+  }
   await redis.del(getBackoffKey(platform, socialAccountId));
   await redis.del(getBackoffCountKey(platform, socialAccountId));
 }
@@ -287,7 +317,9 @@ async function scheduleBackoff(
   socialAccountId: string,
   retryAfterMs?: number
 ): Promise<number> {
-  if (!redis) return RATE_LIMIT_BACKOFF_BASE_MS;
+  if (!redis) {
+    return RATE_LIMIT_BACKOFF_BASE_MS;
+  }
   const countKey = getBackoffCountKey(platform, socialAccountId);
   const count = await redis.incr(countKey);
   if (count === 1) {
@@ -310,10 +342,14 @@ async function scheduleBackoff(
 
 function parseUsageHeader(raw: any): number | null {
   // Meta returns JSON-ish strings like '{"call_count":42,"total_cputime":16,"total_time":22}'
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (typeof parsed?.call_count === 'number') return parsed.call_count;
+    if (typeof parsed?.call_count === 'number') {
+      return parsed.call_count;
+    }
     return null;
   } catch {
     return null;
@@ -364,10 +400,14 @@ function getPublicationRefreshKey(publicationId: string): string {
 }
 
 async function getLastPublicationRefresh(publicationId: string): Promise<number | null> {
-  if (!redis) return null;
+  if (!redis) {
+    return null;
+  }
   try {
     const raw = await redis.get(getPublicationRefreshKey(publicationId));
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const parsed = Number(raw);
     return Number.isNaN(parsed) ? null : parsed;
   } catch {
@@ -380,7 +420,9 @@ async function markPublicationRefreshed(
   publishedAt?: Date | null,
   overrideMs?: number
 ): Promise<void> {
-  if (!redis) return;
+  if (!redis) {
+    return;
+  }
   try {
     const thresholdMs =
       overrideMs && overrideMs > 0 ? overrideMs : computeRefreshThresholdMs(publishedAt);
@@ -409,15 +451,21 @@ async function isPublicationRefreshDue(pub: {
     lastTs = lastUpdated.getTime();
   } else if (typeof lastUpdated === 'string') {
     const parsed = Date.parse(lastUpdated);
-    if (!Number.isNaN(parsed)) lastTs = parsed;
+    if (!Number.isNaN(parsed)) {
+      lastTs = parsed;
+    }
   }
 
   if (!lastTs) {
     const redisTs = await getLastPublicationRefresh(pub.id);
-    if (typeof redisTs === 'number') lastTs = redisTs;
+    if (typeof redisTs === 'number') {
+      lastTs = redisTs;
+    }
   }
 
-  if (!lastTs) return true;
+  if (!lastTs) {
+    return true;
+  }
 
   const ageMs = now - lastTs;
   return ageMs >= thresholdMs;
@@ -574,7 +622,9 @@ async function emitPublicationUnavailableEvent(detail: {
         ],
       })
     );
-    if (wantDebug) console.debug('[Ingestor] Emitted post.unavailable event', payload);
+    if (wantDebug) {
+      console.debug('[Ingestor] Emitted post.unavailable event', payload);
+    }
   } catch (error) {
     console.warn('Failed to emit post.unavailable event', {
       publicationId: detail.publicationId,
@@ -619,7 +669,9 @@ async function markPublicationUnavailable(
 }
 
 async function ingestPublication(publicationId: string) {
-  if (wantInfo) console.log('[Ingestor] Ingesting publication', { publicationId });
+  if (wantInfo) {
+    console.log('[Ingestor] Ingesting publication', { publicationId });
+  }
   const pub = await prisma.contentPublication.findUnique({
     where: { id: publicationId },
     select: {
@@ -635,7 +687,9 @@ async function ingestPublication(publicationId: string) {
       socialAccount: { select: { externalAccountId: true, externalPageId: true } },
     },
   });
-  if (!pub) return;
+  if (!pub) {
+    return;
+  }
   const externalPostId = (pub.externalPostId || '').trim();
   if (!externalPostId || /^invalid/i.test(externalPostId)) {
     console.warn('[Ingestor] Skipping publication with invalid externalPostId', {
@@ -647,28 +701,35 @@ async function ingestPublication(publicationId: string) {
   }
   const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
   if (!allowed) {
-    if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
+    if (wantDebug) {
+      console.debug('Rate limit reached; skipping', pub.id);
+    }
     return;
   }
   const backoffRemaining = await getBackoffRemainingMs(pub.platform, pub.socialAccountId);
   if (backoffRemaining && backoffRemaining > 0) {
-    if (wantInfo)
+    if (wantInfo) {
       console.log('[Ingestor] Backoff active; skipping publication', {
         publicationId: pub.id,
         backoffMsRemaining: backoffRemaining,
         nextAttemptAt: new Date(Date.now() + backoffRemaining).toISOString(),
       });
+    }
     return;
   }
   const connector = getConnector(pub.platform);
-  if (wantDebug) console.log('[Ingestor] Connector resolved', { platform: pub.platform });
+  if (wantDebug) {
+    console.log('[Ingestor] Connector resolved', { platform: pub.platform });
+  }
   const creds = await getCredentialsForSocialAccount(pub.socialAccountId, pub.platform);
   const account: AccountIdentity = {
     platform: pub.platform as any,
     externalAccountId: pub.externalAccountId || pub.socialAccount?.externalAccountId || '',
     externalPageId: pub.externalPageId || pub.socialAccount?.externalPageId || undefined,
   } as any;
-  if (wantDebug) console.debug('[Ingestor] Fetching media insights', { mediaId: externalPostId });
+  if (wantDebug) {
+    console.debug('[Ingestor] Fetching media insights', { mediaId: externalPostId });
+  }
   try {
     const insights = await connector.getMediaInsights(creds, account, externalPostId);
     const fields = connector.getMediaFields
@@ -718,7 +779,9 @@ async function drainQueue(max = 20) {
   let drained = 0;
   for (let i = 0; i < max; i++) {
     const id = await redis.lpop(queueKey);
-    if (!id) break;
+    if (!id) {
+      break;
+    }
     try {
       let effectiveId = String(id);
       // Allow enqueuing by contentId using payload prefix 'content:'
@@ -734,11 +797,12 @@ async function drainQueue(max = 20) {
           continue;
         }
         effectiveId = pub.id;
-        if (wantInfo)
+        if (wantInfo) {
           console.log('[Ingestor] Resolved content to publication', {
             contentId,
             publicationId: effectiveId,
           });
+        }
       }
       // Allow enqueuing by external media id using payload prefix 'ig:'
       else if (effectiveId.startsWith('ig:')) {
@@ -753,11 +817,12 @@ async function drainQueue(max = 20) {
           continue;
         }
         effectiveId = pub.id;
-        if (wantInfo)
+        if (wantInfo) {
           console.log('[Ingestor] Resolved external media to publication', {
             mediaId,
             publicationId: effectiveId,
           });
+        }
       }
       drained++;
       await ingestPublication(effectiveId);
@@ -775,7 +840,9 @@ async function drainQueue(max = 20) {
       );
     }
   }
-  if (wantDebug && drained > 0) console.log('[Ingestor] Drained publications', { drained });
+  if (wantDebug && drained > 0) {
+    console.log('[Ingestor] Drained publications', { drained });
+  }
   return drained;
 }
 
@@ -784,7 +851,9 @@ async function ingestAccountMetrics(socialAccountId: string) {
     where: { id: socialAccountId },
     select: { id: true, platform: true, externalAccountId: true, externalPageId: true },
   });
-  if (!sa) return;
+  if (!sa) {
+    return;
+  }
   // Gate by lastUpdated interval
   const latest = await prisma.accountMetricsLatest.findUnique({
     where: { socialAccountId: sa.id },
@@ -793,30 +862,36 @@ async function ingestAccountMetrics(socialAccountId: string) {
   if (latest?.lastUpdated) {
     const age = Date.now() - new Date(latest.lastUpdated).getTime();
     if (age < ACCOUNT_METRICS_MIN_INTERVAL_MS) {
-      if (wantDebug)
+      if (wantDebug) {
         console.debug('Account metrics within min interval; skipping', {
           socialAccountId: sa.id,
         });
+      }
       return;
     }
   }
   const allowed = await checkAndConsumeRate(sa.platform, sa.id, 200);
   if (!allowed) {
-    if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
+    if (wantDebug) {
+      console.debug('Rate limit reached; skipping account', sa.id);
+    }
     return;
   }
   const acctBackoffRemaining = await getBackoffRemainingMs(sa.platform, sa.id);
   if (acctBackoffRemaining && acctBackoffRemaining > 0) {
-    if (wantInfo)
+    if (wantInfo) {
       console.log('[Ingestor] Backoff active; skipping account metrics', {
         socialAccountId: sa.id,
         backoffMsRemaining: acctBackoffRemaining,
         nextAttemptAt: new Date(Date.now() + acctBackoffRemaining).toISOString(),
       });
+    }
     return;
   }
   const connector = getConnector(sa.platform);
-  if (!connector.getAccountInsights) return;
+  if (!connector.getAccountInsights) {
+    return;
+  }
   const creds = await getCredentialsForSocialAccount(sa.id, sa.platform);
   const account: AccountIdentity = {
     platform: sa.platform as any,
@@ -886,7 +961,9 @@ async function drainAccountQueue(max = 10) {
   let drained = 0;
   for (let i = 0; i < max; i++) {
     const id = await redis.lpop(key);
-    if (!id) break;
+    if (!id) {
+      break;
+    }
     try {
       drained++;
       await ingestAccountMetrics(id);
@@ -904,7 +981,9 @@ async function drainAccountQueue(max = 10) {
       );
     }
   }
-  if (wantDebug && drained > 0) console.log('[Ingestor] Drained accounts', { drained });
+  if (wantDebug && drained > 0) {
+    console.log('[Ingestor] Drained accounts', { drained });
+  }
   return drained;
 }
 
@@ -956,18 +1035,21 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
     try {
       const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
       if (!allowed) {
-        if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
+        if (wantDebug) {
+          console.debug('Rate limit reached; skipping', pub.id);
+        }
         continue;
       }
       const loopBackoffRemaining = await getBackoffRemainingMs(pub.platform, pub.socialAccountId);
       if (loopBackoffRemaining && loopBackoffRemaining > 0) {
         skippedByBackoff += 1;
-        if (wantInfo)
+        if (wantInfo) {
           console.log('Backoff active; skipping publication ingestion', {
             publicationId: pub.id,
             backoffMsRemaining: loopBackoffRemaining,
             nextAttemptAt: new Date(Date.now() + loopBackoffRemaining).toISOString(),
           });
+        }
         continue;
       }
       await ingestPublication(pub.id);
@@ -1013,7 +1095,9 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
           where: { id: socialAccountId },
           select: { id: true, platform: true, externalAccountId: true, externalPageId: true },
         });
-        if (!sa) continue;
+        if (!sa) {
+          continue;
+        }
         // Gate by lastUpdated interval
         const latest = await prisma.accountMetricsLatest.findUnique({
           where: { socialAccountId: sa.id },
@@ -1022,28 +1106,32 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
         if (latest?.lastUpdated) {
           const age = Date.now() - new Date(latest.lastUpdated).getTime();
           if (age < ACCOUNT_METRICS_MIN_INTERVAL_MS) {
-            if (wantDebug)
+            if (wantDebug) {
               console.debug('Account metrics within min interval; skipping', {
                 socialAccountId: sa.id,
               });
+            }
             continue;
           }
         }
         const allowed = await checkAndConsumeRate(sa.platform, sa.id, 200);
         if (!allowed) {
-          if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
+          if (wantDebug) {
+            console.debug('Rate limit reached; skipping account', sa.id);
+          }
           continue;
         }
 
         const batchBackoffRemaining = await getBackoffRemainingMs(sa.platform, sa.id);
         if (batchBackoffRemaining && batchBackoffRemaining > 0) {
           accountsSkippedByBackoff += 1;
-          if (wantInfo)
+          if (wantInfo) {
             console.log('Backoff active; skipping account metrics batch', {
               socialAccountId: sa.id,
               backoffMsRemaining: batchBackoffRemaining,
               nextAttemptAt: new Date(Date.now() + batchBackoffRemaining).toISOString(),
             });
+          }
           continue;
         }
 
@@ -1054,7 +1142,9 @@ async function runOnce(): Promise<{ hadWork: boolean }> {
           externalAccountId: sa.externalAccountId,
           externalPageId: sa.externalPageId || undefined,
         } as any;
-        if (!connector.getAccountInsights) continue;
+        if (!connector.getAccountInsights) {
+          continue;
+        }
         const am = await connector.getAccountInsights(creds, account, '7d');
 
         // Insert daily aggregate sample (period=day, asOf=now)

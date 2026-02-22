@@ -4,7 +4,9 @@ import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { encodeFiltersToURL, decodeFiltersFromURL, areFiltersEqual } from '../utils/filterUrlUtils';
 
 const haveSameMembers = <T extends string>(a: readonly T[], b: readonly T[]): boolean => {
-  if (a.length !== b.length) return false;
+  if (a.length !== b.length) {
+    return false;
+  }
   const sortedA = [...a].sort();
   const sortedB = [...b].sort();
   return sortedA.every((value, index) => value === sortedB[index]);

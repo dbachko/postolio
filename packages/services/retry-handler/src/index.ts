@@ -10,8 +10,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 // import { LambdaClient } from '@aws-sdk/client-lambda';
 import { SchedulerClient, CreateScheduleCommand } from '@aws-sdk/client-scheduler';
-import type { ScheduledEvent } from 'aws-lambda';
-import { SQSEvent, SQSRecord } from 'aws-lambda';
+import type { ScheduledEvent, SQSEvent, SQSRecord } from 'aws-lambda';
 import { RetryStrategy } from './retry-strategy';
 import { initSentry, captureException } from '@postolio/observability';
 
@@ -269,7 +268,7 @@ async function getScheduleData(scheduleId: string): Promise<ScheduleRecord | nul
       })
     );
 
-    const item = (result.Items && result.Items[0]) as ScheduleRecord | undefined;
+    const item = result.Items?.[0] as ScheduleRecord | undefined;
     if (!item) {
       logger.warn('No schedule data found via GSI', { scheduleId });
       return null;
@@ -302,7 +301,7 @@ async function getRetryInfo(scheduleId: string): Promise<RetryInfo | null> {
       })
     );
 
-    const latest = result.Items && result.Items[0];
+    const latest = result.Items?.[0];
     return (latest as RetryInfo) || null;
   } catch (err) {
     logger.warn('No retry info found or query failed', {

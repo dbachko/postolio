@@ -41,7 +41,7 @@ export async function computeUpcomingSlots(
       .format(d)
       .replace(/\//g, '-');
   const addDays = (ymd: string, days: number) => {
-    const dt = new Date(ymd + 'T00:00:00Z');
+    const dt = new Date(`${ymd}T00:00:00Z`);
     dt.setUTCDate(dt.getUTCDate() + days);
     return dt.toISOString().slice(0, 10);
   };
@@ -68,7 +68,9 @@ export async function computeUpcomingSlots(
     if (scheduledUtc > bufferedNow) {
       slots.push(scheduledUtc);
       addedToday = true;
-      if (slots.length >= maxSlots) return slots;
+      if (slots.length >= maxSlots) {
+        return slots;
+      }
     }
   }
 
@@ -91,7 +93,9 @@ export async function computeUpcomingSlots(
       const scheduledUtc = TimezoneService.createDateInBrandTimezone(dateStr, t, timezone);
       if (scheduledUtc > bufferedNow) {
         slots.push(scheduledUtc);
-        if (slots.length >= maxSlots) break;
+        if (slots.length >= maxSlots) {
+          break;
+        }
       }
     }
 

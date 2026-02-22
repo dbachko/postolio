@@ -12,14 +12,22 @@ const prisma = getDatabaseClient();
 const recommendationEngine = new RecommendationEngine();
 
 function periodToDays(period: string | undefined): number {
-  if (period === '7d') return 7;
-  if (period === '90d') return 90;
+  if (period === '7d') {
+    return 7;
+  }
+  if (period === '90d') {
+    return 90;
+  }
   return 30;
 }
 
 function windowToDays(window: string | undefined): number {
-  if (window === '7d') return 7;
-  if (window === '90d') return 90;
+  if (window === '7d') {
+    return 7;
+  }
+  if (window === '90d') {
+    return 90;
+  }
   return 30;
 }
 
@@ -52,7 +60,7 @@ async function resolveSocialAccountForUser(params: {
     },
   });
 
-  if (!sa || sa.brand.userId !== userId) {
+  if (sa?.brand.userId !== userId) {
     throw Object.assign(new Error('social_account_not_found'), { statusCode: 404 });
   }
 
@@ -65,9 +73,13 @@ async function resolveSocialAccountForUser(params: {
       : null;
   const profilePictureUrl = (() => {
     const direct = meta.profile_picture_url;
-    if (typeof direct === 'string' && direct) return direct;
+    if (typeof direct === 'string' && direct) {
+      return direct;
+    }
     const nested = profileData?.profile_picture_url;
-    if (typeof nested === 'string' && nested) return nested;
+    if (typeof nested === 'string' && nested) {
+      return nested;
+    }
     return null;
   })();
 
@@ -120,7 +132,9 @@ export const socialAccountAnalyticsRoutes: FastifyPluginAsync = async (fastify) 
 
       for (const p of pubs) {
         const m = p.metricsLatest;
-        if (!m) continue;
+        if (!m) {
+          continue;
+        }
         totalImpressions += m.impressions || 0;
         totalReach += m.reach || 0;
         totalEngagement += m.engagement || 0;
@@ -146,7 +160,9 @@ export const socialAccountAnalyticsRoutes: FastifyPluginAsync = async (fastify) 
       let prevEngagement = 0;
       for (const p of previousPubs) {
         const m = p.metricsLatest;
-        if (!m) continue;
+        if (!m) {
+          continue;
+        }
         prevImpressions += m.impressions || 0;
         prevReach += m.reach || 0;
         prevEngagement += m.engagement || 0;
@@ -256,14 +272,20 @@ export const socialAccountAnalyticsRoutes: FastifyPluginAsync = async (fastify) 
           select: { publishedAt: true, metricsLatest: true },
         });
         for (const p of pubs) {
-          if (!p.publishedAt || !p.metricsLatest) continue;
+          if (!p.publishedAt || !p.metricsLatest) {
+            continue;
+          }
           const date = p.publishedAt.toISOString().split('T')[0];
           const m = p.metricsLatest;
-          if (metricList.includes('impressions'))
+          if (metricList.includes('impressions')) {
             pushSample(date, 'impressions', m.impressions || 0);
-          if (metricList.includes('reach')) pushSample(date, 'reach', m.reach || 0);
-          if (metricList.includes('profile_views'))
+          }
+          if (metricList.includes('reach')) {
+            pushSample(date, 'reach', m.reach || 0);
+          }
+          if (metricList.includes('profile_views')) {
             pushSample(date, 'profile_views', (m as any).profileViews || 0);
+          }
         }
       }
 
@@ -358,7 +380,9 @@ export const socialAccountAnalyticsRoutes: FastifyPluginAsync = async (fastify) 
           const assetsClient = getAssetsClient();
           const assets = await assetsClient.getBatchAssets(uniquePrimaryAssetIds);
           assets.forEach((asset) => {
-            if (asset?.id) assetsById.set(asset.id, asset);
+            if (asset?.id) {
+              assetsById.set(asset.id, asset);
+            }
           });
         } catch {
           // ignore thumbnails failures

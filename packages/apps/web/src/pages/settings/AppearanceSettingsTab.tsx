@@ -32,14 +32,18 @@ export default function AppearanceSettingsTab() {
   const handleResetTheme = () => {
     setAppearanceMode('system');
     setTheme('system');
-    if (user) setUser({ ...user, theme: 'system' });
+    if (user) {
+      setUser({ ...user, theme: 'system' });
+    }
   };
 
   const handleThemeChange = (val: string) => {
     const newTheme = val as 'system' | 'light' | 'dark';
     setAppearanceMode(newTheme);
     setTheme(newTheme);
-    if (user) setUser({ ...user, theme: newTheme });
+    if (user) {
+      setUser({ ...user, theme: newTheme });
+    }
   };
 
   return (

@@ -37,12 +37,18 @@ export function SlotRow({
 }: SlotRowProps) {
   const isEmpty = !inst.occupied && !estimatedItem;
   const createDisabledReason = useMemo(() => {
-    if (isPast) return 'This slot is in the past.';
-    if (isEmpty && scheduleAheadAtCapacity) return scheduleLimitMessage;
+    if (isPast) {
+      return 'This slot is in the past.';
+    }
+    if (isEmpty && scheduleAheadAtCapacity) {
+      return scheduleLimitMessage;
+    }
     return null;
   }, [isEmpty, isPast, scheduleAheadAtCapacity, scheduleLimitMessage]);
   const queueItemDragMeta = useMemo(() => {
-    if (!estimatedItem) return { disabled: false, reason: '' };
+    if (!estimatedItem) {
+      return { disabled: false, reason: '' };
+    }
     const status =
       typeof (estimatedItem as any)?.content?.status === 'string'
         ? String((estimatedItem as any).content.status).trim()
@@ -74,17 +80,27 @@ export function SlotRow({
   })();
 
   const canDrag = (() => {
-    if (!dragPayload) return false;
-    if (dragPayload.kind === 'queueItem')
+    if (!dragPayload) {
+      return false;
+    }
+    if (dragPayload.kind === 'queueItem') {
       return !isPast && !scheduleAheadAtCapacity && !queueItemDragMeta.disabled;
+    }
     return canDragScheduledContent(occupiedContent, isPast);
   })();
   const dragTooltip = useMemo(() => {
-    if (!dragPayload) return '';
-    if (canDrag)
+    if (!dragPayload) {
+      return '';
+    }
+    if (canDrag) {
       return dragPayload.kind === 'queueItem' ? 'Drag to schedule.' : 'Drag to reschedule.';
-    if (isPast) return 'Past posts cannot be moved.';
-    if (dragPayload.kind === 'queueItem' && scheduleAheadAtCapacity) return scheduleLimitMessage;
+    }
+    if (isPast) {
+      return 'Past posts cannot be moved.';
+    }
+    if (dragPayload.kind === 'queueItem' && scheduleAheadAtCapacity) {
+      return scheduleLimitMessage;
+    }
     if (dragPayload.kind === 'queueItem' && queueItemDragMeta.disabled) {
       return queueItemDragMeta.reason;
     }
@@ -92,7 +108,9 @@ export function SlotRow({
       typeof (occupiedContent as any)?.status === 'string'
         ? String((occupiedContent as any).status).trim()
         : '';
-    if (status === 'published') return 'Published posts cannot be moved.';
+    if (status === 'published') {
+      return 'Published posts cannot be moved.';
+    }
     return 'Dragging is disabled.';
   }, [
     canDrag,
@@ -109,16 +127,30 @@ export function SlotRow({
     () => ({
       accept: DND_ITEM_TYPE,
       canDrop: (item: QueueDragPayload) => {
-        if (!isEmpty) return false;
-        if (isPast) return false;
-        if (!isLaneCompatible(inst.laneKey, item.laneKey)) return false;
-        if (item.kind === 'queueItem' && scheduleAheadAtCapacity) return false;
+        if (!isEmpty) {
+          return false;
+        }
+        if (isPast) {
+          return false;
+        }
+        if (!isLaneCompatible(inst.laneKey, item.laneKey)) {
+          return false;
+        }
+        if (item.kind === 'queueItem' && scheduleAheadAtCapacity) {
+          return false;
+        }
         return true;
       },
       drop: async (item: QueueDragPayload) => {
-        if (!isEmpty) return;
-        if (isPast) return;
-        if (!isLaneCompatible(inst.laneKey, item.laneKey)) return;
+        if (!isEmpty) {
+          return;
+        }
+        if (isPast) {
+          return;
+        }
+        if (!isLaneCompatible(inst.laneKey, item.laneKey)) {
+          return;
+        }
         if (item.kind === 'queueItem' && scheduleAheadAtCapacity) {
           toast.error(scheduleLimitMessage);
           return;

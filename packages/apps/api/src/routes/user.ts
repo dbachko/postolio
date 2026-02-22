@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import type { ThemePreference, WeekStartPreference } from '@postolio/database';
 import { TimezoneService } from '../services/timezone.js';
@@ -10,7 +10,9 @@ const prisma = getDatabaseClient();
 function isTimezoneUpdateBody(
   body: unknown
 ): body is { timezone: string; timezoneAutoDetected: boolean } {
-  if (!body || typeof body !== 'object') return false;
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
 
   const obj = body as Record<string, unknown>;
 
@@ -18,7 +20,9 @@ function isTimezoneUpdateBody(
 }
 
 function isBrandTimezoneUpdateBody(body: unknown): body is { timezone: string | null } {
-  if (!body || typeof body !== 'object') return false;
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
 
   const obj = body as Record<string, unknown>;
 
@@ -27,7 +31,9 @@ function isBrandTimezoneUpdateBody(body: unknown): body is { timezone: string | 
 
 // Theme update body guard (single field)
 function isThemeUpdateBody(body: unknown): body is { theme: 'system' | 'light' | 'dark' } {
-  if (!body || typeof body !== 'object') return false;
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
   const obj = body as Record<string, unknown>;
   const theme = obj.theme;
   return theme === 'system' || theme === 'light' || theme === 'dark';
@@ -35,7 +41,9 @@ function isThemeUpdateBody(body: unknown): body is { theme: 'system' | 'light' |
 
 // Week start update body guard
 function isWeekStartUpdateBody(body: unknown): body is { weekStart: 'monday' | 'sunday' } {
-  if (!body || typeof body !== 'object') return false;
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
   const obj = body as Record<string, unknown>;
   return obj.weekStart === 'monday' || obj.weekStart === 'sunday';
 }
@@ -58,12 +66,16 @@ function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null }
 }
 
 function validateThemeUpdate(body: unknown): { theme: 'system' | 'light' | 'dark' } | null {
-  if (isThemeUpdateBody(body)) return body as { theme: 'system' | 'light' | 'dark' };
+  if (isThemeUpdateBody(body)) {
+    return body as { theme: 'system' | 'light' | 'dark' };
+  }
   return null;
 }
 
 function validateWeekStartUpdate(body: unknown): { weekStart: 'monday' | 'sunday' } | null {
-  if (isWeekStartUpdateBody(body)) return body as { weekStart: 'monday' | 'sunday' };
+  if (isWeekStartUpdateBody(body)) {
+    return body as { weekStart: 'monday' | 'sunday' };
+  }
   return null;
 }
 
@@ -131,7 +143,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: {
-            timezone: timezone, // Store the actual timezone value even when auto-detected
+            timezone, // Store the actual timezone value even when auto-detected
             timezoneAutoDetected,
           },
           select: {

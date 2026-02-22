@@ -12,7 +12,9 @@ export const publicationsAnalyticsRoutes: FastifyPluginAsync = async (fastify) =
       const latest = await prisma.publicationMetricsLatest.findUnique({
         where: { publicationId },
       });
-      if (!latest) return reply.code(404).send({ error: 'Not found' });
+      if (!latest) {
+        return reply.code(404).send({ error: 'Not found' });
+      }
       return reply.send({ success: true, data: latest });
     } catch (error) {
       request.log.error({ error }, 'Failed to get publication metrics');
@@ -25,7 +27,9 @@ export const publicationsAnalyticsRoutes: FastifyPluginAsync = async (fastify) =
     try {
       const { publicationId } = request.params as { publicationId: string };
       const pub = await prisma.contentPublication.findUnique({ where: { id: publicationId } });
-      if (!pub) return reply.code(404).send({ error: 'Publication not found' });
+      if (!pub) {
+        return reply.code(404).send({ error: 'Publication not found' });
+      }
 
       const redis = getRedisClient();
       const key = `ingest:publication:${publicationId}`;

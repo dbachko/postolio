@@ -83,6 +83,8 @@ export function getPlatformAnalyticsModule(
   platform: string | null | undefined
 ): PlatformAnalyticsModule {
   const key = platform as Platform | undefined;
-  if (key && key in MODULES) return MODULES[key];
+  if (key && key in MODULES) {
+    return MODULES[key];
+  }
   return DEFAULT_MODULE;
 }

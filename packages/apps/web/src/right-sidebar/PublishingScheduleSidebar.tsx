@@ -60,7 +60,9 @@ export function PublishingScheduleSidebar({ id }: { id?: string }) {
   }, [accountsQuery.data]);
 
   const selectedAccount = useMemo(() => {
-    if (!accountId) return null;
+    if (!accountId) {
+      return null;
+    }
     return allAccounts.find((account) => account.id === accountId) ?? null;
   }, [accountId, allAccounts]);
 

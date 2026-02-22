@@ -192,7 +192,7 @@ export class PasswordResetService {
       // Log failed password reset attempt
       await AuditLogger.log({
         eventType: AuditEventType.PASSWORD_RESET_COMPLETED,
-        metadata: { token: token.substring(0, 8) + '...', ipAddress },
+        metadata: { token: `${token.substring(0, 8)}...`, ipAddress },
         success: false,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
       });

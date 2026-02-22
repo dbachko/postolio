@@ -82,7 +82,9 @@ export class CSRFTokenManager {
    * Get the appropriate storage adapter based on configuration
    */
   private getStorageAdapter(): StorageAdapter | null {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') {
+      return null;
+    }
 
     switch (this.config.storage) {
       case 'session':

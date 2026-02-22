@@ -1,9 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNotificationsStore } from '@/stores/notificationsStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useState } from 'react';
 
 export default function NotificationsPage() {
   const { items, fetchLatest, markRead, markAllRead, fetchMore, nextCursor } =

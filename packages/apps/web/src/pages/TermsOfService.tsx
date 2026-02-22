@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { ReactElement } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 

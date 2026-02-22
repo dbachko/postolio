@@ -1,8 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { brand as brandApi, content as contentApi } from '@/lib/api';
-import type { Content } from '@/lib/api';
+import { brand as brandApi, content as contentApi, type Content } from '@/lib/api';
 import { isInboxEnabled } from '@/lib/feature-flags';
 import { useBrandStore } from '@/stores/brandStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -140,15 +139,23 @@ export function Dashboard() {
     queueSlotsErrorBySocialAccountId,
   } = usePostEditorQueueAvailability({ socialAccountIds: connectedSocialAccountIds });
   const showScheduleSetupReminder = useMemo(() => {
-    if (!connectedSocialAccountIds.length) return false;
+    if (!connectedSocialAccountIds.length) {
+      return false;
+    }
 
     const allQueueChecksResolved = uniqueSocialAccountIds.every((socialAccountId) => {
-      if (queueSlotsLoadingBySocialAccountId[socialAccountId]) return false;
-      if (queueSlotsErrorBySocialAccountId[socialAccountId]) return false;
+      if (queueSlotsLoadingBySocialAccountId[socialAccountId]) {
+        return false;
+      }
+      if (queueSlotsErrorBySocialAccountId[socialAccountId]) {
+        return false;
+      }
       return hasQueueSlotsBySocialAccountId[socialAccountId] !== null;
     });
 
-    if (!allQueueChecksResolved) return false;
+    if (!allQueueChecksResolved) {
+      return false;
+    }
 
     const hasAnyQueueSlots = uniqueSocialAccountIds.some(
       (socialAccountId) => hasQueueSlotsBySocialAccountId[socialAccountId] === true
@@ -170,8 +177,10 @@ export function Dashboard() {
   const draftPreviewAssetsQuery = useAssetsByIds(draftPreviewAssetIds);
 
   const commentsInboxItems = useMemo(() => {
-    if (!inboxEnabled) return [] as CommentsInboxItem[];
-    const items = ((commentsInboxQuery.data as any)?.items || []) as Array<any>;
+    if (!inboxEnabled) {
+      return [] as CommentsInboxItem[];
+    }
+    const items = ((commentsInboxQuery.data as any)?.items || []) as any[];
 
     const threads = items
       .filter((item) => item?.type === 'comment_thread')

@@ -1,6 +1,6 @@
 import { Pool, type PoolConfig } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 
 // Re-export everything from Prisma client.
 // Keep this as a star export to preserve the Prisma namespace types (e.g. Prisma.InputJsonValue).

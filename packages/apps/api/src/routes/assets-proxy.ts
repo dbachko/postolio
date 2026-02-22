@@ -1,8 +1,8 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import {
   AssetsServiceClient,
-  DeleteAssetResponse,
-  ListAssetsResponse,
+  type DeleteAssetResponse,
+  type ListAssetsResponse,
   type AssetRecord,
   type BulkAssetAction,
 } from '@postolio/assets-client';
@@ -184,7 +184,7 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
         limit: limit ? Number(limit) : undefined,
         collectionId: collectionId || undefined,
         includeSubcollections: includeSubcollections === 'true' || includeSubcollections === '1',
-        labelIds: labelIds,
+        labelIds,
         labelMode,
         // Forward new filter parameters
         aspectRatio,
@@ -552,7 +552,9 @@ export const assetsProxyRoutes: FastifyPluginAsync = async (fastify) => {
       const ownedBrandIds = new Set<string>();
       for (const brandId of uniqueBrandIds) {
         const { owns } = await ensureBrandOwned(brandId, userId);
-        if (owns) ownedBrandIds.add(brandId);
+        if (owns) {
+          ownedBrandIds.add(brandId);
+        }
       }
 
       const assetsById: Record<string, AssetRecord | null> = {};

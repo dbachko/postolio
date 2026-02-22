@@ -189,9 +189,15 @@ export function runTopicEntityExtractor(
   for (const t of input.captions) {
     const tokens = tokenize(t);
     for (const w of tokens) {
-      if (w.length < 3) continue;
-      if (STOPWORDS.has(w)) continue;
-      if (/^\d+$/.test(w)) continue;
+      if (w.length < 3) {
+        continue;
+      }
+      if (STOPWORDS.has(w)) {
+        continue;
+      }
+      if (/^\d+$/.test(w)) {
+        continue;
+      }
       unigramFreq[w] = (unigramFreq[w] || 0) + 1;
     }
   }
@@ -204,7 +210,9 @@ export function runTopicEntityExtractor(
       const a = tokens[i];
       const b = tokens[i + 1];
       // avoid duplicate bigrams with same word repeated
-      if (a === b) continue;
+      if (a === b) {
+        continue;
+      }
       const phrase = `${a} ${b}`;
       bigramFreq[phrase] = (bigramFreq[phrase] || 0) + 1;
     }
@@ -212,10 +220,12 @@ export function runTopicEntityExtractor(
 
   // 3) Merge and rank: prefer bigrams; backfill with unigrams
   const scored: Array<{ value: string; count: number; kind: 'bi' | 'uni' }> = [];
-  for (const [k, v] of Object.entries(bigramFreq))
+  for (const [k, v] of Object.entries(bigramFreq)) {
     scored.push({ value: k, count: v * 2, kind: 'bi' });
-  for (const [k, v] of Object.entries(unigramFreq))
+  }
+  for (const [k, v] of Object.entries(unigramFreq)) {
     scored.push({ value: k, count: v, kind: 'uni' });
+  }
 
   // de-duplicate where a unigram is wholly contained in a high-scoring bigram
   const top = scored

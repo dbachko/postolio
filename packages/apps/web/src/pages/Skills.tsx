@@ -87,7 +87,9 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function normalizeProviderId(value: unknown): string | null {
-  if (!isNonEmptyString(value)) return null;
+  if (!isNonEmptyString(value)) {
+    return null;
+  }
   return value.trim().toLowerCase();
 }
 
@@ -95,13 +97,19 @@ function humanizeKey(raw: string): string {
   const s = String(raw || '')
     .replace(/[_-]+/g, ' ')
     .trim();
-  if (!s) return '';
+  if (!s) {
+    return '';
+  }
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function toStringValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
   return '';
 }
 
@@ -119,7 +127,9 @@ function extractExamplePrompt(value: unknown): string | null {
     return prompt.length > 0 ? prompt : null;
   }
 
-  if (!value || typeof value !== 'object') return null;
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
   const record = value as Record<string, unknown>;
   const promptKeys = ['prompt', 'instruction', 'task', 'query', 'url'];
   for (const key of promptKeys) {
@@ -185,7 +195,9 @@ function parseSkillMeta(scopesJson: unknown): SkillMeta {
   const providerDetails: Record<string, ProviderSkillMeta> = {};
   for (const [providerKey, detailRaw] of Object.entries(providerDetailsRaw)) {
     const providerId = normalizeProviderId(providerKey);
-    if (!providerId) continue;
+    if (!providerId) {
+      continue;
+    }
     const detail = asRecord(detailRaw);
     const detailTry = asRecord(detail.try);
     providerDetails[providerId] = {
@@ -223,17 +235,25 @@ function normalizeInputValueForSchema(value: unknown, schema: SchemaProperty): u
   const type = schema.type;
   if (type === 'number') {
     const raw = toStringValue(value).trim();
-    if (!raw) return undefined;
+    if (!raw) {
+      return undefined;
+    }
     const num = Number(raw);
     return Number.isFinite(num) ? num : undefined;
   }
   if (type === 'boolean') {
-    if (typeof value === 'boolean') return value;
+    if (typeof value === 'boolean') {
+      return value;
+    }
     const raw = String(value || '')
       .trim()
       .toLowerCase();
-    if (raw === 'true') return true;
-    if (raw === 'false') return false;
+    if (raw === 'true') {
+      return true;
+    }
+    if (raw === 'false') {
+      return false;
+    }
     return undefined;
   }
   const raw = toStringValue(value);
@@ -285,7 +305,9 @@ function buildConfigPayload(
 
   if (schema.additionalProperties) {
     for (const [key, value] of Object.entries(values)) {
-      if (Object.prototype.hasOwnProperty.call(schema.properties, key)) continue;
+      if (Object.prototype.hasOwnProperty.call(schema.properties, key)) {
+        continue;
+      }
       out[key] = value;
     }
   }
@@ -366,7 +388,9 @@ export function Skills() {
       config: Record<string, unknown>;
       apiKey?: string;
     }) => {
-      if (!brandId) throw new Error('Brand required');
+      if (!brandId) {
+        throw new Error('Brand required');
+      }
       return await skillsApi.install(params.skillId, {
         brandId,
         mode: params.mode,
@@ -388,7 +412,9 @@ export function Skills() {
 
   const uninstallMutation = useMutation({
     mutationFn: async (skill: SkillSummary) => {
-      if (!brandId) throw new Error('Brand required');
+      if (!brandId) {
+        throw new Error('Brand required');
+      }
       if (skill.installation?.id) {
         return await skillsApi.uninstallInstallation(skill.installation.id);
       }
@@ -410,7 +436,9 @@ export function Skills() {
   const isInitialLoading = skillsQuery.isLoading && !skillsQuery.data;
   const normalizedSearch = search.trim().toLowerCase();
   const filteredSkills = useMemo(() => {
-    if (!normalizedSearch) return skills;
+    if (!normalizedSearch) {
+      return skills;
+    }
     return skills.filter((skill) => {
       const haystack = `${skill.name} ${skill.id} ${skill.description}`.toLowerCase();
       return haystack.includes(normalizedSearch);
@@ -428,7 +456,9 @@ export function Skills() {
     if (selectedFromConfig && activeMeta.providers.includes(selectedFromConfig)) {
       return selectedFromConfig;
     }
-    if (activeMeta.provider) return activeMeta.provider;
+    if (activeMeta.provider) {
+      return activeMeta.provider;
+    }
     return activeMeta.providers[0] ?? null;
   }, [activeMeta.provider, activeMeta.providers, configValues.provider]);
   const selectedProviderMeta = useMemo(
@@ -455,14 +485,18 @@ export function Skills() {
       : activeMeta.trySampleInput;
   const examplePrompt = useMemo(() => {
     const fromTrySample = extractExamplePrompt(activeTrySampleInput);
-    if (fromTrySample) return fromTrySample;
+    if (fromTrySample) {
+      return fromTrySample;
+    }
     const fromExamples = activeExamples
       .map((example) => extractExamplePrompt(example.input))
       .find((item): item is string => Boolean(item));
     return fromExamples || null;
   }, [activeExamples, activeTrySampleInput]);
   const copyExamplePrompt = useCallback(async () => {
-    if (!examplePrompt) return;
+    if (!examplePrompt) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(examplePrompt);
       toast.success('Example prompt copied');
@@ -473,7 +507,9 @@ export function Skills() {
 
   const supportedModes = useMemo(() => {
     const modeSupported = activeSkill?.modeSupported || 'managed';
-    if (modeSupported === 'both') return ['managed', 'byok'] as const;
+    if (modeSupported === 'both') {
+      return ['managed', 'byok'] as const;
+    }
     return [modeSupported] as const;
   }, [activeSkill?.modeSupported]);
 
@@ -493,7 +529,9 @@ export function Skills() {
       setActiveSkill(skill);
       initializeSkillForm(skill);
       setConfigOpen(true);
-      if (!brandId) return;
+      if (!brandId) {
+        return;
+      }
       try {
         setLoadingSkillDetail(true);
         const res = await skillsApi.getSkill(skill.id, brandId);
@@ -510,9 +548,15 @@ export function Skills() {
   );
 
   useEffect(() => {
-    if (!requestedSkillId) return;
-    if (didAutoOpenRef.current) return;
-    if (!skillsQuery.data) return;
+    if (!requestedSkillId) {
+      return;
+    }
+    if (didAutoOpenRef.current) {
+      return;
+    }
+    if (!skillsQuery.data) {
+      return;
+    }
 
     const skill = skillsQuery.data.find((s) => s.id === requestedSkillId) ?? null;
     didAutoOpenRef.current = true;
@@ -530,8 +574,12 @@ export function Skills() {
   }, [requestedSkillId, skillsQuery.data, openConfigure, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (!activeSkill) return;
-    if (supportedModes.includes(mode)) return;
+    if (!activeSkill) {
+      return;
+    }
+    if (supportedModes.includes(mode)) {
+      return;
+    }
     setMode(supportedModes[0] as SkillMode);
   }, [activeSkill, mode, supportedModes]);
 
@@ -555,7 +603,9 @@ export function Skills() {
     opts?: { forceSecret?: boolean }
   ) => {
     const entries = Object.entries(schema.properties);
-    if (entries.length === 0) return null;
+    if (entries.length === 0) {
+      return null;
+    }
 
     return (
       <div className="space-y-3">

@@ -7,7 +7,11 @@
 
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  APIGatewayProxyEventV2,
+} from 'aws-lambda';
 import { ScheduleService } from '../services/schedule-service';
 import {
   validatePublishNowRequest,
@@ -78,11 +82,11 @@ export class HttpHandler {
       // Route requests to appropriate handlers
       if (path.startsWith('/schedules')) {
         return await this.handleScheduleRoutes(event, method, path, authenticatedUserId!);
-      } else if (path === '/health') {
-        return await this.handleHealthCheck();
-      } else {
-        return createErrorResponse(404, 'Route not found', undefined, 'ROUTE_NOT_FOUND');
       }
+      if (path === '/health') {
+        return await this.handleHealthCheck();
+      }
+      return createErrorResponse(404, 'Route not found', undefined, 'ROUTE_NOT_FOUND');
     } catch (error) {
       logger.error('HTTP request failed', { error, path, method });
       metrics.addMetric('HttpRequestError', MetricUnit.Count, 1);
@@ -120,7 +124,8 @@ export class HttpHandler {
         if (pathSegments.length === 1) {
           // GET /schedules - list schedules with filters
           return await this.listSchedules(event, userId);
-        } else if (pathSegments.length === 2) {
+        }
+        if (pathSegments.length === 2) {
           // GET /schedules/{id} - get specific schedule
           return await this.getSchedule(pathSegments[1], userId);
         }
@@ -191,14 +196,13 @@ export class HttpHandler {
       if (result.success) {
         metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
         return createSuccessResponse(201, result.schedule);
-      } else {
-        logger.warn('Schedule service failed to create schedule', {
-          error: result.error,
-          userId,
-          brandId,
-        });
-        return createErrorResponse(400, result.error || 'Failed to create schedule');
       }
+      logger.warn('Schedule service failed to create schedule', {
+        error: result.error,
+        userId,
+        brandId,
+      });
+      return createErrorResponse(400, result.error || 'Failed to create schedule');
     } catch (error) {
       logger.error('Failed to create schedule', { error });
       return createErrorResponse(500, 'Failed to create schedule');
@@ -289,9 +293,8 @@ export class HttpHandler {
           schedules: schedulesForUser,
           pagination: result.pagination,
         });
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to list schedules');
       }
+      return createErrorResponse(400, result.error || 'Failed to list schedules');
     } catch (error) {
       logger.error('Failed to list schedules', { error });
       return createErrorResponse(500, 'Failed to list schedules');
@@ -319,11 +322,11 @@ export class HttpHandler {
         }
 
         return createSuccessResponse(200, result.schedule);
-      } else if (result.success && !result.schedule) {
-        return createErrorResponse(404, 'Schedule not found', undefined, 'SCHEDULE_NOT_FOUND');
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to get schedule');
       }
+      if (result.success && !result.schedule) {
+        return createErrorResponse(404, 'Schedule not found', undefined, 'SCHEDULE_NOT_FOUND');
+      }
+      return createErrorResponse(400, result.error || 'Failed to get schedule');
     } catch (error) {
       logger.error('Failed to get schedule', { error, scheduleId });
       return createErrorResponse(500, 'Failed to get schedule');
@@ -409,9 +412,8 @@ export class HttpHandler {
       if (result.success) {
         metrics.addMetric('ScheduleUpdated', MetricUnit.Count, 1);
         return createSuccessResponse(200, result.schedule);
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to update schedule');
       }
+      return createErrorResponse(400, result.error || 'Failed to update schedule');
     } catch (error) {
       logger.error('Failed to update schedule', { error, scheduleId });
       return createErrorResponse(500, 'Failed to update schedule');
@@ -446,9 +448,8 @@ export class HttpHandler {
       if (result.success) {
         metrics.addMetric('ScheduleDeleted', MetricUnit.Count, 1);
         return createSuccessResponse(204, null);
-      } else {
-        return createErrorResponse(400, result.error || 'Failed to delete schedule');
       }
+      return createErrorResponse(400, result.error || 'Failed to delete schedule');
     } catch (error) {
       logger.error('Failed to delete schedule', { error, scheduleId });
       return createErrorResponse(500, 'Failed to delete schedule');
@@ -468,12 +469,11 @@ export class HttpHandler {
           timestamp: new Date().toISOString(),
           details: healthStatus.details,
         });
-      } else {
-        return createErrorResponse(503, 'Service unhealthy', {
-          status: 'unhealthy',
-          details: healthStatus.details,
-        });
       }
+      return createErrorResponse(503, 'Service unhealthy', {
+        status: 'unhealthy',
+        details: healthStatus.details,
+      });
     } catch (error) {
       logger.error('Health check failed', { error });
       return createErrorResponse(503, 'Health check failed');
@@ -484,17 +484,15 @@ export class HttpHandler {
   private getMethod(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
     if ('httpMethod' in event) {
       return event.httpMethod; // API Gateway v1.0
-    } else {
-      return event.requestContext.http.method; // API Gateway v2.0 / Function URL
     }
+    return event.requestContext.http.method; // API Gateway v2.0 / Function URL
   }
 
   private getPath(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
     if ('path' in event) {
       return event.path; // API Gateway v1.0
-    } else {
-      return event.requestContext.http.path; // API Gateway v2.0 / Function URL
     }
+    return event.requestContext.http.path; // API Gateway v2.0 / Function URL
   }
 
   private getBody(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
@@ -515,18 +513,17 @@ export class HttpHandler {
         }
       }
       return params;
-    } else {
-      // API Gateway v2.0 / Function URL
-      const params: Record<string, string> = {};
-      if (event.queryStringParameters) {
-        for (const [key, value] of Object.entries(event.queryStringParameters)) {
-          if (value !== undefined) {
-            params[key] = value;
-          }
+    }
+    // API Gateway v2.0 / Function URL
+    const params: Record<string, string> = {};
+    if (event.queryStringParameters) {
+      for (const [key, value] of Object.entries(event.queryStringParameters)) {
+        if (value !== undefined) {
+          params[key] = value;
         }
       }
-      return params;
     }
+    return params;
   }
 
   /**

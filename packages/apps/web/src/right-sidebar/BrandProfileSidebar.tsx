@@ -46,7 +46,9 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
 
   useEffect(() => {
     const load = async () => {
-      if (!brandId) return;
+      if (!brandId) {
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
@@ -73,7 +75,9 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
   }, [brandId]);
 
   async function toggleFreeze() {
-    if (!brandId) return;
+    if (!brandId) {
+      return;
+    }
     setFreezeLoading(true);
     try {
       const next = !freezeCore;
@@ -87,12 +91,14 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
   }
 
   async function handleReRun() {
-    if (!brandId) return;
+    if (!brandId) {
+      return;
+    }
     setReRunLoading(true);
     setReRunMessage(null);
     try {
       const res = await brandApi.startBrandAnalysis(brandId, { force: true, maxPosts: 20 });
-      if (res && res.status === 'accepted') {
+      if (res?.status === 'accepted') {
         setReRunMessage('Analysis requested. It will refresh shortly.');
       } else {
         setReRunMessage('Requested. Awaiting update...');

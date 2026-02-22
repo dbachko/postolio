@@ -23,7 +23,9 @@ export const wizardAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        if (!ensureAuth(request, reply)) return;
+        if (!ensureAuth(request, reply)) {
+          return;
+        }
         const userId = request.user.id;
         const email = request.user.email;
         const { eventName, step, brandId } = request.body as z.infer<typeof WizardEventSchema>;

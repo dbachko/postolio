@@ -90,7 +90,9 @@ function ensurePlatformSupported(platform: string) {
 }
 
 function isDisconnected(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
   return Boolean((metadata as any).disconnected);
 }
 
@@ -119,8 +121,12 @@ async function resolveSocialAccountForBrandPlatform(params: {
       },
     });
 
-    if (!sa) return null;
-    if (isDisconnected(sa.metadata)) return null;
+    if (!sa) {
+      return null;
+    }
+    if (isDisconnected(sa.metadata)) {
+      return null;
+    }
 
     return {
       id: sa.id,
@@ -361,7 +367,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           socialAccount.id
         );
 
-        if (!tokens || !tokens.accessToken) {
+        if (!tokens?.accessToken) {
           return reply.code(401).send({
             error: 'invalid_credentials',
             message: `No valid credentials found for ${platform}`,
@@ -710,7 +716,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           socialAccount.id
         );
 
-        if (!tokens || !tokens.accessToken) {
+        if (!tokens?.accessToken) {
           return reply.code(401).send({
             error: 'invalid_credentials',
             message: `No valid credentials found for ${platform}`,
@@ -1258,7 +1264,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           publication.socialAccountId
         );
 
-        if (!tokens || !tokens.accessToken) {
+        if (!tokens?.accessToken) {
           return reply.code(401).send({
             error: 'invalid_credentials',
             message: `No valid credentials found for ${platform}`,

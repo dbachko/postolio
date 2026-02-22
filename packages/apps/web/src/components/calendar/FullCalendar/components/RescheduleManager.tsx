@@ -36,7 +36,9 @@ export function RescheduleManager({
     async (newISO: string) => {
       try {
         const item = state.item;
-        if (!item) return;
+        if (!item) {
+          return;
+        }
 
         const record = item as unknown as Record<string, unknown>;
         const groupId =
@@ -84,7 +86,9 @@ export function RescheduleManager({
 }
 
 function getScheduledAt(item: CalendarItem | null): string | undefined {
-  if (!item) return undefined;
+  if (!item) {
+    return undefined;
+  }
 
   const record = item as unknown as Record<string, unknown>;
   const value = record.scheduledAt;

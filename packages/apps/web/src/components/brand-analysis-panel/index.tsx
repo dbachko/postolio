@@ -71,8 +71,12 @@ export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelPr
   }, [brandId, startPolling]);
 
   useEffect(() => {
-    if (typeof triggerKey !== 'number') return;
-    if (isRunning) return;
+    if (typeof triggerKey !== 'number') {
+      return;
+    }
+    if (isRunning) {
+      return;
+    }
     void runAnalysis();
   }, [triggerKey, isRunning, runAnalysis]);
 
@@ -83,7 +87,9 @@ export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelPr
   });
 
   const profile = useMemo(() => {
-    if (!profileQuery.data || 'error' in profileQuery.data) return null;
+    if (!profileQuery.data || 'error' in profileQuery.data) {
+      return null;
+    }
     return profileQuery.data as AnalysisProfile;
   }, [profileQuery.data]);
 

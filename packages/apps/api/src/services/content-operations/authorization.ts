@@ -45,7 +45,7 @@ export async function verifyContentOwnership(
     },
   });
 
-  if (!content || !content.brand || content.brand.userId !== userId) {
+  if (content?.brand?.userId !== userId) {
     return {
       authorized: false,
       error: 'Content not found',

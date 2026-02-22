@@ -1,6 +1,6 @@
 import { executeAudioGenerationSkill } from './audio-generation-skill.js';
 import { executeImageGenerationSkill } from './image-generation-skill.js';
-import { type SkillRuntimeContext } from './runtime.js';
+import type { SkillRuntimeContext } from './runtime.js';
 import { executeVideoGenerationSkill } from './video-generation-skill.js';
 import { executeWebFetchSkill } from './web-fetch-skill.js';
 

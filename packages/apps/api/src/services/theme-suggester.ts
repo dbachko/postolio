@@ -27,7 +27,9 @@ function normalize(str: string): string {
 const MAX_SAVED_THEMES = 40;
 
 function normalizeThemeList(themes: unknown): string[] {
-  if (!Array.isArray(themes)) return [];
+  if (!Array.isArray(themes)) {
+    return [];
+  }
   return Array.from(
     new Set(
       themes
@@ -39,7 +41,9 @@ function normalizeThemeList(themes: unknown): string[] {
 }
 
 function extractStoredThemes(preferences: unknown): string[] {
-  if (!preferences || typeof preferences !== 'object') return [];
+  if (!preferences || typeof preferences !== 'object') {
+    return [];
+  }
   const pref = preferences as Record<string, unknown>;
   const custom = normalizeThemeList((pref as any).customThemes);
   const saved = normalizeThemeList((pref as any).savedThemes);
@@ -48,14 +52,18 @@ function extractStoredThemes(preferences: unknown): string[] {
 
 export async function storeUserThemes(brandId: string, themes: string[]): Promise<void> {
   const normalized = normalizeThemeList(themes);
-  if (!normalized.length) return;
+  if (!normalized.length) {
+    return;
+  }
 
   const prisma = getDatabaseClient();
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
     select: { preferences: true },
   });
-  if (!brand) return;
+  if (!brand) {
+    return;
+  }
 
   const existing = extractStoredThemes(brand.preferences);
   const merged = Array.from(new Set([...normalized, ...existing])).slice(0, MAX_SAVED_THEMES);
@@ -100,16 +108,24 @@ export async function suggestThemes(params: {
       const interactions = (m?.likes || 0) + (m?.comments || 0) + (m?.saves || 0);
       const base = m?.reach || 0 || m?.impressions || 0;
       const engagement = base > 0 ? interactions / base : interactions;
-      if (engagement <= 0) continue;
+      if (engagement <= 0) {
+        continue;
+      }
       const set = new Set<string>();
       for (const h of p.content?.hashtags || []) {
         const clean = String(h || '').replace(/^#/, '');
-        for (const canon of canonicalizeTopic(clean)) set.add(canon);
+        for (const canon of canonicalizeTopic(clean)) {
+          set.add(canon);
+        }
       }
       if (p.content?.caption) {
-        for (const canon of canonicalizeTopic(p.content.caption)) set.add(canon);
+        for (const canon of canonicalizeTopic(p.content.caption)) {
+          set.add(canon);
+        }
       }
-      if (set.size > 0) metrics.push({ value: engagement, themes: Array.from(set) });
+      if (set.size > 0) {
+        metrics.push({ value: engagement, themes: Array.from(set) });
+      }
     }
     const overallMean = metrics.length
       ? metrics.reduce((s, m) => s + m.value, 0) / metrics.length
@@ -164,7 +180,9 @@ export async function suggestThemes(params: {
   const topicContribution = new Map<string, Map<string, number>>();
   if (topics.length > 0) {
     for (const t of topics.slice(0, 50)) {
-      if (!t?.value) continue;
+      if (!t?.value) {
+        continue;
+      }
       const cands = canonicalizeTopic(t.value);
       for (const c of cands) {
         const key = normalize(c);
@@ -185,14 +203,18 @@ export async function suggestThemes(params: {
       const score = Math.min(1, base + perfBoost);
       const reasons: string[] = [];
       const contrib = topicContribution.get(v);
-      if (contrib && contrib.size) {
+      if (contrib?.size) {
         const top = Array.from(contrib.entries())
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)
           .map(([name]) => name);
-        if (top.length) reasons.push(`Topics: ${top.join(', ')}`);
+        if (top.length) {
+          reasons.push(`Topics: ${top.join(', ')}`);
+        }
       }
-      if (perfBoost > 0) reasons.push(`Performance +${Math.round(perf * 100)}% vs avg`);
+      if (perfBoost > 0) {
+        reasons.push(`Performance +${Math.round(perf * 100)}% vs avg`);
+      }
       reasons.push('Source: brand topics');
       out.push({ value: v, score, source: 'profile', perfDelta: perf, reasons });
     }
@@ -202,18 +224,28 @@ export async function suggestThemes(params: {
   const tones = Array.isArray(ctx?.tones) ? ctx!.tones : [];
   for (const tone of tones.slice(0, 10)) {
     const v = normalize(tone);
-    if (!v) continue;
+    if (!v) {
+      continue;
+    }
     const implied: string[] = [];
-    if (/playful|fun|casual/.test(v)) implied.push('behind the scenes', 'memes & trends');
-    if (/professional|authoritative|expert|thoughtful/.test(v)) implied.push('industry insights');
-    if (/inspir/.test(v)) implied.push('customer stories');
+    if (/playful|fun|casual/.test(v)) {
+      implied.push('behind the scenes', 'memes & trends');
+    }
+    if (/professional|authoritative|expert|thoughtful/.test(v)) {
+      implied.push('industry insights');
+    }
+    if (/inspir/.test(v)) {
+      implied.push('customer stories');
+    }
     for (const theme of implied) {
       const k = normalize(theme);
       const perf = performanceByTheme.get(k) || 0;
       const perfBoost = perf > 0 ? Math.min(0.2, perf * 0.4) : 0;
       const s = 0.35 + perfBoost;
       const reasons: string[] = [`Tone: ${tone}`];
-      if (perfBoost > 0) reasons.push(`Performance +${Math.round(perf * 100)}% vs avg`);
+      if (perfBoost > 0) {
+        reasons.push(`Performance +${Math.round(perf * 100)}% vs avg`);
+      }
       reasons.push('Source: tone heuristic');
       out.push({
         value: k,
@@ -230,7 +262,9 @@ export async function suggestThemes(params: {
   for (const s of out) {
     const key = normalize(s.value);
     const existing = best.get(key);
-    if (!existing || s.score > existing.score) best.set(key, { ...s, value: key });
+    if (!existing || s.score > existing.score) {
+      best.set(key, { ...s, value: key });
+    }
   }
   let suggestions = Array.from(best.values()).sort((a, b) => b.score - a.score);
 
@@ -252,7 +286,11 @@ export async function suggestThemes(params: {
       };
     });
     const seen = new Set(suggestions.map((s) => s.value));
-    for (const f of fb) if (!seen.has(f.value)) suggestions.push(f);
+    for (const f of fb) {
+      if (!seen.has(f.value)) {
+        suggestions.push(f);
+      }
+    }
   }
 
   // limit and return (ensure user themes are always included)

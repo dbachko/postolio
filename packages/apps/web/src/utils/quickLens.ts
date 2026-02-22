@@ -112,33 +112,57 @@ export function analyzeText(text: string): QuickLensResult {
     }
   }
   // Boost for exclamation or repeated emojis
-  if (/!!+|🔥|😍|❤️|👏/.test(text)) score += 0.25;
-  if (/\?/.test(text)) score += 0; // neutral for question mark alone
+  if (/!!+|🔥|😍|❤️|👏/.test(text)) {
+    score += 0.25;
+  }
+  if (/\?/.test(text)) {
+    score += 0;
+  } // neutral for question mark alone
 
   let label: SentimentLabel = 'neutral';
-  if (score > 0.4) label = 'positive';
-  else if (score < -0.4) label = 'negative';
+  if (score > 0.4) {
+    label = 'positive';
+  } else if (score < -0.4) {
+    label = 'negative';
+  }
   const magnitude = Math.min(1, Math.abs(score) + (matchedPos + matchedNeg) * 0.05);
   const confidence = Number((0.5 + magnitude / 2).toFixed(2));
 
   // Spam rules
   const spamReasons: string[] = [];
-  if (URL_RX.test(text)) spamReasons.push('contains link');
-  if ((text.match(/#/g) || []).length >= 5) spamReasons.push('excessive hashtags');
-  if ((text.match(/@/g) || []).length >= 3) spamReasons.push('excessive mentions');
-  if (/(.)\1{4,}/.test(text)) spamReasons.push('repeated characters');
-  for (const k of SPAM_KEYWORDS) if (normalized.includes(k)) spamReasons.push(k);
+  if (URL_RX.test(text)) {
+    spamReasons.push('contains link');
+  }
+  if ((text.match(/#/g) || []).length >= 5) {
+    spamReasons.push('excessive hashtags');
+  }
+  if ((text.match(/@/g) || []).length >= 3) {
+    spamReasons.push('excessive mentions');
+  }
+  if (/(.)\1{4,}/.test(text)) {
+    spamReasons.push('repeated characters');
+  }
+  for (const k of SPAM_KEYWORDS) {
+    if (normalized.includes(k)) {
+      spamReasons.push(k);
+    }
+  }
   const isSpam =
     spamReasons.length >= 2 || normalized.includes('promote on') || normalized.includes('dm for');
 
   // Reply recommendation
   const replyReasons: string[] = [];
   const isQuestion =
-    /\?\s*$/.test(text) || QUESTION_STARTS.some((q) => normalized.trim().startsWith(q + ' '));
-  if (isQuestion) replyReasons.push('question');
-  if (label === 'negative') replyReasons.push('negative sentiment');
-  if (/price|cost|ship|deliver|when|where|how much|available/i.test(text))
+    /\?\s*$/.test(text) || QUESTION_STARTS.some((q) => normalized.trim().startsWith(`${q} `));
+  if (isQuestion) {
+    replyReasons.push('question');
+  }
+  if (label === 'negative') {
+    replyReasons.push('negative sentiment');
+  }
+  if (/price|cost|ship|deliver|when|where|how much|available/i.test(text)) {
     replyReasons.push('purchase/availability intent');
+  }
   const recommended =
     !isSpam &&
     (isQuestion || label === 'negative' || replyReasons.includes('purchase/availability intent'));

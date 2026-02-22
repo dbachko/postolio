@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -51,7 +51,9 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { code: string } }>('/google/code', async (request, reply) => {
     try {
       const { code } = request.body;
-      if (!code) return reply.code(400).send({ error: 'No authorization code provided' });
+      if (!code) {
+        return reply.code(400).send({ error: 'No authorization code provided' });
+      }
 
       // GIS code flow with popup uses the ORIGIN of the calling page as redirect_uri
       const redirectOrigin =
@@ -77,7 +79,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       const payload = ticket.getPayload();
-      if (!payload || !payload.email) {
+      if (!payload?.email) {
         return reply.code(401).send({ error: 'Invalid Google token' });
       }
 
@@ -209,10 +211,14 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
     '/google/link-code',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       try {
         const { code } = request.body;
-        if (!code) return reply.code(400).send({ error: 'No authorization code provided' });
+        if (!code) {
+          return reply.code(400).send({ error: 'No authorization code provided' });
+        }
 
         const redirectOrigin =
           (request.headers.origin as string | undefined) ||
@@ -226,13 +232,17 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
           redirectOrigin
         );
         const { tokens } = await codeClient.getToken(code);
-        if (!tokens?.id_token) return reply.code(401).send({ error: 'Invalid Google token' });
+        if (!tokens?.id_token) {
+          return reply.code(401).send({ error: 'Invalid Google token' });
+        }
         const ticket = await codeClient.verifyIdToken({
           idToken: tokens.id_token,
           audience: process.env.GOOGLE_CLIENT_ID || '',
         });
         const payload = ticket.getPayload();
-        if (!payload) return reply.code(401).send({ error: 'Invalid Google token' });
+        if (!payload) {
+          return reply.code(401).send({ error: 'Invalid Google token' });
+        }
 
         // Check if this Google account is already linked to another user
         const existingGoogleUser = await prisma.user.findFirst({
@@ -278,7 +288,9 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       try {
         const { credential } = request.body;
         const userId = request.user.id;
@@ -348,7 +360,9 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: fastify.authenticate,
     },
     async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+      if (!ensureAuth(request, reply)) {
+        return;
+      }
       try {
         const userId = request.user.id;
 

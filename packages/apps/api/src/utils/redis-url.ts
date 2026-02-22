@@ -8,7 +8,7 @@
  * @param fallbackUrl - Optional fallback URL for local development
  * @returns Constructed Redis URL
  */
-export function getRedisUrl(fallbackUrl: string = 'redis://localhost:6379'): string {
+export function getRedisUrl(fallbackUrl = 'redis://localhost:6379'): string {
   // AWS best practice: Use separate host/port environment variables for dynamic infrastructure
   if (process.env.REDIS_HOST) {
     const host = process.env.REDIS_HOST;

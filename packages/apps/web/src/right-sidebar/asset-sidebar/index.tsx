@@ -93,7 +93,9 @@ export function AssetSidebar({
   });
 
   useEffect(() => {
-    if (!asset) return;
+    if (!asset) {
+      return;
+    }
     setFormState({
       title: asset.title || '',
       description: asset.description || '',
@@ -115,7 +117,9 @@ export function AssetSidebar({
   );
 
   useEffect(() => {
-    if (!asset) return;
+    if (!asset) {
+      return;
+    }
     const metaChanged =
       formState.title !== (asset.title || '') ||
       formState.description !== (asset.description || '') ||
@@ -143,7 +147,9 @@ export function AssetSidebar({
     setLabelIds(updated.labelIds ?? []);
     setHasChanges(false);
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
       return null;
     });
   };
@@ -158,7 +164,9 @@ export function AssetSidebar({
 
   const updateMetadataMutation = useMutation({
     mutationFn: async (input: Partial<AssetType>) => {
-      if (!id) throw new Error('Missing asset id');
+      if (!id) {
+        throw new Error('Missing asset id');
+      }
       const { asset: updated } = await assetsApi.updateAsset(id, {
         title: input.title,
         description: input.description,
@@ -180,7 +188,9 @@ export function AssetSidebar({
 
   const replaceFileMutation = useMutation({
     mutationFn: async (file: File) => {
-      if (!asset) throw new Error('Asset not loaded');
+      if (!asset) {
+        throw new Error('Asset not loaded');
+      }
       const isImage = file.type.startsWith('image/');
       const fileType = isImage ? 'image' : 'video';
       const limit = isImage ? IMAGE_UPLOAD_LIMIT_BYTES : VIDEO_UPLOAD_LIMIT_BYTES;
@@ -225,7 +235,9 @@ export function AssetSidebar({
       toast.error(message);
     },
     onSettled: () => {
-      if (uploadInputRef.current) uploadInputRef.current.value = '';
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = '';
+      }
     },
   });
 
@@ -247,7 +259,9 @@ export function AssetSidebar({
   });
 
   const derivedDisplay = useMemo<DerivedAssetDisplay | null>(() => {
-    if (!asset) return null;
+    if (!asset) {
+      return null;
+    }
     return {
       fileSize: formatBytes(asset.fileSize),
       createdAt: formatDateTime(asset.createdAt),
@@ -282,7 +296,9 @@ export function AssetSidebar({
     : 'Unsorted';
 
   const handleSave = () => {
-    if (!asset) return;
+    if (!asset) {
+      return;
+    }
     updateMetadataMutation.mutate({
       title: formState.title,
       description: formState.description,
@@ -299,13 +315,17 @@ export function AssetSidebar({
     return (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const value = event.target.value;
       setFormState((prev) => ({ ...prev, [field]: value }));
-      if (!asset) return;
+      if (!asset) {
+        return;
+      }
       setHasChanges(true);
     };
   }
 
   const handleReset = () => {
-    if (!asset) return;
+    if (!asset) {
+      return;
+    }
     setFormState({
       title: asset.title || '',
       description: asset.description || '',
@@ -321,9 +341,13 @@ export function AssetSidebar({
   };
 
   const handleCreateLabel = async (name: string): Promise<LabelRecord> => {
-    if (!brandId) throw new Error('Missing brand');
+    if (!brandId) {
+      throw new Error('Missing brand');
+    }
     const trimmedName = name.trim();
-    if (!trimmedName) throw new Error('Label name is required');
+    if (!trimmedName) {
+      throw new Error('Label name is required');
+    }
 
     try {
       const { item } = await assetsApi.createTaxonomy({
@@ -358,18 +382,26 @@ export function AssetSidebar({
 
   const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0];
-    if (!nextFile) return;
+    if (!nextFile) {
+      return;
+    }
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
       return URL.createObjectURL(nextFile);
     });
     replaceFileMutation.mutate(nextFile);
   };
 
   const handleDeleteAsset = () => {
-    if (!asset || deleteAssetMutation.isPending) return;
+    if (!asset || deleteAssetMutation.isPending) {
+      return;
+    }
     const confirmed = window.confirm('Delete this asset? This action cannot be undone.');
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
     deleteAssetMutation.mutate(asset.id);
   };
 

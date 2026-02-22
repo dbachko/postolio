@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getRetentionManager } from '../services/retention-manager.js';
 import { getDatabaseClient } from '../config/database.js';
 

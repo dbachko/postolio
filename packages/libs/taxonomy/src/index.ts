@@ -95,10 +95,16 @@ export function canonicalizeTopic(raw: string): CanonicalTheme[] {
   const s = norm(raw);
   const matched = new Set<CanonicalTheme>();
   for (const r of rules) {
-    if (r.match.test(s)) matched.add(r.to);
+    if (r.match.test(s)) {
+      matched.add(r.to);
+    }
   }
   // if nothing matches but value equals a canonical theme
-  for (const c of canonicalThemes) if (s === c) matched.add(c);
+  for (const c of canonicalThemes) {
+    if (s === c) {
+      matched.add(c);
+    }
+  }
   return Array.from(matched);
 }
 
@@ -109,14 +115,20 @@ export function classifyTopicsToCanonical(
   topics: TopicCount[],
   options?: { maxResults?: number }
 ): CanonicalSuggestion[] {
-  if (!Array.isArray(topics) || topics.length === 0) return [];
+  if (!Array.isArray(topics) || topics.length === 0) {
+    return [];
+  }
   const maxCount = Math.max(...topics.map((t) => Math.max(1, Number(t.count) || 1)));
   const scores = new Map<CanonicalTheme, number>();
 
   for (const t of topics) {
-    if (!t?.value) continue;
+    if (!t?.value) {
+      continue;
+    }
     const cands = canonicalizeTopic(t.value);
-    if (cands.length === 0) continue;
+    if (cands.length === 0) {
+      continue;
+    }
     const base = Math.max(0.05, (Math.min(t.count, maxCount) / maxCount) * 0.8);
     for (const c of cands) {
       scores.set(c, Math.max(scores.get(c) || 0, base));

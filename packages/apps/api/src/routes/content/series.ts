@@ -5,7 +5,7 @@
  * Note: This is distinct from ContentGroup, which represents multi-destination variants of a single post.
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 
 import { getDatabaseClient } from '../../config/database.js';
 import {
@@ -48,7 +48,7 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!series || !series.brand) {
+      if (!series?.brand) {
         return reply.code(404).send({ error: 'content_series_not_found' });
       }
       if (series.brand.userId !== userId) {
@@ -217,10 +217,12 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         brand: { select: { userId: true } },
       },
     });
-    if (!series || !series.brand)
+    if (!series?.brand) {
       return reply.code(404).send({ error: 'content_series_not_found' });
-    if (series.brand.userId !== userId)
+    }
+    if (series.brand.userId !== userId) {
       return reply.code(404).send({ error: 'content_series_not_found' });
+    }
 
     await assertBrandOwnership(userId, series.brandId);
 
@@ -248,7 +250,7 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         ? request.body.rolling
         : undefined;
 
-    if (nextName !== undefined && nextName.length === 0) {
+    if (nextName?.length === 0) {
       return reply.code(400).send({ error: 'invalid_name' });
     }
 
@@ -305,15 +307,19 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentSeriesId },
         select: { id: true, brandId: true, brand: { select: { userId: true } } },
       });
-      if (!series || !series.brand)
+      if (!series?.brand) {
         return reply.code(404).send({ error: 'content_series_not_found' });
-      if (series.brand.userId !== userId)
+      }
+      if (series.brand.userId !== userId) {
         return reply.code(404).send({ error: 'content_series_not_found' });
+      }
 
       await assertBrandOwnership(userId, series.brandId);
 
       const status = await contentSeriesRollingService.getStatus(contentSeriesId);
-      if (!status) return reply.code(404).send({ error: 'content_series_not_found' });
+      if (!status) {
+        return reply.code(404).send({ error: 'content_series_not_found' });
+      }
       return reply.send({ success: true, data: { rolling: status } });
     }
   );
@@ -334,10 +340,12 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentSeriesId },
         select: { id: true, brandId: true, brand: { select: { userId: true } } },
       });
-      if (!series || !series.brand)
+      if (!series?.brand) {
         return reply.code(404).send({ error: 'content_series_not_found' });
-      if (series.brand.userId !== userId)
+      }
+      if (series.brand.userId !== userId) {
         return reply.code(404).send({ error: 'content_series_not_found' });
+      }
 
       await assertBrandOwnership(userId, series.brandId);
 

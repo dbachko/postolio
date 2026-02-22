@@ -119,7 +119,9 @@ export class TokenServiceClient {
   }
 
   private async ensureInitialized(): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized) {
+      return;
+    }
     if (this.initPromise) {
       await this.initPromise;
       return;
@@ -263,7 +265,9 @@ export class TokenServiceClient {
     if (this.pendingRequests.has(pendingKey)) {
       this.logDebug('Request deduplication', { pendingKey });
       const existing = this.pendingRequests.get(pendingKey);
-      if (existing) return existing;
+      if (existing) {
+        return existing;
+      }
     }
 
     // Check rate limit
@@ -342,7 +346,9 @@ export class TokenServiceClient {
     if (this.pendingRequests.has(pendingKey)) {
       this.logDebug('Request deduplication', { pendingKey });
       const existing = this.pendingRequests.get(pendingKey);
-      if (existing) return existing;
+      if (existing) {
+        return existing;
+      }
     }
 
     if (this.config.enableRateLimit) {
@@ -662,7 +668,9 @@ export class TokenServiceClient {
   // Cache management
   private getFromCache(key: string): TokenData | null {
     const entry = this.cache.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      return null;
+    }
 
     const now = Date.now();
     if (now - entry.timestamp > entry.ttl * 1000) {

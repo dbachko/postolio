@@ -1,4 +1,4 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { createRedisClient } from './redis.js';
 

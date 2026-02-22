@@ -21,9 +21,15 @@ function clampPostsPerWeek(postsPerWeek: number): number {
 
 export function parsePostsPerWeek(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  if (!Number.isInteger(parsed)) return null;
-  if (parsed < MIN_POSTS_PER_WEEK || parsed > MAX_POSTS_PER_WEEK) return null;
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  if (!Number.isInteger(parsed)) {
+    return null;
+  }
+  if (parsed < MIN_POSTS_PER_WEEK || parsed > MAX_POSTS_PER_WEEK) {
+    return null;
+  }
   return parsed;
 }
 
@@ -44,7 +50,9 @@ export function buildGoalBasedSlots(postsPerWeek: number): GoalBasedSlot[] {
   }
 
   return slots.sort((a, b) => {
-    if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+    if (a.dayOfWeek !== b.dayOfWeek) {
+      return a.dayOfWeek - b.dayOfWeek;
+    }
     return a.localTime.localeCompare(b.localTime);
   });
 }

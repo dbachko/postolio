@@ -63,7 +63,9 @@ export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const submitLabel = useMemo(() => {
-    if (isSaving) return 'Saving...';
+    if (isSaving) {
+      return 'Saving...';
+    }
     return isEditing ? 'Update Rule' : 'Create Rule';
   }, [isEditing, isSaving]);
 

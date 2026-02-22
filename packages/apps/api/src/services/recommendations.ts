@@ -54,7 +54,7 @@ export class RecommendationEngine {
    */
   async generateRecommendations(
     brandId: string,
-    days: number = 90,
+    days = 90,
     options?: { socialAccountId?: string }
   ): Promise<RecommendationsReport> {
     const startDate = new Date();
@@ -128,7 +128,9 @@ export class RecommendationEngine {
     // Calculate averages and score
     const recommendations: HashtagRecommendation[] = [];
     for (const [hashtag, stats] of hashtagStats.entries()) {
-      if (stats.count < 2) continue; // Need at least 2 uses for reliable data
+      if (stats.count < 2) {
+        continue;
+      } // Need at least 2 uses for reliable data
 
       const avgEngagement = stats.engagement.reduce((a, b) => a + b, 0) / stats.count;
       const avgEngagementRate = stats.engagementRate.reduce((a, b) => a + b, 0) / stats.count;
@@ -167,7 +169,9 @@ export class RecommendationEngine {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     for (const pub of publications) {
-      if (!pub.publishedAt || !pub.metricsLatest) continue;
+      if (!pub.publishedAt || !pub.metricsLatest) {
+        continue;
+      }
 
       const date = new Date(pub.publishedAt);
       const dayOfWeek = dayNames[date.getUTCDay()];
@@ -186,7 +190,9 @@ export class RecommendationEngine {
     // Calculate recommendations
     const recommendations: PostingTimeRecommendation[] = [];
     for (const [key, stats] of timeSlotStats.entries()) {
-      if (stats.count < 2) continue; // Need at least 2 posts in this slot
+      if (stats.count < 2) {
+        continue;
+      } // Need at least 2 posts in this slot
 
       const [dayOfWeek, hourStr] = key.split('-');
       const hour = parseInt(hourStr);
@@ -389,7 +395,9 @@ export class RecommendationEngine {
       const span = 7 * 24 * 60 * 60 * 1000;
       let j = 0;
       for (let i = 0; i < timesAsc.length; i++) {
-        while (timesAsc[i] - timesAsc[j] >= span) j++;
+        while (timesAsc[i] - timesAsc[j] >= span) {
+          j++;
+        }
         maxIn7Days = Math.max(maxIn7Days, i - j + 1);
       }
     }
@@ -494,9 +502,15 @@ export class RecommendationEngine {
     engagementRate: number,
     usageCount: number
   ): 'high-performer' | 'trending' | 'niche' | 'suggested' {
-    if (engagementRate > 8) return 'high-performer';
-    if (usageCount < 3) return 'niche';
-    if (engagementRate > 5) return 'trending';
+    if (engagementRate > 8) {
+      return 'high-performer';
+    }
+    if (usageCount < 3) {
+      return 'niche';
+    }
+    if (engagementRate > 5) {
+      return 'trending';
+    }
     return 'suggested';
   }
 
@@ -508,12 +522,15 @@ export class RecommendationEngine {
     avgEngagement: number,
     usageCount: number
   ): string {
-    if (engagementRate > 10)
+    if (engagementRate > 10) {
       return `Consistently delivers ${safePercent(engagementRate, 1)}% engagement rate across ${usageCount} posts`;
-    if (engagementRate > 7)
+    }
+    if (engagementRate > 7) {
       return `Strong performer with ${safePercent(engagementRate, 1)}% avg engagement rate`;
-    if (usageCount >= 5)
+    }
+    if (usageCount >= 5) {
       return `Reliable choice used in ${usageCount} posts with ${safePercent(engagementRate, 1)}% engagement`;
+    }
     return `Shows promise with ${safePercent(engagementRate, 1)}% engagement`;
   }
 
@@ -521,8 +538,9 @@ export class RecommendationEngine {
    * Get posting time recommendation reason
    */
   private getTimingReason(avgEngagement: number, postCount: number): string {
-    if (postCount >= 5)
+    if (postCount >= 5) {
       return `Strong data: ${postCount} posts averaging ${avgEngagement.toFixed(0)} engagements`;
+    }
     return `Based on ${postCount} posts with ${avgEngagement.toFixed(0)} avg engagements`;
   }
 
@@ -532,15 +550,24 @@ export class RecommendationEngine {
   private inferContentType(caption: string): string {
     const lower = caption.toLowerCase();
 
-    if (lower.includes('?') || lower.includes('what') || lower.includes('how'))
+    if (lower.includes('?') || lower.includes('what') || lower.includes('how')) {
       return 'question/engagement';
-    if (lower.includes('tip') || lower.includes('how to') || lower.includes('guide'))
+    }
+    if (lower.includes('tip') || lower.includes('how to') || lower.includes('guide')) {
       return 'educational';
-    if (lower.includes('new') || lower.includes('announcing') || lower.includes('launch'))
+    }
+    if (lower.includes('new') || lower.includes('announcing') || lower.includes('launch')) {
       return 'announcement';
-    if (lower.match(/🎉|🎊|🥳|celebration/)) return 'celebration';
-    if (lower.length < 50) return 'short-form';
-    if (lower.length > 300) return 'story/long-form';
+    }
+    if (lower.match(/🎉|🎊|🥳|celebration/)) {
+      return 'celebration';
+    }
+    if (lower.length < 50) {
+      return 'short-form';
+    }
+    if (lower.length > 300) {
+      return 'story/long-form';
+    }
 
     return 'general';
   }
@@ -554,8 +581,12 @@ export class RecommendationEngine {
     const complexTypes = ['content-type', 'posting-frequency'];
     const hasComplex = recommendations.some((r) => complexTypes.includes(r.type));
 
-    if (hasComplex && recommendations.length > 3) return 'complex';
-    if (recommendations.length > 2) return 'moderate';
+    if (hasComplex && recommendations.length > 3) {
+      return 'complex';
+    }
+    if (recommendations.length > 2) {
+      return 'moderate';
+    }
     return 'easy';
   }
 
@@ -565,8 +596,12 @@ export class RecommendationEngine {
   private estimateImpact(recommendations: ContentRecommendation[]): string {
     const highImpactCount = recommendations.filter((r) => r.impact === 'high').length;
 
-    if (highImpactCount >= 2) return '30-50% improvement potential';
-    if (highImpactCount === 1) return '15-30% improvement potential';
+    if (highImpactCount >= 2) {
+      return '30-50% improvement potential';
+    }
+    if (highImpactCount === 1) {
+      return '15-30% improvement potential';
+    }
     return '5-15% improvement potential';
   }
 }

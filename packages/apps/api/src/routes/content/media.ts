@@ -3,7 +3,7 @@
  * Asset-based media attachment (no raw URL writes)
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../../config/database.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import {
@@ -49,7 +49,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!content || !content.brand) {
+      if (!content?.brand) {
         return reply.code(404).send({ error: 'Content not found' });
       }
 
@@ -161,7 +161,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!content || !content.brand) {
+      if (!content?.brand) {
         return reply.code(404).send({ error: 'Content not found' });
       }
 
@@ -173,7 +173,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
       } else {
         // Fetch all assets in a single batch request
         const assetsClient = getAssetsClient();
-        let assets: (AssetRecord | null)[];
+        let assets: Array<AssetRecord | null>;
 
         try {
           assets = await assetsClient.getBatchAssets(assetIds);

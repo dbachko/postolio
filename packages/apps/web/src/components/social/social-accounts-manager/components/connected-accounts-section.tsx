@@ -28,7 +28,9 @@ type ConnectedAccountsSectionProps = {
 function moveId(list: string[], activeId: string, overId: string): string[] {
   const from = list.indexOf(activeId);
   const to = list.indexOf(overId);
-  if (from === -1 || to === -1 || from === to) return list;
+  if (from === -1 || to === -1 || from === to) {
+    return list;
+  }
   const next = list.slice();
   const [removed] = next.splice(from, 1);
   next.splice(to, 0, removed);
@@ -75,8 +77,12 @@ export function ConnectedAccountsSection({
         onDragEnd={(event) => {
           const overId = event.over?.id;
           const activeId = event.active?.id;
-          if (typeof overId !== 'string' || typeof activeId !== 'string') return;
-          if (overId === activeId) return;
+          if (typeof overId !== 'string' || typeof activeId !== 'string') {
+            return;
+          }
+          if (overId === activeId) {
+            return;
+          }
           const next = moveId(orderedConnectedIds, activeId, overId);
           onReorder(next);
         }}
