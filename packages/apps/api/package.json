@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:deps": "pnpm --filter \"api^...\" run build",
-    "build": "pnpm run build:deps && tsc -p tsconfig.json",
+    "build": "pnpm run build:deps && tsc -p tsconfig.json && cp src/services/recipes/curated-recipes.json dist/services/recipes/curated-recipes.json",
     "dev": "tsx watch --exclude \"**/.prisma/**\" --exclude \"**/@prisma/client/**\" src/server.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
     "sync:curated": "node dist/scripts/sync-curated-recipes.js",
