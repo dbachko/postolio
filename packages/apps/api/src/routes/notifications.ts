@@ -1,4 +1,5 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+
 import {
   listNotificationsQuerySchema,
   patchNotificationSchema,
@@ -6,104 +7,114 @@ import {
 } from '../schemas/notifications.js';
 import { notificationsService } from '../services/notifications.js';
 
-const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
-  // List notifications
+function registerListNotificationsRoute(fastify: FastifyInstance): void {
   fastify.get('/', { preHandler: fastify.authenticate }, async (request, reply) => {
     const userId = request.user!.id;
     const parsed = listNotificationsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Invalid query', details: parsed.error.flatten() });
     }
-    const q = parsed.data;
+
+    const query = parsed.data;
     const result = await notificationsService.list({
       userId,
-      brandId: q.brandId,
-      cursor: q.cursor,
-      limit: q.limit,
-      filter: q.filter,
-      category: q.category,
-      type: q.type,
-      since: q.since ? new Date(q.since) : undefined,
+      brandId: query.brandId,
+      cursor: query.cursor,
+      limit: query.limit,
+      filter: query.filter,
+      category: query.category,
+      type: query.type,
+      since: query.since ? new Date(query.since) : undefined,
     });
+
     return reply.send(result);
   });
+}
 
-  // Patch notification (read/unread/archived)
+function registerPatchNotificationRoute(fastify: FastifyInstance): void {
   fastify.patch<{ Params: { id: string } }>(
     '/:id',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
-      const id = request.params.id;
       const parsed = patchNotificationSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.code(400).send({ error: 'Invalid body', details: parsed.error.flatten() });
       }
-      const result = await notificationsService.mark(id, userId, parsed.data);
+
+      const result = await notificationsService.mark(request.params.id, userId, parsed.data);
       return reply.send(result);
     }
   );
+}
 
-  // Mark all as read
+function registerMarkAllReadRoute(fastify: FastifyInstance): void {
   fastify.post<{ Body: { before?: string } }>(
     '/mark-all-read',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
-      const beforeParam = request.body?.before;
-      const before = beforeParam ? new Date(beforeParam) : undefined;
+      const before = request.body?.before ? new Date(request.body.before) : undefined;
       const result = await notificationsService.markAllRead(userId, before);
       return reply.send(result);
     }
   );
+}
 
-  // Get preferences
+function registerGetPreferencesRoute(fastify: FastifyInstance): void {
   fastify.get<{ Querystring: { brandId?: string } }>(
     '/preferences',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
-      const brandId = request.query?.brandId;
-      const result = await notificationsService.getPreferences(userId, brandId);
+      const result = await notificationsService.getPreferences(userId, request.query?.brandId);
       return reply.send(result);
     }
   );
+}
 
-  // Update preferences
+function registerUpdatePreferencesRoute(fastify: FastifyInstance): void {
   fastify.patch('/preferences', { preHandler: fastify.authenticate }, async (request, reply) => {
     const userId = request.user!.id;
     const parsed = updatePreferencesSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Invalid body', details: parsed.error.flatten() });
     }
+
     const result = await notificationsService.updatePreferences(userId, parsed.data.updates);
     return reply.send(result);
   });
+}
 
-  // Send test notification (in-app + email if enabled)
+function registerTestNotificationRoute(fastify: FastifyInstance): void {
   fastify.post<{ Body: { brandId?: string; title?: string; body?: string } }>(
     '/test',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user!.id;
-      const brandId = request.body?.brandId;
-      const title = request.body?.title || 'Test notification from Postolio';
-      const body = request.body?.body || 'This is a test to confirm notifications are working.';
-
-      const n = await notificationsService.emitEvent({
+      const notification = await notificationsService.emitEvent({
         userId,
-        brandId,
+        brandId: request.body?.brandId,
         type: 'system.test_notification',
         category: 'system',
         severity: 'info',
-        title,
-        body,
+        title: request.body?.title || 'Test notification from Postolio',
+        body: request.body?.body || 'This is a test to confirm notifications are working.',
         linkUrl: 'https://postolio.example/notifications',
       });
 
-      return reply.send({ success: true, id: n?.id || null });
+      return reply.send({ success: true, id: notification?.id || null });
     }
   );
+}
+
+const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
+  registerListNotificationsRoute(fastify);
+  registerPatchNotificationRoute(fastify);
+  registerMarkAllReadRoute(fastify);
+  registerGetPreferencesRoute(fastify);
+  registerUpdatePreferencesRoute(fastify);
+  registerTestNotificationRoute(fastify);
 };
 
 export default notificationsRoutes;

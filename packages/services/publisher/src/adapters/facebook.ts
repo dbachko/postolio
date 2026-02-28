@@ -34,11 +34,9 @@ export class FacebookAdapter implements PlatformAdapter {
     }
 
     const message = this.formatMessage(schedule.caption, schedule.hashtags);
-    const mediaAssets = Array.isArray(schedule.mediaAssets) ? schedule.mediaAssets.slice() : [];
-    mediaAssets.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    const hasImages = mediaAssets.some((a) => a.type === 'image');
-    const hasVideos = mediaAssets.some((a) => a.type === 'video');
+    const mediaAssets = this.getSortedMediaAssets(schedule);
+    const hasImages = mediaAssets.some((asset) => asset.type === 'image');
+    const hasVideos = mediaAssets.some((asset) => asset.type === 'video');
 
     if (hasImages && hasVideos) {
       return {
@@ -50,94 +48,14 @@ export class FacebookAdapter implements PlatformAdapter {
 
     try {
       if (!hasImages && !hasVideos) {
-        if (!message.trim()) {
-          return {
-            success: false,
-            error: 'Facebook post requires text or media',
-            errorCode: 'FB_CONTENT_REQUIRED',
-          };
-        }
-
-        const postId = await this.createFeedPost({
-          pageId,
-          accessToken: credentials.accessToken,
-          message,
-        });
-
-        const permalink = await this.fetchPermalinkUrl(postId, credentials.accessToken);
-        return { success: true, platformPostId: postId, platformUrl: permalink || undefined };
+        return this.publishTextOnly(pageId, credentials.accessToken, message);
       }
 
       if (hasVideos) {
-        const videos = mediaAssets.filter((a) => a.type === 'video');
-        if (videos.length !== 1) {
-          return {
-            success: false,
-            error: 'Facebook video publishing currently supports exactly one video asset per post',
-            errorCode: 'FB_VIDEO_COUNT',
-          };
-        }
-
-        const videoUrl = await getSignedVideoUrl(videos[0]!.key);
-        logger.info('Resolved video URL for Facebook publish', { ...sanitizeUrlForLog(videoUrl) });
-
-        const videoId = await this.uploadVideo({
-          pageId,
-          accessToken: credentials.accessToken,
-          fileUrl: videoUrl,
-          description: message,
-        });
-
-        const permalink = await this.fetchPermalinkUrl(videoId, credentials.accessToken);
-        return { success: true, platformPostId: videoId, platformUrl: permalink || undefined };
+        return this.publishVideoOnly(pageId, credentials.accessToken, message, mediaAssets, logger);
       }
 
-      const images = mediaAssets.filter((a) => a.type === 'image');
-      if (images.length === 1) {
-        const imageUrl = await getSignedImageUrlFromKey(images[0]!.key);
-        logger.info('Resolved image URL for Facebook publish', { ...sanitizeUrlForLog(imageUrl) });
-
-        const { postId } = await this.publishSinglePhoto({
-          pageId,
-          accessToken: credentials.accessToken,
-          imageUrl,
-          caption: message,
-        });
-
-        const permalinkId = postId;
-        const permalink = await this.fetchPermalinkUrl(permalinkId, credentials.accessToken);
-        return { success: true, platformPostId: postId, platformUrl: permalink || undefined };
-      }
-
-      const imageUrls: string[] = [];
-      for (const image of images.slice(0, 10)) {
-        const url = await getSignedImageUrlFromKey(image.key);
-        imageUrls.push(url);
-      }
-      logger.info('Resolved image URLs for Facebook album publish', {
-        count: imageUrls.length,
-        urls: imageUrls.map((u) => sanitizeUrlForLog(u)),
-      });
-
-      const photoIds: string[] = [];
-      for (const url of imageUrls) {
-        const photoId = await this.uploadUnpublishedPhoto({
-          pageId,
-          accessToken: credentials.accessToken,
-          imageUrl: url,
-        });
-        photoIds.push(photoId);
-      }
-
-      const postId = await this.createFeedPostWithAttachedMedia({
-        pageId,
-        accessToken: credentials.accessToken,
-        message,
-        photoIds,
-      });
-
-      const permalink = await this.fetchPermalinkUrl(postId, credentials.accessToken);
-      return { success: true, platformPostId: postId, platformUrl: permalink || undefined };
+      return this.publishImagePost(pageId, credentials.accessToken, message, mediaAssets, logger);
     } catch (error) {
       const err = error as Error & { meta?: { httpStatus?: number; errorCode?: string } };
       return {
@@ -147,6 +65,140 @@ export class FacebookAdapter implements PlatformAdapter {
         errorCode: err.meta?.errorCode,
       };
     }
+  }
+
+  private getSortedMediaAssets(
+    schedule: Schedule
+  ): Array<{ key: string; type: string; order?: number }> {
+    const mediaAssets = Array.isArray(schedule.mediaAssets) ? schedule.mediaAssets.slice() : [];
+    mediaAssets.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return mediaAssets;
+  }
+
+  private async publishTextOnly(
+    pageId: string,
+    accessToken: string,
+    message: string
+  ): Promise<PublishResult> {
+    if (!message.trim()) {
+      return {
+        success: false,
+        error: 'Facebook post requires text or media',
+        errorCode: 'FB_CONTENT_REQUIRED',
+      };
+    }
+
+    const postId = await this.createFeedPost({
+      pageId,
+      accessToken,
+      message,
+    });
+    const permalink = await this.fetchPermalinkUrl(postId, accessToken);
+    return { success: true, platformPostId: postId, platformUrl: permalink || undefined };
+  }
+
+  private async publishVideoOnly(
+    pageId: string,
+    accessToken: string,
+    message: string,
+    mediaAssets: Array<{ key: string; type: string }>,
+    logger: Logger
+  ): Promise<PublishResult> {
+    const videos = mediaAssets.filter((asset) => asset.type === 'video');
+    if (videos.length !== 1) {
+      return {
+        success: false,
+        error: 'Facebook video publishing currently supports exactly one video asset per post',
+        errorCode: 'FB_VIDEO_COUNT',
+      };
+    }
+
+    const videoUrl = await getSignedVideoUrl(videos[0]!.key);
+    logger.info('Resolved video URL for Facebook publish', { ...sanitizeUrlForLog(videoUrl) });
+
+    const videoId = await this.uploadVideo({
+      pageId,
+      accessToken,
+      fileUrl: videoUrl,
+      description: message,
+    });
+
+    const permalink = await this.fetchPermalinkUrl(videoId, accessToken);
+    return { success: true, platformPostId: videoId, platformUrl: permalink || undefined };
+  }
+
+  private async publishImagePost(
+    pageId: string,
+    accessToken: string,
+    message: string,
+    mediaAssets: Array<{ key: string; type: string }>,
+    logger: Logger
+  ): Promise<PublishResult> {
+    const images = mediaAssets.filter((asset) => asset.type === 'image');
+    if (images.length === 1) {
+      return this.publishSingleImage(pageId, accessToken, message, images[0]!.key, logger);
+    }
+
+    return this.publishImageAlbum(pageId, accessToken, message, images, logger);
+  }
+
+  private async publishSingleImage(
+    pageId: string,
+    accessToken: string,
+    message: string,
+    imageKey: string,
+    logger: Logger
+  ): Promise<PublishResult> {
+    const imageUrl = await getSignedImageUrlFromKey(imageKey);
+    logger.info('Resolved image URL for Facebook publish', { ...sanitizeUrlForLog(imageUrl) });
+
+    const { postId } = await this.publishSinglePhoto({
+      pageId,
+      accessToken,
+      imageUrl,
+      caption: message,
+    });
+
+    const permalink = await this.fetchPermalinkUrl(postId, accessToken);
+    return { success: true, platformPostId: postId, platformUrl: permalink || undefined };
+  }
+
+  private async publishImageAlbum(
+    pageId: string,
+    accessToken: string,
+    message: string,
+    images: Array<{ key: string }>,
+    logger: Logger
+  ): Promise<PublishResult> {
+    const imageUrls: string[] = [];
+    for (const image of images.slice(0, 10)) {
+      const url = await getSignedImageUrlFromKey(image.key);
+      imageUrls.push(url);
+    }
+
+    logger.info('Resolved image URLs for Facebook album publish', {
+      count: imageUrls.length,
+      urls: imageUrls.map((url) => sanitizeUrlForLog(url)),
+    });
+
+    const photoIds: string[] = [];
+    for (const imageUrl of imageUrls) {
+      const photoId = await this.uploadUnpublishedPhoto({
+        pageId,
+        accessToken,
+        imageUrl,
+      });
+      photoIds.push(photoId);
+    }
+
+    const postId = await this.createFeedPostWithAttachedMedia({
+      pageId,
+      accessToken,
+      message,
+      photoIds,
+    });
+    const permalink = await this.fetchPermalinkUrl(postId, accessToken);
+    return { success: true, platformPostId: postId, platformUrl: permalink || undefined };
   }
 
   validateCredentials(credentials: Credentials): boolean {
@@ -225,13 +277,16 @@ export class FacebookAdapter implements PlatformAdapter {
       graphError && typeof graphError.error_subcode === 'number'
         ? graphError.error_subcode
         : undefined;
+    let errorCode: string | undefined;
+    if (code) {
+      errorCode = `FB_${code}${subcode ? `_${subcode}` : ''}`;
+    } else if (resp.status === 401) {
+      errorCode = 'FB_UNAUTHORIZED';
+    }
+
     error.meta = {
       httpStatus: resp.status,
-      errorCode: code
-        ? `FB_${code}${subcode ? `_${subcode}` : ''}`
-        : resp.status === 401
-          ? 'FB_UNAUTHORIZED'
-          : undefined,
+      errorCode,
     };
     return error;
   }

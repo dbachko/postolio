@@ -59,12 +59,42 @@ function PreviewImageTile({
 }
 
 function PreviewFallback({ kind }: { kind: 'generic' | 'video' | 'carousel' }) {
-  const Icon = kind === 'video' ? Video : kind === 'carousel' ? Images : ExternalLink;
+  let Icon = ExternalLink;
+  if (kind === 'video') {
+    Icon = Video;
+  } else if (kind === 'carousel') {
+    Icon = Images;
+  }
   return (
     <div className="bg-muted text-muted-foreground flex h-10 w-10 items-center justify-center rounded-md">
       <Icon className="h-4 w-4" aria-hidden="true" />
     </div>
   );
+}
+
+function buildPreviewTiles(media: PublicationPreviewMedia[]) {
+  return media.slice(0, 4).map((item) => ({
+    type: item.type,
+    src: item.type === 'video' ? item.thumbnailUrl || null : item.url,
+  }));
+}
+
+function resolvePreviewKinds(params: {
+  media: PublicationPreviewMedia[];
+  tiles: Array<{ type: PublicationPreviewMedia['type']; src: string | null }>;
+  contentType: string;
+}) {
+  const isCarousel = params.media.length > 1;
+  let carouselKind: 'generic' | 'video' | 'carousel' = 'generic';
+  if (isCarousel) {
+    carouselKind = 'carousel';
+  } else if (params.tiles[0]?.type === 'video') {
+    carouselKind = 'video';
+  }
+  const showPlayOverlay =
+    !isCarousel && (params.tiles[0]?.type === 'video' || params.contentType === 'reel');
+
+  return { isCarousel, carouselKind, showPlayOverlay };
 }
 
 function PublicationPreview({
@@ -79,17 +109,12 @@ function PublicationPreview({
     return <PreviewFallback kind="generic" />;
   }
 
-  const tiles = media.slice(0, 4).map((item) => {
-    const src = item.type === 'video' ? item.thumbnailUrl || null : item.url;
-    return {
-      type: item.type,
-      src,
-    };
+  const tiles = buildPreviewTiles(media);
+  const { isCarousel, carouselKind, showPlayOverlay } = resolvePreviewKinds({
+    media,
+    tiles,
+    contentType,
   });
-
-  const isCarousel = media.length > 1;
-  const carouselKind = isCarousel ? 'carousel' : tiles[0]?.type === 'video' ? 'video' : 'generic';
-  const showPlayOverlay = !isCarousel && (tiles[0]?.type === 'video' || contentType === 'reel');
 
   if (isCarousel) {
     return (

@@ -10,7 +10,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import type { ViewMode } from '../types';
-import { formatTimezoneLabel } from '../utils';
+import { RegionItems, TimezoneItems } from './timezone-command-items';
 
 interface TimezoneCommandProps {
   allowClear: boolean;
@@ -34,6 +34,174 @@ interface TimezoneCommandProps {
   onSelectTimezone: (timezone: string) => void;
   onBackToRegions: () => void;
   onClear: () => void;
+}
+
+function SearchResultsContent({
+  matchedRegions,
+  matchedTimezones,
+  selectedRegionKey,
+  selectedValue,
+  timezoneOffsetLabelByName,
+  onSelectRegion,
+  onSelectTimezone,
+}: {
+  matchedRegions: TimezoneRegion[];
+  matchedTimezones: string[];
+  selectedRegionKey: string | null;
+  selectedValue: string | null;
+  timezoneOffsetLabelByName: Map<string, string>;
+  onSelectRegion: (regionKey: string) => void;
+  onSelectTimezone: (timezone: string) => void;
+}) {
+  return (
+    <>
+      {matchedRegions.length > 0 && (
+        <CommandGroup heading="Regions">
+          <RegionItems
+            regions={matchedRegions}
+            selectedRegionKey={selectedRegionKey}
+            onSelectRegion={onSelectRegion}
+          />
+        </CommandGroup>
+      )}
+
+      {matchedRegions.length > 0 && matchedTimezones.length > 0 && <CommandSeparator />}
+
+      {matchedTimezones.length > 0 && (
+        <CommandGroup heading="Timezones">
+          <TimezoneItems
+            timezones={matchedTimezones}
+            selectedValue={selectedValue}
+            timezoneOffsetLabelByName={timezoneOffsetLabelByName}
+            onSelectTimezone={onSelectTimezone}
+          />
+        </CommandGroup>
+      )}
+    </>
+  );
+}
+
+function ActiveRegionTimezonesContent({
+  activeRegion,
+  activeRegionTimezones,
+  selectedValue,
+  timezoneOffsetLabelByName,
+  onSelectTimezone,
+  onBackToRegions,
+}: {
+  activeRegion: TimezoneRegion;
+  activeRegionTimezones: string[];
+  selectedValue: string | null;
+  timezoneOffsetLabelByName: Map<string, string>;
+  onSelectTimezone: (timezone: string) => void;
+  onBackToRegions: () => void;
+}) {
+  return (
+    <CommandGroup>
+      <div className="text-muted-foreground flex items-center gap-2 px-2 py-1.5 text-xs font-medium">
+        <Globe2 className="h-4 w-4" />
+        <span className="min-w-0 flex-1 truncate">{activeRegion.label}</span>
+        <span>{activeRegion.timezones.length}</span>
+      </div>
+      <CommandItem value="back:regions" className="mb-1" onSelect={onBackToRegions}>
+        <ArrowLeft className="h-4 w-4" />
+        <span className="min-w-0 flex-1 truncate">Back to regions</span>
+      </CommandItem>
+      <CommandSeparator className="mb-1" />
+      <TimezoneItems
+        timezones={activeRegionTimezones}
+        selectedValue={selectedValue}
+        timezoneOffsetLabelByName={timezoneOffsetLabelByName}
+        onSelectTimezone={onSelectTimezone}
+      />
+    </CommandGroup>
+  );
+}
+
+function TimezoneCommandBody({
+  emptyMessage,
+  isLoading,
+  loadError,
+  options,
+  query,
+  view,
+  activeRegion,
+  matchedRegions,
+  matchedTimezones,
+  hasSearchResults,
+  selectedRegionKey,
+  selectedValue,
+  timezoneOffsetLabelByName,
+  activeRegionTimezones,
+  onSelectRegion,
+  onSelectTimezone,
+  onBackToRegions,
+}: Pick<
+  TimezoneCommandProps,
+  | 'emptyMessage'
+  | 'isLoading'
+  | 'loadError'
+  | 'options'
+  | 'query'
+  | 'view'
+  | 'activeRegion'
+  | 'matchedRegions'
+  | 'matchedTimezones'
+  | 'hasSearchResults'
+  | 'selectedRegionKey'
+  | 'selectedValue'
+  | 'timezoneOffsetLabelByName'
+  | 'activeRegionTimezones'
+  | 'onSelectRegion'
+  | 'onSelectTimezone'
+  | 'onBackToRegions'
+>) {
+  const hasQuery = query.trim().length > 0;
+
+  if (loadError || isLoading || !options) {
+    return <div className="text-muted-foreground py-6 text-center text-sm">{emptyMessage}</div>;
+  }
+
+  if (hasQuery) {
+    if (!hasSearchResults) {
+      return <div className="text-muted-foreground py-6 text-center text-sm">{emptyMessage}</div>;
+    }
+
+    return (
+      <SearchResultsContent
+        matchedRegions={matchedRegions}
+        matchedTimezones={matchedTimezones}
+        selectedRegionKey={selectedRegionKey}
+        selectedValue={selectedValue}
+        timezoneOffsetLabelByName={timezoneOffsetLabelByName}
+        onSelectRegion={onSelectRegion}
+        onSelectTimezone={onSelectTimezone}
+      />
+    );
+  }
+
+  if (view === 'timezones' && activeRegion) {
+    return (
+      <ActiveRegionTimezonesContent
+        activeRegion={activeRegion}
+        activeRegionTimezones={activeRegionTimezones}
+        selectedValue={selectedValue}
+        timezoneOffsetLabelByName={timezoneOffsetLabelByName}
+        onSelectTimezone={onSelectTimezone}
+        onBackToRegions={onBackToRegions}
+      />
+    );
+  }
+
+  return (
+    <CommandGroup heading="Regions">
+      <RegionItems
+        regions={options.regions}
+        selectedRegionKey={selectedRegionKey}
+        onSelectRegion={onSelectRegion}
+      />
+    </CommandGroup>
+  );
 }
 
 export function TimezoneCommand({
@@ -84,127 +252,25 @@ export function TimezoneCommand({
           </>
         )}
 
-        {loadError || isLoading || !options ? (
-          <div className="text-muted-foreground py-6 text-center text-sm">{emptyMessage}</div>
-        ) : query.trim() ? (
-          !hasSearchResults ? (
-            <div className="text-muted-foreground py-6 text-center text-sm">{emptyMessage}</div>
-          ) : (
-            <>
-              {matchedRegions.length > 0 && (
-                <CommandGroup heading="Regions">
-                  {matchedRegions.map((region) => {
-                    const selected = selectedRegionKey === region.key;
-
-                    return (
-                      <CommandItem
-                        key={region.key}
-                        value={`region:${region.key}`}
-                        onSelect={() => {
-                          onSelectRegion(region.key);
-                        }}
-                      >
-                        <Check className={cn('h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                        <span className="min-w-0 flex-1 truncate">{region.label}</span>
-                        <span className="text-muted-foreground ml-auto text-xs">
-                          {region.timezones.length}
-                        </span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              )}
-
-              {matchedRegions.length > 0 && matchedTimezones.length > 0 && <CommandSeparator />}
-
-              {matchedTimezones.length > 0 && (
-                <CommandGroup heading="Timezones">
-                  {matchedTimezones.map((timezone) => {
-                    const selected = selectedValue === timezone;
-
-                    return (
-                      <CommandItem
-                        key={timezone}
-                        value={timezone}
-                        onSelect={() => {
-                          onSelectTimezone(timezone);
-                        }}
-                      >
-                        <Check className={cn('h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                        <span className="min-w-0 flex-1 truncate">
-                          {formatTimezoneLabel(timezone)}
-                        </span>
-                        <span className="text-muted-foreground ml-auto text-xs">
-                          {timezoneOffsetLabelByName.get(timezone) || ''}
-                        </span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              )}
-            </>
-          )
-        ) : view === 'timezones' && activeRegion ? (
-          <CommandGroup>
-            <div className="text-muted-foreground flex items-center gap-2 px-2 py-1.5 text-xs font-medium">
-              <Globe2 className="h-4 w-4" />
-              <span className="min-w-0 flex-1 truncate">{activeRegion.label}</span>
-              <span>{activeRegion.timezones.length}</span>
-            </div>
-            <CommandItem
-              value="back:regions"
-              className="mb-1"
-              onSelect={() => {
-                onBackToRegions();
-              }}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="min-w-0 flex-1 truncate">Back to regions</span>
-            </CommandItem>
-            <CommandSeparator className="mb-1" />
-            {activeRegionTimezones.map((timezone) => {
-              const selected = selectedValue === timezone;
-
-              return (
-                <CommandItem
-                  key={timezone}
-                  value={timezone}
-                  onSelect={() => {
-                    onSelectTimezone(timezone);
-                  }}
-                >
-                  <Check className={cn('h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                  <span className="min-w-0 flex-1 truncate">{formatTimezoneLabel(timezone)}</span>
-                  <span className="text-muted-foreground ml-auto text-xs">
-                    {timezoneOffsetLabelByName.get(timezone) || ''}
-                  </span>
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        ) : (
-          <CommandGroup heading="Regions">
-            {options.regions.map((region) => {
-              const selected = selectedRegionKey === region.key;
-
-              return (
-                <CommandItem
-                  key={region.key}
-                  value={`region:${region.key}`}
-                  onSelect={() => {
-                    onSelectRegion(region.key);
-                  }}
-                >
-                  <Check className={cn('h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
-                  <span className="min-w-0 flex-1 truncate">{region.label}</span>
-                  <span className="text-muted-foreground ml-auto text-xs">
-                    {region.timezones.length}
-                  </span>
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        )}
+        <TimezoneCommandBody
+          emptyMessage={emptyMessage}
+          isLoading={isLoading}
+          loadError={loadError}
+          options={options}
+          query={query}
+          view={view}
+          activeRegion={activeRegion}
+          matchedRegions={matchedRegions}
+          matchedTimezones={matchedTimezones}
+          hasSearchResults={hasSearchResults}
+          selectedRegionKey={selectedRegionKey}
+          selectedValue={selectedValue}
+          timezoneOffsetLabelByName={timezoneOffsetLabelByName}
+          activeRegionTimezones={activeRegionTimezones}
+          onSelectRegion={onSelectRegion}
+          onSelectTimezone={onSelectTimezone}
+          onBackToRegions={onBackToRegions}
+        />
       </CommandList>
     </Command>
   );

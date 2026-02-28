@@ -16,6 +16,41 @@ interface KPICardProps {
   onHelpClick?: () => void;
 }
 
+const TREND_CONFIG = {
+  up: {
+    icon: TrendingUp,
+    color: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-green-50 dark:bg-green-950/30',
+  },
+  down: {
+    icon: TrendingDown,
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-50 dark:bg-red-950/30',
+  },
+  neutral: {
+    icon: Minus,
+    color: 'text-gray-600 dark:text-gray-400',
+    bgColor: 'bg-gray-50 dark:bg-gray-950/30',
+  },
+};
+
+function KpiLoadingCard() {
+  return (
+    <Card className="cursor-pointer transition-shadow hover:shadow-md">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-5 w-5 rounded" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="mb-2 h-8 w-32" />
+        <Skeleton className="h-4 w-20" />
+      </CardContent>
+    </Card>
+  );
+}
+
 export function KPICard({
   title,
   value,
@@ -27,20 +62,7 @@ export function KPICard({
   onHelpClick,
 }: KPICardProps) {
   if (loading) {
-    return (
-      <Card className="cursor-pointer transition-shadow hover:shadow-md">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-5 w-5 rounded" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="mb-2 h-8 w-32" />
-          <Skeleton className="h-4 w-20" />
-        </CardContent>
-      </Card>
-    );
+    return <KpiLoadingCard />;
   }
 
   // Auto-determine trend if not provided
@@ -53,25 +75,7 @@ export function KPICard({
     }
   }
 
-  const trendConfig = {
-    up: {
-      icon: TrendingUp,
-      color: 'text-green-600 dark:text-green-400',
-      bgColor: 'bg-green-50 dark:bg-green-950/30',
-    },
-    down: {
-      icon: TrendingDown,
-      color: 'text-red-600 dark:text-red-400',
-      bgColor: 'bg-red-50 dark:bg-red-950/30',
-    },
-    neutral: {
-      icon: Minus,
-      color: 'text-gray-600 dark:text-gray-400',
-      bgColor: 'bg-gray-50 dark:bg-gray-950/30',
-    },
-  };
-
-  const config = trendConfig[determinedTrend];
+  const config = TREND_CONFIG[determinedTrend];
   const TrendIcon = config.icon;
 
   return (

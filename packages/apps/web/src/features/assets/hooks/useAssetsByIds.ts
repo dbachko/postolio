@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { assetsApi, type Asset } from '@/features/assets/api/client';
 
-type AssetsById = Record<string, Asset | null>;
+export type AssetsById = Record<string, Asset | null>;
 
 export function useAssetsByIds(assetIds: Array<string | null | undefined>) {
   const normalized = useMemo(() => {

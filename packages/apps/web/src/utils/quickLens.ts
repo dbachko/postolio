@@ -91,33 +91,35 @@ const SPAM_KEYWORDS = [
 
 const URL_RX = /(https?:\/\/|www\.)/i;
 
-export function analyzeText(text: string): QuickLensResult {
-  const normalized = (text || '').toLowerCase();
-  const tokens = normalized.split(/[^\p{L}\p{N}\p{Emoji_Presentation}']+/gu).filter(Boolean);
+function tokenizeText(normalized: string): string[] {
+  return normalized.split(/[^\p{L}\p{N}\p{Emoji_Presentation}']+/gu).filter(Boolean);
+}
 
+function analyzeSentimentSignal(text: string, tokens: string[]) {
   let score = 0;
   let matchedPos = 0;
   let matchedNeg = 0;
+
   for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
+    const token = tokens[i];
     const prev = tokens[i - 1];
     const negation = prev === 'not' || prev === "don't" || prev === "didn't";
-    if (POSITIVE.includes(t)) {
+    if (POSITIVE.includes(token)) {
       matchedPos++;
       score += negation ? -1 : 1;
     }
-    if (NEGATIVE.includes(t)) {
+    if (NEGATIVE.includes(token)) {
       matchedNeg++;
       score += negation ? 1 : -1;
     }
   }
-  // Boost for exclamation or repeated emojis
+
   if (/!!+|🔥|😍|❤️|👏/.test(text)) {
     score += 0.25;
   }
   if (/\?/.test(text)) {
     score += 0;
-  } // neutral for question mark alone
+  }
 
   let label: SentimentLabel = 'neutral';
   if (score > 0.4) {
@@ -128,49 +130,80 @@ export function analyzeText(text: string): QuickLensResult {
   const magnitude = Math.min(1, Math.abs(score) + (matchedPos + matchedNeg) * 0.05);
   const confidence = Number((0.5 + magnitude / 2).toFixed(2));
 
-  // Spam rules
-  const spamReasons: string[] = [];
+  return { label, score: Number(score.toFixed(2)), confidence };
+}
+
+function detectSpam(text: string, normalized: string) {
+  const reasons: string[] = [];
   if (URL_RX.test(text)) {
-    spamReasons.push('contains link');
+    reasons.push('contains link');
   }
   if ((text.match(/#/g) || []).length >= 5) {
-    spamReasons.push('excessive hashtags');
+    reasons.push('excessive hashtags');
   }
   if ((text.match(/@/g) || []).length >= 3) {
-    spamReasons.push('excessive mentions');
+    reasons.push('excessive mentions');
   }
   if (/(.)\1{4,}/.test(text)) {
-    spamReasons.push('repeated characters');
+    reasons.push('repeated characters');
   }
-  for (const k of SPAM_KEYWORDS) {
-    if (normalized.includes(k)) {
-      spamReasons.push(k);
+  for (const keyword of SPAM_KEYWORDS) {
+    if (normalized.includes(keyword)) {
+      reasons.push(keyword);
     }
   }
-  const isSpam =
-    spamReasons.length >= 2 || normalized.includes('promote on') || normalized.includes('dm for');
 
-  // Reply recommendation
-  const replyReasons: string[] = [];
+  const isSpam =
+    reasons.length >= 2 || normalized.includes('promote on') || normalized.includes('dm for');
+  return { isSpam, reasons };
+}
+
+function detectReplyRecommendation(params: {
+  text: string;
+  normalized: string;
+  sentimentLabel: SentimentLabel;
+  isSpam: boolean;
+}) {
+  const reasons: string[] = [];
   const isQuestion =
-    /\?\s*$/.test(text) || QUESTION_STARTS.some((q) => normalized.trim().startsWith(`${q} `));
+    /\?\s*$/.test(params.text) ||
+    QUESTION_STARTS.some((questionStart) =>
+      params.normalized.trim().startsWith(`${questionStart} `)
+    );
   if (isQuestion) {
-    replyReasons.push('question');
+    reasons.push('question');
   }
-  if (label === 'negative') {
-    replyReasons.push('negative sentiment');
+  if (params.sentimentLabel === 'negative') {
+    reasons.push('negative sentiment');
   }
-  if (/price|cost|ship|deliver|when|where|how much|available/i.test(text)) {
-    replyReasons.push('purchase/availability intent');
+  if (/price|cost|ship|deliver|when|where|how much|available/i.test(params.text)) {
+    reasons.push('purchase/availability intent');
   }
+
   const recommended =
-    !isSpam &&
-    (isQuestion || label === 'negative' || replyReasons.includes('purchase/availability intent'));
+    !params.isSpam &&
+    (isQuestion ||
+      params.sentimentLabel === 'negative' ||
+      reasons.includes('purchase/availability intent'));
+  return { recommended, reasons };
+}
+
+export function analyzeText(text: string): QuickLensResult {
+  const normalized = (text || '').toLowerCase();
+  const tokens = tokenizeText(normalized);
+  const sentiment = analyzeSentimentSignal(text, tokens);
+  const spam = detectSpam(text, normalized);
+  const reply = detectReplyRecommendation({
+    text,
+    normalized,
+    sentimentLabel: sentiment.label,
+    isSpam: spam.isSpam,
+  });
 
   return {
-    sentiment: { label, score: Number(score.toFixed(2)), confidence },
-    spam: { isSpam, reasons: spamReasons },
-    reply: { recommended, reasons: replyReasons },
+    sentiment,
+    spam,
+    reply,
     language: 'en',
   };
 }

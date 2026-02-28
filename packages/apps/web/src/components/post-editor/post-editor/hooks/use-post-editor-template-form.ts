@@ -15,7 +15,7 @@ import {
   toValidationPlatform,
 } from '../utils';
 
-export function usePostEditorTemplateForm(params: {
+type UsePostEditorTemplateFormParams = {
   id?: string;
   contentGroupId: string | null;
   isMultiDestinationGroup: boolean;
@@ -29,25 +29,30 @@ export function usePostEditorTemplateForm(params: {
   templateAssetIds: string[];
   templateAssetsById: Record<string, unknown> | undefined;
   templateCarouselAssets: AssetReference[];
+};
+
+function useTemplateInitialization(params: {
+  isMultiDestinationGroup: boolean;
+  contentGroupTemplate: UsePostEditorTemplateFormParams['contentGroupTemplate'];
+  templateAssetIds: string[];
+  templateAssetsById: Record<string, unknown> | undefined;
+  templateCarouselAssets: AssetReference[];
+  setTemplateFormData: React.Dispatch<React.SetStateAction<ContentGroupTemplateFormState>>;
+  setTemplateFirstCommentOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setTemplateHasChanges: React.Dispatch<React.SetStateAction<boolean>>;
+  templateInitializedRef: React.MutableRefObject<boolean>;
 }) {
   const {
-    contentGroupId,
     contentGroupTemplate,
-    groupPlatforms,
-    id,
     isMultiDestinationGroup,
+    setTemplateFirstCommentOpen,
+    setTemplateFormData,
+    setTemplateHasChanges,
     templateAssetIds,
     templateAssetsById,
     templateCarouselAssets,
+    templateInitializedRef,
   } = params;
-
-  const [templateFormData, setTemplateFormData] = useState<ContentGroupTemplateFormState>(() =>
-    createEmptyTemplateFormState()
-  );
-  const [templateHasChanges, setTemplateHasChanges] = useState(false);
-  const templateInitializedRef = useRef(false);
-  const [templateFirstCommentOpen, setTemplateFirstCommentOpen] = useState(false);
-  const [isTemplateTab, setIsTemplateTab] = useState(false);
 
   useEffect(() => {
     if (!isMultiDestinationGroup) {
@@ -78,90 +83,97 @@ export function usePostEditorTemplateForm(params: {
   }, [
     contentGroupTemplate,
     isMultiDestinationGroup,
+    setTemplateFirstCommentOpen,
+    setTemplateFormData,
+    setTemplateHasChanges,
     templateAssetIds.length,
     templateAssetsById,
     templateCarouselAssets,
+    templateInitializedRef,
   ]);
+}
 
-  useEffect(() => {
-    setIsTemplateTab(false);
-  }, [contentGroupId, id]);
+function buildTemplateValidation(params: {
+  isMultiDestinationGroup: boolean;
+  templateFormData: ContentGroupTemplateFormState;
+  templateMediaType: InstagramMediaType;
+  groupPlatforms: Platform[];
+}) {
+  if (!params.isMultiDestinationGroup) {
+    return { ok: true, errors: [] as any[] };
+  }
 
-  const templateMediaType = useMemo<InstagramMediaType>(() => {
-    return deriveMediaTypeFromAssets(templateFormData.carouselAssets, templateFormData.contentType);
-  }, [templateFormData.carouselAssets, templateFormData.contentType]);
+  const isStory = params.templateFormData.contentType === 'story';
+  const mediaAssets = (params.templateFormData.carouselAssets || [])
+    .filter((asset) => typeof asset.id === 'string' && asset.id.trim().length > 0)
+    .map((asset) => ({
+      key: asset.id,
+      type: (asset.type === 'video' ? 'video' : 'image') as InstagramMediaType,
+    }));
 
-  const templateValidation = useMemo(() => {
-    if (!isMultiDestinationGroup) {
-      return { ok: true, errors: [] as any[] };
-    }
-
-    const isStory = templateFormData.contentType === 'story';
-    const mediaAssets: Array<{ key: string; type: InstagramMediaType }> = (
-      templateFormData.carouselAssets || []
-    )
-      .filter((asset) => typeof asset.id === 'string' && asset.id.trim().length > 0)
-      .map((asset) => ({
-        key: asset.id,
-        type: asset.type === 'video' ? 'video' : 'image',
-      }));
-
-    const platformsForValidation: Platform[] =
-      groupPlatforms.length > 0 ? groupPlatforms : ['instagram'];
-    const validations = platformsForValidation.map((platform) => {
-      const validationPlatform = toValidationPlatform(platform);
-      if (!validationPlatform) {
-        return {
-          platform,
-          result: {
-            ok: false,
-            errors: [
-              {
-                field: 'platform',
-                message: `Unsupported platform: ${platform}`,
-                code: 'UNSUPPORTED_PLATFORM',
-              },
-            ],
-          },
-        };
-      }
-
+  const platformsForValidation: Platform[] =
+    params.groupPlatforms.length > 0 ? params.groupPlatforms : ['instagram'];
+  const validations = platformsForValidation.map((platform) => {
+    const validationPlatform = toValidationPlatform(platform);
+    if (!validationPlatform) {
       return {
         platform,
-        result: validateContentPayload({
-          platform: validationPlatform,
-          contentType: templateFormData.contentType,
-          mediaType: mediaAssets.length > 0 ? templateMediaType : undefined,
-          caption: isStory ? '' : templateFormData.caption,
-          mediaAssets,
-        }),
+        result: {
+          ok: false,
+          errors: [
+            {
+              field: 'platform',
+              message: `Unsupported platform: ${platform}`,
+              code: 'UNSUPPORTED_PLATFORM',
+            },
+          ],
+        },
       };
-    });
-
-    const firstFail = validations.find((v) => !v.result.ok);
-    if (!firstFail) {
-      return { ok: true, errors: [] };
     }
 
     return {
-      ok: false,
-      errors: firstFail.result.errors.map((e) => ({
-        ...e,
-        message: `${firstFail.platform}: ${e.message}`,
-      })),
+      platform,
+      result: validateContentPayload({
+        platform: validationPlatform,
+        contentType: params.templateFormData.contentType,
+        mediaType: mediaAssets.length > 0 ? params.templateMediaType : undefined,
+        caption: isStory ? '' : params.templateFormData.caption,
+        mediaAssets,
+      }),
     };
-  }, [
-    groupPlatforms,
-    isMultiDestinationGroup,
-    templateFormData.caption,
-    templateFormData.carouselAssets,
-    templateFormData.contentType,
-    templateMediaType,
-  ]);
+  });
 
-  const templateValidationError = templateValidation.ok
-    ? null
-    : templateValidation.errors[0]?.message;
+  const firstFail = validations.find((value) => !value.result.ok);
+  if (!firstFail) {
+    return { ok: true, errors: [] };
+  }
+  return {
+    ok: false,
+    errors: firstFail.result.errors.map((error) => ({
+      ...error,
+      message: `${firstFail.platform}: ${error.message}`,
+    })),
+  };
+}
+
+function useTemplateDirtyTracking(params: {
+  isMultiDestinationGroup: boolean;
+  contentGroupTemplate: UsePostEditorTemplateFormParams['contentGroupTemplate'];
+  templateInitializedRef: React.MutableRefObject<boolean>;
+  templateFormData: ContentGroupTemplateFormState;
+  templateAssetIds: string[];
+  templateFirstCommentOpen: boolean;
+  setTemplateHasChanges: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const {
+    contentGroupTemplate,
+    isMultiDestinationGroup,
+    setTemplateHasChanges,
+    templateAssetIds,
+    templateFirstCommentOpen,
+    templateFormData,
+    templateInitializedRef,
+  } = params;
 
   useEffect(() => {
     if (!isMultiDestinationGroup || !contentGroupTemplate || !templateInitializedRef.current) {
@@ -170,62 +182,185 @@ export function usePostEditorTemplateForm(params: {
       }
       return;
     }
-
-    const isStory = templateFormData.contentType === 'story';
-    const normalizedContentType =
-      (contentGroupTemplate.contentType as InstagramContentType) || 'post';
-
-    const trimmedCaption = isStory ? '' : (templateFormData.caption || '').trim();
-    const originalCaption = (
-      normalizedContentType === 'story' ? '' : contentGroupTemplate.caption || ''
-    ).trim();
-
-    const formAssetIds = (templateFormData.carouselAssets || []).map((asset) => asset.id);
-    const originalAssetIds = templateAssetIds;
-
-    const formFirstComment = templateFirstCommentOpen
-      ? (templateFormData.firstComment || '').trim()
-      : '';
-    const originalFirstComment = (contentGroupTemplate.firstComment || '').trim();
-
-    const formShareToFeed = templateFormData.shareToFeed ?? true;
-    const originalShareToFeed =
-      normalizedContentType === 'reel' ? (contentGroupTemplate.shareToFeed ?? true) : true;
-
-    const changed =
-      trimmedCaption !== originalCaption ||
-      templateFormData.contentType !== normalizedContentType ||
-      formShareToFeed !== originalShareToFeed ||
-      formFirstComment !== originalFirstComment ||
-      JSON.stringify(formAssetIds) !== JSON.stringify(originalAssetIds);
-
-    setTemplateHasChanges(changed);
+    setTemplateHasChanges(
+      hasTemplateFormChanges({
+        contentGroupTemplate,
+        templateFormData,
+        templateAssetIds,
+        templateFirstCommentOpen,
+      })
+    );
   }, [
     contentGroupTemplate,
     isMultiDestinationGroup,
+    setTemplateHasChanges,
     templateAssetIds,
     templateFirstCommentOpen,
     templateFormData,
+    templateInitializedRef,
   ]);
+}
 
-  const allowMixedTemplateMedia = useMemo(() => {
+function hasTemplateFormChanges(params: {
+  contentGroupTemplate: UsePostEditorTemplateFormParams['contentGroupTemplate'];
+  templateFormData: ContentGroupTemplateFormState;
+  templateAssetIds: string[];
+  templateFirstCommentOpen: boolean;
+}) {
+  const normalizedContentType =
+    (params.contentGroupTemplate?.contentType as InstagramContentType) || 'post';
+  const { trimmedCaption, originalCaption } = getTemplateCaptionComparisonValues(
+    params.templateFormData,
+    params.contentGroupTemplate,
+    normalizedContentType
+  );
+  const formAssetIds = (params.templateFormData.carouselAssets || []).map((asset) => asset.id);
+  const { formFirstComment, originalFirstComment } = getTemplateFirstCommentComparisonValues(
+    params.templateFormData,
+    params.contentGroupTemplate,
+    params.templateFirstCommentOpen
+  );
+  const { formShareToFeed, originalShareToFeed } = getTemplateShareToFeedComparisonValues(
+    params.templateFormData,
+    params.contentGroupTemplate,
+    normalizedContentType
+  );
+
+  return (
+    trimmedCaption !== originalCaption ||
+    params.templateFormData.contentType !== normalizedContentType ||
+    formShareToFeed !== originalShareToFeed ||
+    formFirstComment !== originalFirstComment ||
+    JSON.stringify(formAssetIds) !== JSON.stringify(params.templateAssetIds)
+  );
+}
+
+function getTemplateCaptionComparisonValues(
+  templateFormData: ContentGroupTemplateFormState,
+  contentGroupTemplate: UsePostEditorTemplateFormParams['contentGroupTemplate'],
+  normalizedContentType: InstagramContentType
+) {
+  const isStory = templateFormData.contentType === 'story';
+  return {
+    trimmedCaption: isStory ? '' : (templateFormData.caption || '').trim(),
+    originalCaption:
+      normalizedContentType === 'story' ? '' : (contentGroupTemplate?.caption || '').trim(),
+  };
+}
+
+function getTemplateFirstCommentComparisonValues(
+  templateFormData: ContentGroupTemplateFormState,
+  contentGroupTemplate: UsePostEditorTemplateFormParams['contentGroupTemplate'],
+  templateFirstCommentOpen: boolean
+) {
+  return {
+    formFirstComment: templateFirstCommentOpen ? (templateFormData.firstComment || '').trim() : '',
+    originalFirstComment: (contentGroupTemplate?.firstComment || '').trim(),
+  };
+}
+
+function getTemplateShareToFeedComparisonValues(
+  templateFormData: ContentGroupTemplateFormState,
+  contentGroupTemplate: UsePostEditorTemplateFormParams['contentGroupTemplate'],
+  normalizedContentType: InstagramContentType
+) {
+  return {
+    formShareToFeed: templateFormData.shareToFeed ?? true,
+    originalShareToFeed:
+      normalizedContentType === 'reel' ? (contentGroupTemplate?.shareToFeed ?? true) : true,
+  };
+}
+
+function useAllowMixedTemplateMedia(
+  groupPlatforms: Platform[],
+  contentType: InstagramContentType
+): boolean {
+  return useMemo(() => {
     const platforms = groupPlatforms.length ? groupPlatforms : (['instagram'] as Platform[]);
-    return templateFormData.contentType !== 'reel' && !platforms.includes('facebook');
-  }, [groupPlatforms, templateFormData.contentType]);
+    return contentType !== 'reel' && !platforms.includes('facebook');
+  }, [groupPlatforms, contentType]);
+}
 
-  const templateQueueSupported = useMemo(() => {
-    if (!isMultiDestinationGroup) {
+function useTemplateQueueSupported(params: {
+  isMultiDestinationGroup: boolean;
+  groupPlatforms: Platform[];
+}): boolean {
+  return useMemo(() => {
+    if (!params.isMultiDestinationGroup) {
       return false;
     }
-    const platforms = groupPlatforms.length ? groupPlatforms : (['instagram'] as Platform[]);
-    return platforms.every((p) => {
+    const platforms = params.groupPlatforms.length
+      ? params.groupPlatforms
+      : (['instagram'] as Platform[]);
+    return platforms.every((platform) => {
       try {
-        return getPlatformConfig(p).features.scheduling;
+        return getPlatformConfig(platform).features.scheduling;
       } catch {
         return false;
       }
     });
-  }, [groupPlatforms, isMultiDestinationGroup]);
+  }, [params.groupPlatforms, params.isMultiDestinationGroup]);
+}
+
+export function usePostEditorTemplateForm(params: UsePostEditorTemplateFormParams) {
+  const [templateFormData, setTemplateFormData] = useState<ContentGroupTemplateFormState>(() =>
+    createEmptyTemplateFormState()
+  );
+  const [templateHasChanges, setTemplateHasChanges] = useState(false);
+  const templateInitializedRef = useRef(false);
+  const [templateFirstCommentOpen, setTemplateFirstCommentOpen] = useState(false);
+  const [isTemplateTab, setIsTemplateTab] = useState(false);
+
+  useTemplateInitialization({
+    isMultiDestinationGroup: params.isMultiDestinationGroup,
+    contentGroupTemplate: params.contentGroupTemplate,
+    templateAssetIds: params.templateAssetIds,
+    templateAssetsById: params.templateAssetsById,
+    templateCarouselAssets: params.templateCarouselAssets,
+    setTemplateFormData,
+    setTemplateFirstCommentOpen,
+    setTemplateHasChanges,
+    templateInitializedRef,
+  });
+
+  useEffect(() => {
+    setIsTemplateTab(false);
+  }, [params.contentGroupId, params.id]);
+
+  const templateMediaType = useMemo<InstagramMediaType>(
+    () => deriveMediaTypeFromAssets(templateFormData.carouselAssets, templateFormData.contentType),
+    [templateFormData.carouselAssets, templateFormData.contentType]
+  );
+
+  const templateValidation = useMemo(
+    () =>
+      buildTemplateValidation({
+        isMultiDestinationGroup: params.isMultiDestinationGroup,
+        templateFormData,
+        templateMediaType,
+        groupPlatforms: params.groupPlatforms,
+      }),
+    [params.groupPlatforms, params.isMultiDestinationGroup, templateFormData, templateMediaType]
+  );
+
+  useTemplateDirtyTracking({
+    isMultiDestinationGroup: params.isMultiDestinationGroup,
+    contentGroupTemplate: params.contentGroupTemplate,
+    templateInitializedRef,
+    templateFormData,
+    templateAssetIds: params.templateAssetIds,
+    templateFirstCommentOpen,
+    setTemplateHasChanges,
+  });
+
+  const allowMixedTemplateMedia = useAllowMixedTemplateMedia(
+    params.groupPlatforms,
+    templateFormData.contentType
+  );
+  const templateQueueSupported = useTemplateQueueSupported({
+    isMultiDestinationGroup: params.isMultiDestinationGroup,
+    groupPlatforms: params.groupPlatforms,
+  });
 
   return {
     templateFormData,
@@ -238,7 +373,7 @@ export function usePostEditorTemplateForm(params: {
     isTemplateTab,
     setIsTemplateTab,
     templateValidation,
-    templateValidationError,
+    templateValidationError: templateValidation.ok ? null : templateValidation.errors[0]?.message,
     allowMixedTemplateMedia,
     templateQueueSupported,
   };

@@ -12,23 +12,8 @@ type UseSocialAccountsManagerAccountsParams = {
   brandId: string;
 };
 
-export function useSocialAccountsManagerAccounts({
-  brandId,
-}: UseSocialAccountsManagerAccountsParams) {
-  const [orderedConnectedIds, setOrderedConnectedIds] = useState<string[]>([]);
-
-  const accountsQuery = useQuery({
-    queryKey: ['brand-social-accounts', brandId],
-    queryFn: () => brandApi.getConnectedAccounts(brandId),
-    staleTime: CACHE_TIMES.LONG,
-    gcTime: GC_TIMES.LONG,
-    refetchOnWindowFocus: false,
-  });
-
-  const socialAccounts = useMemo(
-    () => getConnectedAccountsFromQueryData(accountsQuery.data),
-    [accountsQuery.data]
-  );
+function useConnectedAccounts(data: unknown) {
+  const socialAccounts = useMemo(() => getConnectedAccountsFromQueryData(data), [data]);
 
   const connectedAccounts = useMemo(
     () =>
@@ -39,19 +24,19 @@ export function useSocialAccountsManagerAccounts({
     [socialAccounts]
   );
 
-  useEffect(() => {
-    setOrderedConnectedIds(connectedAccounts.map((a) => a.id));
-  }, [connectedAccounts]);
+  return { socialAccounts, connectedAccounts };
+}
 
-  const primarySocialAccountId = useMemo(() => {
-    const data = accountsQuery.data as any;
-    const raw = data?.primarySocialAccountId;
+function usePrimarySocialAccountId(data: unknown, orderedConnectedIds: string[]) {
+  return useMemo(() => {
+    const raw = (data as any)?.primarySocialAccountId;
     return typeof raw === 'string' && raw.trim() ? raw : (orderedConnectedIds[0] ?? null);
-  }, [accountsQuery.data, orderedConnectedIds]);
+  }, [data, orderedConnectedIds]);
+}
 
-  const defaultPostSocialAccountIds = useMemo(() => {
-    const data = accountsQuery.data as any;
-    const raw = data?.defaultPostSocialAccountIds;
+function useDefaultPostSocialAccountIds(data: unknown, connectedAccounts: ConnectedAccount[]) {
+  return useMemo(() => {
+    const raw = (data as any)?.defaultPostSocialAccountIds;
     if (!Array.isArray(raw)) {
       return [] as string[];
     }
@@ -59,11 +44,11 @@ export function useSocialAccountsManagerAccounts({
     const allowed = new Set(connectedAccounts.map((account) => account.id));
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const v of raw) {
-      if (typeof v !== 'string') {
+    for (const value of raw) {
+      if (typeof value !== 'string') {
         continue;
       }
-      const id = v.trim();
+      const id = value.trim();
       if (!id || !allowed.has(id) || seen.has(id)) {
         continue;
       }
@@ -71,9 +56,11 @@ export function useSocialAccountsManagerAccounts({
       out.push(id);
     }
     return out;
-  }, [accountsQuery.data, connectedAccounts]);
+  }, [data, connectedAccounts]);
+}
 
-  const defaultPostSocialAccountOptions = useMemo(() => {
+function useDefaultPostSocialAccountOptions(connectedAccounts: ConnectedAccount[]) {
+  return useMemo(() => {
     return connectedAccounts
       .map((account) => {
         const platform = account.platform as Platform;
@@ -104,11 +91,41 @@ export function useSocialAccountsManagerAccounts({
       })
       .sort((a, b) => a.platform.localeCompare(b.platform) || a.id.localeCompare(b.id));
   }, [connectedAccounts]);
+}
 
-  const orderedAccounts = useMemo(() => {
-    const byId = new Map(connectedAccounts.map((a) => [a.id, a]));
+function useOrderedAccounts(connectedAccounts: ConnectedAccount[], orderedConnectedIds: string[]) {
+  return useMemo(() => {
+    const byId = new Map(connectedAccounts.map((account) => [account.id, account]));
     return orderedConnectedIds.map((id) => byId.get(id)).filter(Boolean) as ConnectedAccount[];
   }, [connectedAccounts, orderedConnectedIds]);
+}
+
+export function useSocialAccountsManagerAccounts({
+  brandId,
+}: UseSocialAccountsManagerAccountsParams) {
+  const [orderedConnectedIds, setOrderedConnectedIds] = useState<string[]>([]);
+
+  const accountsQuery = useQuery({
+    queryKey: ['brand-social-accounts', brandId],
+    queryFn: () => brandApi.getConnectedAccounts(brandId),
+    staleTime: CACHE_TIMES.LONG,
+    gcTime: GC_TIMES.LONG,
+    refetchOnWindowFocus: false,
+  });
+
+  const { socialAccounts, connectedAccounts } = useConnectedAccounts(accountsQuery.data);
+
+  useEffect(() => {
+    setOrderedConnectedIds(connectedAccounts.map((a) => a.id));
+  }, [connectedAccounts]);
+
+  const primarySocialAccountId = usePrimarySocialAccountId(accountsQuery.data, orderedConnectedIds);
+  const defaultPostSocialAccountIds = useDefaultPostSocialAccountIds(
+    accountsQuery.data,
+    connectedAccounts
+  );
+  const defaultPostSocialAccountOptions = useDefaultPostSocialAccountOptions(connectedAccounts);
+  const orderedAccounts = useOrderedAccounts(connectedAccounts, orderedConnectedIds);
 
   return {
     accountsQuery,

@@ -46,6 +46,16 @@ function clamp0to100(value: number): number {
   return Math.round(Math.min(100, Math.max(0, value)));
 }
 
+function daysFromPeriod(period: '7d' | '30d' | '90d'): number {
+  if (period === '7d') {
+    return 7;
+  }
+  if (period === '90d') {
+    return 90;
+  }
+  return 30;
+}
+
 function calculateEngagementRateFactor(publications: Array<{ metricsLatest: any | null }>): number {
   const valid = publications.filter(
     (p) => p.metricsLatest && (p.metricsLatest.impressions || 0) > 0
@@ -184,7 +194,7 @@ export async function calculateAccountHealthScore(
   socialAccountId: string,
   period: '7d' | '30d' | '90d' = '30d'
 ): Promise<HealthScoreResult> {
-  const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+  const days = daysFromPeriod(period);
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 

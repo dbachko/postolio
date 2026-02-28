@@ -12,6 +12,72 @@ import { X, RefreshCcw, Bell as BellIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
+function NotificationsBody({
+  loading,
+  unreadItems,
+  onRefresh,
+  onMarkRead,
+}: {
+  loading: boolean;
+  unreadItems: ReturnType<typeof useNotificationsStore.getState>['items'];
+  onRefresh: () => void;
+  onMarkRead: (id: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+        Loading...
+      </div>
+    );
+  }
+  if (unreadItems.length === 0) {
+    return (
+      <div className="flex h-full min-h-full items-center justify-center">
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+          <span className="text-muted-foreground/70">
+            <BellIcon className="h-8 w-8" />
+          </span>
+          <div>
+            <p className="text-foreground text-base font-semibold">Nothing to see here</p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              You’re all caught up. New notifications will appear here.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <Link to="/notifications">Open all</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-1">
+      {unreadItems.map((item) => (
+        <li key={item.id} className="hover:bg-accent bg-accent/40 rounded-md p-2">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">{item.title}</div>
+              {item.body && <div className="text-muted-foreground mt-0.5 text-xs">{item.body}</div>}
+              <div className="text-muted-foreground mt-0.5 text-xs">
+                {new Date(item.createdAt).toLocaleString()}
+              </div>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => onMarkRead(item.id)}>
+              Mark read
+            </Button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function NotificationsSidebar() {
   const { close } = useRightSidebarRouter();
   const { items, loading, fetchLatest, markRead, markAllRead } = useNotificationsStore();
@@ -50,65 +116,12 @@ export function NotificationsSidebar() {
         </div>
       </div>
       <ScrollArea className="flex-1 px-4 py-4">
-        {(() => {
-          if (loading) {
-            return (
-              <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                Loading...
-              </div>
-            );
-          }
-
-          if (unreadItems.length === 0) {
-            return (
-              <div className="flex h-full min-h-full items-center justify-center">
-                <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
-                  <span className="text-muted-foreground/70">
-                    <BellIcon className="h-8 w-8" />
-                  </span>
-                  <div>
-                    <p className="text-foreground text-base font-semibold">Nothing to see here</p>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                      You’re all caught up. New notifications will appear here.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => fetchLatest()}>
-                      <RefreshCcw className="mr-2 h-4 w-4" />
-                      Refresh
-                    </Button>
-                    <Button asChild size="sm" variant="secondary">
-                      <Link to="/notifications">Open all</Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <ul className="space-y-1">
-              {unreadItems.map((n) => (
-                <li key={n.id} className="hover:bg-accent bg-accent/40 rounded-md p-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-medium">{n.title}</div>
-                      {n.body && (
-                        <div className="text-muted-foreground mt-0.5 text-xs">{n.body}</div>
-                      )}
-                      <div className="text-muted-foreground mt-0.5 text-xs">
-                        {new Date(n.createdAt).toLocaleString()}
-                      </div>
-                    </div>
-                    <Button size="sm" variant="secondary" onClick={() => markRead(n.id)}>
-                      Mark read
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          );
-        })()}
+        <NotificationsBody
+          loading={loading}
+          unreadItems={unreadItems}
+          onRefresh={() => void fetchLatest()}
+          onMarkRead={markRead}
+        />
       </ScrollArea>
     </div>
   );

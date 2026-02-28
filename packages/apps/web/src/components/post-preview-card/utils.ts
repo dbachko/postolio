@@ -134,6 +134,24 @@ export const extractHashtags = (item: CalendarItem): string[] => {
     .filter(Boolean);
 };
 
+function parseTargetSocialAccountIds(record: Record<string, unknown>): string[] {
+  if (Array.isArray(record.targetSocialAccountIds)) {
+    return (record.targetSocialAccountIds as unknown[])
+      .filter((v): v is string => typeof v === 'string')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof record.targetSocialAccountIds === 'string') {
+    return record.targetSocialAccountIds
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 export const getPlaceholderCreateParams = (
   item: CalendarItem
 ): Record<string, string | null | undefined> => {
@@ -156,19 +174,7 @@ export const getPlaceholderCreateParams = (
     params.targetSocialAccountId = targetSocialAccountId;
   }
 
-  const targetSocialAccountIdsRaw =
-    typeof record.targetSocialAccountIds === 'string' ? record.targetSocialAccountIds : null;
-  const targetSocialAccountIds = Array.isArray(record.targetSocialAccountIds)
-    ? (record.targetSocialAccountIds as unknown[])
-        .filter((v): v is string => typeof v === 'string')
-        .map((v) => v.trim())
-        .filter(Boolean)
-    : targetSocialAccountIdsRaw
-      ? targetSocialAccountIdsRaw
-          .split(',')
-          .map((v) => v.trim())
-          .filter(Boolean)
-      : [];
+  const targetSocialAccountIds = parseTargetSocialAccountIds(record);
   if (!targetSocialAccountId && targetSocialAccountIds.length > 0) {
     const unique = Array.from(new Set(targetSocialAccountIds));
     if (unique.length === 1) {

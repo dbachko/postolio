@@ -13,6 +13,8 @@ import {
   topUpAiCredits,
   type RecipeCreditEstimate,
 } from '../ai-credits.js';
+import { buildGetRunResult } from './run-result-mappers.js';
+import type { GetRunResult } from './runs-service-types.js';
 
 export type CreateRunParams = {
   brandId: string;
@@ -297,65 +299,6 @@ export async function listRuns(params: {
   }));
 }
 
-export type GetRunResult = {
-  run: {
-    id: string;
-    brandId: string;
-    status: 'queued' | 'running' | 'success' | 'failed' | 'canceled';
-    trigger: 'manual' | 'schedule' | 'api' | 'chat';
-    createdAt: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-    input: unknown;
-    errorCode: string | null;
-    errorMessage: string | null;
-  };
-  recipe: { id: string; name: string; slug: string; isCurated: boolean };
-  recipeVersion: { id: string; version: number };
-  steps: Array<{
-    id: string;
-    runId: string;
-    index: number;
-    type: string;
-    name: string;
-    status: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-    inputJsonRedacted: unknown;
-    outputJsonRedacted: unknown;
-    errorMessage: string | null;
-    createdAt: string;
-  }>;
-  artifacts: Array<{
-    id: string;
-    runId: string;
-    kind: 'markdown' | 'text' | 'json' | 'asset';
-    name: string;
-    mimeType: string | null;
-    contentText: string | null;
-    assetId: string | null;
-    sizeBytes: number | null;
-    createdAt: string;
-  }>;
-  costs: Array<{
-    id: string;
-    runId: string;
-    provider: string;
-    mode: 'managed' | 'byok';
-    inputTokens: number;
-    outputTokens: number;
-    estimatedCostUsd: string | null;
-    notes: string | null;
-    createdAt: string;
-  }>;
-  costSummary: {
-    totalInputTokens: number;
-    totalOutputTokens: number;
-    totalEstimatedCostUsd: string | null;
-    managedCreditsSpent: number;
-  };
-};
-
 export async function getRun(runId: string): Promise<GetRunResult | null> {
   const run = await prisma.recipeRun.findUnique({
     where: { id: runId },
@@ -372,74 +315,8 @@ export async function getRun(runId: string): Promise<GetRunResult | null> {
     return null;
   }
 
-  const totalInputTokens = run.costs.reduce((sum, cost) => sum + (cost.inputTokens || 0), 0);
-  const totalOutputTokens = run.costs.reduce((sum, cost) => sum + (cost.outputTokens || 0), 0);
-  const totalEstimatedCostUsd = run.costs.reduce((sum, cost) => {
-    if (!cost.estimatedCostUsd) {
-      return sum;
-    }
-    return sum + Number(cost.estimatedCostUsd.toString() || '0');
-  }, 0);
   const managedCreditsSpent = await getRunManagedCreditsSpent(runId);
-
-  return {
-    run: {
-      id: run.id,
-      brandId: run.brandId,
-      status: run.status,
-      trigger: run.trigger,
-      createdAt: run.createdAt.toISOString(),
-      startedAt: run.startedAt ? run.startedAt.toISOString() : null,
-      finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
-      input: run.inputJson,
-      errorCode: run.errorCode,
-      errorMessage: run.errorMessage,
-    },
-    recipe: run.recipeTemplate,
-    recipeVersion: run.recipeTemplateVersion,
-    steps: run.steps.map((s) => ({
-      id: s.id,
-      runId: s.runId,
-      index: s.index,
-      type: s.type,
-      name: s.name,
-      status: s.status,
-      startedAt: s.startedAt ? s.startedAt.toISOString() : null,
-      finishedAt: s.finishedAt ? s.finishedAt.toISOString() : null,
-      inputJsonRedacted: s.inputJsonRedacted,
-      outputJsonRedacted: s.outputJsonRedacted,
-      errorMessage: s.errorMessage,
-      createdAt: s.createdAt.toISOString(),
-    })),
-    artifacts: run.artifacts.map((a) => ({
-      id: a.id,
-      runId: a.runId,
-      kind: a.kind,
-      name: a.name,
-      mimeType: a.mimeType,
-      contentText: a.contentText,
-      assetId: a.assetId,
-      sizeBytes: a.sizeBytes,
-      createdAt: a.createdAt.toISOString(),
-    })),
-    costs: run.costs.map((c) => ({
-      id: c.id,
-      runId: c.runId,
-      provider: c.provider,
-      mode: c.mode,
-      inputTokens: c.inputTokens,
-      outputTokens: c.outputTokens,
-      estimatedCostUsd: c.estimatedCostUsd ? c.estimatedCostUsd.toString() : null,
-      notes: c.notes,
-      createdAt: c.createdAt.toISOString(),
-    })),
-    costSummary: {
-      totalInputTokens,
-      totalOutputTokens,
-      totalEstimatedCostUsd: totalEstimatedCostUsd > 0 ? totalEstimatedCostUsd.toFixed(4) : null,
-      managedCreditsSpent,
-    },
-  };
+  return buildGetRunResult(run, managedCreditsSpent);
 }
 
 export async function cancelRun(runId: string) {

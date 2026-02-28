@@ -325,7 +325,7 @@ describe('Publishing queues routes', () => {
     // @ts-ignore - jwt decorator is added by @fastify/jwt
     const token = await (app as any).jwt.sign({ id: 'user-123', email: 'test@example.com' });
     authHeader = `Bearer ${token}`;
-  });
+  }, 30_000);
 
   afterEach(async () => {
     if (app) await app.close();

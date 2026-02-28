@@ -1,34 +1,23 @@
 import Bull from 'bull';
 import { logger as baseLogger } from '@postolio/logger';
 import { getRedisUrl } from '../utils/redis-url.js';
-import { RefreshTokenService } from './refresh-token.js';
 import { RedisTokenStore } from './redis-token-store.js';
-import { AuditLogger, AuditEventType } from './audit-logger.js';
+import { JobType, type JobData, type CleanupResult } from './background-jobs/types.js';
+import {
+  processAuditLogCleanupJob,
+  processTokenCleanupJob,
+  processTokenIntegrityCheckJob,
+  processTokenMigrationJob,
+} from './background-jobs/token-processors.js';
+import {
+  processInboxCommentsBackfillJob,
+  processInboxCommentsIngestJob,
+  processInboxDMsIngestJob,
+  processNotificationRetentionJob,
+  processPublishingQueueWindowMaintenanceJob,
+} from './background-jobs/operational-processors.js';
 
-// Define job types
-export enum JobType {
-  TOKEN_CLEANUP = 'token-cleanup',
-  TOKEN_MIGRATION = 'token-migration',
-  TOKEN_INTEGRITY_CHECK = 'token-integrity-check',
-  AUDIT_LOG_CLEANUP = 'audit-log-cleanup',
-  PUBLISHING_QUEUE_WINDOW_MAINTENANCE = 'publishing-queue-window-maintenance',
-  NOTIFICATION_RETENTION = 'notification-retention',
-  INBOX_COMMENTS_INGEST = 'inbox-comments-ingest',
-  INBOX_COMMENTS_BACKFILL = 'inbox-comments-backfill',
-  INBOX_DMS_INGEST = 'inbox-dms-ingest',
-  RECIPE_RUN_EXECUTE = 'recipe-run-execute',
-}
-
-interface JobData {
-  type: JobType;
-  metadata?: Record<string, unknown>;
-}
-
-interface CleanupResult {
-  deletedCount: number;
-  duration: number;
-  errors?: string[];
-}
+export { JobType } from './background-jobs/types.js';
 
 /**
  * Background job queue for async operations
@@ -146,51 +135,7 @@ export class BackgroundJobQueue {
    * Process token cleanup job
    */
   private async processTokenCleanup(job: Bull.Job<JobData>): Promise<CleanupResult> {
-    const startTime = Date.now();
-
-    try {
-      // Update job progress
-      await job.progress(10);
-
-      // Clean up expired tokens using the optimized method
-      const deletedCount = await RefreshTokenService.cleanupExpiredTokens();
-
-      await job.progress(90);
-
-      // Log cleanup result
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_CLEANUP,
-        metadata: {
-          type: 'token-cleanup',
-          deletedCount,
-          duration: Date.now() - startTime,
-        },
-        success: true,
-      });
-
-      await job.progress(100);
-
-      return {
-        deletedCount,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_ERROR,
-        metadata: {
-          type: 'token-cleanup',
-          error: errorMessage,
-          duration: Date.now() - startTime,
-        },
-        success: false,
-      });
-
-      throw error;
-    }
+    return processTokenCleanupJob(job);
   }
 
   /**
@@ -201,51 +146,7 @@ export class BackgroundJobQueue {
     errors: string[];
     duration: number;
   }> {
-    const startTime = Date.now();
-
-    try {
-      await job.progress(10);
-
-      // Run migration
-      const result = await this.tokenStore.migrateFromKeysToSets();
-
-      await job.progress(90);
-
-      // Log migration result
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_MIGRATION,
-        metadata: {
-          type: 'token-migration',
-          migrated: result.migrated,
-          errors: result.errors.length,
-          duration: Date.now() - startTime,
-        },
-        success: result.errors.length === 0,
-      });
-
-      await job.progress(100);
-
-      return {
-        ...result,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_ERROR,
-        metadata: {
-          type: 'token-migration',
-          error: errorMessage,
-          duration: Date.now() - startTime,
-        },
-        success: false,
-      });
-
-      throw error;
-    }
+    return processTokenMigrationJob(job, this.tokenStore);
   }
 
   /**
@@ -257,61 +158,7 @@ export class BackgroundJobQueue {
     missingFromSets: string[];
     duration: number;
   }> {
-    const startTime = Date.now();
-
-    try {
-      await job.progress(10);
-
-      // Check integrity
-      const result = await this.tokenStore.verifyIntegrity();
-
-      await job.progress(70);
-
-      // Fix orphaned tokens
-      if (result.orphanedTokens.length > 0) {
-        for (const tokenId of result.orphanedTokens) {
-          await this.tokenStore.deleteToken(tokenId);
-        }
-      }
-
-      await job.progress(90);
-
-      // Log integrity check result
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_INTEGRITY_CHECK,
-        metadata: {
-          type: 'token-integrity',
-          valid: result.valid,
-          orphaned: result.orphanedTokens.length,
-          missingFromSets: result.missingFromSets.length,
-          duration: Date.now() - startTime,
-        },
-        success: true,
-      });
-
-      await job.progress(100);
-
-      return {
-        ...result,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_ERROR,
-        metadata: {
-          type: 'token-integrity-check',
-          error: errorMessage,
-          duration: Date.now() - startTime,
-        },
-        success: false,
-      });
-
-      throw error;
-    }
+    return processTokenIntegrityCheckJob(job, this.tokenStore);
   }
 
   /**
@@ -321,53 +168,7 @@ export class BackgroundJobQueue {
     cutoffDate: string;
     duration: number;
   }> {
-    const startTime = Date.now();
-
-    try {
-      await job.progress(10);
-
-      // Clean up old audit logs (older than 90 days)
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 90);
-
-      // This would need to be implemented in AuditLogger
-      // For now, just log the attempt
-
-      await job.progress(90);
-
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_CLEANUP,
-        metadata: {
-          type: 'audit-log-cleanup',
-          cutoffDate: cutoffDate.toISOString(),
-          duration: Date.now() - startTime,
-        },
-        success: true,
-      });
-
-      await job.progress(100);
-
-      return {
-        cutoffDate: cutoffDate.toISOString(),
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      await AuditLogger.log({
-        userId: 'system',
-        eventType: AuditEventType.SYSTEM_ERROR,
-        metadata: {
-          type: 'audit-log-cleanup',
-          error: errorMessage,
-          duration: Date.now() - startTime,
-        },
-        success: false,
-      });
-
-      throw error;
-    }
+    return processAuditLogCleanupJob(job);
   }
 
   /**
@@ -457,11 +258,7 @@ export class BackgroundJobQueue {
   }
 
   private async processNotificationRetention(): Promise<CleanupResult> {
-    const start = Date.now();
-    const maxAgeDays = Number(process.env.NOTIFICATION_RETENTION_DAYS || 90);
-    const { notificationsService } = await import('./notifications.js');
-    const res = await notificationsService.purgeOld(maxAgeDays);
-    return { deletedCount: res.deleted, duration: Date.now() - start };
+    return processNotificationRetentionJob();
   }
 
   private async processInboxCommentsIngest(job: Bull.Job<JobData>): Promise<{
@@ -470,41 +267,7 @@ export class BackgroundJobQueue {
     commentsUpserted: number;
     duration: number;
   }> {
-    const start = Date.now();
-    const brandId = String(job.data.metadata?.brandId ?? '').trim();
-    const maxPosts = Number(job.data.metadata?.maxPosts ?? 50);
-    const perPostLimit = Number(job.data.metadata?.perPostLimit ?? 100);
-    const minStaleMs = Number(job.data.metadata?.minStaleMs ?? 0);
-    const socialAccountIdsRaw = job.data.metadata?.socialAccountIds;
-    const socialAccountIds = Array.isArray(socialAccountIdsRaw)
-      ? (socialAccountIdsRaw as unknown[]).map(String).filter(Boolean)
-      : [];
-
-    if (!brandId) {
-      throw new Error('Missing brandId for inbox comments ingest job');
-    }
-
-    await job.progress(5);
-
-    const { ingestBrandComments } = await import('./inbox-comments-ingestor.js');
-    await job.progress(15);
-
-    const result = await ingestBrandComments(
-      brandId,
-      Number.isFinite(maxPosts) ? maxPosts : 50,
-      Number.isFinite(perPostLimit) ? perPostLimit : 100,
-      {
-        minStaleMs: Number.isFinite(minStaleMs) ? minStaleMs : 0,
-        socialAccountIds,
-      }
-    );
-    await job.progress(100);
-
-    return {
-      brandId,
-      ...result,
-      duration: Date.now() - start,
-    };
+    return processInboxCommentsIngestJob(job);
   }
 
   private async processInboxCommentsBackfill(job: Bull.Job<JobData>): Promise<{
@@ -515,66 +278,7 @@ export class BackgroundJobQueue {
     commentsUpserted: number;
     duration: number;
   }> {
-    const start = Date.now();
-    const prisma = (await import('../config/database.js')).getDatabaseClient();
-    const { ingestBrandComments } = await import('./inbox-comments-ingestor.js');
-
-    const maxPosts = Number(
-      job.data.metadata?.maxPosts ?? process.env.INBOX_COMMENTS_BACKFILL_MAX_POSTS ?? 20
-    );
-    const perPostLimit = Number(
-      job.data.metadata?.perPostLimit ?? process.env.INBOX_COMMENTS_BACKFILL_PER_POST_LIMIT ?? 50
-    );
-    const minStaleMs = Number(
-      job.data.metadata?.minStaleMs ??
-        process.env.INBOX_COMMENTS_BACKFILL_MIN_STALE_MS ??
-        15 * 60 * 1000
-    );
-
-    const brands = await prisma.brand.findMany({
-      where: { socialAccounts: { some: { platform: { in: ['instagram', 'facebook'] } } } },
-      select: { id: true },
-    });
-
-    const safeMaxPosts = Number.isFinite(maxPosts) ? maxPosts : 20;
-    const safePerPostLimit = Number.isFinite(perPostLimit) ? perPostLimit : 50;
-    const safeMinStaleMs = Number.isFinite(minStaleMs) ? minStaleMs : 15 * 60 * 1000;
-
-    let brandsProcessed = 0;
-    let brandsFailed = 0;
-    let postsProcessed = 0;
-    let commentsUpserted = 0;
-
-    for (let i = 0; i < brands.length; i++) {
-      const brand = brands[i];
-      try {
-        const res = await ingestBrandComments(brand.id, safeMaxPosts, safePerPostLimit, {
-          minStaleMs: safeMinStaleMs,
-        });
-        brandsProcessed++;
-        postsProcessed += res.postsProcessed;
-        commentsUpserted += res.commentsUpserted;
-      } catch (error) {
-        brandsFailed++;
-        this.logger.warn('Inbox comments backfill failed for brand', {
-          brandId: brand.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-
-      await job.progress(Math.min(99, Math.round(((i + 1) / brands.length) * 100)));
-    }
-
-    await job.progress(100);
-
-    return {
-      brandsTotal: brands.length,
-      brandsProcessed,
-      brandsFailed,
-      postsProcessed,
-      commentsUpserted,
-      duration: Date.now() - start,
-    };
+    return processInboxCommentsBackfillJob(job, this.logger);
   }
 
   private async processInboxDMsIngest(job: Bull.Job<JobData>): Promise<{
@@ -585,36 +289,7 @@ export class BackgroundJobQueue {
     messagesInserted: number;
     duration: number;
   }> {
-    const start = Date.now();
-    const brandId = String(job.data.metadata?.brandId ?? '').trim();
-    const maxThreads = Number(job.data.metadata?.maxThreads ?? 25);
-    const perThreadLimit = Number(job.data.metadata?.perThreadLimit ?? 30);
-    const minStaleMs = Number(job.data.metadata?.minStaleMs ?? 0);
-    const socialAccountIdsRaw = job.data.metadata?.socialAccountIds;
-    const socialAccountIds = Array.isArray(socialAccountIdsRaw)
-      ? (socialAccountIdsRaw as unknown[]).map(String).filter(Boolean)
-      : [];
-
-    if (!brandId) {
-      throw new Error('Missing brandId for inbox DMs ingest job');
-    }
-
-    await job.progress(5);
-    const { ingestBrandDMs } = await import('./inbox-dm-ingestor.js');
-    await job.progress(15);
-
-    const result = await ingestBrandDMs(
-      brandId,
-      Number.isFinite(maxThreads) ? maxThreads : 25,
-      Number.isFinite(perThreadLimit) ? perThreadLimit : 30,
-      {
-        socialAccountIds,
-        minStaleMs: Number.isFinite(minStaleMs) ? minStaleMs : 0,
-      }
-    );
-
-    await job.progress(100);
-    return { brandId, ...result, duration: Date.now() - start };
+    return processInboxDMsIngestJob(job);
   }
 
   private async processPublishingQueueWindowMaintenance(): Promise<{
@@ -625,78 +300,7 @@ export class BackgroundJobQueue {
     cancelled: number;
     errors: number;
   }> {
-    const start = Date.now();
-    let processed = 0;
-    let assigned = 0;
-    let scheduled = 0;
-    let rescheduled = 0;
-    let cancelled = 0;
-    let errors = 0;
-
-    try {
-      const prisma = (await import('../config/database.js')).getDatabaseClient();
-      const { publishingQueueScheduler } = await import('./publishing-queue/queue-scheduler.js');
-
-      const batchSize = (() => {
-        const raw = process.env.PUBLISHING_QUEUE_WINDOW_MAINTENANCE_BATCH_SIZE;
-        const n = raw ? parseInt(raw, 10) : 50;
-        return Number.isFinite(n) ? Math.max(1, Math.min(500, n)) : 50;
-      })();
-
-      const lookbackMinutes = (() => {
-        const raw = process.env.PUBLISHING_QUEUE_WINDOW_MAINTENANCE_LOOKBACK_MINUTES;
-        const n = raw ? parseInt(raw, 10) : 15;
-        return Number.isFinite(n) ? Math.max(1, Math.min(180, n)) : 15;
-      })();
-      const since = new Date(Date.now() - lookbackMinutes * 60 * 1000);
-
-      const brands = await prisma.content.findMany({
-        where: {
-          updatedAt: { gte: since },
-          publishingQueueItem: { isNot: null },
-        },
-        select: { brandId: true },
-        distinct: ['brandId'],
-        take: batchSize,
-        orderBy: { updatedAt: 'desc' },
-      });
-
-      for (const b of brands) {
-        processed += 1;
-        try {
-          const res = await publishingQueueScheduler.recomputeBrandWindow(b.brandId);
-          assigned += res.assigned;
-          scheduled += res.scheduled;
-          rescheduled += res.rescheduled;
-          cancelled += res.cancelled;
-          errors += res.errors.length;
-        } catch {
-          errors += 1;
-        }
-      }
-
-      this.logger.info('Publishing queue window maintenance completed', {
-        processed,
-        assigned,
-        scheduled,
-        rescheduled,
-        cancelled,
-        errors,
-        durationMs: Date.now() - start,
-      });
-
-      return { processed, assigned, scheduled, rescheduled, cancelled, errors };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.logger.error('Publishing queue window maintenance error', {
-        error: {
-          name: err.name,
-          message: err.message,
-          stack: err.stack,
-        },
-      });
-      return { processed, assigned, scheduled, rescheduled, cancelled, errors };
-    }
+    return processPublishingQueueWindowMaintenanceJob(this.logger);
   }
 
   /**

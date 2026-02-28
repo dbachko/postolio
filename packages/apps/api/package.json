@@ -12,7 +12,7 @@
     "sync:curated:dev": "tsx src/scripts/sync-curated-recipes.ts",
     "status:curated": "node dist/scripts/curated-recipes-status.js",
     "status:curated:dev": "tsx src/scripts/curated-recipes-status.ts",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint --no-warn-ignored src/**/*.ts",
     "generate-secret": "node scripts/generate-jwt-secret.js",
     "test": "vitest run",
     "test:watch": "vitest",

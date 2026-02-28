@@ -13,101 +13,140 @@ type PrimaryActionButtonProps = {
   onEditPrimaryAction: () => void | Promise<void>;
 };
 
+function getTooltipContent(
+  barProps: EditBarProps,
+  postingAction: PostingAction,
+  isDisabled: boolean
+) {
+  if (isDisabled) {
+    return null;
+  }
+
+  if (barProps.hasChanges) {
+    if (postingAction === 'now' && barProps.publishNowBlocker) {
+      return (
+        <TooltipContent>
+          <BlockerTooltipMessage message={barProps.publishNowBlocker} />
+        </TooltipContent>
+      );
+    }
+    if (!barProps.validationOk) {
+      return (
+        <TooltipContent>
+          <p className="text-sm">Fix validation errors before saving.</p>
+        </TooltipContent>
+      );
+    }
+    return null;
+  }
+
+  if (postingAction === 'now') {
+    if (barProps.publishNowBlocker) {
+      return (
+        <TooltipContent>
+          <BlockerTooltipMessage message={barProps.publishNowBlocker} />
+        </TooltipContent>
+      );
+    }
+    if (!barProps.onPublishNow || Boolean(barProps.publishNowDisabled)) {
+      return (
+        <TooltipContent>
+          <p className="text-sm">Publishing is not available for this post.</p>
+        </TooltipContent>
+      );
+    }
+    return null;
+  }
+
+  if (postingAction !== 'queue') {
+    return (
+      <TooltipContent>
+        <p className="text-sm">No changes to save.</p>
+      </TooltipContent>
+    );
+  }
+
+  if (!barProps.onAddToQueue || Boolean(barProps.queueDisabled)) {
+    if (barProps.queueBlocker) {
+      return (
+        <TooltipContent>
+          <BlockerTooltipMessage message={barProps.queueBlocker} />
+        </TooltipContent>
+      );
+    }
+    return (
+      <TooltipContent>
+        <p className="text-sm">Queue scheduling is not available for this post.</p>
+      </TooltipContent>
+    );
+  }
+
+  if (!barProps.validationOk) {
+    return (
+      <TooltipContent>
+        <p className="text-sm">Fix validation errors before adding to queue.</p>
+      </TooltipContent>
+    );
+  }
+  return null;
+}
+
+function getPrimaryActionLabel(barProps: EditBarProps, postingAction: PostingAction) {
+  if (barProps.isPublishingNow) {
+    return 'Publishing...';
+  }
+  if (barProps.isSaving) {
+    return 'Saving...';
+  }
+  if (barProps.hasChanges) {
+    return postingAction === 'now' ? 'Save & publish' : barProps.primaryEditCtaLabel;
+  }
+  if (postingAction === 'queue') {
+    return 'Add to queue';
+  }
+  if (postingAction === 'now') {
+    return 'Publish';
+  }
+  return barProps.primaryEditCtaLabel;
+}
+
+function isPrimaryActionBlocked(barProps: EditBarProps, postingAction: PostingAction): boolean {
+  if (barProps.hasChanges && !barProps.validationOk) {
+    return true;
+  }
+  if (!barProps.hasChanges && postingAction !== 'queue' && postingAction !== 'now') {
+    return true;
+  }
+  if (postingAction === 'now') {
+    return (
+      !barProps.onPublishNow ||
+      Boolean(barProps.publishNowDisabled) ||
+      !barProps.validationOk ||
+      Boolean(barProps.isPublishingNow)
+    );
+  }
+  if (postingAction === 'queue') {
+    return (
+      !barProps.onAddToQueue ||
+      Boolean(barProps.queueDisabled) ||
+      barProps.hasChanges ||
+      !barProps.validationOk ||
+      Boolean(barProps.isQueueing)
+    );
+  }
+  return false;
+}
+
 export function PrimaryActionButton({
   barProps,
   postingAction,
   onEditPrimaryAction,
 }: PrimaryActionButtonProps) {
   const isDisabled = barProps.isSaving || barProps.isUnscheduling;
-  const isBlocked =
-    (barProps.hasChanges && !barProps.validationOk) ||
-    (!barProps.hasChanges && postingAction !== 'queue' && postingAction !== 'now') ||
-    (postingAction === 'now' &&
-      (!barProps.onPublishNow ||
-        Boolean(barProps.publishNowDisabled) ||
-        !barProps.validationOk ||
-        barProps.isPublishingNow)) ||
-    (postingAction === 'queue' &&
-      (!barProps.onAddToQueue ||
-        Boolean(barProps.queueDisabled) ||
-        barProps.hasChanges ||
-        !barProps.validationOk ||
-        barProps.isQueueing));
+  const isBlocked = isPrimaryActionBlocked(barProps, postingAction);
 
-  const tooltipContent = (() => {
-    if (isDisabled) {
-      return null;
-    }
-
-    if (barProps.hasChanges) {
-      if (postingAction === 'now' && barProps.publishNowBlocker) {
-        return (
-          <TooltipContent>
-            <BlockerTooltipMessage message={barProps.publishNowBlocker} />
-          </TooltipContent>
-        );
-      }
-      if (!barProps.validationOk) {
-        return (
-          <TooltipContent>
-            <p className="text-sm">Fix validation errors before saving.</p>
-          </TooltipContent>
-        );
-      }
-      return null;
-    }
-
-    if (postingAction === 'now') {
-      if (barProps.publishNowBlocker) {
-        return (
-          <TooltipContent>
-            <BlockerTooltipMessage message={barProps.publishNowBlocker} />
-          </TooltipContent>
-        );
-      }
-      if (!barProps.onPublishNow || Boolean(barProps.publishNowDisabled)) {
-        return (
-          <TooltipContent>
-            <p className="text-sm">Publishing is not available for this post.</p>
-          </TooltipContent>
-        );
-      }
-      return null;
-    }
-
-    if (postingAction !== 'queue') {
-      return (
-        <TooltipContent>
-          <p className="text-sm">No changes to save.</p>
-        </TooltipContent>
-      );
-    }
-
-    if (!barProps.onAddToQueue || Boolean(barProps.queueDisabled)) {
-      if (barProps.queueBlocker) {
-        return (
-          <TooltipContent>
-            <BlockerTooltipMessage message={barProps.queueBlocker} />
-          </TooltipContent>
-        );
-      }
-      return (
-        <TooltipContent>
-          <p className="text-sm">Queue scheduling is not available for this post.</p>
-        </TooltipContent>
-      );
-    }
-
-    if (!barProps.validationOk) {
-      return (
-        <TooltipContent>
-          <p className="text-sm">Fix validation errors before adding to queue.</p>
-        </TooltipContent>
-      );
-    }
-
-    return null;
-  })();
+  const tooltipContent = getTooltipContent(barProps, postingAction, isDisabled);
+  const buttonLabel = getPrimaryActionLabel(barProps, postingAction);
 
   return (
     <Tooltip>
@@ -129,23 +168,7 @@ export function PrimaryActionButton({
             isBlocked && !isDisabled && 'hover:bg-primary cursor-not-allowed opacity-50'
           )}
         >
-          {barProps.isPublishingNow ? (
-            <>Publishing...</>
-          ) : barProps.isSaving ? (
-            <>Saving...</>
-          ) : barProps.hasChanges ? (
-            postingAction === 'now' ? (
-              <>Save &amp; publish</>
-            ) : (
-              <>{barProps.primaryEditCtaLabel}</>
-            )
-          ) : postingAction === 'queue' ? (
-            <>Add to queue</>
-          ) : postingAction === 'now' ? (
-            <>Publish</>
-          ) : (
-            <>{barProps.primaryEditCtaLabel}</>
-          )}
+          {buttonLabel}
         </Button>
       </TooltipTrigger>
       {tooltipContent}

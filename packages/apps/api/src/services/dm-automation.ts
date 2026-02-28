@@ -48,6 +48,172 @@ export interface EventLogData {
   metadata?: Record<string, unknown>;
 }
 
+type LogEventFn = (data: EventLogData) => Promise<void>;
+
+async function evaluateEligibleRules(
+  matchedRules: DMAutomationRule[],
+  event: TriggerEvent,
+  eventLogger: ReturnType<typeof logger.child>
+): Promise<DMAutomationRule[]> {
+  const eligibleRules: DMAutomationRule[] = [];
+  for (const rule of matchedRules) {
+    const evaluation = await dmRulesEngine.evaluateConditions(rule, {
+      userId: event.participantExternalUserId,
+      username: event.triggeredBy,
+      postUrl: event.postUrl,
+    });
+    if (evaluation.eligible) {
+      eligibleRules.push(rule);
+      continue;
+    }
+
+    eventLogger.debug('Rule not eligible', {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      reason: evaluation.reason,
+    });
+  }
+  return eligibleRules;
+}
+
+async function ensureRateLimitOrThrow(
+  rule: DMAutomationRule,
+  context: TriggerEvent,
+  logEvent: LogEventFn
+): Promise<void> {
+  const rateLimitCheck = await dmRateLimiter.checkLimit(context.socialAccountId);
+  if (rateLimitCheck.allowed) {
+    return;
+  }
+
+  logger.warn('DM rate limit exceeded', {
+    brandId: context.brandId,
+    socialAccountId: context.socialAccountId,
+    ruleId: rule.id,
+    remaining: rateLimitCheck.remainingHour,
+  });
+
+  await logEvent({
+    brandId: context.brandId,
+    ruleId: rule.id,
+    triggerType: context.triggerType,
+    triggerSource: context.triggerSource,
+    triggerText: context.triggerText,
+    triggeredBy: context.triggeredBy,
+    actionType: rule.actionType,
+    rateLimited: true,
+    errorMessage: 'Rate limit exceeded',
+  });
+  throw new Error('DM rate limit exceeded');
+}
+
+async function sendDirectMessageForRule(params: {
+  rule: DMAutomationRule;
+  context: TriggerEvent;
+  variables: Record<string, string>;
+}): Promise<{ conversationId: string; messageSent: boolean }> {
+  const { rule, context, variables } = params;
+  if (rule.actionType !== 'send_dm' && rule.actionType !== 'send_dm_and_reply') {
+    throw new Error('sendDirectMessageForRule called for non-DM rule');
+  }
+  if (!rule.messageTemplate) {
+    throw new Error('Message template is required for DM actions');
+  }
+
+  const messageText = dmRulesEngine.renderTemplate(rule.messageTemplate, variables);
+  const { messageId } = await instagramService.sendDirectMessageForSocialAccount(
+    context.socialAccountId,
+    context.participantExternalUserId,
+    messageText
+  );
+  await dmRateLimiter.incrementCount(context.socialAccountId);
+
+  const conversation = await prisma.dMConversation.upsert({
+    where: {
+      brandId_socialAccountId_platform_participantExternalUserId: {
+        brandId: context.brandId,
+        socialAccountId: context.socialAccountId,
+        platform: context.platform,
+        participantExternalUserId: context.participantExternalUserId,
+      },
+    },
+    create: {
+      brandId: context.brandId,
+      socialAccountId: context.socialAccountId,
+      platform: context.platform,
+      ruleId: rule.id,
+      participantExternalUserId: context.participantExternalUserId,
+      participantUsername: context.triggeredBy,
+      state: 'active',
+    },
+    update: {
+      participantUsername: context.triggeredBy,
+      lastMessageAt: new Date(),
+    },
+  });
+
+  const dmMessage = await prisma.dMMessage.create({
+    data: {
+      conversationId: conversation.id,
+      platform: context.platform,
+      direction: 'outbound',
+      messageText,
+      externalMessageId: messageId,
+      externalCommentId: context.externalCommentId,
+      status: 'sent',
+      sentAt: new Date(),
+    },
+  });
+
+  logger.info('DM sent successfully', {
+    brandId: context.brandId,
+    conversationId: conversation.id,
+    messageId,
+  });
+
+  if (statusBroadcaster) {
+    await statusBroadcaster.broadcastDMMessage({
+      conversationId: conversation.id,
+      messageId: dmMessage.id,
+      brandId: context.brandId,
+      socialAccountId: context.socialAccountId,
+      platform: context.platform,
+      direction: 'outbound',
+      messageText,
+      participantUsername: context.triggeredBy,
+    });
+  }
+  return { conversationId: conversation.id, messageSent: true };
+}
+
+async function maybeSendCommentReply(params: {
+  rule: DMAutomationRule;
+  context: TriggerEvent;
+  variables: Record<string, string>;
+}): Promise<boolean> {
+  const { rule, context, variables } = params;
+  if (
+    (rule.actionType !== 'reply_comment' && rule.actionType !== 'send_dm_and_reply') ||
+    !context.externalCommentId ||
+    !rule.commentReplyTemplate
+  ) {
+    return false;
+  }
+
+  const replyText = dmRulesEngine.renderTemplate(rule.commentReplyTemplate, variables);
+  await instagramService.replyToCommentDirectForSocialAccount(
+    context.socialAccountId,
+    context.externalCommentId,
+    replyText
+  );
+  logger.info('Comment reply sent successfully', {
+    brandId: context.brandId,
+    socialAccountId: context.socialAccountId,
+    commentId: context.externalCommentId,
+  });
+  return true;
+}
+
 export const dmAutomation = {
   /**
    * Initialize the DM automation service with WebSocket broadcaster
@@ -99,25 +265,7 @@ export const dmAutomation = {
         ruleIds: matchedRules.map((r) => r.id),
       });
 
-      // 2. Evaluate conditions for each matched rule (rate limits, scheduling, etc.)
-      const eligibleRules: DMAutomationRule[] = [];
-      for (const rule of matchedRules) {
-        const evaluation = await dmRulesEngine.evaluateConditions(rule, {
-          userId: event.participantExternalUserId,
-          username: event.triggeredBy,
-          postUrl: event.postUrl,
-        });
-
-        if (evaluation.eligible) {
-          eligibleRules.push(rule);
-        } else {
-          eventLogger.debug('Rule not eligible', {
-            ruleId: rule.id,
-            ruleName: rule.name,
-            reason: evaluation.reason,
-          });
-        }
-      }
+      const eligibleRules = await evaluateEligibleRules(matchedRules, event, eventLogger);
 
       if (eligibleRules.length === 0) {
         eventLogger.info('No eligible rules after evaluation', {
@@ -131,7 +279,6 @@ export const dmAutomation = {
         ruleIds: eligibleRules.map((r) => r.id),
       });
 
-      // 3. Process each eligible rule (send DM and/or reply to comment)
       for (const rule of eligibleRules) {
         try {
           await this.sendAutomatedDM(rule, event);
@@ -176,143 +323,25 @@ export const dmAutomation = {
    * Handles: Rate limiting, template rendering, message sending, conversation tracking
    */
   async sendAutomatedDM(rule: DMAutomationRule, context: TriggerEvent): Promise<void> {
-    // 1. Check DM rate limit (Instagram's 350 DMs/hour limit)
-    const rateLimitCheck = await dmRateLimiter.checkLimit(context.socialAccountId);
-    if (!rateLimitCheck.allowed) {
-      logger.warn('DM rate limit exceeded', {
-        brandId: context.brandId,
-        socialAccountId: context.socialAccountId,
-        ruleId: rule.id,
-        remaining: rateLimitCheck.remainingHour,
-      });
+    await ensureRateLimitOrThrow(rule, context, this.logEvent.bind(this));
 
-      // Log rate-limited event
-      await this.logEvent({
-        brandId: context.brandId,
-        ruleId: rule.id,
-        triggerType: context.triggerType,
-        triggerSource: context.triggerSource,
-        triggerText: context.triggerText,
-        triggeredBy: context.triggeredBy,
-        actionType: rule.actionType,
-        rateLimited: true,
-        errorMessage: 'Rate limit exceeded',
-      });
-
-      throw new Error('DM rate limit exceeded');
-    }
-
-    // 2. Prepare template variables
     const variables: Record<string, string> = {
       name: context.triggeredBy,
       username: context.triggeredBy,
       post_url: context.postUrl || '',
     };
 
-    // 3. Send DM and/or comment reply based on actionType
     let messageSent = false;
     let commentReplySent = false;
     let conversationId: string | undefined;
 
-    // Send DM
     if (rule.actionType === 'send_dm' || rule.actionType === 'send_dm_and_reply') {
-      if (!rule.messageTemplate) {
-        throw new Error('Message template is required for DM actions');
-      }
-
-      const messageText = dmRulesEngine.renderTemplate(rule.messageTemplate, variables);
-      const { messageId } = await instagramService.sendDirectMessageForSocialAccount(
-        context.socialAccountId,
-        context.participantExternalUserId,
-        messageText
-      );
-      messageSent = true;
-
-      // Increment rate limit counter
-      await dmRateLimiter.incrementCount(context.socialAccountId);
-
-      // Create or update conversation record
-      const conversation = await prisma.dMConversation.upsert({
-        where: {
-          brandId_socialAccountId_platform_participantExternalUserId: {
-            brandId: context.brandId,
-            socialAccountId: context.socialAccountId,
-            platform: context.platform,
-            participantExternalUserId: context.participantExternalUserId,
-          },
-        },
-        create: {
-          brandId: context.brandId,
-          socialAccountId: context.socialAccountId,
-          platform: context.platform,
-          ruleId: rule.id,
-          participantExternalUserId: context.participantExternalUserId,
-          participantUsername: context.triggeredBy,
-          state: 'active',
-        },
-        update: {
-          participantUsername: context.triggeredBy,
-          lastMessageAt: new Date(),
-        },
-      });
-      conversationId = conversation.id;
-
-      // Log outbound message
-      const dmMessage = await prisma.dMMessage.create({
-        data: {
-          conversationId: conversation.id,
-          platform: context.platform,
-          direction: 'outbound',
-          messageText,
-          externalMessageId: messageId,
-          externalCommentId: context.externalCommentId,
-          status: 'sent',
-          sentAt: new Date(),
-        },
-      });
-
-      logger.info('DM sent successfully', {
-        brandId: context.brandId,
-        conversationId: conversation.id,
-        messageId,
-      });
-
-      // Broadcast WebSocket event for new outbound message
-      if (statusBroadcaster) {
-        await statusBroadcaster.broadcastDMMessage({
-          conversationId: conversation.id,
-          messageId: dmMessage.id,
-          brandId: context.brandId,
-          socialAccountId: context.socialAccountId,
-          platform: context.platform,
-          direction: 'outbound',
-          messageText,
-          participantUsername: context.triggeredBy,
-        });
-      }
+      const dmResult = await sendDirectMessageForRule({ rule, context, variables });
+      conversationId = dmResult.conversationId;
+      messageSent = dmResult.messageSent;
     }
 
-    // Reply to comment
-    if (rule.actionType === 'reply_comment' || rule.actionType === 'send_dm_and_reply') {
-      if (context.externalCommentId && rule.commentReplyTemplate) {
-        const replyText = dmRulesEngine.renderTemplate(rule.commentReplyTemplate, variables);
-
-        await instagramService.replyToCommentDirectForSocialAccount(
-          context.socialAccountId,
-          context.externalCommentId,
-          replyText
-        );
-        commentReplySent = true;
-
-        logger.info('Comment reply sent successfully', {
-          brandId: context.brandId,
-          socialAccountId: context.socialAccountId,
-          commentId: context.externalCommentId,
-        });
-      }
-    }
-
-    // 4. Log successful automation event
+    commentReplySent = await maybeSendCommentReply({ rule, context, variables });
     await this.logEvent({
       brandId: context.brandId,
       ruleId: rule.id,

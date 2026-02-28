@@ -14,6 +14,40 @@ interface GoogleSignInIsolatedProps {
   onError?: (error: string) => void;
 }
 
+function GoogleSetupWarning() {
+  return (
+    <div className="bg-muted/50 w-full rounded-md border p-3 text-center">
+      <p className="text-muted-foreground text-sm">Google Sign-In not configured</p>
+      <p className="text-muted-foreground mt-1 text-xs">
+        See GOOGLE_OAUTH_SETUP.md for instructions
+      </p>
+    </div>
+  );
+}
+
+function GoogleActionButton({
+  isLoading,
+  label,
+  onClick,
+}: {
+  isLoading: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full justify-center gap-2"
+      onClick={onClick}
+      disabled={isLoading}
+    >
+      <img src={googleIconUrl} alt="" className="h-4 w-4" loading="lazy" decoding="async" />
+      {isLoading ? 'Connecting…' : label}
+    </Button>
+  );
+}
+
 export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInIsolatedProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { setUser } = useAuthStore();
@@ -93,32 +127,14 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
   });
 
   if (!isConfigured) {
-    return (
-      <div className="bg-muted/50 w-full rounded-md border p-3 text-center">
-        <p className="text-muted-foreground text-sm">Google Sign-In not configured</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          See GOOGLE_OAUTH_SETUP.md for instructions
-        </p>
-      </div>
-    );
+    return <GoogleSetupWarning />;
   }
 
-  const buttonText = {
+  const buttonLabel = {
     signin: 'Sign in with Google',
     signup: 'Sign up with Google',
     link: 'Link Google Account',
   }[mode];
 
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="w-full justify-center gap-2"
-      onClick={() => login()}
-      disabled={isLoading}
-    >
-      <img src={googleIconUrl} alt="" className="h-4 w-4" loading="lazy" decoding="async" />
-      {isLoading ? 'Connecting…' : buttonText}
-    </Button>
-  );
+  return <GoogleActionButton isLoading={isLoading} label={buttonLabel} onClick={() => login()} />;
 }

@@ -15,10 +15,10 @@ function pickFromPalette(palette: string[], key: string): string | null {
 export function createChipStyleFor(palette?: string[]) {
   const paletteSafe = palette || [];
 
-  return (key: string): CSSProperties | undefined => {
+  return (key: string): CSSProperties => {
     const hex = pickFromPalette(paletteSafe, key);
     if (!hex) {
-      return undefined;
+      return {};
     }
 
     return {

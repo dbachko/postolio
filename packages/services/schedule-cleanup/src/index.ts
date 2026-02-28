@@ -36,6 +36,15 @@ interface CleanupResult {
   errors: string[];
 }
 
+interface ScheduledItemRecord {
+  pk: string;
+  sk: string;
+  scheduleId?: string;
+  brandId?: string;
+  userId?: string;
+  contentId?: string;
+}
+
 export const handler = async (): Promise<CleanupResult> => {
   logger.info('Starting schedule cleanup job');
 
@@ -299,54 +308,69 @@ async function validateScheduledItems(
 
     // Validate each scheduled item
     for (const item of scanResult.Items) {
+      const scheduledItem = item as ScheduledItemRecord;
+
       // Check if required fields are present
-      if (!item.brandId || !item.userId || !item.contentId) {
+      if (!scheduledItem.brandId || !scheduledItem.userId || !scheduledItem.contentId) {
         logger.warn('Found scheduled item with missing required fields', {
-          scheduleId: item.scheduleId,
-          missingBrandId: !item.brandId,
-          missingUserId: !item.userId,
-          missingContentId: !item.contentId,
+          scheduleId: scheduledItem.scheduleId,
+          missingBrandId: !scheduledItem.brandId,
+          missingUserId: !scheduledItem.userId,
+          missingContentId: !scheduledItem.contentId,
         });
 
-        // Mark as failed if missing critical fields
-        await docClient.send(
-          new UpdateCommand({
-            TableName: process.env.SCHEDULES_TABLE!,
-            Key: {
-              pk: item.pk,
-              sk: item.sk,
-            },
-            UpdateExpression: 'SET #status = :failed, schedulingError = :error, updatedAt = :now',
-            ExpressionAttributeNames: {
-              '#status': 'status',
-            },
-            ExpressionAttributeValues: {
-              ':failed': 'failed',
-              ':error': 'Missing required fields detected during cleanup',
-              ':now': new Date().toISOString(),
-            },
-          })
-        );
+        await markInvalidScheduledItemAsFailed(docClient, scheduledItem);
 
         // Try to clean up associated EventBridge rule if it exists
-        if (item.scheduleId) {
-          try {
-            await schedulerClient.send(
-              new DeleteScheduleCommand({
-                Name: `schedule-${item.scheduleId}`,
-                GroupName: process.env.SCHEDULER_GROUP_NAME,
-              })
-            );
-            logger.info(`Deleted EventBridge rule for invalid schedule: ${item.scheduleId}`);
-          } catch {
-            // Rule might not exist, which is fine
-            logger.debug(`EventBridge rule might not exist for: ${item.scheduleId}`);
-          }
+        if (scheduledItem.scheduleId) {
+          await tryDeleteInvalidScheduledRule(schedulerClient, scheduledItem.scheduleId);
         }
       }
     }
   } catch (error) {
     logger.error('Failed to validate scheduled items', error as Error);
     result.errors.push(`Validation: ${(error as Error).message}`);
+  }
+}
+
+async function markInvalidScheduledItemAsFailed(
+  docClient: DynamoDBDocumentClient,
+  item: ScheduledItemRecord
+): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      Key: {
+        pk: item.pk,
+        sk: item.sk,
+      },
+      UpdateExpression: 'SET #status = :failed, schedulingError = :error, updatedAt = :now',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+      },
+      ExpressionAttributeValues: {
+        ':failed': 'failed',
+        ':error': 'Missing required fields detected during cleanup',
+        ':now': new Date().toISOString(),
+      },
+    })
+  );
+}
+
+async function tryDeleteInvalidScheduledRule(
+  schedulerClient: SchedulerClient,
+  scheduleId: string
+): Promise<void> {
+  try {
+    await schedulerClient.send(
+      new DeleteScheduleCommand({
+        Name: `schedule-${scheduleId}`,
+        GroupName: process.env.SCHEDULER_GROUP_NAME,
+      })
+    );
+    logger.info(`Deleted EventBridge rule for invalid schedule: ${scheduleId}`);
+  } catch {
+    // Rule might not exist, which is fine
+    logger.debug(`EventBridge rule might not exist for: ${scheduleId}`);
   }
 }

@@ -9,6 +9,20 @@ import { toast } from 'sonner';
 import { auth as authApi } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 
+function AppearanceOption({ id, value, label }: { id: string; value: string; label: string }) {
+  return (
+    <label
+      htmlFor={id}
+      className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
+    >
+      <div className="flex items-center gap-2">
+        <RadioGroupItem id={id} value={value} />
+        <span>{label}</span>
+      </div>
+    </label>
+  );
+}
+
 export default function AppearanceSettingsTab() {
   const { theme, setTheme } = useTheme();
   const { user, setUser } = useAuthStore();
@@ -60,33 +74,9 @@ export default function AppearanceSettingsTab() {
             onValueChange={handleThemeChange}
             className="grid grid-cols-3 gap-2 sm:max-w-md"
           >
-            <label
-              htmlFor="appearance-system"
-              className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem id="appearance-system" value="system" />
-                <span>System</span>
-              </div>
-            </label>
-            <label
-              htmlFor="appearance-light"
-              className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem id="appearance-light" value="light" />
-                <span>Light</span>
-              </div>
-            </label>
-            <label
-              htmlFor="appearance-dark"
-              className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem id="appearance-dark" value="dark" />
-                <span>Dark</span>
-              </div>
-            </label>
+            <AppearanceOption id="appearance-system" value="system" label="System" />
+            <AppearanceOption id="appearance-light" value="light" label="Light" />
+            <AppearanceOption id="appearance-dark" value="dark" label="Dark" />
           </RadioGroup>
           <p className="text-muted-foreground text-sm">
             System adapts to your device’s appearance and updates automatically.

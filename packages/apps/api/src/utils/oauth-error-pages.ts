@@ -39,7 +39,7 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
       'No Instagram Business or Creator (Professional) account was found connected to your Facebook pages.',
     solutions: [
       'Convert your Instagram account to a Business or Creator account (Professional)',
-      'Connect your Instagram account to a Facebook Page you manage (Accounts Center / Meta Business Suite)',
+      'Connect your Instagram account to a Facebook Page you manage',
       "Make sure you're logged into the correct Facebook account",
       'Verify your Facebook Page has admin permissions',
     ],
@@ -53,7 +53,7 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
     message: 'Your authorization session has expired for security reasons.',
     solutions: [
       'Close this window and try connecting again',
-      'Make sure to complete the authorization within 10 minutes',
+      'Complete authorization within 10 minutes',
       'Check that your browser accepts cookies',
     ],
     showRetry: true,
@@ -90,8 +90,8 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
     message: 'Required permissions were not granted for Instagram integration.',
     solutions: [
       'Click "Connect Instagram" to try again',
-      'Make sure to accept all requested permissions',
-      'Check that your Facebook account has the necessary business permissions',
+      'Accept all requested permissions',
+      'Ensure your Facebook account has required business permissions',
       "Verify you're an admin of the Facebook Page",
     ],
     helpLink: 'https://www.facebook.com/settings?tab=business_tools',
@@ -103,7 +103,7 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
     title: 'Account Restricted',
     message: 'Your Instagram account appears to have restrictions that prevent connection.',
     solutions: [
-      'Check your Instagram account for any violation notices',
+      'Check your Instagram account for violation notices',
       "Ensure your account follows Instagram's Terms of Service",
       'Verify your identity if Instagram has requested it',
       'Try connecting a different Instagram account',
@@ -140,6 +140,102 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
   },
 };
 
+const COLORS = {
+  error: { accent: '#ef4444', bg: '#fee2e2' },
+  warning: { accent: '#f59e0b', bg: '#fef3c7' },
+  info: { accent: '#3b82f6', bg: '#dbeafe' },
+};
+
+const ERROR_PAGE_STYLE_TEMPLATE = `
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
+    color: #111827;
+  }
+  .card {
+    width: 100%;
+    max-width: 540px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 40px rgba(2, 6, 23, 0.2);
+  }
+  .icon { font-size: 40px; margin-bottom: 12px; }
+  .title { margin: 0 0 8px; font-size: 24px; }
+  .message { margin: 0 0 16px; color: #4b5563; }
+  .alert { border-left: 4px solid __ACCENT__; background: __BG__; border-radius: 8px; padding: 12px; }
+  .alert h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .alert ul { margin: 0; padding-left: 18px; }
+  .alert li { margin: 6px 0; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn { flex: 1; border: 0; border-radius: 10px; padding: 11px 14px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%); color: #fff; }
+  .btn-secondary { background: #e5e7eb; color: #111827; }
+  .help-link { display: inline-block; margin-top: 14px; color: #4338ca; text-decoration: none; }
+  .details { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+  .details pre { white-space: pre-wrap; background: #f8fafc; padding: 10px; border-radius: 8px; }
+`;
+
+const ERROR_SCRIPT_TEMPLATE = `
+  const retryUrl = __RETRY_URL__;
+  const parentOrigin = __PARENT_ORIGIN__;
+  const error = __ERROR__;
+  const errorDescription = __ERROR_DESCRIPTION__;
+  const errorCode = __ERROR_CODE__;
+
+  function notifyParent() {
+    if (window.opener && !window.opener.closed) {
+      try {
+        window.opener.postMessage({
+          type: 'INSTAGRAM_OAUTH_ERROR',
+          data: { success: false, error, errorDescription, errorCode }
+        }, parentOrigin);
+      } catch (_) {
+      }
+    }
+  }
+
+  function closeOrRedirect() {
+    try {
+      window.close();
+    } catch (_) {
+    }
+    setTimeout(() => {
+      if (!window.closed) {
+        window.location.href = retryUrl;
+      }
+    }, 150);
+  }
+
+  function closeWindow() {
+    notifyParent();
+    closeOrRedirect();
+  }
+
+  function retryConnection() {
+    notifyParent();
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.focus();
+      }
+    } catch (_) {
+    }
+    closeOrRedirect();
+  }
+
+  document.getElementById('close-button')?.addEventListener('click', closeWindow);
+  document.getElementById('retry-button')?.addEventListener('click', retryConnection);
+  setTimeout(closeWindow, 30000);
+  notifyParent();
+`;
+
 export function getErrorConfig(error: string, errorDescription?: string): ErrorConfig {
   const description = errorDescription?.toLowerCase() || '';
   if (
@@ -175,404 +271,121 @@ export function getErrorConfig(error: string, errorDescription?: string): ErrorC
   return ERROR_CONFIGS[errorMap[error]] || ERROR_CONFIGS.default;
 }
 
+function escapeHtml(input: string): string {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function resolveAppUrl() {
+  const appUrl = (process.env.APP_URL || 'https://postolio.example').replace(/\/+$/, '');
+  let parentOrigin = '*';
+  try {
+    parentOrigin = new URL(appUrl).origin;
+  } catch {}
+  return { appUrl, parentOrigin };
+}
+
+function resolveRetryUrl(appUrl: string, retryUrlInput: string | undefined) {
+  const retryUrlRaw = retryUrlInput?.trim();
+  if (!retryUrlRaw) {
+    return `${appUrl}/brands`;
+  }
+  if (/^https?:\/\//i.test(retryUrlRaw)) {
+    return retryUrlRaw;
+  }
+  return `${appUrl}${retryUrlRaw.startsWith('/') ? '' : '/'}${retryUrlRaw}`;
+}
+
+function buildErrorStyle(severity: ErrorConfig['severity']) {
+  const colors = COLORS[severity];
+  return ERROR_PAGE_STYLE_TEMPLATE.replace('__ACCENT__', colors.accent).replace(
+    '__BG__',
+    colors.bg
+  );
+}
+
+function buildActions(config: ErrorConfig): string {
+  const retryButton = config.showRetry
+    ? '<button id="retry-button" type="button" class="btn btn-primary">Try Again</button>'
+    : '';
+  return `<div class="actions">${retryButton}<button id="close-button" type="button" class="btn btn-secondary">Close Window</button></div>`;
+}
+
+function buildTechnicalDetails(options: ErrorPageOptions): string {
+  const details = isDevelopmentEnv() ? options.technicalDetails : undefined;
+  if (!details) {
+    return '';
+  }
+
+  const safeErrorCode = options.errorCode?.replace(/[a-f0-9]{32,}/gi, '[REDACTED]');
+  return `
+    <section class="details">
+      <strong>Technical details</strong>
+      <pre>Error: ${escapeHtml(options.error)}
+Code: ${escapeHtml(safeErrorCode || '')}
+Description: ${escapeHtml(options.errorDescription || '')}
+Details: ${escapeHtml(details)}</pre>
+    </section>
+  `;
+}
+
+function buildErrorScript(params: {
+  retryUrl: string;
+  parentOrigin: string;
+  error: string;
+  errorDescription?: string;
+  errorCode?: string;
+}) {
+  return ERROR_SCRIPT_TEMPLATE.replace('__RETRY_URL__', JSON.stringify(params.retryUrl))
+    .replace('__PARENT_ORIGIN__', JSON.stringify(params.parentOrigin))
+    .replace('__ERROR__', JSON.stringify(params.error || ''))
+    .replace('__ERROR_DESCRIPTION__', JSON.stringify(params.errorDescription || ''))
+    .replace('__ERROR_CODE__', JSON.stringify(params.errorCode || ''));
+}
+
 export function generateErrorPage(options: ErrorPageOptions): string {
   const config = getErrorConfig(options.error, options.errorDescription);
+  const { appUrl, parentOrigin } = resolveAppUrl();
+  const retryUrl = resolveRetryUrl(appUrl, options.retryUrl);
+  const solutions = config.solutions.map((solution) => `<li>${escapeHtml(solution)}</li>`).join('');
+  const helpLink = config.helpLink
+    ? `<a class="help-link" href="${escapeHtml(config.helpLink)}" target="_blank" rel="noopener noreferrer">Learn more →</a>`
+    : '';
 
-  const escapeHtml = (str: string) => {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  };
-
-  const appUrl = (process.env.APP_URL || 'https://postolio.example').replace(/\/+$/, '');
-  const retryUrlRaw = options.retryUrl?.trim();
-  const retryUrl = retryUrlRaw
-    ? /^https?:\/\//i.test(retryUrlRaw)
-      ? retryUrlRaw
-      : `${appUrl}${retryUrlRaw.startsWith('/') ? '' : '/'}${retryUrlRaw}`
-    : `${appUrl}/brands`;
-
-  const parentOrigin = (() => {
-    try {
-      return new URL(appUrl).origin;
-    } catch {
-      return '*';
-    }
-  })();
-
-  const sanitizedTechnicalDetails = isDevelopmentEnv() ? options.technicalDetails : undefined;
-
-  const sanitizedErrorCode = options.errorCode?.replace(/[a-f0-9]{32,}/gi, '[REDACTED]');
-
-  const severityColors = {
-    error: '#ef4444',
-    warning: '#f59e0b',
-    info: '#3b82f6',
-  };
-
-  const bgColors = {
-    error: '#fee2e2',
-    warning: '#fef3c7',
-    info: '#dbeafe',
-  };
-
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${escapeHtml(config.title)} - Postolio</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            color: #1f2937;
-          }
-
-          .container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            max-width: 480px;
-            width: 100%;
-            padding: 32px;
-            animation: slideUp 0.3s ease-out;
-          }
-
-          @keyframes slideUp {
-            from {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          .icon {
-            font-size: 48px;
-            display: block;
-            text-align: center;
-            margin-bottom: 16px;
-            animation: pulse 2s infinite;
-          }
-
-          @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-          }
-
-          .title {
-            font-size: 24px;
-            font-weight: 700;
-            text-align: center;
-            margin-bottom: 12px;
-            color: #1f2937;
-          }
-
-          .message {
-            text-align: center;
-            color: #6b7280;
-            margin-bottom: 24px;
-            line-height: 1.5;
-          }
-
-          .alert-box {
-            background: ${bgColors[config.severity]};
-            border-left: 4px solid ${severityColors[config.severity]};
-            padding: 16px;
-            border-radius: 8px;
-            margin-bottom: 24px;
-          }
-
-          .solutions-title {
-            font-weight: 600;
-            margin-bottom: 12px;
-            color: #374151;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-
-          .solutions {
-            list-style: none;
-            padding: 0;
-          }
-
-          .solution-item {
-            position: relative;
-            padding-left: 28px;
-            margin-bottom: 12px;
-            color: #4b5563;
-            line-height: 1.5;
-            font-size: 14px;
-          }
-
-          .solution-item:before {
-            content: "→";
-            position: absolute;
-            left: 0;
-            color: ${severityColors[config.severity]};
-            font-weight: bold;
-          }
-
-          .actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 28px;
-          }
-
-          .button {
-            flex: 1;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            text-align: center;
-            display: inline-block;
-          }
-
-          .button-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-          }
-
-          .button-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(102, 126, 234, 0.4);
-          }
-
-          .button-secondary {
-            background: #f3f4f6;
-            color: #4b5563;
-          }
-
-          .button-secondary:hover {
-            background: #e5e7eb;
-          }
-
-          .help-link {
-            display: block;
-            text-align: center;
-            margin-top: 20px;
-            color: #6366f1;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-          }
-
-          .help-link:hover {
-            text-decoration: underline;
-          }
-
-          .technical-details {
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 1px solid #e5e7eb;
-          }
-
-          .details-toggle {
-            background: none;
-            border: none;
-            color: #6b7280;
-            font-size: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-          }
-
-          .details-content {
-            margin-top: 12px;
-            font-size: 12px;
-            color: #4b5563;
-            background: #f9fafb;
-            padding: 12px;
-            border-radius: 8px;
-            max-height: 200px;
-            overflow: auto;
-            white-space: pre-wrap;
-          }
-
-          .details-toggle::-webkit-details-marker {
-            display: none;
-          }
-
-          .toggle-arrow {
-            transition: transform 0.15s ease;
-          }
-
-          details[open] .toggle-arrow {
-            transform: rotate(180deg);
-          }
-
-          .footer {
-            text-align: center;
-            margin-top: 24px;
-            font-size: 12px;
-            color: #9ca3af;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="icon">${config.icon}</div>
-          <h1 class="title">${escapeHtml(config.title)}</h1>
-          <p class="message">${escapeHtml(config.message)}</p>
-
-          <div class="alert-box">
-            <div class="solutions-title">How to fix this</div>
-            <ul class="solutions">
-              ${config.solutions
-                .map((solution) => `<li class="solution-item">${escapeHtml(solution)}</li>`)
-                .join('')}
-            </ul>
-          </div>
-
-          <div class="actions">
-            ${
-              config.showRetry
-                ? `<button id="retry-button" type="button" class="button button-primary">Try Again</button>`
-                : ''
-            }
-            <button id="close-button" type="button" class="button button-secondary">
-              Close Window
-            </button>
-          </div>
-
-          ${
-            config.helpLink
-              ? `
-            <a href="${escapeHtml(config.helpLink)}" target="_blank" class="help-link">
-              Learn more →
-            </a>
-          `
-              : ''
-          }
-
-          ${
-            sanitizedTechnicalDetails
-              ? `
-            <details class="technical-details">
-              <summary class="details-toggle">
-                <span>Technical details</span>
-                <span class="toggle-arrow">▼</span>
-              </summary>
-              <div class="details-content">
-                <strong>Error:</strong> ${escapeHtml(options.error)}<br>
-                ${sanitizedErrorCode ? `<strong>Code:</strong> ${escapeHtml(sanitizedErrorCode)}<br>` : ''}
-                ${options.errorDescription ? `<strong>Description:</strong> ${escapeHtml(options.errorDescription)}<br>` : ''}
-                ${sanitizedTechnicalDetails ? `<strong>Details:</strong> ${escapeHtml(sanitizedTechnicalDetails)}` : ''}
-              </div>
-            </details>
-          `
-              : ''
-          }
-
-          <div class="footer">
-            Postolio • Social Media Management
-          </div>
-        </div>
-
-        <script>
-          const retryUrl = ${JSON.stringify(retryUrl)};
-          const parentOrigin = ${JSON.stringify(parentOrigin)};
-          const error = ${JSON.stringify(options.error || '')};
-          const errorDescription = ${JSON.stringify(options.errorDescription || '')};
-          const errorCode = ${JSON.stringify(options.errorCode || '')};
-
-          if (typeof window !== 'undefined' && window.gtag) {
-            window.gtag('event', 'oauth_error', {
-              event_category: 'instagram',
-              event_label: error,
-              value: 0
-            });
-          }
-
-          function notifyParent() {
-            if (window.opener && !window.opener.closed) {
-              try {
-                window.opener.postMessage(
-                  {
-                    type: 'INSTAGRAM_OAUTH_ERROR',
-                    data: {
-                      success: false,
-                      error,
-                      errorDescription,
-                      errorCode
-                    }
-                  },
-                  parentOrigin
-                );
-              } catch (e) {
-              }
-            }
-          }
-
-          function closeOrRedirect() {
-            try {
-              window.close();
-            } catch (e) {
-            }
-
-            setTimeout(() => {
-              if (!window.closed) {
-                window.location.href = retryUrl;
-              }
-            }, 150);
-          }
-
-          function closeWindow() {
-            notifyParent();
-            closeOrRedirect();
-          }
-
-          function retryConnection() {
-            notifyParent();
-            try {
-              if (window.opener && !window.opener.closed) {
-                window.opener.focus();
-              }
-            } catch (e) {
-            }
-            closeOrRedirect();
-          }
-
-          setTimeout(() => {
-            try {
-              window.close();
-            } catch (e) {
-            }
-          }, 30000);
-
-          document.getElementById('close-button')?.addEventListener('click', closeWindow);
-          document.getElementById('retry-button')?.addEventListener('click', retryConnection);
-
-          notifyParent();
-        </script>
-      </body>
-    </html>
-  `;
+  return `<!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>${escapeHtml(config.title)} - Postolio</title>
+      <style>${buildErrorStyle(config.severity)}</style>
+    </head>
+    <body>
+      <main class="card">
+        <div class="icon">${config.icon}</div>
+        <h1 class="title">${escapeHtml(config.title)}</h1>
+        <p class="message">${escapeHtml(config.message)}</p>
+        <section class="alert">
+          <h2>How to fix this</h2>
+          <ul>${solutions}</ul>
+        </section>
+        ${buildActions(config)}
+        ${helpLink}
+        ${buildTechnicalDetails(options)}
+      </main>
+      <script>${buildErrorScript({
+        retryUrl,
+        parentOrigin,
+        error: options.error,
+        errorDescription: options.errorDescription,
+        errorCode: options.errorCode,
+      })}</script>
+    </body>
+  </html>`;
 }
 
 export function sendErrorPage(reply: FastifyReply, options: ErrorPageOptions): void {

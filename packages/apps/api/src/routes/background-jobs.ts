@@ -1,30 +1,25 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
 import { deletionQueueService } from '../services/deletion-queue.js';
 
-const backgroundJobsRoutes: FastifyPluginAsync = async (fastify) => {
-  /**
-   * Get background job queue statistics
-   */
+function registerJobStatsRoute(fastify: FastifyInstance): void {
   fastify.get(
     '/api/admin/jobs/stats',
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
+    async (_request, reply) => {
       try {
         const stats = await backgroundJobs.getStats();
         return reply.send(stats);
       } catch (error) {
         fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to get job statistics',
-        });
+        return reply.code(500).send({ error: 'Failed to get job statistics' });
       }
     }
   );
+}
 
-  /**
-   * Get recent jobs
-   */
+function registerRecentJobsRoute(fastify: FastifyInstance): void {
   fastify.get<{ Querystring: { limit?: string } }>(
     '/api/admin/jobs/recent',
     { preHandler: fastify.authenticate },
@@ -33,160 +28,113 @@ const backgroundJobsRoutes: FastifyPluginAsync = async (fastify) => {
         const limit = request.query.limit ? parseInt(request.query.limit) : 10;
         const jobs = await backgroundJobs.getRecentJobs(limit);
 
-        // Transform jobs to simpler format
-        const jobList = jobs.map((job) => ({
-          id: job.id,
-          name: job.name,
-          data: job.data,
-          progress: job.progress(),
-          attemptsMade: job.attemptsMade,
-          finishedOn: job.finishedOn,
-          processedOn: job.processedOn,
-          failedReason: job.failedReason,
-          stacktrace: job.stacktrace,
-        }));
-
-        return reply.send(jobList);
+        return reply.send(
+          jobs.map((job) => ({
+            id: job.id,
+            name: job.name,
+            data: job.data,
+            progress: job.progress(),
+            attemptsMade: job.attemptsMade,
+            finishedOn: job.finishedOn,
+            processedOn: job.processedOn,
+            failedReason: job.failedReason,
+            stacktrace: job.stacktrace,
+          }))
+        );
       } catch (error) {
         fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to get recent jobs',
-        });
+        return reply.code(500).send({ error: 'Failed to get recent jobs' });
       }
     }
   );
+}
 
-  /**
-   * Trigger a one-time token cleanup job
-   */
-  fastify.post(
-    '/api/admin/jobs/cleanup',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const job = await backgroundJobs.scheduleJob(JobType.TOKEN_CLEANUP, {
-          triggeredBy: request.user!.id,
-        });
+function registerJobTriggerRoute(
+  fastify: FastifyInstance,
+  options: {
+    path: string;
+    jobType: JobType;
+    successMessage: string;
+    errorMessage: string;
+  }
+): void {
+  fastify.post(options.path, { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      const job = await backgroundJobs.scheduleJob(options.jobType, {
+        triggeredBy: request.user!.id,
+      });
 
-        return reply.send({
-          success: true,
-          jobId: job.id,
-          message: 'Token cleanup job scheduled',
-        });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to schedule cleanup job',
-        });
-      }
+      return reply.send({
+        success: true,
+        jobId: job.id,
+        message: options.successMessage,
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.code(500).send({ error: options.errorMessage });
     }
-  );
+  });
+}
 
-  /**
-   * Trigger token migration job (one-time migration from KEYS to Sets)
-   */
-  fastify.post(
-    '/api/admin/jobs/migrate',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const job = await backgroundJobs.scheduleJob(JobType.TOKEN_MIGRATION, {
-          triggeredBy: request.user!.id,
-        });
-
-        return reply.send({
-          success: true,
-          jobId: job.id,
-          message: 'Token migration job scheduled',
-        });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to schedule migration job',
-        });
-      }
-    }
-  );
-
-  /**
-   * Trigger integrity check job
-   */
-  fastify.post(
-    '/api/admin/jobs/integrity-check',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const job = await backgroundJobs.scheduleJob(JobType.TOKEN_INTEGRITY_CHECK, {
-          triggeredBy: request.user!.id,
-        });
-
-        return reply.send({
-          success: true,
-          jobId: job.id,
-          message: 'Integrity check job scheduled',
-        });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to schedule integrity check job',
-        });
-      }
-    }
-  );
-
-  /**
-   * Manually trigger sweep for pending account deletions
-   * (finds users past their scheduledDeletion date and enqueues deletion jobs).
-   */
+function registerDeletionSweepRoute(fastify: FastifyInstance): void {
   fastify.post(
     '/api/admin/jobs/deletion-sweep',
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
+    async (_request, reply) => {
       try {
         const result = await deletionQueueService.sweepScheduledDeletions();
-
-        return reply.send({
-          success: true,
-          ...result,
-        });
+        return reply.send({ success: true, ...result });
       } catch (error) {
         fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to run deletion sweep',
-        });
+        return reply.code(500).send({ error: 'Failed to run deletion sweep' });
       }
     }
   );
+}
 
-  /**
-   * Clear all completed/failed jobs (for testing)
-   */
+function registerCleanJobsRoute(fastify: FastifyInstance): void {
   fastify.delete(
     '/api/admin/jobs/clean',
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
+    async (_request, reply) => {
       try {
-        // Only allow in development/test environments
         if (process.env.NODE_ENV === 'prod') {
-          return reply.code(403).send({
-            error: 'Job cleanup not allowed in production',
-          });
+          return reply.code(403).send({ error: 'Job cleanup not allowed in production' });
         }
 
         await backgroundJobs.clean();
-
-        return reply.send({
-          success: true,
-          message: 'All jobs cleaned',
-        });
+        return reply.send({ success: true, message: 'All jobs cleaned' });
       } catch (error) {
         fastify.log.error(error);
-        return reply.code(500).send({
-          error: 'Failed to clean jobs',
-        });
+        return reply.code(500).send({ error: 'Failed to clean jobs' });
       }
     }
   );
+}
+
+const backgroundJobsRoutes: FastifyPluginAsync = async (fastify) => {
+  registerJobStatsRoute(fastify);
+  registerRecentJobsRoute(fastify);
+  registerJobTriggerRoute(fastify, {
+    path: '/api/admin/jobs/cleanup',
+    jobType: JobType.TOKEN_CLEANUP,
+    successMessage: 'Token cleanup job scheduled',
+    errorMessage: 'Failed to schedule cleanup job',
+  });
+  registerJobTriggerRoute(fastify, {
+    path: '/api/admin/jobs/migrate',
+    jobType: JobType.TOKEN_MIGRATION,
+    successMessage: 'Token migration job scheduled',
+    errorMessage: 'Failed to schedule migration job',
+  });
+  registerJobTriggerRoute(fastify, {
+    path: '/api/admin/jobs/integrity-check',
+    jobType: JobType.TOKEN_INTEGRITY_CHECK,
+    successMessage: 'Integrity check job scheduled',
+    errorMessage: 'Failed to schedule integrity check job',
+  });
+  registerDeletionSweepRoute(fastify);
+  registerCleanJobsRoute(fastify);
 };
 
 export default backgroundJobsRoutes;

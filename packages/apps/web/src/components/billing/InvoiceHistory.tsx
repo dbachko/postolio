@@ -11,6 +11,42 @@ function toUsd(cents: number, currency: string) {
   return `${amount.toFixed(2)} ${currency.toUpperCase()}`;
 }
 
+function resolveInvoiceLink(
+  invoice: BillingInvoice
+): { href: string; label: 'PDF' | 'View' } | null {
+  if (invoice.invoicePdfUrl) {
+    return { href: invoice.invoicePdfUrl, label: 'PDF' };
+  }
+  if (invoice.hostedInvoiceUrl) {
+    return { href: invoice.hostedInvoiceUrl, label: 'View' };
+  }
+  return null;
+}
+
+function InvoiceRow({ invoice }: { invoice: BillingInvoice }) {
+  const link = resolveInvoiceLink(invoice);
+  return (
+    <div className="bg-background flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
+      <div className="space-y-1">
+        <div className="font-medium">{invoice.number || invoice.stripeInvoiceId}</div>
+        <div className="text-muted-foreground">
+          {new Date(invoice.createdAt).toLocaleDateString()} · {invoice.status}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="font-medium">{toUsd(invoice.total, invoice.currency)}</div>
+        {link ? (
+          <Button asChild variant="outline" size="sm">
+            <a href={link.href} target="_blank" rel="noreferrer">
+              {link.label}
+            </a>
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function InvoiceHistory({ invoices }: InvoiceHistoryProps) {
   return (
     <Card>
@@ -24,33 +60,7 @@ export function InvoiceHistory({ invoices }: InvoiceHistoryProps) {
         ) : (
           <div className="space-y-2">
             {invoices.map((invoice) => (
-              <div
-                key={invoice.stripeInvoiceId}
-                className="bg-background flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm"
-              >
-                <div className="space-y-1">
-                  <div className="font-medium">{invoice.number || invoice.stripeInvoiceId}</div>
-                  <div className="text-muted-foreground">
-                    {new Date(invoice.createdAt).toLocaleDateString()} · {invoice.status}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-medium">{toUsd(invoice.total, invoice.currency)}</div>
-                  {invoice.invoicePdfUrl ? (
-                    <Button asChild variant="outline" size="sm">
-                      <a href={invoice.invoicePdfUrl} target="_blank" rel="noreferrer">
-                        PDF
-                      </a>
-                    </Button>
-                  ) : invoice.hostedInvoiceUrl ? (
-                    <Button asChild variant="outline" size="sm">
-                      <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer">
-                        View
-                      </a>
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
+              <InvoiceRow key={invoice.stripeInvoiceId} invoice={invoice} />
             ))}
           </div>
         )}

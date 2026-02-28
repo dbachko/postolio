@@ -6,6 +6,38 @@ import { FB_COMMENTS_LABEL, FB_REACTIONS_LABEL, FB_SHARES_LABEL } from '../const
 import { getAccountDisplayName } from '../utils';
 import { MediaFrame } from './media-frame';
 
+function FacebookPreviewActions() {
+  return (
+    <div className="border-border text-muted-foreground flex items-center justify-between border-t px-3 py-2 text-xs font-medium">
+      <div className="flex items-center gap-1">
+        <ThumbsUp className="h-4 w-4" />
+        Like
+      </div>
+      <div className="flex items-center gap-1">
+        <MessageCircle className="h-4 w-4" />
+        Comment
+      </div>
+      <div className="flex items-center gap-1">
+        <Share2 className="h-4 w-4" />
+        Share
+      </div>
+    </div>
+  );
+}
+
+function resolveFacebookAspectRatio(
+  contentType: PostPreviewItem['content']['contentType'],
+  primaryMedia: PostPreviewItem['content']['media'][number] | null
+): string {
+  if (contentType === 'story') {
+    return '9 / 16';
+  }
+  if (primaryMedia?.type === 'video') {
+    return '16 / 9';
+  }
+  return '1 / 1';
+}
+
 export function FacebookPreviewCard({ item }: { item: PostPreviewItem }) {
   const { account, content } = item;
   const caption = (content.caption || '').trim();
@@ -13,12 +45,7 @@ export function FacebookPreviewCard({ item }: { item: PostPreviewItem }) {
   const media = content.media || [];
   const primaryMedia = media[0] || null;
   const mediaCount = media.length;
-  const aspectRatio =
-    content.contentType === 'story'
-      ? '9 / 16'
-      : primaryMedia?.type === 'video'
-        ? '16 / 9'
-        : '1 / 1';
+  const aspectRatio = resolveFacebookAspectRatio(content.contentType, primaryMedia);
 
   const overlayTopRight =
     mediaCount > 1 ? (
@@ -81,20 +108,7 @@ export function FacebookPreviewCard({ item }: { item: PostPreviewItem }) {
         </div>
       </div>
 
-      <div className="border-border text-muted-foreground flex items-center justify-between border-t px-3 py-2 text-xs font-medium">
-        <div className="flex items-center gap-1">
-          <ThumbsUp className="h-4 w-4" />
-          Like
-        </div>
-        <div className="flex items-center gap-1">
-          <MessageCircle className="h-4 w-4" />
-          Comment
-        </div>
-        <div className="flex items-center gap-1">
-          <Share2 className="h-4 w-4" />
-          Share
-        </div>
-      </div>
+      <FacebookPreviewActions />
     </div>
   );
 }

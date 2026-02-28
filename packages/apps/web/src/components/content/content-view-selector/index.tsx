@@ -1,29 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronsUpDown, Layers, Loader2 } from 'lucide-react';
 
 import { brand as brandApi } from '@/lib/api';
-import type { Platform } from '@/lib/platform-config';
 import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
-import { useContentViewStore } from '@/stores/contentViewStore';
-import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/stores/authStore';
 import { isMultiDestinationEnabled } from '@/lib/feature-flags';
-
-import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
-import { SocialAccountAvatar } from '@/components/social/social-account-avatar';
+import type { Platform } from '@/lib/platform-config';
 import { formatSocialAccountLabel } from '@/lib/social-account-label';
+import { useAuthStore } from '@/stores/authStore';
+import { useContentViewStore } from '@/stores/contentViewStore';
+import {
+  ContentViewSelectorPopover,
+  type SocialAccountOption,
+} from './components/content-view-selector-popover';
 
 const PLATFORM_SET: ReadonlySet<string> = new Set([
   'instagram',
@@ -34,55 +22,179 @@ const PLATFORM_SET: ReadonlySet<string> = new Set([
   'tiktok',
 ]);
 
-type SocialAccountOption = {
-  id: string;
-  platform: Platform;
-  label: string;
-  avatarName: string;
-  avatarUrl: string | null;
-  disconnected: boolean;
-  sortOrder: number;
-};
+function readString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function resolvePlatform(platformRaw: string | null): Platform | null {
+  if (!platformRaw || !PLATFORM_SET.has(platformRaw)) {
+    return null;
+  }
+  return platformRaw as Platform;
+}
+
+function resolveAvatarName(
+  username: string | null,
+  displayName: string | null,
+  platform: Platform
+): string {
+  if (username) {
+    return username;
+  }
+  if (displayName) {
+    return displayName;
+  }
+  return platform;
+}
+
+function resolveSortOrder(value: unknown): number {
+  return typeof value === 'number' ? value : 0;
+}
+
+function toSocialAccountOption(account: any): SocialAccountOption | null {
+  const id = readString(account?.id);
+  const platform = resolvePlatform(readString(account?.platform));
+  if (!id || !platform) {
+    return null;
+  }
+  const username = readString(account?.username);
+  const displayName = readString(account?.displayName);
+
+  return {
+    id,
+    platform,
+    label: formatSocialAccountLabel({ platform, username, displayName }),
+    avatarName: resolveAvatarName(username, displayName, platform),
+    avatarUrl: readString(account?.profilePictureUrl),
+    disconnected: account?.disconnected === true,
+    sortOrder: resolveSortOrder(account?.sortOrder),
+  };
+}
+
+function compareSocialAccountOptions(
+  left: SocialAccountOption,
+  right: SocialAccountOption
+): number {
+  if (left.sortOrder !== right.sortOrder) {
+    return left.sortOrder - right.sortOrder;
+  }
+  return left.label.localeCompare(right.label);
+}
 
 function toSocialAccountOptions(raw: unknown): SocialAccountOption[] {
   const list = (raw as any)?.socialAccounts;
   const accounts = Array.isArray(list) ? (list as any[]) : [];
 
   return accounts
-    .map((account) => {
-      const id = typeof account?.id === 'string' ? account.id : null;
-      const platformRaw = typeof account?.platform === 'string' ? account.platform : null;
-      if (!id || !platformRaw || !PLATFORM_SET.has(platformRaw)) {
-        return null;
-      }
-      const platform = platformRaw as Platform;
-
-      const username = typeof account?.username === 'string' ? account.username : null;
-      const displayName = typeof account?.displayName === 'string' ? account.displayName : null;
-      const label = formatSocialAccountLabel({ platform, username, displayName });
-      const avatarName = username || displayName || platform;
-      const avatarUrl =
-        typeof account?.profilePictureUrl === 'string' ? account.profilePictureUrl : null;
-      const disconnected = account?.disconnected === true;
-      const sortOrder = typeof account?.sortOrder === 'number' ? account.sortOrder : 0;
-
-      return { id, platform, label, avatarName, avatarUrl, disconnected, sortOrder };
-    })
-    .filter((a): a is SocialAccountOption => Boolean(a))
-    .sort((a, b) => {
-      if (a.sortOrder !== b.sortOrder) {
-        return a.sortOrder - b.sortOrder;
-      }
-      return a.label.localeCompare(b.label);
-    });
+    .map((account) => toSocialAccountOption(account))
+    .filter((account): account is SocialAccountOption => Boolean(account))
+    .sort(compareSocialAccountOptions);
 }
 
-export function ContentViewSelector({ brandId }: { brandId: string }) {
-  const [open, setOpen] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const multiDestinationEnabled = isMultiDestinationEnabled(user);
-  const storeEntry = useContentViewStore((s) => s.selectedSocialAccountIdsByBrandId[brandId]);
-  const setSelectedSocialAccountIds = useContentViewStore((s) => s.setSelectedSocialAccountIds);
+function usePrimaryAndOptions(data: unknown) {
+  const primarySocialAccountId = useMemo(() => {
+    const raw = data as any;
+    return typeof raw?.primarySocialAccountId === 'string' ? raw.primarySocialAccountId : null;
+  }, [data]);
+
+  const options = useMemo(() => toSocialAccountOptions(data), [data]);
+
+  return { primarySocialAccountId, options };
+}
+
+function useSelectedSocialAccountIds(storeEntry: string[] | null | undefined) {
+  return useMemo(() => {
+    if (storeEntry === undefined) {
+      return undefined;
+    }
+    if (storeEntry == null) {
+      return null;
+    }
+    return storeEntry.filter((id) => typeof id === 'string' && id.trim().length > 0);
+  }, [storeEntry]);
+}
+
+function useSyncDefaultSelection({
+  brandId,
+  isLoading,
+  options,
+  primarySocialAccountId,
+  selectedSocialAccountIds,
+  setSelectedSocialAccountIds,
+  multiDestinationEnabled,
+}: {
+  brandId: string;
+  isLoading: boolean;
+  options: SocialAccountOption[];
+  primarySocialAccountId: string | null;
+  selectedSocialAccountIds: string[] | null | undefined;
+  setSelectedSocialAccountIds: (brandId: string, socialAccountIds: string[] | null) => void;
+  multiDestinationEnabled: boolean;
+}) {
+  useEffect(() => {
+    if (!brandId || isLoading) {
+      return;
+    }
+
+    const defaultId =
+      (primarySocialAccountId && options.some((option) => option.id === primarySocialAccountId)
+        ? primarySocialAccountId
+        : options[0]?.id) ?? null;
+
+    if (!multiDestinationEnabled) {
+      const currentSingleId =
+        Array.isArray(selectedSocialAccountIds) && selectedSocialAccountIds.length === 1
+          ? selectedSocialAccountIds[0]
+          : null;
+      if (currentSingleId !== defaultId || selectedSocialAccountIds == null) {
+        setSelectedSocialAccountIds(brandId, defaultId ? [defaultId] : null);
+      }
+      return;
+    }
+
+    if (selectedSocialAccountIds === undefined) {
+      setSelectedSocialAccountIds(brandId, defaultId ? [defaultId] : null);
+    }
+  }, [
+    brandId,
+    isLoading,
+    multiDestinationEnabled,
+    options,
+    primarySocialAccountId,
+    selectedSocialAccountIds,
+    setSelectedSocialAccountIds,
+  ]);
+}
+
+function getTriggerLabel({
+  selectedSocialAccountIds,
+  selectedOption,
+}: {
+  selectedSocialAccountIds: string[] | null;
+  selectedOption: SocialAccountOption | null;
+}) {
+  if (selectedSocialAccountIds == null) {
+    return 'All destinations';
+  }
+  if (selectedSocialAccountIds.length <= 1) {
+    return selectedOption?.label ?? 'Select destinations';
+  }
+  return `${selectedSocialAccountIds.length} destinations`;
+}
+
+function useContentViewSelectorModel({
+  brandId,
+  multiDestinationEnabled,
+}: {
+  brandId: string;
+  multiDestinationEnabled: boolean;
+}) {
+  const storeEntry = useContentViewStore(
+    (state) => state.selectedSocialAccountIdsByBrandId[brandId]
+  );
+  const setSelectedSocialAccountIds = useContentViewStore(
+    (state) => state.setSelectedSocialAccountIds
+  );
 
   const accountsQuery = useQuery({
     queryKey: ['brand-social-accounts', brandId],
@@ -93,202 +205,90 @@ export function ContentViewSelector({ brandId }: { brandId: string }) {
     refetchOnWindowFocus: false,
   });
 
-  const primarySocialAccountId = useMemo(() => {
-    const raw = accountsQuery.data as any;
-    return typeof raw?.primarySocialAccountId === 'string' ? raw.primarySocialAccountId : null;
-  }, [accountsQuery.data]);
+  const { primarySocialAccountId, options } = usePrimaryAndOptions(accountsQuery.data);
+  const selectedSocialAccountIds = useSelectedSocialAccountIds(storeEntry);
 
-  const options = useMemo(() => toSocialAccountOptions(accountsQuery.data), [accountsQuery.data]);
-
-  const selectedSocialAccountIds = useMemo(() => {
-    if (storeEntry === undefined) {
-      return undefined;
-    }
-    if (storeEntry == null) {
-      return null;
-    }
-    return storeEntry.filter((id) => typeof id === 'string' && id.trim().length > 0);
-  }, [storeEntry]);
-
-  useEffect(() => {
-    if (!brandId) {
-      return;
-    }
-    if (accountsQuery.isLoading) {
-      return;
-    }
-
-    const defaultId =
-      (primarySocialAccountId && options.some((o) => o.id === primarySocialAccountId)
-        ? primarySocialAccountId
-        : options[0]?.id) ?? null;
-
-    if (!multiDestinationEnabled) {
-      const currentSingleId =
-        Array.isArray(selectedSocialAccountIds) && selectedSocialAccountIds.length === 1
-          ? selectedSocialAccountIds[0]
-          : null;
-      const nextSingleId = defaultId;
-      if (currentSingleId !== nextSingleId || selectedSocialAccountIds == null) {
-        setSelectedSocialAccountIds(brandId, nextSingleId ? [nextSingleId] : null);
-      }
-      return;
-    }
-
-    if (selectedSocialAccountIds !== undefined) {
-      return;
-    }
-
-    setSelectedSocialAccountIds(brandId, defaultId ? [defaultId] : null);
-  }, [
-    accountsQuery.isLoading,
+  useSyncDefaultSelection({
     brandId,
-    multiDestinationEnabled,
+    isLoading: accountsQuery.isLoading,
     options,
     primarySocialAccountId,
     selectedSocialAccountIds,
     setSelectedSocialAccountIds,
-  ]);
+    multiDestinationEnabled,
+  });
 
   const selectedOption = useMemo(() => {
     if (!Array.isArray(selectedSocialAccountIds) || selectedSocialAccountIds.length !== 1) {
       return null;
     }
-    return options.find((o) => o.id === selectedSocialAccountIds[0]) || null;
+    return options.find((option) => option.id === selectedSocialAccountIds[0]) || null;
   }, [options, selectedSocialAccountIds]);
 
-  const selectedCount = Array.isArray(selectedSocialAccountIds)
-    ? selectedSocialAccountIds.length
-    : 0;
-  const triggerLabel =
-    selectedSocialAccountIds == null
-      ? 'All destinations'
-      : selectedCount <= 1
-        ? (selectedOption?.label ?? 'Select destinations')
-        : `${selectedCount} destinations`;
+  const triggerLabel = useMemo(
+    () =>
+      getTriggerLabel({
+        selectedSocialAccountIds: selectedSocialAccountIds ?? null,
+        selectedOption,
+      }),
+    [selectedOption, selectedSocialAccountIds]
+  );
 
+  const selectAll = useCallback(() => {
+    setSelectedSocialAccountIds(brandId, null);
+  }, [brandId, setSelectedSocialAccountIds]);
+
+  const toggleAccount = useCallback(
+    (accountId: string) => {
+      const next = new Set(Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : []);
+      if (next.has(accountId)) {
+        next.delete(accountId);
+      } else {
+        next.add(accountId);
+      }
+      const nextValues = Array.from(next);
+      setSelectedSocialAccountIds(brandId, nextValues.length > 0 ? nextValues : null);
+    },
+    [brandId, selectedSocialAccountIds, setSelectedSocialAccountIds]
+  );
+
+  return {
+    isLoading: accountsQuery.isLoading,
+    primarySocialAccountId,
+    options,
+    selectedSocialAccountIds,
+    selectedOption,
+    triggerLabel,
+    selectAll,
+    toggleAccount,
+  };
+}
+
+export function ContentViewSelector({ brandId }: { brandId: string }) {
+  const [open, setOpen] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
+
+  const model = useContentViewSelectorModel({ brandId, multiDestinationEnabled });
   if (!multiDestinationEnabled) {
     return null;
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="h-10 min-w-0 justify-between gap-2 px-3"
-          disabled={accountsQuery.isLoading}
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            {accountsQuery.isLoading ? (
-              <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : selectedOption ? (
-              <SocialAccountAvatar
-                platform={selectedOption.platform}
-                name={selectedOption.avatarName}
-                src={selectedOption.avatarUrl}
-                size="sm"
-                selected
-                muted={false}
-                disabled={selectedOption.disconnected}
-              />
-            ) : (
-              <span className="bg-muted text-muted-foreground flex h-8 w-8 items-center justify-center rounded-full">
-                <Layers className="h-4 w-4" aria-hidden="true" />
-              </span>
-            )}
-            <span className="min-w-0 truncate text-left text-sm">{triggerLabel}</span>
-          </span>
-          <ChevronsUpDown className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden="true" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-[320px] p-0">
-        <Command>
-          <CommandInput placeholder="Search destinations..." />
-          <CommandList>
-            <CommandEmpty>
-              {accountsQuery.isLoading ? 'Loading destinations...' : 'No destinations found.'}
-            </CommandEmpty>
-
-            <CommandGroup heading="Destinations">
-              <CommandItem
-                value="__all__"
-                onSelect={() => {
-                  setSelectedSocialAccountIds(brandId, null);
-                  setOpen(false);
-                }}
-                className="flex items-center justify-between gap-3"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="bg-muted text-muted-foreground flex h-8 w-8 items-center justify-center rounded-full">
-                    <Layers className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 truncate">All destinations</span>
-                </div>
-                <span
-                  className={cn(
-                    'text-muted-foreground',
-                    selectedSocialAccountIds == null && 'opacity-100'
-                  )}
-                >
-                  {selectedSocialAccountIds == null && (
-                    <Check className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </span>
-              </CommandItem>
-
-              {options.length > 0 && <CommandSeparator />}
-
-              {options.map((account) => {
-                const isPrimary = Boolean(
-                  primarySocialAccountId && account.id === primarySocialAccountId
-                );
-                const active = Array.isArray(selectedSocialAccountIds)
-                  ? selectedSocialAccountIds.includes(account.id)
-                  : false;
-                return (
-                  <CommandItem
-                    key={account.id}
-                    value={`${account.label} ${account.platform}`}
-                    onSelect={() => {
-                      const nextSet = new Set<string>(
-                        Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : []
-                      );
-                      if (nextSet.has(account.id)) {
-                        nextSet.delete(account.id);
-                      } else {
-                        nextSet.add(account.id);
-                      }
-                      const next = Array.from(nextSet);
-                      setSelectedSocialAccountIds(brandId, next.length ? next : null);
-                    }}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <SocialAccountAvatar
-                        platform={account.platform}
-                        name={account.avatarName}
-                        src={account.avatarUrl}
-                        size="sm"
-                        selected={active}
-                        muted={!active}
-                        disabled={account.disconnected}
-                      />
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 truncate">{account.label}</span>
-                        {isPrimary && <Badge variant="secondary">Primary</Badge>}
-                      </div>
-                    </div>
-                    {active && <Check className="h-4 w-4" aria-hidden="true" />}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <ContentViewSelectorPopover
+      open={open}
+      onOpenChange={setOpen}
+      isLoading={model.isLoading}
+      triggerLabel={model.triggerLabel}
+      selectedOption={model.selectedOption}
+      selectedSocialAccountIds={model.selectedSocialAccountIds ?? null}
+      options={model.options}
+      primarySocialAccountId={model.primarySocialAccountId}
+      onSelectAll={() => {
+        model.selectAll();
+        setOpen(false);
+      }}
+      onToggleAccount={model.toggleAccount}
+    />
   );
 }

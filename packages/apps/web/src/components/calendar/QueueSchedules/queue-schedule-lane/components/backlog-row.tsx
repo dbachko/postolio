@@ -14,6 +14,106 @@ import type { BacklogRowProps, QueueDragPayload } from '../types';
 import { getDisplayTitle } from '../utils';
 import { DragHandle } from './drag-handle';
 
+function getDragTooltip({
+  canDrag,
+  scheduleAheadAtCapacity,
+  blockedByStatus,
+  scheduleLimitMessage,
+}: {
+  canDrag: boolean;
+  scheduleAheadAtCapacity: boolean;
+  blockedByStatus: boolean;
+  scheduleLimitMessage: string;
+}) {
+  if (canDrag) {
+    return 'Drag to schedule.';
+  }
+  if (scheduleAheadAtCapacity) {
+    return scheduleLimitMessage;
+  }
+  if (blockedByStatus) {
+    return 'Published posts cannot be moved.';
+  }
+  return 'Dragging is disabled.';
+}
+
+function BacklogRowMedia({
+  previewUrl,
+  laneView,
+  laneKey,
+}: {
+  previewUrl: string | null;
+  laneView: BacklogRowProps['laneView'];
+  laneKey: BacklogRowProps['item']['laneKey'];
+}) {
+  return (
+    <div className="bg-muted border-border relative h-9 w-9 shrink-0 overflow-hidden rounded-md border">
+      <img
+        src={getPostImageOrPlaceholder(previewUrl)}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      {laneView === 'all' ? (
+        <div className="bg-background/80 border-border text-foreground absolute right-0.5 bottom-0.5 rounded-full border p-0.5">
+          <span className="sr-only">{getLanePillLabel(laneKey)}</span>
+          {laneIcon(laneKey, 'h-3 w-3')}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function resolveBacklogContentForRules(
+  item: BacklogRowProps['item'],
+  calendarContentById: Map<string, unknown>
+) {
+  return (calendarContentById.get(item.contentId) as any) ?? (item.content as any) ?? null;
+}
+
+function resolveBacklogPrimaryAssetId(
+  contentForThumb: any,
+  item: BacklogRowProps['item']
+): string | null {
+  return (
+    contentForThumb?.primaryAssetId ||
+    contentForThumb?.mediaAssets?.[0]?.assetId ||
+    item.content?.primaryAssetId ||
+    item.content?.mediaAssets?.[0]?.assetId ||
+    null
+  );
+}
+
+function resolveBacklogPreviewUrl(
+  primaryAsset: {
+    fileType?: string | null;
+    thumbnailUrl?: string | null;
+    url?: string | null;
+  } | null
+): string | null {
+  if (!primaryAsset) {
+    return null;
+  }
+  if (primaryAsset.fileType === 'video') {
+    return primaryAsset.thumbnailUrl || primaryAsset.url || null;
+  }
+  return primaryAsset.thumbnailUrl || primaryAsset.url || null;
+}
+
+function resolveBacklogContentStatus(contentForRules: any): string {
+  return typeof contentForRules?.status === 'string' ? String(contentForRules.status).trim() : '';
+}
+
+function buildBacklogDragPayload(item: BacklogRowProps['item']): QueueDragPayload {
+  return {
+    kind: 'queueItem',
+    contentId: item.contentId,
+    laneKey: item.laneKey,
+    sourceQueueItem: { queueId: item.queueId, queueItemId: item.id },
+  };
+}
+
 export function BacklogRow({
   item,
   laneView,
@@ -24,43 +124,28 @@ export function BacklogRow({
   scheduleLimitMessage,
 }: BacklogRowProps) {
   const contentForThumb = calendarContentById.get(item.contentId) ?? null;
-  const contentForRules =
-    (calendarContentById.get(item.contentId) as any) ?? (item.content as any) ?? null;
-  const primaryAssetId =
-    contentForThumb?.primaryAssetId ||
-    contentForThumb?.mediaAssets?.[0]?.assetId ||
-    item.content?.primaryAssetId ||
-    item.content?.mediaAssets?.[0]?.assetId ||
-    null;
+  const contentForRules = resolveBacklogContentForRules(
+    item,
+    calendarContentById as Map<string, unknown>
+  );
+  const primaryAssetId = resolveBacklogPrimaryAssetId(contentForThumb, item);
   const primaryAsset = primaryAssetId ? (assetsById?.[primaryAssetId] ?? null) : null;
-  const previewUrl =
-    primaryAsset?.fileType === 'video'
-      ? primaryAsset.thumbnailUrl || primaryAsset.url || null
-      : primaryAsset?.thumbnailUrl || primaryAsset?.url || null;
-
-  const payload: QueueDragPayload = {
-    kind: 'queueItem',
-    contentId: item.contentId,
-    laneKey: item.laneKey,
-    sourceQueueItem: { queueId: item.queueId, queueItemId: item.id },
-  };
-
-  const contentStatus =
-    typeof contentForRules?.status === 'string' ? String(contentForRules.status).trim() : '';
+  const previewUrl = resolveBacklogPreviewUrl(primaryAsset);
+  const payload = buildBacklogDragPayload(item);
+  const contentStatus = resolveBacklogContentStatus(contentForRules);
   const blockedByStatus = contentStatus === 'published';
   const canDrag = !scheduleAheadAtCapacity && !blockedByStatus;
-  const dragTooltip = (() => {
-    if (canDrag) {
-      return 'Drag to schedule.';
-    }
-    if (scheduleAheadAtCapacity) {
-      return scheduleLimitMessage;
-    }
-    if (blockedByStatus) {
-      return 'Published posts cannot be moved.';
-    }
-    return 'Dragging is disabled.';
-  })();
+  const dragTooltip = getDragTooltip({
+    canDrag,
+    scheduleAheadAtCapacity,
+    blockedByStatus,
+    scheduleLimitMessage,
+  });
+  const displayTitle = getDisplayTitle({
+    caption: item.content?.caption ?? null,
+    contentType: item.content?.contentType ?? null,
+    laneKey: item.laneKey,
+  });
   const [, dragRef] = useDrag(
     () => ({
       type: DND_ITEM_TYPE,
@@ -80,30 +165,9 @@ export function BacklogRow({
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <DragHandle disabled={!canDrag} dragRef={dragRef as any} tooltip={dragTooltip} />
-
-        <div className="bg-muted border-border relative h-9 w-9 shrink-0 overflow-hidden rounded-md border">
-          <img
-            src={getPostImageOrPlaceholder(previewUrl)}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-            decoding="async"
-          />
-          {laneView === 'all' ? (
-            <div className="bg-background/80 border-border text-foreground absolute right-0.5 bottom-0.5 rounded-full border p-0.5">
-              <span className="sr-only">{getLanePillLabel(item.laneKey)}</span>
-              {laneIcon(item.laneKey, 'h-3 w-3')}
-            </div>
-          ) : null}
-        </div>
+        <BacklogRowMedia previewUrl={previewUrl} laneView={laneView} laneKey={item.laneKey} />
         <div className="min-w-0">
-          <div className="text-foreground truncate text-sm font-medium">
-            {getDisplayTitle({
-              caption: item.content?.caption ?? null,
-              contentType: item.content?.contentType ?? null,
-              laneKey: item.laneKey,
-            })}
-          </div>
+          <div className="text-foreground truncate text-sm font-medium">{displayTitle}</div>
           <div className="text-muted-foreground truncate text-xs">Queued</div>
         </div>
       </div>

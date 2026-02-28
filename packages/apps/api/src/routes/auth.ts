@@ -1,209 +1,192 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+
 import { getDatabaseClient } from '../config/database.js';
-import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import {
-  registerSchema,
   loginSchema,
-  type RegisterInput,
+  registerSchema,
   type LoginInput,
+  type RegisterInput,
 } from '../schemas/auth.js';
-import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
-import { RefreshTokenService } from '../services/refresh-token.js';
-import { isProductionEnv } from '../utils/env-mode.js';
-import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
-import { ensureDeviceId } from '../utils/device-id.js';
-import { signupsAllowedForEmail } from '../utils/access-control.js';
-import { getUserFeatureFlags } from '../utils/feature-flags.js';
-import { createRedisClient } from '../services/redis.js';
 import { AuthService } from '../services/auth.js';
+import { AuditEventType, AuditLogger } from '../services/audit-logger.js';
+import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
+import { RefreshTokenService } from '../services/refresh-token.js';
+import { createRedisClient } from '../services/redis.js';
+import { ensureDeviceId } from '../utils/device-id.js';
+import { isProductionEnv } from '../utils/env-mode.js';
+import { getUserFeatureFlags } from '../utils/feature-flags.js';
+import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
+import { signupsAllowedForEmail } from '../utils/access-control.js';
 
 const prisma = getDatabaseClient();
 const redis = createRedisClient();
 
-const authRoutes: FastifyPluginAsync = async (fastify) => {
-  // User registration with rate limiting and validation
-  fastify.post<{ Body: RegisterInput }>(
-    '/register',
-    {
-      preHandler: [validateAndSanitize(registerSchema), enhancedRateLimiters.register()],
-    },
-    async (request, reply) => {
-      const { email, deviceFingerprint, deviceName } = request.body;
+function setAccessTokenCookie(reply: any, accessToken: string) {
+  reply.setCookie('auth_token', accessToken, {
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60,
+  });
+}
 
-      // Enforce signup mode restrictions before proceeding
-      const gate = signupsAllowedForEmail(email);
-      if (!gate.allowed) {
-        return reply
-          .code(403)
-          .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
-      }
+function clearLegacyRefreshCookies(reply: any) {
+  reply.clearCookie('refresh_token', { path: '/' });
+  reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+}
 
-      // Resolve stable device identifier and set cookie if needed
-      const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
+function setRefreshTokenCookie(reply: any, refreshToken: string, maxAge: number) {
+  clearLegacyRefreshCookies(reply);
+  reply.setCookie('refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'lax',
+    path: '/api/auth',
+    maxAge,
+  });
+}
 
-      // Generate tokens with refresh token rotation and session tracking
-      const ipAddress = getClientIp(request);
-      const userAgent = getUserAgent(request);
-      const humanDeviceName = deviceName || parseDeviceName(userAgent);
-      const { user, refreshToken, accessToken } = await AuthService.register({
-        fastify,
-        input: {
-          ...request.body,
-          // Ensure email is non-optional for the service layer
-          email: request.body.email,
-        },
-        ipAddress,
-        userAgent,
-        deviceFingerprint: stableFingerprint,
-        deviceName: humanDeviceName,
-      });
+async function sendPostRegistrationEmails(params: {
+  fastify: FastifyInstance;
+  userId: string;
+  email: string;
+  name?: string | null;
+}) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    return;
+  }
+  const [{ EmailService }, { EmailVerificationService }] = await Promise.all([
+    import('../services/email.js'),
+    import('../services/email-verification.js'),
+  ]);
 
-      // Set access token in HTTP-only cookie
-      reply.setCookie('auth_token', accessToken, {
-        httpOnly: true,
-        secure: isProductionEnv(),
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60, // 1 hour access token
-      });
+  EmailService.sendWelcomeEmail(params.email, params.name || undefined).catch((error) => {
+    params.fastify.log.error({ err: error, userId: params.userId }, 'Failed to send welcome email');
+  });
+  EmailVerificationService.sendVerificationEmail(params.userId).catch((error) => {
+    params.fastify.log.error(
+      { err: error, userId: params.userId },
+      'Failed to send verification email'
+    );
+  });
+}
 
-      // Set refresh token in separate HTTP-only cookie (scoped to /api/auth so logout can read it)
-      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
-      reply.clearCookie('refresh_token', { path: '/' });
-      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
-      reply.setCookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: isProductionEnv(),
-        sameSite: 'lax',
-        path: '/api/auth',
-        maxAge: 7 * 24 * 60 * 60, // 7 days for new users
-      });
+function createRegisterHandler(fastify: FastifyInstance) {
+  return async (request: any, reply: any) => {
+    const { email, deviceFingerprint, deviceName } = request.body as RegisterInput;
+    const gate = signupsAllowedForEmail(email);
+    if (!gate.allowed) {
+      return reply
+        .code(403)
+        .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
+    }
 
-      // Log successful registration
-      await AuditLogger.logAuth(AuditEventType.USER_REGISTER, user.id, user.email, request, {
-        name: user.name,
-      });
+    const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
+    const ipAddress = getClientIp(request);
+    const userAgent = getUserAgent(request);
+    const humanDeviceName = deviceName || parseDeviceName(userAgent);
+    const { user, refreshToken, accessToken } = await AuthService.register({
+      fastify,
+      input: { ...request.body, email: request.body.email },
+      ipAddress,
+      userAgent,
+      deviceFingerprint: stableFingerprint,
+      deviceName: humanDeviceName,
+    });
 
-      // Send welcome and verification emails (non-blocking)
-      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-        Promise.all([
-          import('../services/email.js'),
-          import('../services/email-verification.js'),
-        ]).then(([{ EmailService }, { EmailVerificationService }]) => {
-          // Send welcome email
-          EmailService.sendWelcomeEmail(user.email, user.name || undefined).catch((error) => {
-            fastify.log.error(
-              { err: error, userId: user.id },
-              'Failed to send welcome email after registration'
-            );
-          });
+    setAccessTokenCookie(reply, accessToken);
+    setRefreshTokenCookie(reply, refreshToken, 7 * 24 * 60 * 60);
+    await AuditLogger.logAuth(AuditEventType.USER_REGISTER, user.id, user.email, request, {
+      name: user.name,
+    });
+    void sendPostRegistrationEmails({
+      fastify,
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+    });
 
-          // Send verification email
-          EmailVerificationService.sendVerificationEmail(user.id).catch((error) => {
-            fastify.log.error(
-              { err: error, userId: user.id },
-              'Failed to send verification email after registration'
-            );
-          });
-        });
-      }
+    return reply.code(201).send({
+      user: { ...user, featureFlags: getUserFeatureFlags({ userId: user.id, email: user.email }) },
+      message: 'Registration successful',
+    });
+  };
+}
 
-      return reply.code(201).send({
-        user: {
-          ...user,
-          featureFlags: getUserFeatureFlags({ userId: user.id, email: user.email }),
-        },
-        message: 'Registration successful',
+function createLoginHandler(fastify: FastifyInstance) {
+  return async (request: any, reply: any) => {
+    const { rememberMe, deviceFingerprint, deviceName } = request.body as LoginInput;
+    const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
+
+    const result = await AuthService.login({
+      fastify,
+      request,
+      redis,
+      input: request.body,
+      ipAddress: getClientIp(request),
+      userAgent: getUserAgent(request),
+      stableFingerprint,
+      deviceName,
+    });
+
+    if (result.outcome === 'locked') {
+      return reply.code(423).send({ error: result.message, code: 'ACCOUNT_LOCKED' });
+    }
+    if (result.outcome === 'invalid_credentials') {
+      return reply.code(401).send({ error: result.message });
+    }
+    if (result.outcome === '2fa_required') {
+      return reply.code(200).send({
+        requiresTwoFactor: true,
+        method: result.method,
+        message: result.message,
       });
     }
-  );
 
-  // User login with rate limiting and validation
-  fastify.post<{ Body: LoginInput }>(
-    '/login',
-    {
-      preHandler: [validateAndSanitize(loginSchema), enhancedRateLimiters.login()],
-    },
-    async (request, reply) => {
-      const { rememberMe, deviceFingerprint, deviceName } = request.body;
+    setAccessTokenCookie(reply, result.accessToken);
+    setRefreshTokenCookie(
+      reply,
+      result.refreshToken,
+      rememberMe ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60
+    );
+    return reply.send({
+      user: {
+        ...result.user,
+        featureFlags: getUserFeatureFlags({ userId: result.user.id, email: result.user.email }),
+      },
+      message: 'Login successful',
+    });
+  };
+}
 
-      // Resolve stable device identifier and set cookie if needed
-      const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
+async function buildRefreshAuthContext(fastify: FastifyInstance, request: any) {
+  const authContext: Record<string, unknown> = {
+    refreshTokenCookieCount: request.headers.cookie?.includes('refresh_token=')
+      ? request.headers.cookie.split('refresh_token=').length - 1
+      : 0,
+    hasAuthTokenCookie: Boolean(request.cookies?.auth_token),
+  };
 
-      const ipAddress = getClientIp(request);
-      const userAgent = getUserAgent(request);
+  const authToken = request.cookies?.auth_token;
+  if (!authToken) {
+    return authContext;
+  }
 
-      const result = await AuthService.login({
-        fastify,
-        request,
-        redis,
-        input: request.body,
-        ipAddress,
-        userAgent,
-        stableFingerprint,
-        deviceName,
-      });
+  try {
+    const decoded = fastify.jwt.verify(authToken) as { id: string; sid?: string };
+    authContext.authUserId = decoded.id;
+    authContext.authSessionId = decoded.sid;
+  } catch (error: unknown) {
+    authContext.authTokenError = error instanceof Error ? error.name : String(error);
+  }
+  return authContext;
+}
 
-      if (result.outcome === 'locked') {
-        return reply.code(423).send({
-          error: result.message,
-          code: 'ACCOUNT_LOCKED',
-        });
-      }
-
-      if (result.outcome === 'invalid_credentials') {
-        return reply.code(401).send({ error: result.message });
-      }
-
-      if (result.outcome === '2fa_required') {
-        return reply.code(200).send({
-          requiresTwoFactor: true,
-          method: result.method,
-          message: result.message,
-        });
-      }
-
-      // Authenticated
-      const { user, accessToken, refreshToken } = result;
-
-      // Set access token in HTTP-only cookie
-      reply.setCookie('auth_token', accessToken, {
-        httpOnly: true,
-        secure: isProductionEnv(),
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60, // 1 hour access token
-      });
-
-      // Set refresh token in separate HTTP-only cookie
-      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
-      reply.clearCookie('refresh_token', { path: '/' });
-      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
-      reply.setCookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: isProductionEnv(),
-        sameSite: 'lax',
-        path: '/api/auth', // Sent to all /api/auth endpoints
-        maxAge: rememberMe
-          ? 30 * 24 * 60 * 60 // 30 days if remember me
-          : 7 * 24 * 60 * 60, // 7 days otherwise
-      });
-
-      return reply.send({
-        user: {
-          ...user,
-          featureFlags: getUserFeatureFlags({ userId: user.id, email: user.email }),
-        },
-        message: 'Login successful',
-      });
-    }
-  );
-
-  // Refresh token endpoint with rotation
-  fastify.post('/refresh', async (request, reply) => {
+function createRefreshHandler(fastify: FastifyInstance) {
+  return async (request: any, reply: any) => {
     const refreshToken = request.cookies?.refresh_token;
-
     if (!refreshToken) {
       request.log.warn(
         {
@@ -219,38 +202,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(401).send({ error: 'Refresh token required' });
     }
 
-    // Rotate refresh token
     const result = await RefreshTokenService.rotateRefreshToken(
       fastify,
       refreshToken,
       getClientIp(request),
       getUserAgent(request)
     );
-
     if (!result) {
-      // Capture best-effort auth context for debugging refresh failures.
-      // Avoid logging any raw token values.
-      const authContext: Record<string, unknown> = {
-        refreshTokenCookieCount: request.headers.cookie?.includes('refresh_token=')
-          ? request.headers.cookie.split('refresh_token=').length - 1
-          : 0,
-        hasAuthTokenCookie: Boolean(request.cookies?.auth_token),
-      };
-      const authToken = request.cookies?.auth_token;
-      if (authToken) {
-        try {
-          const decoded = fastify.jwt.verify(authToken) as {
-            id: string;
-            email: string;
-            sid?: string;
-          };
-          authContext.authUserId = decoded.id;
-          authContext.authSessionId = decoded.sid;
-        } catch (err) {
-          authContext.authTokenError = err instanceof Error ? err.name : String(err);
-        }
-      }
-
+      const authContext = await buildRefreshAuthContext(fastify, request);
       request.log.warn(
         {
           type: 'refresh_invalid_or_expired',
@@ -262,158 +221,139 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
         'Refresh token rotation failed (invalid/expired/reused/session-mismatch)'
       );
-      // Invalid or expired refresh token
-      // Clear refresh token on all known historical paths to avoid duplicate-name cookie confusion.
       reply.clearCookie('refresh_token', { path: '/api/auth' });
       reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
       reply.clearCookie('refresh_token', { path: '/' });
       return reply.code(401).send({ error: 'Invalid or expired refresh token' });
     }
 
-    // Set new access token
-    reply.setCookie('auth_token', result.accessToken, {
-      httpOnly: true,
-      secure: isProductionEnv(),
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60, // 1 hour
-    });
+    setAccessTokenCookie(reply, result.accessToken);
+    setRefreshTokenCookie(reply, result.refreshToken, 30 * 24 * 60 * 60);
+    return reply.send({ message: 'Token refreshed successfully' });
+  };
+}
 
-    // Set new refresh token (keep path at /api/auth so logout can invalidate it)
-    // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
-    reply.clearCookie('refresh_token', { path: '/' });
-    reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
-    reply.setCookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: isProductionEnv(),
-      sameSite: 'lax',
-      path: '/api/auth',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-    });
+type LogoutContext = { userId?: string; email?: string; sessionId?: string };
 
-    return reply.send({
-      message: 'Token refreshed successfully',
-    });
-  });
+function parseLogoutContext(fastify: FastifyInstance, request: any): LogoutContext {
+  const token = request.cookies?.auth_token || request.headers.authorization?.substring(7);
+  if (!token) {
+    return {};
+  }
+  try {
+    const decoded = fastify.jwt.verify(token) as { id: string; email: string; sid?: string };
+    return { userId: decoded.id, email: decoded.email, sessionId: decoded.sid };
+  } catch {
+    return {};
+  }
+}
 
-  // Logout endpoint
-  fastify.post('/logout', async (request, reply) => {
-    // Try to get user info and session ID for audit log and session revocation
-    let userId: string | undefined;
-    let email: string | undefined;
-    let sessionId: string | undefined;
+async function revokeSessionByRefreshToken(
+  refreshToken: string,
+  userId?: string,
+  sessionId?: string
+) {
+  const invalidated = await RefreshTokenService.invalidateRefreshToken(refreshToken);
+  if (!invalidated || !sessionId || !userId) {
+    return false;
+  }
+
+  const { SessionService } = await import('../services/session.service.js');
+  const session = await SessionService.getSessionById(sessionId, userId);
+  return Boolean(session?.revokedAt);
+}
+
+async function revokeSessionBySessionId(request: any, sessionId?: string) {
+  if (!sessionId) {
+    return false;
+  }
+  try {
+    const { SessionService } = await import('../services/session.service.js');
+    await SessionService.revokeSession(sessionId, 'user_logout');
+    return true;
+  } catch (error: unknown) {
+    request.log.error(error, 'Failed to revoke session via session ID');
+    return false;
+  }
+}
+
+async function revokeSessionByFallback(request: any, userId?: string) {
+  if (!userId) {
+    return;
+  }
+  try {
+    const { SessionService } = await import('../services/session.service.js');
+    const sessions = await SessionService.getUserSessions(userId);
     const ipAddress = getClientIp(request);
     const userAgent = getUserAgent(request);
-
-    try {
-      const token = request.cookies?.auth_token || request.headers.authorization?.substring(7);
-      if (token) {
-        try {
-          const decoded = fastify.jwt.verify(token) as {
-            id: string;
-            email: string;
-            sid?: string;
-          };
-          userId = decoded.id;
-          email = decoded.email;
-          sessionId = decoded.sid;
-        } catch {
-          // Invalid token, still allow logout
-        }
-      }
-    } catch {
-      // User might have invalid token, still allow logout
+    const match = sessions
+      .filter((session) => (userAgent ? session.userAgent === userAgent : true))
+      .filter((session) => (ipAddress ? session.ipAddress === ipAddress : true))
+      .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())[0];
+    if (match) {
+      await SessionService.revokeSession(match.id, 'user_logout');
     }
+  } catch (error: unknown) {
+    request.log.error(error, 'Failed to revoke session via logout fallback');
+  }
+}
 
-    // Invalidate refresh token if present
+function clearAuthCookies(reply: any) {
+  reply.clearCookie('auth_token', {
+    path: '/',
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'strict',
+  });
+  reply.clearCookie('refresh_token', {
+    path: '/api/auth',
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'strict',
+  });
+  reply.clearCookie('refresh_token', {
+    path: '/api/auth/refresh',
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'strict',
+  });
+  reply.clearCookie('refresh_token', {
+    path: '/',
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'strict',
+  });
+}
+
+function createLogoutHandler(fastify: FastifyInstance) {
+  return async (request: any, reply: any) => {
+    const context = parseLogoutContext(fastify, request);
     const refreshToken = request.cookies?.refresh_token;
-    let sessionRevoked = false;
+    let revoked = false;
 
     if (refreshToken) {
-      const invalidated = await RefreshTokenService.invalidateRefreshToken(refreshToken);
-      // Check if session was actually revoked by checking if it still exists
-      if (invalidated && sessionId && userId) {
-        const { SessionService } = await import('../services/session.service.js');
-        const session = await SessionService.getSessionById(sessionId, userId);
-        sessionRevoked = session?.revokedAt !== null;
-      }
+      revoked = await revokeSessionByRefreshToken(refreshToken, context.userId, context.sessionId);
+    }
+    if (!revoked) {
+      revoked = await revokeSessionBySessionId(request, context.sessionId);
+    }
+    if (!revoked) {
+      await revokeSessionByFallback(request, context.userId);
     }
 
-    // If refresh token method didn't revoke the session, try using session ID from JWT
-    if (!sessionRevoked && sessionId) {
-      try {
-        const { SessionService } = await import('../services/session.service.js');
-        await SessionService.revokeSession(sessionId, 'user_logout');
-        sessionRevoked = true;
-      } catch (e) {
-        request.log.error(e, 'Failed to revoke session via session ID');
-      }
+    clearAuthCookies(reply);
+    if (context.userId && context.email) {
+      await AuditLogger.logAuth(AuditEventType.USER_LOGOUT, context.userId, context.email, request);
     }
-
-    // Final fallback: try to find the most likely current session by matching IP and User-Agent
-    if (!sessionRevoked && userId) {
-      try {
-        const { SessionService } = await import('../services/session.service.js');
-        const sessions = await SessionService.getUserSessions(userId);
-        const match = sessions
-          .filter(
-            (s) =>
-              (userAgent ? s.userAgent === userAgent : true) &&
-              (ipAddress ? s.ipAddress === ipAddress : true)
-          )
-          .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())[0];
-        if (match) {
-          await SessionService.revokeSession(match.id, 'user_logout');
-        }
-      } catch (e) {
-        request.log.error(e, 'Failed to revoke session via logout fallback');
-      }
-    }
-
-    // Clear both cookies
-    reply.clearCookie('auth_token', {
-      path: '/',
-      httpOnly: true,
-      secure: isProductionEnv(),
-      sameSite: 'strict',
-    });
-
-    // Clear refresh cookies for both possible paths
-    reply.clearCookie('refresh_token', {
-      path: '/api/auth',
-      httpOnly: true,
-      secure: isProductionEnv(),
-      sameSite: 'strict',
-    });
-    reply.clearCookie('refresh_token', {
-      path: '/api/auth/refresh',
-      httpOnly: true,
-      secure: isProductionEnv(),
-      sameSite: 'strict',
-    });
-    reply.clearCookie('refresh_token', {
-      path: '/',
-      httpOnly: true,
-      secure: isProductionEnv(),
-      sameSite: 'strict',
-    });
-
-    // Log logout event if we have user info
-    if (userId && email) {
-      await AuditLogger.logAuth(AuditEventType.USER_LOGOUT, userId, email, request);
-    }
-
     return reply.send({ success: true, message: 'Logged out successfully' });
-  });
+  };
+}
 
-  // Get current user profile - using authentication decorator
-  fastify.get('/me', { preHandler: fastify.authenticate }, async (request, reply) => {
+function createCurrentUserHandler() {
+  return async (request: any, reply: any) => {
     try {
-      // User is already authenticated via preHandler
-      const userId = request.user!.id;
-
       const dbUser = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: request.user!.id },
         select: {
           id: true,
           email: true,
@@ -428,46 +368,59 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           updatedAt: true,
         },
       });
-
       if (!dbUser) {
         return reply.code(404).send({ error: 'User not found' });
       }
-
-      const user = {
-        id: dbUser.id,
-        email: dbUser.email,
-        name: dbUser.name,
-        subscriptionTier: dbUser.subscriptionTier,
-        timezone: dbUser.timezone,
-        timezoneAutoDetected: dbUser.timezoneAutoDetected,
-        theme: dbUser.themePreference,
-        weekStart: dbUser.weekStartPreference,
-        uiPreferences: dbUser.uiPreferences,
-        createdAt: dbUser.createdAt,
-        updatedAt: dbUser.updatedAt,
-        featureFlags: getUserFeatureFlags({ userId: dbUser.id, email: dbUser.email }),
+      return {
+        user: {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          subscriptionTier: dbUser.subscriptionTier,
+          timezone: dbUser.timezone,
+          timezoneAutoDetected: dbUser.timezoneAutoDetected,
+          theme: dbUser.themePreference,
+          weekStart: dbUser.weekStartPreference,
+          uiPreferences: dbUser.uiPreferences,
+          createdAt: dbUser.createdAt,
+          updatedAt: dbUser.updatedAt,
+          featureFlags: getUserFeatureFlags({ userId: dbUser.id, email: dbUser.email }),
+        },
       };
-      return { user };
-    } catch (err) {
-      // Log the specific error for debugging
-      if (err instanceof Error) {
+    } catch (error: unknown) {
+      if (error instanceof Error) {
         request.log.error(
-          {
-            err,
-            message: err.message,
-          },
+          { err: error, message: error.message },
           'Auth verification failed in /me'
         );
-        if (err.name === 'TokenExpiredError') {
+        if (error.name === 'TokenExpiredError') {
           return reply.code(401).send({ error: 'Token expired' });
         }
-        if (err.name === 'JsonWebTokenError') {
+        if (error.name === 'JsonWebTokenError') {
           return reply.code(401).send({ error: 'Invalid token' });
         }
       }
       return reply.code(401).send({ error: 'Authentication required' });
     }
-  });
+  };
+}
+
+const authRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post<{ Body: RegisterInput }>(
+    '/register',
+    { preHandler: [validateAndSanitize(registerSchema), enhancedRateLimiters.register()] },
+    createRegisterHandler(fastify)
+  );
+
+  fastify.post<{ Body: LoginInput }>(
+    '/login',
+    { preHandler: [validateAndSanitize(loginSchema), enhancedRateLimiters.login()] },
+    createLoginHandler(fastify)
+  );
+
+  fastify.post('/refresh', createRefreshHandler(fastify));
+  fastify.post('/logout', createLogoutHandler(fastify));
+  fastify.get('/me', { preHandler: fastify.authenticate }, createCurrentUserHandler());
 };
 
 export default authRoutes;

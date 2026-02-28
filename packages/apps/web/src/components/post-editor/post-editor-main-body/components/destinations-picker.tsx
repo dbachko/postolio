@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,20 +29,27 @@ export function DestinationsPicker({
     return null;
   }
 
+  let destinationBadge: ReactNode = null;
+  if (isMultiDestinationSelection) {
+    destinationBadge = (
+      <Badge variant="secondary" className="gap-1 text-[11px] font-medium">
+        <Layers className="h-3 w-3" />
+        <span>{destinationCount} destinations</span>
+      </Badge>
+    );
+  } else if (destinationCount === 1) {
+    destinationBadge = (
+      <Badge variant="outline" className="text-muted-foreground text-[11px] font-medium">
+        Single destination
+      </Badge>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <Label className="flex items-center gap-2 text-sm">
         Destinations <span className="text-destructive">*</span>
-        {isMultiDestinationSelection ? (
-          <Badge variant="secondary" className="gap-1 text-[11px] font-medium">
-            <Layers className="h-3 w-3" />
-            <span>{destinationCount} destinations</span>
-          </Badge>
-        ) : destinationCount === 1 ? (
-          <Badge variant="outline" className="text-muted-foreground text-[11px] font-medium">
-            Single destination
-          </Badge>
-        ) : null}
+        {destinationBadge}
       </Label>
 
       {platformOptions && selectedPlatformAccountIds && onSelectedPlatformAccountIdsChange ? (

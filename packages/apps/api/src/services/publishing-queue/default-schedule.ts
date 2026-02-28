@@ -14,6 +14,16 @@ export type GoalBasedSlot = {
 };
 
 type QueueScheduleDbClient = PrismaClient | Prisma.TransactionClient;
+type PublishingQueueDelegate = {
+  findFirst: (...args: any[]) => Promise<any>;
+  create: (...args: any[]) => Promise<any>;
+  update: (...args: any[]) => Promise<any>;
+};
+type PublishingQueueSlotDelegate = {
+  count?: (...args: any[]) => Promise<any>;
+  findMany?: (...args: any[]) => Promise<any>;
+  createMany?: (...args: any[]) => Promise<any>;
+};
 
 function clampPostsPerWeek(postsPerWeek: number): number {
   return Math.max(MIN_POSTS_PER_WEEK, Math.min(MAX_POSTS_PER_WEEK, Math.trunc(postsPerWeek)));
@@ -66,26 +76,62 @@ export async function ensureDefaultQueueWithStarterSchedule(
   createdQueue: boolean;
   createdSlots: number;
 }> {
-  const queueModel = (db as any)?.publishingQueue;
-  const slotModel = (db as any)?.publishingQueueSlot;
+  const queueModel = (db as any)?.publishingQueue as PublishingQueueDelegate | undefined;
+  const slotModel = (db as any)?.publishingQueueSlot as PublishingQueueSlotDelegate | undefined;
+  if (!queueModel || !slotModel) {
+    return { queueId: '', createdQueue: false, createdSlots: 0 };
+  }
 
-  // Some unit tests use partial DB mocks that don't include queue delegates.
-  // In that case this helper should be a no-op.
-  if (
-    !queueModel ||
-    typeof queueModel.findFirst !== 'function' ||
-    typeof queueModel.create !== 'function' ||
-    typeof queueModel.update !== 'function'
-  ) {
+  const queueResolution = await resolveDefaultQueue(queueModel, socialAccountId);
+  if (!queueResolution.queueId) {
+    return { queueId: '', createdQueue: queueResolution.createdQueue, createdSlots: 0 };
+  }
+
+  const queueSlotCount = await getQueueSlotCount(slotModel, queueResolution.queueId);
+  if (queueSlotCount > 0 || typeof slotModel.createMany !== 'function') {
     return {
-      queueId: '',
-      createdQueue: false,
+      queueId: queueResolution.queueId,
+      createdQueue: queueResolution.createdQueue,
       createdSlots: 0,
     };
   }
 
-  let createdQueue = false;
+  const occupiedKeys = await getOccupiedSlotKeys(
+    slotModel,
+    socialAccountId,
+    queueResolution.queueId
+  );
+  const nextSlots = buildGoalBasedSlots(postsPerWeek).filter(
+    (slot) => !occupiedKeys.has(`${slot.dayOfWeek}:${slot.localTime}`)
+  );
+  if (nextSlots.length === 0) {
+    return {
+      queueId: queueResolution.queueId,
+      createdQueue: queueResolution.createdQueue,
+      createdSlots: 0,
+    };
+  }
 
+  const createResult = await slotModel.createMany({
+    data: nextSlots.map((slot) => ({
+      queueId: queueResolution.queueId,
+      socialAccountId,
+      dayOfWeek: slot.dayOfWeek,
+      localTime: slot.localTime,
+      laneKey: slot.laneKey,
+      enabled: true,
+    })),
+  });
+
+  return {
+    queueId: queueResolution.queueId,
+    createdQueue: queueResolution.createdQueue,
+    createdSlots: typeof createResult?.count === 'number' ? createResult.count : nextSlots.length,
+  };
+}
+
+async function resolveDefaultQueue(queueModel: PublishingQueueDelegate, socialAccountId: string) {
+  let createdQueue = false;
   const existingDefault = await queueModel.findFirst({
     where: { socialAccountId, isDefault: true },
     select: { id: true },
@@ -100,96 +146,48 @@ export async function ensureDefaultQueueWithStarterSchedule(
       orderBy: { createdAt: 'asc' },
     });
     if (byName) {
-      await queueModel.update({
-        where: { id: byName.id },
-        data: { isDefault: true },
-      });
+      await queueModel.update({ where: { id: byName.id }, data: { isDefault: true } });
       queueId = byName.id;
     } else {
       const created = await queueModel.create({
-        data: {
-          socialAccountId,
-          name: 'Default',
-          isDefault: true,
-        },
+        data: { socialAccountId, name: 'Default', isDefault: true },
         select: { id: true },
       });
       queueId = created.id;
       createdQueue = true;
     }
   }
+  return { queueId: queueId ?? '', createdQueue };
+}
 
-  if (!queueId) {
-    return {
-      queueId: '',
-      createdQueue,
-      createdSlots: 0,
-    };
+async function getQueueSlotCount(slotModel: PublishingQueueSlotDelegate, queueId: string) {
+  if (typeof slotModel.count === 'function') {
+    return slotModel.count({ where: { queueId } });
   }
-
-  let queueSlotCount = 0;
-  if (slotModel && typeof slotModel.count === 'function') {
-    queueSlotCount = await slotModel.count({ where: { queueId } });
-  } else if (slotModel && typeof slotModel.findMany === 'function') {
+  if (typeof slotModel.findMany === 'function') {
     const existingSlots = await slotModel.findMany({ where: { queueId }, select: { id: true } });
-    queueSlotCount = Array.isArray(existingSlots) ? existingSlots.length : 0;
+    return Array.isArray(existingSlots) ? existingSlots.length : 0;
+  }
+  return 0;
+}
+
+async function getOccupiedSlotKeys(
+  slotModel: PublishingQueueSlotDelegate,
+  socialAccountId: string,
+  queueId: string
+) {
+  if (typeof slotModel.findMany !== 'function') {
+    return new Set<string>();
   }
 
-  if (queueSlotCount > 0) {
-    return {
-      queueId,
-      createdQueue,
-      createdSlots: 0,
-    };
-  }
-
-  if (!slotModel || typeof slotModel.createMany !== 'function') {
-    return {
-      queueId,
-      createdQueue,
-      createdSlots: 0,
-    };
-  }
-
-  const occupied: Array<{ dayOfWeek: number; localTime: string }> =
-    typeof slotModel.findMany === 'function'
-      ? await (
-          slotModel.findMany({
-            where: {
-              socialAccountId,
-              queueId: { not: queueId },
-            },
-            select: { dayOfWeek: true, localTime: true },
-          }) as Promise<Array<{ dayOfWeek: number; localTime: string }>>
-        ).catch(() => [])
-      : [];
-  const occupiedKeys = new Set(occupied.map((slot) => `${slot.dayOfWeek}:${slot.localTime}`));
-
-  const nextSlots = buildGoalBasedSlots(postsPerWeek).filter(
-    (slot) => !occupiedKeys.has(`${slot.dayOfWeek}:${slot.localTime}`)
-  );
-  if (nextSlots.length === 0) {
-    return {
-      queueId,
-      createdQueue,
-      createdSlots: 0,
-    };
-  }
-
-  const createResult = await slotModel.createMany({
-    data: nextSlots.map((slot) => ({
-      queueId,
-      socialAccountId,
-      dayOfWeek: slot.dayOfWeek,
-      localTime: slot.localTime,
-      laneKey: slot.laneKey,
-      enabled: true,
-    })),
-  });
-
-  return {
-    queueId,
-    createdQueue,
-    createdSlots: typeof createResult?.count === 'number' ? createResult.count : nextSlots.length,
-  };
+  const occupied = await (
+    slotModel.findMany({
+      where: {
+        socialAccountId,
+        queueId: { not: queueId },
+      },
+      select: { dayOfWeek: true, localTime: true },
+    }) as Promise<Array<{ dayOfWeek: number; localTime: string }>>
+  ).catch(() => []);
+  return new Set(occupied.map((slot) => `${slot.dayOfWeek}:${slot.localTime}`));
 }

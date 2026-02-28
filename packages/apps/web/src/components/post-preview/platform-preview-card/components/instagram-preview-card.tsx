@@ -6,6 +6,17 @@ import { IG_COMMENTS_LABEL, IG_TIMESTAMP_LABEL } from '../constants';
 import { getAccountDisplayName, stripLeadingAt } from '../utils';
 import { MediaFrame } from './media-frame';
 
+function getTopLeftOverlay(contentType: PostPreviewItem['content']['contentType']) {
+  if (contentType !== 'story' && contentType !== 'reel') {
+    return null;
+  }
+  return (
+    <div className="bg-background/80 text-foreground rounded-full px-2 py-0.5 text-[10px] font-medium uppercase">
+      {contentType === 'story' ? 'Story' : 'Reel'}
+    </div>
+  );
+}
+
 export function InstagramPreviewCard({ item }: { item: PostPreviewItem }) {
   const { account, content } = item;
   const caption = (content.caption || '').trim();
@@ -15,17 +26,7 @@ export function InstagramPreviewCard({ item }: { item: PostPreviewItem }) {
   const isVertical = content.contentType === 'story' || content.contentType === 'reel';
   const aspectRatio = isVertical ? '9 / 16' : '4 / 5';
   const showActions = content.contentType !== 'story';
-
-  const overlayTopLeft =
-    content.contentType === 'story' ? (
-      <div className="bg-background/80 text-foreground rounded-full px-2 py-0.5 text-[10px] font-medium uppercase">
-        Story
-      </div>
-    ) : content.contentType === 'reel' ? (
-      <div className="bg-background/80 text-foreground rounded-full px-2 py-0.5 text-[10px] font-medium uppercase">
-        Reel
-      </div>
-    ) : null;
+  const overlayTopLeft = getTopLeftOverlay(content.contentType);
 
   const overlayTopRight =
     mediaCount > 1 ? (

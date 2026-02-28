@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { InstagramBestTimeService } from '../instagram-best-time.js';
+import { rankTopWindows } from '../instagram-best-time/rank-top-windows.js';
 
 describe('InstagramBestTimeService.rankTopWindows', () => {
-  const svc = new InstagramBestTimeService();
-
   it('ranks top windows from a simple heatmap', () => {
     // Build a heatmap with a clear peak at Wed 10:30 and Fri 19:30
     const hm = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
@@ -11,7 +9,7 @@ describe('InstagramBestTimeService.rankTopWindows', () => {
     hm[3][11] = 1.0;
     hm[5][19] = 0.9;
     hm[5][20] = 0.9;
-    const res = (svc as any).rankTopWindows(hm, 'UTC', 30, 2);
+    const res = rankTopWindows(hm, 'UTC', 30, 2);
     expect(res).toHaveLength(2);
     expect(res[0].score).toBeCloseTo(1.0, 3);
     expect(res[1].score).toBeCloseTo(0.9, 3);
@@ -28,7 +26,7 @@ describe('InstagramBestTimeService.rankTopWindows', () => {
       hm[d][13] = 0.9;
     }
 
-    const res = (svc as any).rankTopWindows(hm, 'UTC', 30, 14);
+    const res = rankTopWindows(hm, 'UTC', 30, 14);
     expect(res).toHaveLength(14);
 
     const byDay = new Map<number, number[]>();

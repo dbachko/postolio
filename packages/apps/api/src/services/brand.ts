@@ -22,6 +22,12 @@ export interface UpdateBrandBody {
   countryCode?: string | null;
 }
 
+interface BrandUpdateData {
+  name?: string;
+  description?: string | null;
+  countryCode?: string | null;
+}
+
 export class BrandValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -132,19 +138,13 @@ export async function getBrandDetails(userId: string, brandId: string): Promise<
   return brand;
 }
 
-export async function updateBrand(
-  userId: string,
-  brandId: string,
-  updates: UpdateBrandBody
-): Promise<unknown> {
+function validateBrandUpdateInput(updates: UpdateBrandBody): void {
   const { name, description, countryCode } = updates;
 
-  // Validate at least one field is provided
   if (!name && description === undefined && countryCode === undefined) {
     throw new BrandValidationError('At least one field must be provided for update');
   }
 
-  // Validate name if provided
   if (name !== undefined) {
     if (!name || name.trim().length === 0) {
       throw new BrandValidationError('Brand name cannot be empty');
@@ -154,12 +154,45 @@ export async function updateBrand(
     }
   }
 
-  // Basic validation for countryCode if provided
   if (countryCode !== undefined && countryCode !== null) {
     if (typeof countryCode !== 'string' || countryCode.length !== 2) {
       throw new BrandValidationError('countryCode must be a 2-letter ISO code');
     }
   }
+}
+
+function buildBrandUpdateData(updates: UpdateBrandBody): BrandUpdateData {
+  const updateData: BrandUpdateData = {};
+  if (updates.name !== undefined) {
+    updateData.name = updates.name.trim();
+  }
+  if (updates.description !== undefined) {
+    updateData.description = updates.description?.trim() || null;
+  }
+  if (updates.countryCode !== undefined) {
+    updateData.countryCode = updates.countryCode ? updates.countryCode.toUpperCase() : null;
+  }
+  return updateData;
+}
+
+function hasBrandAnalysisInputChanged(
+  existingBrand: { name: string; description: string | null },
+  updates: UpdateBrandBody
+): boolean {
+  const nameChanged =
+    typeof updates.name === 'string' && updates.name.trim() !== (existingBrand.name || '').trim();
+  const descChanged =
+    typeof updates.description === 'string' &&
+    (existingBrand.description || '') !== (updates.description?.trim() || '');
+  return nameChanged || descChanged;
+}
+
+export async function updateBrand(
+  userId: string,
+  brandId: string,
+  updates: UpdateBrandBody
+): Promise<unknown> {
+  validateBrandUpdateInput(updates);
 
   // Check if brand exists and user owns it
   const existingBrand = await prisma.brand.findFirst({
@@ -173,21 +206,7 @@ export async function updateBrand(
     throw new BrandNotFoundError();
   }
 
-  interface BrandUpdateData {
-    name?: string;
-    description?: string | null;
-    countryCode?: string | null;
-  }
-  const updateData: BrandUpdateData = {};
-  if (name !== undefined) {
-    updateData.name = name.trim();
-  }
-  if (description !== undefined) {
-    updateData.description = description?.trim() || null;
-  }
-  if (countryCode !== undefined) {
-    updateData.countryCode = countryCode ? countryCode.toUpperCase() : null;
-  }
+  const updateData = buildBrandUpdateData(updates);
 
   const updatedBrand = await prisma.brand.update({
     where: { id: brandId },
@@ -204,12 +223,7 @@ export async function updateBrand(
   });
 
   // If brand name or description changed, trigger a new brand analysis (fire-and-forget)
-  const nameChanged = typeof name === 'string' && name.trim() !== (existingBrand.name || '').trim();
-  const descChanged =
-    typeof description === 'string' &&
-    (existingBrand.description || '') !== (description?.trim() || '');
-
-  if (nameChanged || descChanged) {
+  if (hasBrandAnalysisInputChanged(existingBrand, updates)) {
     void triggerBrandAnalysisIfNeeded(updatedBrand.id, userId);
   }
 

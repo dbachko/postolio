@@ -1,0 +1,30 @@
+import type { CollectionNode } from '@/features/assets/api/client';
+
+export type CollectionTreeProps = {
+  collections: CollectionNode[];
+  collectionId: string | null;
+  unsortedAssetCount?: number;
+  expandedCollections: Set<string>;
+  inlineRenameId: string | null;
+  inlineRenameValue: string;
+  inlineCreateParentId: string | null;
+  inlineCreateValue: string;
+  isInlineRenameSaving: boolean;
+  isInlineCreateSaving: boolean;
+  selectedAssetsCount: number;
+  rootCollectionInlineParentId: string;
+  unsortedCollectionParam: string;
+  onSetInlineRenameValue: (value: string) => void;
+  onSetInlineCreateValue: (value: string) => void;
+  onSetCollectionSelection: (collectionId: string | null) => void;
+  onSetCollectionExpanded: (collectionId: string, open: boolean) => void;
+  onStartInlineCreateRootCollection: () => void;
+  onStartInlineRenameCollection: (collection: CollectionNode) => void;
+  onCancelInlineRenameCollection: () => void;
+  onSubmitInlineRenameCollection: () => void;
+  onStartInlineCreateSubcollection: (collection: CollectionNode) => void;
+  onCancelInlineCreateCollection: () => void;
+  onSubmitInlineCreateCollection: () => void;
+  onDeleteCollection: (collection: CollectionNode) => void;
+  onMoveSelectedToCollection: (collectionId: string | null) => void;
+};

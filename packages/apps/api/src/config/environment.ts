@@ -67,6 +67,37 @@ interface EnvironmentConfig {
   corsOrigin: string | string[];
 }
 
+function pickString(values: unknown[], fallback = ''): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.length > 0) {
+      return value;
+    }
+  }
+  return fallback;
+}
+
+function pickOptionalString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function parseInteger(value: unknown, fallback: number): number {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseAwsSecrets(secretString: string | undefined): AwsAppSecrets {
+  if (!secretString) {
+    return {};
+  }
+  const parsed = JSON.parse(secretString) as unknown;
+  return parsed && typeof parsed === 'object' ? (parsed as AwsAppSecrets) : {};
+}
+
 class EnvironmentService {
   private static instance: EnvironmentService;
   private config: EnvironmentConfig | null = null;
@@ -118,79 +149,83 @@ class EnvironmentService {
       return this.config;
     }
 
-    const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'dev';
+    const environment = pickString([process.env.ENVIRONMENT, process.env.NODE_ENV], 'dev');
     const isProduction = environment === 'prod';
-
-    // Get secrets from AWS Secrets Manager if in production
-    let awsSecrets: AwsAppSecrets = {};
-    if (isProduction && this.secretsManager) {
-      const secretName = `Postolio-${environment}/AppSecrets`;
-      try {
-        const response = await this.secretsManager.getSecretValue({
-          SecretId: secretName,
-        });
-        if (response.SecretString) {
-          const parsed = JSON.parse(response.SecretString) as unknown;
-          if (parsed && typeof parsed === 'object') {
-            awsSecrets = parsed as AwsAppSecrets;
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to fetch AWS secrets, using environment variables:', error);
-      }
-    }
-
-    // Build configuration with proper precedence
-    this.config = {
-      // Environment
-      nodeEnv: process.env.NODE_ENV || 'dev',
-      environment: process.env.ENVIRONMENT || 'dev',
-      port: parseInt(process.env.PORT || '3000', 10),
-      logLevel: process.env.LOG_LEVEL || 'info',
-
-      // Database (from AWS Secrets Manager or env vars)
-      databaseUrl: process.env.DATABASE_URL || awsSecrets.databaseUrl || '',
-      // Redis URL using shared utility
-      redisUrl: getRedisUrl(awsSecrets.redisUrl || 'redis://localhost:6379'),
-
-      // Authentication Secrets (from AWS Secrets Manager or env vars)
-      jwtSecret: process.env.JWT_SECRET || awsSecrets.jwtSecret || 'dev-jwt-secret',
-      refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET || awsSecrets.refreshTokenSecret,
-
-      // OAuth Configuration
-      // Public IDs from environment variables (set by GitHub Actions)
-      googleClientId: process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '',
-      facebookAppId: process.env.FACEBOOK_APP_ID || process.env.VITE_FACEBOOK_APP_ID || '',
-
-      // OAuth Secrets from AWS Secrets Manager only
-      googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || awsSecrets.googleClientSecret || '',
-      facebookAppSecret: process.env.FACEBOOK_APP_SECRET || awsSecrets.facebookAppSecret || '',
-
-      // API Keys (from AWS Secrets Manager or env vars)
-      openaiApiKey: process.env.OPENAI_API_KEY || awsSecrets.openaiApiKey || '',
-
-      // URLs and Endpoints (from environment variables)
-      apiUrl: process.env.API_URL || process.env.VITE_API_URL || 'http://localhost:3000',
-      frontendUrl: process.env.FRONTEND_URL || process.env.VITE_API_URL || 'http://localhost:5173',
-      schedulerApiUrl: process.env.SCHEDULER_API_URL || awsSecrets.schedulerApiUrl,
-
-      // Feature Flags (from environment variables)
-      enableMonitoring: process.env.ENABLE_MONITORING === 'true',
-      enableVideoSupport: process.env.VITE_FEATURE_VIDEO_SUPPORT === 'true',
-      enableAiSuggestions: process.env.VITE_FEATURE_AI_SUGGESTIONS !== 'false', // Default true
-
-      // Rate Limiting (from environment variables with defaults)
-      rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10),
-      rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
-
-      // CORS (from environment variables)
-      corsOrigin: process.env.CORS_ORIGIN || process.env.VITE_API_URL || '*',
-    };
+    const awsSecrets = await this.loadAwsSecrets(environment, isProduction);
+    this.config = this.buildConfig(awsSecrets);
 
     // Validate required configuration
     this.validateConfig();
 
     return this.config;
+  }
+
+  private async loadAwsSecrets(environment: string, isProduction: boolean): Promise<AwsAppSecrets> {
+    if (!isProduction || !this.secretsManager) {
+      return {};
+    }
+
+    const secretName = `Postolio-${environment}/AppSecrets`;
+    try {
+      const response = await this.secretsManager.getSecretValue({
+        SecretId: secretName,
+      });
+      return parseAwsSecrets(response.SecretString);
+    } catch (error) {
+      console.warn('Failed to fetch AWS secrets, using environment variables:', error);
+      return {};
+    }
+  }
+
+  private buildConfig(awsSecrets: AwsAppSecrets): EnvironmentConfig {
+    const nodeEnv = pickString([process.env.NODE_ENV], 'dev');
+    const environment = pickString([process.env.ENVIRONMENT], 'dev');
+
+    return {
+      nodeEnv,
+      environment,
+      port: parseInteger(process.env.PORT, 3000),
+      logLevel: pickString([process.env.LOG_LEVEL], 'info'),
+      databaseUrl: pickString([process.env.DATABASE_URL, awsSecrets.databaseUrl], ''),
+      redisUrl: getRedisUrl(pickString([awsSecrets.redisUrl], 'redis://localhost:6379')),
+      jwtSecret: pickString([process.env.JWT_SECRET, awsSecrets.jwtSecret], 'dev-jwt-secret'),
+      refreshTokenSecret: pickOptionalString([
+        process.env.REFRESH_TOKEN_SECRET,
+        awsSecrets.refreshTokenSecret,
+      ]),
+      googleClientId: pickString(
+        [process.env.GOOGLE_CLIENT_ID, process.env.VITE_GOOGLE_CLIENT_ID],
+        ''
+      ),
+      facebookAppId: pickString(
+        [process.env.FACEBOOK_APP_ID, process.env.VITE_FACEBOOK_APP_ID],
+        ''
+      ),
+      googleClientSecret: pickString(
+        [process.env.GOOGLE_CLIENT_SECRET, awsSecrets.googleClientSecret],
+        ''
+      ),
+      facebookAppSecret: pickString(
+        [process.env.FACEBOOK_APP_SECRET, awsSecrets.facebookAppSecret],
+        ''
+      ),
+      openaiApiKey: pickString([process.env.OPENAI_API_KEY, awsSecrets.openaiApiKey], ''),
+      apiUrl: pickString([process.env.API_URL, process.env.VITE_API_URL], 'http://localhost:3000'),
+      frontendUrl: pickString(
+        [process.env.FRONTEND_URL, process.env.VITE_API_URL],
+        'http://localhost:5173'
+      ),
+      schedulerApiUrl: pickOptionalString([
+        process.env.SCHEDULER_API_URL,
+        awsSecrets.schedulerApiUrl,
+      ]),
+      enableMonitoring: process.env.ENABLE_MONITORING === 'true',
+      enableVideoSupport: process.env.VITE_FEATURE_VIDEO_SUPPORT === 'true',
+      enableAiSuggestions: process.env.VITE_FEATURE_AI_SUGGESTIONS !== 'false',
+      rateLimitWindow: parseInteger(process.env.RATE_LIMIT_WINDOW, 60000),
+      rateLimitMaxRequests: parseInteger(process.env.RATE_LIMIT_MAX_REQUESTS, 100),
+      corsOrigin: pickString([process.env.CORS_ORIGIN, process.env.VITE_API_URL], '*'),
+    };
   }
 
   /**

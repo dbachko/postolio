@@ -4,7 +4,7 @@ export function useWsHeartbeat() {
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const startHeartbeat = useCallback(
-    (wsRef: MutableRefObject<WebSocket | null>, intervalMs: number) => {
+    (wsRef: MutableRefObject<WebSocket | null>, intervalMs = 25000) => {
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }

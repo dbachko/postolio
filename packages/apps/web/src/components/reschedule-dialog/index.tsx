@@ -30,6 +30,144 @@ interface RescheduleDialogProps {
   onSave: (newISO: string) => Promise<void> | void;
 }
 
+const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+function DatePickerField({
+  date,
+  onDateChange,
+  weekStartsOn,
+}: {
+  date: Date;
+  onDateChange: (next: Date) => void;
+  weekStartsOn: number;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            'w-full justify-start text-left font-normal',
+            !date && 'text-muted-foreground'
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {date ? format(date, 'PPP') : <span>Pick a date</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={(selected) => selected && onDateChange(selected)}
+          initialFocus
+          weekStartsOn={weekStartsOn as any}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TimePickerRow({
+  hour,
+  minute,
+  ampm,
+  onHourChange,
+  onMinuteChange,
+  onAmPmChange,
+}: {
+  hour: string;
+  minute: string;
+  ampm: 'am' | 'pm';
+  onHourChange: (next: string) => void;
+  onMinuteChange: (next: string) => void;
+  onAmPmChange: (next: 'am' | 'pm') => void;
+}) {
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      <div className="text-muted-foreground text-xs">Time</div>
+      <Select value={hour} onValueChange={onHourChange}>
+        <SelectTrigger className="w-14">
+          <SelectValue placeholder="hr" />
+        </SelectTrigger>
+        <SelectContent>
+          {HOURS.map((value) => (
+            <SelectItem key={value} value={value}>
+              {value}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span className="text-muted-foreground">:</span>
+      <Select value={minute} onValueChange={onMinuteChange}>
+        <SelectTrigger className="w-16">
+          <SelectValue placeholder="min" />
+        </SelectTrigger>
+        <SelectContent>
+          {MINUTES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {value}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={ampm} onValueChange={(value) => onAmPmChange(value as 'am' | 'pm')}>
+        <SelectTrigger className="w-16">
+          <SelectValue placeholder="am/pm" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="am">am</SelectItem>
+          <SelectItem value="pm">pm</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function RescheduleForm({
+  date,
+  hour,
+  minute,
+  ampm,
+  weekStartsOn,
+  onDateChange,
+  onHourChange,
+  onMinuteChange,
+  onAmPmChange,
+}: {
+  date: Date;
+  hour: string;
+  minute: string;
+  ampm: 'am' | 'pm';
+  weekStartsOn: number;
+  onDateChange: (next: Date) => void;
+  onHourChange: (next: string) => void;
+  onMinuteChange: (next: string) => void;
+  onAmPmChange: (next: 'am' | 'pm') => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div>
+        <div className="mb-2 text-sm font-medium">Manual</div>
+        <div className="text-muted-foreground mb-3 text-xs">Date</div>
+        <DatePickerField date={date} onDateChange={onDateChange} weekStartsOn={weekStartsOn} />
+        <TimePickerRow
+          hour={hour}
+          minute={minute}
+          ampm={ampm}
+          onHourChange={onHourChange}
+          onMinuteChange={onMinuteChange}
+          onAmPmChange={onAmPmChange}
+        />
+        <div className="text-muted-foreground mt-3 text-sm">
+          New time: {format(date, 'EEE, MMM d, yyyy')} at {hour}:{minute} {ampm.toUpperCase()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RescheduleDialog({
   open,
   onOpenChange,
@@ -55,8 +193,6 @@ export function RescheduleDialog({
     setDate(baseDate);
   }, [baseDate]);
 
-  // Shortcuts removed for a cleaner layout
-
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -74,9 +210,6 @@ export function RescheduleDialog({
     }
   };
 
-  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const minutes = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="p-5 sm:max-w-md">
@@ -84,76 +217,17 @@ export function RescheduleDialog({
           <DialogTitle>Reschedule</DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-4">
-          {/* Manual pickers */}
-          <div>
-            <div className="mb-2 text-sm font-medium">Manual</div>
-            <div className="text-muted-foreground mb-3 text-xs">Date</div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'w-full justify-start text-left font-normal',
-                    !date && 'text-muted-foreground'
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, 'PPP') : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(d) => d && setDate(d)}
-                  initialFocus
-                  weekStartsOn={weekStartsOn as any}
-                />
-              </PopoverContent>
-            </Popover>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="text-muted-foreground text-xs">Time</div>
-              <Select value={hour} onValueChange={setHour}>
-                <SelectTrigger className="w-14">
-                  <SelectValue placeholder="hr" />
-                </SelectTrigger>
-                <SelectContent>
-                  {hours.map((h) => (
-                    <SelectItem key={h} value={h}>
-                      {h}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-muted-foreground">:</span>
-              <Select value={minute} onValueChange={setMinute}>
-                <SelectTrigger className="w-16">
-                  <SelectValue placeholder="min" />
-                </SelectTrigger>
-                <SelectContent>
-                  {minutes.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={ampm} onValueChange={(v) => setAmPm(v as 'am' | 'pm')}>
-                <SelectTrigger className="w-16">
-                  <SelectValue placeholder="am/pm" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="am">am</SelectItem>
-                  <SelectItem value="pm">pm</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="text-muted-foreground mt-3 text-sm">
-              New time: {format(date, 'EEE, MMM d, yyyy')} at {hour}:{minute} {ampm.toUpperCase()}
-            </div>
-          </div>
-        </div>
+        <RescheduleForm
+          date={date}
+          hour={hour}
+          minute={minute}
+          ampm={ampm}
+          weekStartsOn={weekStartsOn}
+          onDateChange={setDate}
+          onHourChange={setHour}
+          onMinuteChange={setMinute}
+          onAmPmChange={setAmPm}
+        />
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

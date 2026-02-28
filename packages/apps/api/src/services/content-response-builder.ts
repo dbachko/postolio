@@ -76,25 +76,7 @@ export interface ContentResponse {
   primaryAssetId?: string | null;
 }
 
-/**
- * Build a single content response with CDN URL
- *
- * @param content - Content record from database
- * @returns Formatted content response with CDN URL
- *
- * @example
- * const response = buildContentResponse(dbContent)
- * // Returns: { id, caption, hashtags, imageUrl, status, createdAt, ... }
- */
-export function buildContentResponse(content: ContentWithMetadata): ContentResponse {
-  const response: ContentResponse = {
-    id: content.id,
-    caption: content.caption,
-    status: content.status,
-    createdAt: content.createdAt,
-  };
-
-  // Add optional fields if present
+function copyOptionalFields(content: ContentWithMetadata, response: ContentResponse): void {
   if (content.hashtags !== undefined) {
     response.hashtags = content.hashtags;
   }
@@ -149,11 +131,37 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   if (content.firstCommentError !== undefined) {
     response.firstCommentError = content.firstCommentError;
   }
-  if (content.mediaAssets !== undefined) {
-    response.mediaAssets = content.mediaAssets;
-    response.mediaAssetCount = content.mediaAssets.length;
-    response.primaryAssetId = content.mediaAssets[0]?.assetId ?? null;
+}
+
+function addMediaAssetFields(content: ContentWithMetadata, response: ContentResponse): void {
+  if (content.mediaAssets === undefined) {
+    return;
   }
+  response.mediaAssets = content.mediaAssets;
+  response.mediaAssetCount = content.mediaAssets.length;
+  response.primaryAssetId = content.mediaAssets[0]?.assetId ?? null;
+}
+
+/**
+ * Build a single content response with CDN URL
+ *
+ * @param content - Content record from database
+ * @returns Formatted content response with CDN URL
+ *
+ * @example
+ * const response = buildContentResponse(dbContent)
+ * // Returns: { id, caption, hashtags, imageUrl, status, createdAt, ... }
+ */
+export function buildContentResponse(content: ContentWithMetadata): ContentResponse {
+  const response: ContentResponse = {
+    id: content.id,
+    caption: content.caption,
+    status: content.status,
+    createdAt: content.createdAt,
+  };
+
+  copyOptionalFields(content, response);
+  addMediaAssetFields(content, response);
 
   return response;
 }

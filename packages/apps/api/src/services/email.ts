@@ -3,6 +3,16 @@ import type Mail from 'nodemailer/lib/mailer';
 import { logger as baseLogger } from '@postolio/logger';
 import { SESClient, SendEmailCommand, type SESClientConfig } from '@aws-sdk/client-ses';
 import CircuitBreaker from 'opossum';
+import { generateEmailTemplate, type EmailTemplateParams } from './email/template.js';
+import {
+  sendDataDeletionVerificationEmail as sendDataDeletionVerificationEmailTransactional,
+  sendDeletionConfirmationEmail as sendDeletionConfirmationTransactional,
+  sendMagicLinkEmail as sendMagicLinkTransactional,
+  sendPasswordResetEmail as sendPasswordResetEmailTransactional,
+  sendTwoFactorCodeImmediate as sendTwoFactorCodeImmediateTransactional,
+  sendVerificationEmail as sendVerificationEmailTransactional,
+  sendWelcomeEmailImmediate as sendWelcomeEmailImmediateTransactional,
+} from './email/transactional.js';
 import { formatError } from '../utils/logging.js';
 
 const emailLogger = baseLogger.child({ module: 'email-service' });
@@ -144,23 +154,56 @@ export class EmailService {
   /**
    * Send email via AWS SES with circuit breaker
    */
-  private static async sendViaSES(options: Mail.Options): Promise<void> {
-    // Convert nodemailer options to SES format
-    const from =
-      typeof options.from === 'string'
-        ? options.from
-        : options.from?.address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example';
+  private static resolveFromAddress(options: Mail.Options): string {
+    if (typeof options.from === 'string') {
+      return options.from;
+    }
+    return options.from?.address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example';
+  }
 
-    const to = Array.isArray(options.to)
-      ? options.to.map((addr) => (typeof addr === 'string' ? addr : addr.address))
-      : [typeof options.to === 'string' ? options.to : options.to?.address];
+  private static resolveRecipientAddress(
+    value: Mail.Address | string | undefined
+  ): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    return value.address;
+  }
 
-    emailLogger.info(`Sending email via SES from ${from} to ${to.join(', ')}`);
+  private static resolveToAddresses(options: Mail.Options): string[] {
+    if (Array.isArray(options.to)) {
+      return options.to
+        .map((value) => this.resolveRecipientAddress(value))
+        .filter((value): value is string => Boolean(value));
+    }
+    const address = this.resolveRecipientAddress(options.to);
+    return address ? [address] : [];
+  }
 
-    const command = new SendEmailCommand({
+  private static toSesBodyPart(
+    value: Mail.Options['html'] | Mail.Options['text']
+  ): { Data: string; Charset: 'UTF-8' } | undefined {
+    if (!value) {
+      return undefined;
+    }
+    return {
+      Data: typeof value === 'string' ? value : '',
+      Charset: 'UTF-8',
+    };
+  }
+
+  private static buildSesCommand(
+    options: Mail.Options,
+    from: string,
+    to: string[]
+  ): SendEmailCommand {
+    return new SendEmailCommand({
       Source: from,
       Destination: {
-        ToAddresses: to.filter(Boolean) as string[],
+        ToAddresses: to,
       },
       Message: {
         Subject: {
@@ -168,21 +211,20 @@ export class EmailService {
           Charset: 'UTF-8',
         },
         Body: {
-          Html: options.html
-            ? {
-                Data: typeof options.html === 'string' ? options.html : '',
-                Charset: 'UTF-8',
-              }
-            : undefined,
-          Text: options.text
-            ? {
-                Data: typeof options.text === 'string' ? options.text : '',
-                Charset: 'UTF-8',
-              }
-            : undefined,
+          Html: this.toSesBodyPart(options.html),
+          Text: this.toSesBodyPart(options.text),
         },
       },
     });
+  }
+
+  private static async sendViaSES(options: Mail.Options): Promise<void> {
+    const from = this.resolveFromAddress(options);
+    const to = this.resolveToAddresses(options);
+
+    emailLogger.info(`Sending email via SES from ${from} to ${to.join(', ')}`);
+
+    const command = this.buildSesCommand(options, from, to);
 
     // Use circuit breaker for SES calls
     const sesCircuitBreaker = this.getSESCircuitBreaker();
@@ -276,134 +318,8 @@ export class EmailService {
   /**
    * Generate a standard email template
    */
-  static generateEmailTemplate(params: {
-    title: string;
-    greeting?: string;
-    content: string;
-    buttonText?: string;
-    buttonUrl?: string;
-    warning?: string;
-    footer?: string;
-  }): { html: string; text: string } {
-    const currentYear = new Date().getFullYear();
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { text-align: center; padding: 20px 0; }
-          .button { 
-            display: inline-block; 
-            padding: 14px 30px; 
-            background: #3b82f6; 
-            color: white !important; 
-            text-decoration: none; 
-            border-radius: 6px;
-            font-weight: 500;
-          }
-          .footer { 
-            margin-top: 40px; 
-            padding-top: 20px; 
-            border-top: 1px solid #e5e7eb;
-            color: #6b7280;
-            font-size: 14px;
-          }
-          .warning { 
-            background: #fef3c7; 
-            border: 1px solid #fcd34d;
-            padding: 12px;
-            border-radius: 6px;
-            margin: 20px 0;
-          }
-          .code-block {
-            background: #f3f4f6;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            padding: 16px;
-            font-family: monospace;
-            word-break: break-all;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>${params.title}</h1>
-          </div>
-          
-          ${params.greeting ? `<p>${params.greeting}</p>` : ''}
-          
-          <div>${params.content}</div>
-          
-          ${
-            params.buttonText && params.buttonUrl
-              ? `
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${params.buttonUrl}" class="button">${params.buttonText}</a>
-            </div>
-            
-            <p>Or copy and paste this link into your browser:</p>
-            <div class="code-block">${params.buttonUrl}</div>
-          `
-              : ''
-          }
-          
-          ${
-            params.warning
-              ? `
-            <div class="warning">
-              ${params.warning}
-            </div>
-          `
-              : ''
-          }
-          
-          <div class="footer">
-            ${
-              params.footer ||
-              `
-              <p>If you didn't request this email, you can safely ignore it.</p>
-              <p>© ${currentYear} Postolio. All rights reserved.</p>
-            `
-            }
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    const text = `
-${params.title}
-
-${params.greeting || ''}
-
-${params.content.replace(/<[^>]*>/g, '')}
-
-${
-  params.buttonText && params.buttonUrl
-    ? `
-${params.buttonText}: ${params.buttonUrl}
-`
-    : ''
-}
-
-${params.warning ? params.warning.replace(/<[^>]*>/g, '') : ''}
-
-${
-  params.footer
-    ? params.footer.replace(/<[^>]*>/g, '')
-    : `
-If you didn't request this email, you can safely ignore it.
-
-© ${currentYear} Postolio. All rights reserved.
-`
-}
-    `.trim();
-
-    return { html, text };
+  static generateEmailTemplate(params: EmailTemplateParams): { html: string; text: string } {
+    return generateEmailTemplate(params);
   }
 
   /**
@@ -414,28 +330,7 @@ If you didn't request this email, you can safely ignore it.
     token: string,
     isSignUp = false
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${token}`;
-
-    const { html, text } = this.generateEmailTemplate({
-      title: isSignUp ? 'Complete Your Registration' : 'Your Secure Sign-In Link',
-      greeting: 'Hello,',
-      content: isSignUp
-        ? 'Thank you for signing up for Postolio. Please click the button below to verify your email and complete your registration:'
-        : 'We received a request to sign in to your Postolio account. Click the button below to continue:',
-      buttonText: isSignUp ? 'Verify Email & Complete Registration' : 'Sign In to Postolio',
-      buttonUrl: magicLinkUrl,
-      warning:
-        '<strong>Security Notice:</strong> This link will expire in 15 minutes and can only be used once. If you did not request this link, please ignore this email.',
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: isSignUp ? 'Verify your email for Postolio' : 'Your Postolio sign-in link',
-      html,
-      text,
-      replyTo: 'support@postolio.example', // Add reply-to address
-    });
+    return sendMagicLinkTransactional((options) => this.sendEmail(options), email, token, isSignUp);
   }
 
   /**
@@ -445,25 +340,7 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     token: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
-
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Verify Your Email',
-      greeting: 'Hi there,',
-      content: 'Please verify your email address to unlock all features of your Postolio account.',
-      buttonText: 'Verify Email Address',
-      buttonUrl: verificationUrl,
-      warning:
-        '<strong>This verification link expires in 24 hours</strong><br>You can request a new verification email from your account settings.',
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Verify your Postolio email address',
-      html,
-      text,
-    });
+    return sendVerificationEmailTransactional((options) => this.sendEmail(options), email, token);
   }
 
   /**
@@ -473,26 +350,7 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     token: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
-
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Reset Your Password',
-      greeting: 'Hi there,',
-      content:
-        'We received a request to reset your password. Click the button below to set a new password:',
-      buttonText: 'Reset Password',
-      buttonUrl: resetUrl,
-      warning:
-        "<strong>This link expires in 1 hour</strong><br>If you didn't request a password reset, please ignore this email and your password will remain unchanged.",
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Reset your Postolio password',
-      html,
-      text,
-    });
+    return sendPasswordResetEmailTransactional((options) => this.sendEmail(options), email, token);
   }
 
   /**
@@ -502,26 +360,11 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     token: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verifyUrl = `${baseUrl}/legal/data-deletion-verify?token=${token}`;
-
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Confirm Your Data Deletion Request',
-      greeting: 'Hi there,',
-      content:
-        'We received a request to delete your Postolio account and associated data. To confirm this request, please click the button below.',
-      buttonText: 'Confirm Data Deletion Request',
-      buttonUrl: verifyUrl,
-      warning:
-        '<strong>This deletion verification link expires in 24 hours.</strong><br>If you did not request data deletion, you can safely ignore this email and your account will remain active.',
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Confirm your Postolio data deletion request',
-      html,
-      text,
-    });
+    return sendDataDeletionVerificationEmailTransactional(
+      (options) => this.sendEmail(options),
+      email,
+      token
+    );
   }
 
   /**
@@ -551,24 +394,11 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     code: string
   ): Promise<{ success: boolean; error?: string }> {
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Two-Factor Authentication Code',
-      content: `
-        <p>Your verification code for Postolio is:</p>
-        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 6px;">
-          ${code}
-        </div>
-        <p>This code will expire in 5 minutes.</p>
-      `,
-      warning: "If you didn't request this code, please secure your account immediately.",
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Your Postolio Verification Code',
-      html,
-      text,
-    });
+    return sendTwoFactorCodeImmediateTransactional(
+      (options) => this.sendEmail(options),
+      email,
+      code
+    );
   }
 
   /**
@@ -598,34 +428,11 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     name?: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Welcome to Postolio! 🎉',
-      greeting: `Hi${name ? ` ${name}` : ''},`,
-      content: `
-        <p>Welcome to Postolio - your AI-powered Instagram content management platform!</p>
-        
-        <p>Here's what you can do with Postolio:</p>
-        <ul>
-          <li>🤖 Generate AI-powered content that matches your brand</li>
-          <li>📅 Schedule posts for optimal engagement</li>
-          <li>📊 Track analytics and grow your audience</li>
-          <li>🚀 Automate your scheduling with Autopilot</li>
-        </ul>
-        
-        <p>Ready to get started? Create your first brand and let's grow your Instagram presence together!</p>
-      `,
-      buttonText: 'Go to Dashboard',
-      buttonUrl: `${baseUrl}/dashboard`,
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Welcome to Postolio! 🎉',
-      html,
-      text,
-    });
+    return sendWelcomeEmailImmediateTransactional(
+      (options) => this.sendEmail(options),
+      email,
+      name
+    );
   }
 
   /**
@@ -635,27 +442,11 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     scheduledDeletionDate: Date
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const formattedDate = scheduledDeletionDate.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Account Deletion Scheduled',
-      greeting: 'Your account has been scheduled for deletion',
-      content: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}. You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.`,
-      buttonText: 'Recover Account',
-      buttonUrl: `${baseUrl}/account/recover`,
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Postolio Account Deletion Scheduled',
-      html,
-      text,
-    });
+    return sendDeletionConfirmationTransactional(
+      (options) => this.sendEmail(options),
+      email,
+      scheduledDeletionDate
+    );
   }
 
   /**
@@ -665,27 +456,11 @@ If you didn't request this email, you can safely ignore it.
     email: string,
     scheduledDeletionDate: Date
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const formattedDate = scheduledDeletionDate.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    const { html, text } = this.generateEmailTemplate({
-      title: 'Account Deletion Scheduled',
-      greeting: 'Your account has been scheduled for deletion',
-      content: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}. You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.`,
-      buttonText: 'Recover Account',
-      buttonUrl: `${baseUrl}/account/recover`,
-    });
-
-    return this.sendEmail({
-      to: email,
-      subject: 'Postolio Account Deletion Scheduled',
-      html,
-      text,
-    });
+    return sendDeletionConfirmationTransactional(
+      (options) => this.sendEmail(options),
+      email,
+      scheduledDeletionDate
+    );
   }
 
   /**

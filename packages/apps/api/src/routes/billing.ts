@@ -1,4 +1,5 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+
 import {
   createCheckoutSessionSchema,
   createCreditCheckoutSchema,
@@ -16,7 +17,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Billing request failed.';
 }
 
-const billingRoutes: FastifyPluginAsync = async (fastify) => {
+function registerSubscriptionCheckoutRoute(fastify: FastifyInstance): void {
   fastify.post(
     '/checkout/subscription',
     { preHandler: fastify.authenticate },
@@ -42,7 +43,9 @@ const billingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
+function registerCreditCheckoutRoute(fastify: FastifyInstance): void {
   fastify.post(
     '/checkout/credits',
     { preHandler: fastify.authenticate },
@@ -69,7 +72,9 @@ const billingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
+function registerSubscriptionRoutes(fastify: FastifyInstance): void {
   fastify.get('/subscription', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const result = await billingService.getSubscription(request.user!.id);
@@ -107,7 +112,9 @@ const billingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
+function registerInvoiceAndPortalRoutes(fastify: FastifyInstance): void {
   fastify.get('/invoices', { preHandler: fastify.authenticate }, async (request, reply) => {
     const parsed = listInvoicesQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -146,6 +153,13 @@ const billingRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(errorStatus(error)).send({ error: errorMessage(error) });
     }
   });
+}
+
+const billingRoutes: FastifyPluginAsync = async (fastify) => {
+  registerSubscriptionCheckoutRoute(fastify);
+  registerCreditCheckoutRoute(fastify);
+  registerSubscriptionRoutes(fastify);
+  registerInvoiceAndPortalRoutes(fastify);
 };
 
 export default billingRoutes;

@@ -3,9 +3,10 @@
  * CRUD operations for managing quick response templates
  */
 
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { prisma } from '../config/database.js';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { logger as baseLogger } from '@postolio/logger';
+
+import { prisma } from '../config/database.js';
 import { isInboxEnabledForUser } from '../utils/feature-flags.js';
 
 const logger = baseLogger.child({ module: 'saved-replies-routes' });
@@ -29,11 +30,11 @@ async function requireInboxFeature(request: AuthenticatedRequest, reply: Fastify
   }
 }
 
-const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
-  /**
-   * GET /api/brands/:brandId/saved-replies
-   * List all saved replies for a brand
-   */
+async function assertBrandExistsForUser(brandId: string, userId: string) {
+  return prisma.brand.findFirst({ where: { id: brandId, userId } });
+}
+
+function registerListSavedRepliesRoute(fastify: FastifyInstance): void {
   fastify.get<{ Params: { brandId: string } }>(
     '/brands/:brandId/saved-replies',
     { preHandler: [fastify.authenticate, requireInboxFeature] },
@@ -42,11 +43,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify brand belongs to user
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
+        const brand = await assertBrandExistsForUser(brandId, userId);
         if (!brand) {
           return reply.code(404).send({ error: 'Brand not found' });
         }
@@ -56,12 +53,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
           orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
         });
 
-        logger.info('Fetched saved replies', {
-          brandId,
-          userId,
-          count: savedReplies.length,
-        });
-
+        logger.info('Fetched saved replies', { brandId, userId, count: savedReplies.length });
         return reply.send({ savedReplies });
       } catch (error) {
         logger.error('Error fetching saved replies', {
@@ -72,11 +64,9 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * POST /api/brands/:brandId/saved-replies
-   * Create a new saved reply
-   */
+function registerCreateSavedReplyRoute(fastify: FastifyInstance): void {
   fastify.post<{
     Params: { brandId: string };
     Body: { title: string; body: string; isDefault?: boolean };
@@ -89,34 +79,20 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify brand belongs to user
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
+        const brand = await assertBrandExistsForUser(brandId, userId);
         if (!brand) {
           return reply.code(404).send({ error: 'Brand not found' });
         }
-
-        // Validate input
         if (!title?.trim()) {
           return reply.code(400).send({ error: 'Title is required' });
         }
-
         if (!body?.trim()) {
           return reply.code(400).send({ error: 'Message body is required' });
         }
 
-        // Check for duplicate title
         const existing = await prisma.savedReply.findUnique({
-          where: {
-            brandId_title: {
-              brandId,
-              title: title.trim(),
-            },
-          },
+          where: { brandId_title: { brandId, title: title.trim() } },
         });
-
         if (existing) {
           return reply.code(409).send({ error: 'A saved reply with this title already exists' });
         }
@@ -148,11 +124,9 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * PUT /api/brands/:brandId/saved-replies/:replyId
-   * Update a saved reply
-   */
+function registerUpdateSavedReplyRoute(fastify: FastifyInstance): void {
   fastify.put<{
     Params: { brandId: string; replyId: string };
     Body: { title?: string; body?: string; isDefault?: boolean };
@@ -165,36 +139,22 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify saved reply belongs to user's brand
         const savedReply = await prisma.savedReply.findFirst({
-          where: {
-            id: replyId,
-            brandId,
-            brand: { userId },
-          },
+          where: { id: replyId, brandId, brand: { userId } },
         });
-
         if (!savedReply) {
           return reply.code(404).send({ error: 'Saved reply not found' });
         }
 
-        // If title is being updated, check for duplicates
         if (title && title.trim() !== savedReply.title) {
           const existing = await prisma.savedReply.findUnique({
-            where: {
-              brandId_title: {
-                brandId,
-                title: title.trim(),
-              },
-            },
+            where: { brandId_title: { brandId, title: title.trim() } },
           });
-
           if (existing && existing.id !== replyId) {
             return reply.code(409).send({ error: 'A saved reply with this title already exists' });
           }
         }
 
-        // Update the saved reply
         const updated = await prisma.savedReply.update({
           where: { id: replyId },
           data: {
@@ -204,12 +164,7 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        logger.info('Updated saved reply', {
-          brandId,
-          userId,
-          savedReplyId: replyId,
-        });
-
+        logger.info('Updated saved reply', { brandId, userId, savedReplyId: replyId });
         return reply.send({ savedReply: updated });
       } catch (error) {
         logger.error('Error updating saved reply', {
@@ -221,11 +176,9 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * DELETE /api/brands/:brandId/saved-replies/:replyId
-   * Delete a saved reply
-   */
+function registerDeleteSavedReplyRoute(fastify: FastifyInstance): void {
   fastify.delete<{ Params: { brandId: string; replyId: string } }>(
     '/brands/:brandId/saved-replies/:replyId',
     { preHandler: [fastify.authenticate, requireInboxFeature] },
@@ -234,29 +187,15 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify saved reply belongs to user's brand
         const savedReply = await prisma.savedReply.findFirst({
-          where: {
-            id: replyId,
-            brandId,
-            brand: { userId },
-          },
+          where: { id: replyId, brandId, brand: { userId } },
         });
-
         if (!savedReply) {
           return reply.code(404).send({ error: 'Saved reply not found' });
         }
 
-        await prisma.savedReply.delete({
-          where: { id: replyId },
-        });
-
-        logger.info('Deleted saved reply', {
-          brandId,
-          userId,
-          savedReplyId: replyId,
-        });
-
+        await prisma.savedReply.delete({ where: { id: replyId } });
+        logger.info('Deleted saved reply', { brandId, userId, savedReplyId: replyId });
         return reply.code(204).send();
       } catch (error) {
         logger.error('Error deleting saved reply', {
@@ -268,6 +207,13 @@ const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
+
+const savedRepliesRoutes: FastifyPluginAsync = async (fastify) => {
+  registerListSavedRepliesRoute(fastify);
+  registerCreateSavedReplyRoute(fastify);
+  registerUpdateSavedReplyRoute(fastify);
+  registerDeleteSavedReplyRoute(fastify);
 };
 
 export default savedRepliesRoutes;

@@ -160,6 +160,13 @@ async function ensureProjectionTable(client: ExecClient) {
   );
 }
 
+function toStringArray(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((x): x is string => typeof x === 'string').slice(0, limit);
+}
+
 export function computeDerivedProjection(profile: unknown) {
   const p = profile as Record<string, unknown>;
   const text = (p?.text as Record<string, unknown> | undefined) || undefined;
@@ -167,12 +174,8 @@ export function computeDerivedProjection(profile: unknown) {
   const tonesRaw = (text?.tone as unknown) || [];
   const paletteRaw = (visual?.palette as unknown) || [];
   const topicsRaw = (p?.topics as unknown) || null;
-  const tones: string[] = Array.isArray(tonesRaw)
-    ? (tonesRaw as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 5)
-    : [];
-  const palette: string[] = Array.isArray(paletteRaw)
-    ? (paletteRaw as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 8)
-    : [];
+  const tones = toStringArray(tonesRaw, 5);
+  const palette = toStringArray(paletteRaw, 8);
   const topicsTop = Array.isArray(topicsRaw) ? (topicsRaw as unknown[]).slice(0, 10) : null;
   const archetype: string | null =
     typeof p?.archetype === 'string' ? (p.archetype as string) : null;

@@ -1,17 +1,14 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { getRetentionManager } from '../services/retention-manager.js';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+
 import { getDatabaseClient } from '../config/database.js';
+import { getRetentionManager } from '../services/retention-manager.js';
 
-export async function complianceRoutes(app: FastifyInstance) {
+function registerGdprDeleteRoute(app: FastifyInstance): void {
   const retentionManager = getRetentionManager(app);
-  const prisma = getDatabaseClient();
 
-  // GDPR - Delete all user data
   app.post(
     '/api/compliance/gdpr-delete',
-    {
-      preHandler: app.authenticate,
-    },
+    { preHandler: app.authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const user = request.user;
@@ -19,10 +16,7 @@ export async function complianceRoutes(app: FastifyInstance) {
           return reply.code(401).send({ error: 'Unauthorized' });
         }
 
-        // Log the deletion request for compliance
         app.log.info({ userId: user.id }, 'GDPR deletion request received');
-
-        // Process the deletion
         const result = await retentionManager.deleteUserData(user.id);
 
         return reply.send({
@@ -39,14 +33,15 @@ export async function complianceRoutes(app: FastifyInstance) {
       }
     }
   );
+}
 
-  // Get retention statistics (admin only)
+function registerRetentionStatsRoute(app: FastifyInstance): void {
+  const retentionManager = getRetentionManager(app);
+
   app.get(
     '/api/compliance/retention-stats',
-    {
-      preHandler: app.authenticate,
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    { preHandler: app.authenticate },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         const stats = await retentionManager.getRetentionStats();
         return reply.send(stats);
@@ -56,20 +51,17 @@ export async function complianceRoutes(app: FastifyInstance) {
       }
     }
   );
+}
 
-  // Manual trigger for retention processing (admin only)
+function registerProcessRetentionRoute(app: FastifyInstance): void {
+  const retentionManager = getRetentionManager(app);
+
   app.post(
     '/api/compliance/process-retention',
-    {
-      preHandler: app.authenticate,
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    { preHandler: app.authenticate },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
-        // In production, add admin role check here
-
         app.log.info('Manual retention processing triggered');
-
-        // Run asynchronously
         setImmediate(() => {
           retentionManager.triggerRetentionProcessing();
         });
@@ -84,13 +76,15 @@ export async function complianceRoutes(app: FastifyInstance) {
       }
     }
   );
+}
 
-  // Delete specific brand data
+function registerDeleteBrandDataRoute(app: FastifyInstance): void {
+  const retentionManager = getRetentionManager(app);
+  const prisma = getDatabaseClient();
+
   app.delete<{ Params: { brandId: string } }>(
     '/api/compliance/brand/:brandId',
-    {
-      preHandler: app.authenticate,
-    },
+    { preHandler: app.authenticate },
     async (request, reply) => {
       try {
         const user = request.user;
@@ -99,8 +93,6 @@ export async function complianceRoutes(app: FastifyInstance) {
         }
 
         const { brandId } = request.params;
-
-        // Verify user owns the brand
         const brand = await prisma.brand.findFirst({
           where: {
             id: brandId,
@@ -113,11 +105,7 @@ export async function complianceRoutes(app: FastifyInstance) {
         }
 
         const result = await retentionManager.deleteBrandData(brandId);
-
-        // Delete the brand itself
-        await prisma.brand.delete({
-          where: { id: brandId },
-        });
+        await prisma.brand.delete({ where: { id: brandId } });
 
         return reply.send({
           success: true,
@@ -130,4 +118,11 @@ export async function complianceRoutes(app: FastifyInstance) {
       }
     }
   );
+}
+
+export async function complianceRoutes(app: FastifyInstance) {
+  registerGdprDeleteRoute(app);
+  registerRetentionStatsRoute(app);
+  registerProcessRetentionRoute(app);
+  registerDeleteBrandDataRoute(app);
 }

@@ -1,14 +1,21 @@
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { rollingContentService } from '../services/rolling-content.js';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import { APIError } from '@postolio/errors';
+
 import { getDatabaseClient } from '../config/database.js';
 import { assertBrandOwnership } from '../services/ownership.js';
-import { APIError } from '@postolio/errors';
+import { rollingContentService } from '../services/rolling-content.js';
 
 const prisma = getDatabaseClient();
 
 interface BrandParams {
   brandId: string;
 }
+
+const BRAND_PARAMS_SCHEMA = {
+  type: 'object',
+  properties: { brandId: { type: 'string' } },
+  required: ['brandId'],
+};
 
 function ensureAuth(
   request: FastifyRequest,
@@ -21,251 +28,216 @@ function ensureAuth(
   return true;
 }
 
-const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
-  /**
-   * Get queue status for a brand
-   */
-  fastify.get(
-    '/queue-status/:brandId',
-    {
-      schema: {
-        params: {
-          type: 'object',
-          properties: {
-            brandId: { type: 'string' },
-          },
-          required: ['brandId'],
-        },
+function wrapRollingError(
+  error: unknown,
+  code: string,
+  fallbackMessage: string,
+  details?: object
+): never {
+  if (error instanceof APIError) {
+    throw error;
+  }
+
+  throw new APIError(error instanceof Error ? error.message : fallbackMessage, code, 500, details);
+}
+
+async function handleQueueStatus(
+  request: FastifyRequest<{ Params: BrandParams }>,
+  reply: FastifyReply
+) {
+  try {
+    if (!ensureAuth(request, reply)) {
+      return;
+    }
+
+    const { brandId } = request.params;
+    const brand = await assertBrandOwnership(request.user.id, brandId);
+    const queueStatus = await rollingContentService.getQueueStatus(brandId);
+
+    return reply.send({
+      success: true,
+      data: {
+        brandId,
+        brandName: brand.name,
+        ...queueStatus,
       },
-      preHandler: fastify.authenticate,
-    },
-    async (request, reply) => {
-      try {
-        if (!ensureAuth(request, reply)) {
-          return;
-        }
-        const { brandId } = request.params as BrandParams;
+    });
+  } catch (error) {
+    request.log.error({ err: error }, 'Get queue status error');
+    wrapRollingError(
+      error,
+      'ROLLING_CONTENT_QUEUE_STATUS_FAILED',
+      'Failed to get rolling queue status',
+      {
+        brandId: request.params.brandId,
+      }
+    );
+  }
+}
 
-        // Verify brand ownership
-        const brand = await assertBrandOwnership(request.user.id, brandId);
+async function handleGenerate(
+  request: FastifyRequest<{ Params: BrandParams }>,
+  reply: FastifyReply
+) {
+  try {
+    if (!ensureAuth(request, reply)) {
+      return;
+    }
 
-        const queueStatus = await rollingContentService.getQueueStatus(brandId);
+    const { brandId } = request.params;
+    const brand = await assertBrandOwnership(request.user.id, brandId);
+    const result = await rollingContentService.triggerManual(brandId);
 
-        return reply.send({
-          success: true,
-          data: {
-            brandId,
+    return reply.send({
+      success: result.success,
+      data: {
+        brandId,
+        brandName: brand.name,
+        generated: result.generated,
+        message: result.message,
+      },
+      ...(result.success ? {} : { error: result.message }),
+    });
+  } catch (error) {
+    request.log.error({ err: error }, 'Manual rolling generation error');
+    wrapRollingError(
+      error,
+      'ROLLING_CONTENT_GENERATE_FAILED',
+      'Failed to trigger rolling content generation',
+      { brandId: request.params.brandId }
+    );
+  }
+}
+
+async function handleCheck(request: FastifyRequest<{ Params: BrandParams }>, reply: FastifyReply) {
+  try {
+    if (!ensureAuth(request, reply)) {
+      return;
+    }
+
+    const { brandId } = request.params;
+    const brand = await assertBrandOwnership(request.user.id, brandId);
+
+    const before = await rollingContentService.getQueueStatus(brandId);
+    await rollingContentService.checkAndGenerateContent(brandId);
+    const after = await rollingContentService.getQueueStatus(brandId);
+
+    return reply.send({
+      success: true,
+      data: {
+        brandId,
+        brandName: brand.name,
+        before,
+        after,
+        actionTaken: before.needsGeneration ? 'generation_triggered' : 'no_action_needed',
+      },
+    });
+  } catch (error) {
+    request.log.error({ err: error }, 'Check rolling generation error');
+    wrapRollingError(
+      error,
+      'ROLLING_CONTENT_CHECK_FAILED',
+      'Failed to check rolling content needs',
+      {
+        brandId: request.params.brandId,
+      }
+    );
+  }
+}
+
+async function handleOverview(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    if (!ensureAuth(request, reply)) {
+      return;
+    }
+
+    const brandsWithInstagram = await prisma.socialAccount.findMany({
+      where: { platform: 'instagram', brand: { userId: request.user.id } },
+      include: { brand: true },
+    });
+
+    const brands = brandsWithInstagram.map((socialAccount) => socialAccount.brand);
+    const brandStatuses = await Promise.all(
+      brands.map(async (brand) => {
+        try {
+          const queueStatus = await rollingContentService.getQueueStatus(brand.id);
+          return {
+            brandId: brand.id,
             brandName: brand.name,
             ...queueStatus,
-          },
-        });
-      } catch (error) {
-        request.log.error({ err: error }, 'Get queue status error');
-        if (error instanceof APIError) {
-          throw error;
-        }
-        throw new APIError(
-          error instanceof Error ? error.message : 'Failed to get rolling queue status',
-          'ROLLING_CONTENT_QUEUE_STATUS_FAILED',
-          500,
-          { brandId: (request.params as BrandParams).brandId }
-        );
-      }
-    }
-  );
-
-  /**
-   * Manually trigger rolling content generation for a brand
-   */
-  fastify.post(
-    '/generate/:brandId',
-    {
-      schema: {
-        params: {
-          type: 'object',
-          properties: {
-            brandId: { type: 'string' },
-          },
-          required: ['brandId'],
-        },
-        body: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      preHandler: fastify.authenticate,
-    },
-    async (request, reply) => {
-      try {
-        if (!ensureAuth(request, reply)) {
-          return;
-        }
-        const { brandId } = request.params as BrandParams;
-
-        // Verify brand ownership
-        const brand = await assertBrandOwnership(request.user.id, brandId);
-
-        const result = await rollingContentService.triggerManual(brandId);
-
-        return reply.send({
-          success: result.success,
-          data: {
-            brandId,
+            lastChecked: new Date().toISOString(),
+          };
+        } catch (error) {
+          return {
+            brandId: brand.id,
             brandName: brand.name,
-            generated: result.generated,
-            message: result.message,
-          },
-          ...(result.success ? {} : { error: result.message }),
-        });
-      } catch (error) {
-        request.log.error({ err: error }, 'Manual rolling generation error');
-        if (error instanceof APIError) {
-          throw error;
+            totalScheduled: 0,
+            daysAhead: 0,
+            needsGeneration: true,
+            minQueueSize: 7,
+            maxQueueSize: 14,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            lastChecked: new Date().toISOString(),
+          };
         }
-        throw new APIError(
-          error instanceof Error ? error.message : 'Failed to trigger rolling content generation',
-          'ROLLING_CONTENT_GENERATE_FAILED',
-          500,
-          { brandId: (request.params as BrandParams).brandId }
-        );
-      }
-    }
-  );
+      })
+    );
 
-  /**
-   * Check rolling generation needs for a brand
-   */
-  fastify.get(
-    '/check/:brandId',
-    {
-      schema: {
-        params: {
-          type: 'object',
-          properties: {
-            brandId: { type: 'string' },
-          },
-          required: ['brandId'],
+    return reply.send({
+      success: true,
+      data: {
+        summary: {
+          totalBrands: brands.length,
+          brandsNeedingContent: brandStatuses.filter((item) => item.needsGeneration).length,
+          brandsWithSufficientContent: brandStatuses.filter((item) => !item.needsGeneration).length,
+          totalScheduledPosts: brandStatuses.reduce(
+            (sum, item) => sum + (item.totalScheduled || 0),
+            0
+          ),
         },
+        brands: brandStatuses,
       },
-      preHandler: fastify.authenticate,
-    },
-    async (request, reply) => {
-      try {
-        if (!ensureAuth(request, reply)) {
-          return;
-        }
-        const { brandId } = request.params as BrandParams;
+    });
+  } catch (error) {
+    request.log.error({ err: error }, 'Get rolling content overview error');
+    wrapRollingError(
+      error,
+      'ROLLING_CONTENT_OVERVIEW_FAILED',
+      'Failed to get rolling content overview'
+    );
+  }
+}
 
-        // Verify brand ownership
-        const brand = await assertBrandOwnership(request.user.id, brandId);
-
-        const queueStatus = await rollingContentService.getQueueStatus(brandId);
-
-        // Check if this brand should be generating content
-        await rollingContentService.checkAndGenerateContent(brandId);
-
-        const updatedQueueStatus = await rollingContentService.getQueueStatus(brandId);
-
-        return reply.send({
-          success: true,
-          data: {
-            brandId,
-            brandName: brand.name,
-            before: queueStatus,
-            after: updatedQueueStatus,
-            actionTaken: queueStatus.needsGeneration ? 'generation_triggered' : 'no_action_needed',
-          },
-        });
-      } catch (error) {
-        request.log.error({ err: error }, 'Check rolling generation error');
-        if (error instanceof APIError) {
-          throw error;
-        }
-        throw new APIError(
-          error instanceof Error ? error.message : 'Failed to check rolling content needs',
-          'ROLLING_CONTENT_CHECK_FAILED',
-          500,
-          { brandId: (request.params as BrandParams).brandId }
-        );
-      }
-    }
-  );
-
-  /**
-   * Get all brands' queue statuses for monitoring
-   */
-  fastify.get('/overview', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      if (!ensureAuth(request, reply)) {
-        return;
-      }
-      const userId = request.user.id;
-
-      // Get all user's brands with Instagram integration
-      const brandsWithInstagram = await prisma.socialAccount.findMany({
-        where: {
-          platform: 'instagram',
-          brand: { userId },
-        },
-        include: {
-          brand: true,
-        },
-      });
-
-      const brands = brandsWithInstagram.map((sa) => sa.brand);
-
-      const brandStatuses = await Promise.all(
-        brands.map(async (brand) => {
-          try {
-            const queueStatus = await rollingContentService.getQueueStatus(brand.id);
-            return {
-              brandId: brand.id,
-              brandName: brand.name,
-              ...queueStatus,
-              lastChecked: new Date().toISOString(),
-            };
-          } catch (error) {
-            return {
-              brandId: brand.id,
-              brandName: brand.name,
-              totalScheduled: 0,
-              daysAhead: 0,
-              needsGeneration: true,
-              minQueueSize: 7,
-              maxQueueSize: 14,
-              error: error instanceof Error ? error.message : 'Unknown error',
-              lastChecked: new Date().toISOString(),
-            };
-          }
-        })
-      );
-
-      const summary = {
-        totalBrands: brands.length,
-        brandsNeedingContent: brandStatuses.filter((b) => b.needsGeneration).length,
-        brandsWithSufficientContent: brandStatuses.filter((b) => !b.needsGeneration).length,
-        totalScheduledPosts: brandStatuses.reduce((sum, b) => sum + (b.totalScheduled || 0), 0),
-      };
-
-      return reply.send({
-        success: true,
-        data: {
-          summary,
-          brands: brandStatuses,
-        },
-      });
-    } catch (error) {
-      request.log.error({ err: error }, 'Get rolling content overview error');
-      if (error instanceof APIError) {
-        throw error;
-      }
-      throw new APIError(
-        error instanceof Error ? error.message : 'Failed to get rolling content overview',
-        'ROLLING_CONTENT_OVERVIEW_FAILED',
-        500
-      );
-    }
+function registerRollingContentRoutes(fastify: FastifyInstance): void {
+  fastify.get('/queue-status/:brandId', {
+    schema: { params: BRAND_PARAMS_SCHEMA },
+    preHandler: fastify.authenticate,
+    handler: handleQueueStatus,
   });
+
+  fastify.post('/generate/:brandId', {
+    schema: {
+      params: BRAND_PARAMS_SCHEMA,
+      body: { type: 'object', properties: {} },
+    },
+    preHandler: fastify.authenticate,
+    handler: handleGenerate,
+  });
+
+  fastify.get('/check/:brandId', {
+    schema: { params: BRAND_PARAMS_SCHEMA },
+    preHandler: fastify.authenticate,
+    handler: handleCheck,
+  });
+
+  fastify.get('/overview', {
+    preHandler: fastify.authenticate,
+    handler: handleOverview,
+  });
+}
+
+const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
+  registerRollingContentRoutes(fastify);
 };
 
 export default rollingContentRoutes;

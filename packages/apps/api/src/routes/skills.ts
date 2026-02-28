@@ -1,61 +1,37 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import { validateBody, validateQuery, validateParams } from '../middleware/validation.js';
-import { assertBrandOwnership } from '../services/ownership.js';
 import { prisma } from '../config/database.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation.js';
+import { assertBrandOwnership } from '../services/ownership.js';
 import {
   ensureDefaultSkillInstallations,
   getSkill,
   installSkill,
   listSkills,
-  trySkill,
   toggleSkillInstallation,
+  trySkill,
   uninstallSkillByInstallationId,
   uninstallSkillBySkillId,
 } from '../services/skills/skills-service.js';
 
-const ListSkillsQuerySchema = z.object({
-  brandId: z.string().min(1),
-});
-
-const SkillDetailQuerySchema = z.object({
-  brandId: z.string().min(1),
-});
-
-const SkillIdParamsSchema = z.object({
-  skillId: z.string().min(1),
-});
+const ListSkillsQuerySchema = z.object({ brandId: z.string().min(1) });
+const SkillDetailQuerySchema = z.object({ brandId: z.string().min(1) });
+const SkillIdParamsSchema = z.object({ skillId: z.string().min(1) });
 
 const InstallSkillBodySchema = z.object({
   brandId: z.string().min(1),
   mode: z.enum(['managed', 'byok']).default('managed'),
   config: z.unknown().optional().default({}),
-  secret: z
-    .object({
-      apiKey: z.string().min(1),
-    })
-    .optional(),
+  secret: z.object({ apiKey: z.string().min(1) }).optional(),
 });
 
-const InstallationIdParamsSchema = z.object({
-  installationId: z.string().min(1),
-});
+const InstallationIdParamsSchema = z.object({ installationId: z.string().min(1) });
+const ToggleBodySchema = z.object({ enabled: z.boolean() });
+const UninstallSkillBodySchema = z.object({ brandId: z.string().min(1) });
+const TrySkillBodySchema = z.object({ brandId: z.string().min(1), input: z.unknown().optional() });
 
-const ToggleBodySchema = z.object({
-  enabled: z.boolean(),
-});
-
-const UninstallSkillBodySchema = z.object({
-  brandId: z.string().min(1),
-});
-
-const TrySkillBodySchema = z.object({
-  brandId: z.string().min(1),
-  input: z.unknown().optional(),
-});
-
-export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
+function registerListSkillsRoute(fastify: FastifyInstance): void {
   fastify.get<{ Querystring: z.infer<typeof ListSkillsQuerySchema> }>(
     '/',
     { preHandler: [fastify.authenticate, validateQuery(ListSkillsQuerySchema)] },
@@ -66,11 +42,12 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       await assertBrandOwnership(userId, brandId);
       await ensureDefaultSkillInstallations(brandId, userId);
 
-      const skills = await listSkills(brandId);
-      return reply.send({ skills });
+      return reply.send({ skills: await listSkills(brandId) });
     }
   );
+}
 
+function registerGetSkillRoute(fastify: FastifyInstance): void {
   fastify.get<{
     Params: z.infer<typeof SkillIdParamsSchema>;
     Querystring: z.infer<typeof SkillDetailQuerySchema>;
@@ -99,7 +76,9 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ skill });
     }
   );
+}
 
+function registerInstallSkillRoute(fastify: FastifyInstance): void {
   fastify.post<{
     Params: z.infer<typeof SkillIdParamsSchema>;
     Body: z.infer<typeof InstallSkillBodySchema>;
@@ -136,7 +115,9 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
+function registerToggleSkillRoute(fastify: FastifyInstance): void {
   fastify.post<{
     Params: z.infer<typeof InstallationIdParamsSchema>;
     Body: z.infer<typeof ToggleBodySchema>;
@@ -163,12 +144,12 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       await assertBrandOwnership(userId, installation.brandId);
-
-      const res = await toggleSkillInstallation({ installationId, enabled: body.enabled });
-      return reply.send(res);
+      return reply.send(await toggleSkillInstallation({ installationId, enabled: body.enabled }));
     }
   );
+}
 
+function registerUninstallSkillRoutes(fastify: FastifyInstance): void {
   fastify.post<{
     Params: z.infer<typeof SkillIdParamsSchema>;
     Body: z.infer<typeof UninstallSkillBodySchema>;
@@ -187,16 +168,13 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       const { brandId } = request.body;
 
       await assertBrandOwnership(userId, brandId);
-      const res = await uninstallSkillBySkillId({ brandId, skillId });
-      return reply.send(res);
+      return reply.send(await uninstallSkillBySkillId({ brandId, skillId }));
     }
   );
 
   fastify.delete<{ Params: z.infer<typeof InstallationIdParamsSchema> }>(
     '/:installationId',
-    {
-      preHandler: [fastify.authenticate, validateParams(InstallationIdParamsSchema)],
-    },
+    { preHandler: [fastify.authenticate, validateParams(InstallationIdParamsSchema)] },
     async (request, reply) => {
       const userId = request.user!.id;
       const { installationId } = request.params;
@@ -210,11 +188,12 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       await assertBrandOwnership(userId, installation.brandId);
-      const res = await uninstallSkillByInstallationId({ installationId });
-      return reply.send(res);
+      return reply.send(await uninstallSkillByInstallationId({ installationId }));
     }
   );
+}
 
+function registerTrySkillRoute(fastify: FastifyInstance): void {
   fastify.post<{
     Params: z.infer<typeof SkillIdParamsSchema>;
     Body: z.infer<typeof TrySkillBodySchema>;
@@ -236,14 +215,22 @@ export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
       await ensureDefaultSkillInstallations(brandId, userId);
 
       try {
-        const result = await trySkill({ brandId, skillId, input });
-        return reply.send(result);
+        return reply.send(await trySkill({ brandId, skillId, input }));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to run skill try stub';
         return reply.code(400).send({ error: message });
       }
     }
   );
+}
+
+export const skillsRoutes: FastifyPluginAsync = async (fastify) => {
+  registerListSkillsRoute(fastify);
+  registerGetSkillRoute(fastify);
+  registerInstallSkillRoute(fastify);
+  registerToggleSkillRoute(fastify);
+  registerUninstallSkillRoutes(fastify);
+  registerTrySkillRoute(fastify);
 };
 
 export default skillsRoutes;

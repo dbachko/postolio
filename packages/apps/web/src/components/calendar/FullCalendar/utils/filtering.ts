@@ -75,12 +75,12 @@ function matchesSearchQuery(item: CalendarDataItem, query: string): boolean {
   const normalized = query.toLowerCase();
 
   const caption = getStringField(item, 'caption');
-  if (caption && caption.includes(normalized)) {
+  if (caption.includes(normalized)) {
     return true;
   }
 
   const hashtags = getArrayField(item, 'hashtags').join(' ');
-  if (hashtags && hashtags.toLowerCase().includes(normalized)) {
+  if (hashtags.toLowerCase().includes(normalized)) {
     return true;
   }
   return false;

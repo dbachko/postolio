@@ -3,7 +3,6 @@ import { ChevronDown, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type CreateActionsMenuProps = {
   selectedBrandId: string | null;
@@ -32,20 +31,11 @@ export function CreateActionsMenu({
           New Post
         </Button>
         <Popover open={open} onOpenChange={setOpen}>
-          <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button size="icon" className="h-9 w-9" aria-label="Open create actions menu">
-                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>More create options</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <PopoverTrigger asChild>
+            <Button size="icon" className="h-9 w-9" aria-label="Open create actions menu">
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
           <PopoverContent align="end" className="w-80 p-2">
             <div className="flex flex-col gap-1">
               <Button

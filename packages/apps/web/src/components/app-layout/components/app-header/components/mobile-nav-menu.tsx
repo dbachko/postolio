@@ -13,14 +13,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-export function MobileNavMenu() {
-  const user = useAuthStore((state) => state.user);
-  const location = useLocation();
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const inboxEnabled = isInboxEnabled(user);
-  const snippetsEnabled = isSnippetsEnabled(user);
-  const visibleMainItems = mainNavItems.filter((item) => {
+function filterMainItems(inboxEnabled: boolean, snippetsEnabled: boolean) {
+  return mainNavItems.filter((item) => {
     if (!inboxEnabled && item.path === '/inbox') {
       return false;
     }
@@ -29,6 +23,87 @@ export function MobileNavMenu() {
     }
     return true;
   });
+}
+
+function MobileMainNavLinks({
+  items,
+  isActiveRoute,
+  onSelect,
+}: {
+  items: NavigationItem[];
+  isActiveRoute: (item: NavigationItem) => boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <div className="space-y-1">
+      {items.map((item) => (
+        <Link
+          key={item.path}
+          to={item.path}
+          onClick={onSelect}
+          className={cn(
+            'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
+            isActiveRoute(item)
+              ? 'bg-accent text-primary'
+              : 'hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <item.icon className="mr-3 h-5 w-5" aria-hidden="true" />
+          <div>
+            <div className="font-medium">{item.label}</div>
+            {item.description ? (
+              <div className="text-muted-foreground text-xs">{item.description}</div>
+            ) : null}
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function MobileSecondaryNavLinks({ onSelect }: { onSelect: () => void }) {
+  return (
+    <div className="space-y-1 border-t pt-4">
+      <Link
+        to="/dashboard"
+        onClick={onSelect}
+        className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
+      >
+        <Home className="mr-3 h-4 w-4" aria-hidden="true" />
+        Dashboard
+      </Link>
+      <Link
+        to="/brands"
+        onClick={onSelect}
+        className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
+      >
+        <Building2 className="mr-3 h-4 w-4" aria-hidden="true" />
+        Manage Brands
+      </Link>
+      {secondaryNavItems.map((item) => (
+        <Link
+          key={item.path}
+          to={item.path}
+          onClick={onSelect}
+          className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
+        >
+          <item.icon className="mr-3 h-4 w-4" aria-hidden="true" />
+          {item.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+export function MobileNavMenu() {
+  const user = useAuthStore((state) => state.user);
+  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const inboxEnabled = isInboxEnabled(user);
+  const snippetsEnabled = isSnippetsEnabled(user);
+  const visibleMainItems = filterMainItems(inboxEnabled, snippetsEnabled);
+  const closeMenu = () => setOpen(false);
 
   const isActiveRoute = useCallback(
     (item: NavigationItem) => {
@@ -77,60 +152,14 @@ export function MobileNavMenu() {
           <div className="bg-card absolute right-0 z-40 mt-2 w-80 rounded-lg border shadow-lg">
             <div className="p-4">
               <div className="mb-4">
-                <div className="space-y-1">
-                  {visibleMainItems.map((item) => (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setOpen(false)}
-                      className={cn(
-                        'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
-                        isActiveRoute(item)
-                          ? 'bg-accent text-primary'
-                          : 'hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      <item.icon className="mr-3 h-5 w-5" aria-hidden="true" />
-                      <div>
-                        <div className="font-medium">{item.label}</div>
-                        {item.description && (
-                          <div className="text-muted-foreground text-xs">{item.description}</div>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                <MobileMainNavLinks
+                  items={visibleMainItems}
+                  isActiveRoute={isActiveRoute}
+                  onSelect={closeMenu}
+                />
               </div>
 
-              <div className="space-y-1 border-t pt-4">
-                <Link
-                  to="/dashboard"
-                  onClick={() => setOpen(false)}
-                  className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
-                >
-                  <Home className="mr-3 h-4 w-4" aria-hidden="true" />
-                  Dashboard
-                </Link>
-                <Link
-                  to="/brands"
-                  onClick={() => setOpen(false)}
-                  className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
-                >
-                  <Building2 className="mr-3 h-4 w-4" aria-hidden="true" />
-                  Manage Brands
-                </Link>
-                {secondaryNavItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setOpen(false)}
-                    className="hover:bg-accent flex items-center rounded-lg px-3 py-2 text-sm transition-colors"
-                  >
-                    <item.icon className="mr-3 h-4 w-4" aria-hidden="true" />
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
+              <MobileSecondaryNavLinks onSelect={closeMenu} />
             </div>
           </div>
         </>

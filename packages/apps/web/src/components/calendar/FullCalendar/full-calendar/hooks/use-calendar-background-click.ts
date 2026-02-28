@@ -12,6 +12,18 @@ type UseCalendarBackgroundClickParams = {
   targetSocialAccountIds: string[] | null;
 };
 
+function buildTargetDestinationParams(
+  targetSocialAccountIds: string[] | null
+): Record<string, string> {
+  if (!Array.isArray(targetSocialAccountIds) || targetSocialAccountIds.length === 0) {
+    return {};
+  }
+  if (targetSocialAccountIds.length === 1) {
+    return { targetSocialAccountId: targetSocialAccountIds[0] };
+  }
+  return { targetSocialAccountIds: targetSocialAccountIds.join(',') };
+}
+
 export function useCalendarBackgroundClick({
   calendarView,
   tzRef,
@@ -54,11 +66,7 @@ export function useCalendarBackgroundClick({
         openSidebar('post-create', {
           params: {
             scheduledAt: utcISO,
-            ...(Array.isArray(targetSocialAccountIds) && targetSocialAccountIds.length > 0
-              ? targetSocialAccountIds.length === 1
-                ? { targetSocialAccountId: targetSocialAccountIds[0] }
-                : { targetSocialAccountIds: targetSocialAccountIds.join(',') }
-              : {}),
+            ...buildTargetDestinationParams(targetSocialAccountIds),
           },
         });
       } catch (error) {

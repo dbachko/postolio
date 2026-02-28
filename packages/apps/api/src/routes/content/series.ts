@@ -16,200 +16,249 @@ import { assertBrandOwnership } from '../../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
-const seriesRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/content/series/:contentSeriesId
-  fastify.get<{ Params: { contentSeriesId: string } }>(
-    '/series/:contentSeriesId',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const userId = request.user!.id;
-      const { contentSeriesId } = request.params;
+function parseContentSeriesId(contentSeriesId: unknown) {
+  return typeof contentSeriesId === 'string' && contentSeriesId ? contentSeriesId : null;
+}
 
-      if (!contentSeriesId || typeof contentSeriesId !== 'string') {
-        return reply.code(400).send({ error: 'invalid_content_series_id' });
-      }
+async function loadAuthorizedSeries(params: {
+  contentSeriesId: string;
+  userId: string;
+  reply: any;
+  select: Record<string, unknown>;
+}) {
+  const series = await prisma.contentSeries.findUnique({
+    where: { id: params.contentSeriesId },
+    select: params.select as any,
+  });
+  if (!(series as any)?.brand) {
+    params.reply.code(404).send({ error: 'content_series_not_found' });
+    return null;
+  }
+  if ((series as any).brand.userId !== params.userId) {
+    params.reply.code(404).send({ error: 'content_series_not_found' });
+    return null;
+  }
 
-      const series = await prisma.contentSeries.findUnique({
-        where: { id: contentSeriesId },
-        select: {
-          id: true,
-          brandId: true,
-          key: true,
-          name: true,
-          description: true,
-          color: true,
-          kind: true,
-          status: true,
-          generatorJson: true,
-          rollingConfigJson: true,
-          createdAt: true,
-          updatedAt: true,
-          brand: { select: { id: true, userId: true } },
+  await assertBrandOwnership(params.userId, (series as any).brandId);
+  return series;
+}
+
+function mapGeneration(g: any) {
+  return {
+    id: g.id,
+    status: g.status,
+    trigger: g.trigger,
+    createdAt: g.createdAt,
+    startedAt: g.startedAt,
+    finishedAt: g.finishedAt,
+    errorMessage: g.errorMessage,
+    recipe: g.recipeTemplate
+      ? {
+          id: g.recipeTemplate.id,
+          slug: g.recipeTemplate.slug,
+          name: g.recipeTemplate.name,
+          category: g.recipeTemplate.category,
+          version: g.recipeTemplateVersion?.version ?? null,
+        }
+      : null,
+  };
+}
+
+function mapSeriesContent(item: any) {
+  return {
+    id: item.id,
+    caption: item.caption,
+    hashtags: item.hashtags,
+    status: item.status,
+    scheduledAt: item.scheduledAt,
+    postedAt: item.postedAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    brandId: item.brandId,
+    contentGroupId: item.contentGroupId,
+    contentSeriesId: item.contentSeriesId,
+    targetSocialAccountId: item.targetSocialAccountId,
+    recipeRunId: item.recipeRunId,
+    generatedByRecipe: item.recipeRun?.recipeTemplate ?? null,
+    schedulingError: item.schedulingError,
+    generationParams: item.generationParams,
+    contentType: item.contentType,
+    shareToFeed: item.shareToFeed,
+    thumbOffset: item.thumbOffset,
+    firstComment: item.firstComment,
+    firstCommentStatus: item.firstCommentStatus,
+    firstCommentPostedAt: item.firstCommentPostedAt,
+    firstCommentError: item.firstCommentError,
+    publishingQueueItemId: item.publishingQueueItem?.id ?? null,
+    primaryAssetId: item.mediaAssets?.[0]?.assetId ?? null,
+    mediaAssets: item.mediaAssets,
+    mediaAssetCount: item._count?.mediaAssets ?? null,
+  };
+}
+
+async function loadSeriesDetails(contentSeriesId: string) {
+  const [contents, generations] = await Promise.all([
+    prisma.content.findMany({
+      where: { contentSeriesId },
+      select: {
+        id: true,
+        caption: true,
+        hashtags: true,
+        status: true,
+        scheduledAt: true,
+        postedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        brandId: true,
+        contentGroupId: true,
+        contentSeriesId: true,
+        targetSocialAccountId: true,
+        recipeRunId: true,
+        recipeRun: { select: { recipeTemplate: { select: { id: true, slug: true, name: true } } } },
+        schedulingError: true,
+        generationParams: true,
+        contentType: true,
+        shareToFeed: true,
+        thumbOffset: true,
+        firstComment: true,
+        firstCommentStatus: true,
+        firstCommentPostedAt: true,
+        firstCommentError: true,
+        publishingQueueItem: { select: { id: true } },
+        mediaAssets: {
+          select: { assetId: true, displayOrder: true },
+          orderBy: { displayOrder: 'asc' },
         },
-      });
+        _count: { select: { mediaAssets: true } },
+      },
+      orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'asc' }],
+    }),
+    prisma.recipeRun.findMany({
+      where: { contentSeriesId },
+      select: {
+        id: true,
+        status: true,
+        trigger: true,
+        createdAt: true,
+        startedAt: true,
+        finishedAt: true,
+        errorMessage: true,
+        recipeTemplate: { select: { id: true, slug: true, name: true, category: true } },
+        recipeTemplateVersion: { select: { version: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
+  ]);
+  return { contents, generations };
+}
 
-      if (!series?.brand) {
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
-      if (series.brand.userId !== userId) {
-        // Avoid leaking series existence across users.
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
+function buildSeriesDetailsResponse(series: any, contents: any[], generations: any[]) {
+  return {
+    success: true,
+    data: {
+      contentSeries: {
+        id: series.id,
+        brandId: series.brandId,
+        key: series.key,
+        name: series.name,
+        description: series.description,
+        color: series.color,
+        kind: series.kind,
+        status: series.status,
+        generatorJson: series.generatorJson,
+        rollingConfigJson: series.rollingConfigJson,
+        createdAt: series.createdAt,
+        updatedAt: series.updatedAt,
+      },
+      generations: generations.map(mapGeneration),
+      contents: contents.map(mapSeriesContent),
+    },
+  };
+}
 
-      await assertBrandOwnership(userId, series.brandId);
+function parseSeriesPatchPayload(body: any, rollingConfigJson: unknown) {
+  const nextName = typeof body?.name === 'string' ? body.name.trim() : undefined;
+  if (nextName?.length === 0) {
+    return { error: 'invalid_name' } as const;
+  }
 
-      const contents = await prisma.content.findMany({
-        where: { contentSeriesId: series.id },
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          status: true,
-          scheduledAt: true,
-          postedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          brandId: true,
-          contentGroupId: true,
-          contentSeriesId: true,
-          targetSocialAccountId: true,
-          recipeRunId: true,
-          recipeRun: {
-            select: {
-              recipeTemplate: { select: { id: true, slug: true, name: true } },
-            },
-          },
-          schedulingError: true,
-          generationParams: true,
-          contentType: true,
-          shareToFeed: true,
-          thumbOffset: true,
-          firstComment: true,
-          firstCommentStatus: true,
-          firstCommentPostedAt: true,
-          firstCommentError: true,
-          publishingQueueItem: { select: { id: true } },
-          mediaAssets: {
-            select: { assetId: true, displayOrder: true },
-            orderBy: { displayOrder: 'asc' },
-          },
-          _count: { select: { mediaAssets: true } },
-        },
-        orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'asc' }],
-      });
+  const nextDescription =
+    body?.description === null
+      ? null
+      : typeof body?.description === 'string'
+        ? body.description.trim()
+        : undefined;
+  const nextColor =
+    body?.color === null ? null : typeof body?.color === 'string' ? body.color.trim() : undefined;
+  const nextStatus =
+    body?.status === 'active' || body?.status === 'paused' || body?.status === 'archived'
+      ? body.status
+      : undefined;
+  const rollingPartial =
+    body?.rolling && typeof body.rolling === 'object' ? body.rolling : undefined;
+  const mergedRolling =
+    rollingPartial !== undefined
+      ? normalizeSeriesRollingConfig({
+          ...(rollingConfigJson as Record<string, unknown>),
+          ...rollingPartial,
+        })
+      : undefined;
 
-      const generations = await prisma.recipeRun.findMany({
-        where: { contentSeriesId: series.id },
-        select: {
-          id: true,
-          status: true,
-          trigger: true,
-          createdAt: true,
-          startedAt: true,
-          finishedAt: true,
-          errorMessage: true,
-          recipeTemplate: { select: { id: true, slug: true, name: true, category: true } },
-          recipeTemplateVersion: { select: { version: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      });
+  return {
+    nextName,
+    nextDescription,
+    nextColor,
+    nextStatus,
+    mergedRolling,
+  };
+}
 
-      return reply.send({
-        success: true,
-        data: {
-          contentSeries: {
-            id: series.id,
-            brandId: series.brandId,
-            key: series.key,
-            name: series.name,
-            description: series.description,
-            color: series.color,
-            kind: series.kind,
-            status: series.status,
-            generatorJson: series.generatorJson,
-            rollingConfigJson: series.rollingConfigJson,
-            createdAt: series.createdAt,
-            updatedAt: series.updatedAt,
-          },
-          generations: generations.map((g) => ({
-            id: g.id,
-            status: g.status,
-            trigger: g.trigger,
-            createdAt: g.createdAt,
-            startedAt: g.startedAt,
-            finishedAt: g.finishedAt,
-            errorMessage: g.errorMessage,
-            recipe: g.recipeTemplate
-              ? {
-                  id: g.recipeTemplate.id,
-                  slug: g.recipeTemplate.slug,
-                  name: g.recipeTemplate.name,
-                  category: g.recipeTemplate.category,
-                  version: g.recipeTemplateVersion?.version ?? null,
-                }
-              : null,
-          })),
-          contents: contents.map((item) => ({
-            id: item.id,
-            caption: item.caption,
-            hashtags: item.hashtags,
-            status: item.status,
-            scheduledAt: item.scheduledAt,
-            postedAt: item.postedAt,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-            brandId: item.brandId,
-            contentGroupId: item.contentGroupId,
-            contentSeriesId: item.contentSeriesId,
-            targetSocialAccountId: item.targetSocialAccountId,
-            recipeRunId: item.recipeRunId,
-            generatedByRecipe: item.recipeRun?.recipeTemplate ?? null,
-            schedulingError: item.schedulingError,
-            generationParams: item.generationParams,
-            contentType: item.contentType,
-            shareToFeed: item.shareToFeed,
-            thumbOffset: item.thumbOffset,
-            firstComment: item.firstComment,
-            firstCommentStatus: item.firstCommentStatus,
-            firstCommentPostedAt: item.firstCommentPostedAt,
-            firstCommentError: item.firstCommentError,
-            publishingQueueItemId: item.publishingQueueItem?.id ?? null,
-            primaryAssetId: item.mediaAssets?.[0]?.assetId ?? null,
-            mediaAssets: item.mediaAssets,
-            mediaAssetCount: item._count?.mediaAssets ?? null,
-          })),
-        },
-      });
-    }
-  );
+async function createGetSeriesHandler(request: any, reply: any) {
+  const contentSeriesId = parseContentSeriesId(request.params?.contentSeriesId);
+  if (!contentSeriesId) {
+    return reply.code(400).send({ error: 'invalid_content_series_id' });
+  }
 
-  // PATCH /api/content/series/:contentSeriesId
-  fastify.patch<{
-    Params: { contentSeriesId: string };
-    Body: {
-      name?: string;
-      description?: string | null;
-      color?: string | null;
-      status?: 'active' | 'paused' | 'archived';
-      rolling?: {
-        enabled?: boolean;
-        minQueueDays?: number;
-        targetQueueDays?: number;
-        maxQueueDays?: number;
-        batchSize?: number;
-      };
-    };
-  }>('/series/:contentSeriesId', { preHandler: fastify.authenticate }, async (request, reply) => {
-    const userId = request.user!.id;
-    const { contentSeriesId } = request.params;
+  const series = await loadAuthorizedSeries({
+    contentSeriesId,
+    userId: request.user!.id,
+    reply,
+    select: {
+      id: true,
+      brandId: true,
+      key: true,
+      name: true,
+      description: true,
+      color: true,
+      kind: true,
+      status: true,
+      generatorJson: true,
+      rollingConfigJson: true,
+      createdAt: true,
+      updatedAt: true,
+      brand: { select: { id: true, userId: true } },
+    },
+  });
+  if (!series) {
+    return;
+  }
 
-    if (!contentSeriesId || typeof contentSeriesId !== 'string') {
+  const { contents, generations } = await loadSeriesDetails((series as any).id);
+  return reply.send(buildSeriesDetailsResponse(series, contents, generations));
+}
+
+function createPatchSeriesHandler() {
+  return async (request: any, reply: any) => {
+    const contentSeriesId = parseContentSeriesId(request.params?.contentSeriesId);
+    if (!contentSeriesId) {
       return reply.code(400).send({ error: 'invalid_content_series_id' });
     }
 
-    const series = await prisma.contentSeries.findUnique({
-      where: { id: contentSeriesId },
+    const series = await loadAuthorizedSeries({
+      contentSeriesId,
+      userId: request.user!.id,
+      reply,
       select: {
         id: true,
         brandId: true,
@@ -217,60 +266,28 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         brand: { select: { userId: true } },
       },
     });
-    if (!series?.brand) {
-      return reply.code(404).send({ error: 'content_series_not_found' });
-    }
-    if (series.brand.userId !== userId) {
-      return reply.code(404).send({ error: 'content_series_not_found' });
+    if (!series) {
+      return;
     }
 
-    await assertBrandOwnership(userId, series.brandId);
-
-    const nextName = typeof request.body?.name === 'string' ? request.body.name.trim() : undefined;
-    const nextDescription =
-      request.body?.description === null
-        ? null
-        : typeof request.body?.description === 'string'
-          ? request.body.description.trim()
-          : undefined;
-    const nextColor =
-      request.body?.color === null
-        ? null
-        : typeof request.body?.color === 'string'
-          ? request.body.color.trim()
-          : undefined;
-    const nextStatus =
-      request.body?.status === 'active' ||
-      request.body?.status === 'paused' ||
-      request.body?.status === 'archived'
-        ? request.body.status
-        : undefined;
-    const nextRollingPartial =
-      request.body?.rolling && typeof request.body.rolling === 'object'
-        ? request.body.rolling
-        : undefined;
-
-    if (nextName?.length === 0) {
-      return reply.code(400).send({ error: 'invalid_name' });
+    const patchPayload = parseSeriesPatchPayload(request.body, (series as any).rollingConfigJson);
+    if ('error' in patchPayload) {
+      return reply.code(400).send({ error: patchPayload.error });
     }
-
-    const mergedRolling =
-      nextRollingPartial !== undefined
-        ? normalizeSeriesRollingConfig({
-            ...(series as any).rollingConfigJson,
-            ...nextRollingPartial,
-          })
-        : undefined;
 
     const updated = await prisma.contentSeries.update({
       where: { id: contentSeriesId },
       data: {
-        ...(nextName !== undefined ? { name: nextName } : {}),
-        ...(nextDescription !== undefined ? { description: nextDescription } : {}),
-        ...(nextColor !== undefined ? { color: nextColor } : {}),
-        ...(nextStatus !== undefined ? { status: nextStatus } : {}),
-        ...(mergedRolling !== undefined ? { rollingConfigJson: mergedRolling as any } : {}),
-        ...(mergedRolling?.enabled ? { kind: 'rolling' } : {}),
+        ...(patchPayload.nextName !== undefined ? { name: patchPayload.nextName } : {}),
+        ...(patchPayload.nextDescription !== undefined
+          ? { description: patchPayload.nextDescription }
+          : {}),
+        ...(patchPayload.nextColor !== undefined ? { color: patchPayload.nextColor } : {}),
+        ...(patchPayload.nextStatus !== undefined ? { status: patchPayload.nextStatus } : {}),
+        ...(patchPayload.mergedRolling !== undefined
+          ? { rollingConfigJson: patchPayload.mergedRolling as any }
+          : {}),
+        ...(patchPayload.mergedRolling?.enabled ? { kind: 'rolling' } : {}),
       },
       select: {
         id: true,
@@ -289,69 +306,90 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     return reply.send({ success: true, data: { contentSeries: updated } });
-  });
+  };
+}
 
-  // GET /api/content/series/:contentSeriesId/rolling/status
+function createGetRollingStatusHandler() {
+  return async (request: any, reply: any) => {
+    const contentSeriesId = parseContentSeriesId(request.params?.contentSeriesId);
+    if (!contentSeriesId) {
+      return reply.code(400).send({ error: 'invalid_content_series_id' });
+    }
+
+    const series = await loadAuthorizedSeries({
+      contentSeriesId,
+      userId: request.user!.id,
+      reply,
+      select: { id: true, brandId: true, brand: { select: { userId: true } } },
+    });
+    if (!series) {
+      return;
+    }
+
+    const status = await contentSeriesRollingService.getStatus(contentSeriesId);
+    if (!status) {
+      return reply.code(404).send({ error: 'content_series_not_found' });
+    }
+    return reply.send({ success: true, data: { rolling: status } });
+  };
+}
+
+function createRefreshRollingHandler() {
+  return async (request: any, reply: any) => {
+    const contentSeriesId = parseContentSeriesId(request.params?.contentSeriesId);
+    if (!contentSeriesId) {
+      return reply.code(400).send({ error: 'invalid_content_series_id' });
+    }
+
+    const series = await loadAuthorizedSeries({
+      contentSeriesId,
+      userId: request.user!.id,
+      reply,
+      select: { id: true, brandId: true, brand: { select: { userId: true } } },
+    });
+    if (!series) {
+      return;
+    }
+
+    const result = await contentSeriesRollingService.refresh(contentSeriesId);
+    return reply.send({ success: true, data: { rollingRefresh: result } });
+  };
+}
+
+const seriesRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get<{ Params: { contentSeriesId: string } }>(
+    '/series/:contentSeriesId',
+    { preHandler: fastify.authenticate },
+    createGetSeriesHandler
+  );
+
+  fastify.patch<{
+    Params: { contentSeriesId: string };
+    Body: {
+      name?: string;
+      description?: string | null;
+      color?: string | null;
+      status?: 'active' | 'paused' | 'archived';
+      rolling?: {
+        enabled?: boolean;
+        minQueueDays?: number;
+        targetQueueDays?: number;
+        maxQueueDays?: number;
+        batchSize?: number;
+      };
+    };
+  }>('/series/:contentSeriesId', { preHandler: fastify.authenticate }, createPatchSeriesHandler());
+
   fastify.get<{ Params: { contentSeriesId: string } }>(
     '/series/:contentSeriesId/rolling/status',
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const userId = request.user!.id;
-      const { contentSeriesId } = request.params;
-
-      if (!contentSeriesId || typeof contentSeriesId !== 'string') {
-        return reply.code(400).send({ error: 'invalid_content_series_id' });
-      }
-
-      const series = await prisma.contentSeries.findUnique({
-        where: { id: contentSeriesId },
-        select: { id: true, brandId: true, brand: { select: { userId: true } } },
-      });
-      if (!series?.brand) {
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
-      if (series.brand.userId !== userId) {
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
-
-      await assertBrandOwnership(userId, series.brandId);
-
-      const status = await contentSeriesRollingService.getStatus(contentSeriesId);
-      if (!status) {
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
-      return reply.send({ success: true, data: { rolling: status } });
-    }
+    createGetRollingStatusHandler()
   );
 
-  // POST /api/content/series/:contentSeriesId/rolling/refresh
   fastify.post<{ Params: { contentSeriesId: string } }>(
     '/series/:contentSeriesId/rolling/refresh',
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const userId = request.user!.id;
-      const { contentSeriesId } = request.params;
-
-      if (!contentSeriesId || typeof contentSeriesId !== 'string') {
-        return reply.code(400).send({ error: 'invalid_content_series_id' });
-      }
-
-      const series = await prisma.contentSeries.findUnique({
-        where: { id: contentSeriesId },
-        select: { id: true, brandId: true, brand: { select: { userId: true } } },
-      });
-      if (!series?.brand) {
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
-      if (series.brand.userId !== userId) {
-        return reply.code(404).send({ error: 'content_series_not_found' });
-      }
-
-      await assertBrandOwnership(userId, series.brandId);
-
-      const result = await contentSeriesRollingService.refresh(contentSeriesId);
-      return reply.send({ success: true, data: { rollingRefresh: result } });
-    }
+    createRefreshRollingHandler()
   );
 };
 

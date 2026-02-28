@@ -105,7 +105,7 @@ export async function loadRecentContentWindow(
 
 export async function loadBrandLocation(
   brandId: string,
-  reqId: string
+  _reqId: string
 ): Promise<BrandLocationContext | null> {
   try {
     const brand = await prisma.brand.findUnique({
@@ -117,8 +117,7 @@ export async function loadBrandLocation(
     });
 
     return brand ?? null;
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+  } catch {
     return null;
   }
 }

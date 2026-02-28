@@ -20,12 +20,23 @@ import {
 } from '../validators/schedule-validator';
 import { createErrorResponse, createSuccessResponse } from '../utils/response-utils';
 import { authenticateRequest, AuthenticationError } from '../utils/auth';
+import {
+  createCorsPreflightResponse,
+  getBody,
+  getMethod,
+  getPath,
+  getQueryParams,
+} from './http-event-utils';
 
 const logger = new Logger({ serviceName: 'schedule-management-http' });
 const metrics = new Metrics({
   namespace: 'ContentScheduler',
   serviceName: 'schedule-management-http',
 });
+
+type ParsedUpdateRequestResult =
+  | { updateRequest: Record<string, unknown> }
+  | { errorResponse: APIGatewayProxyResult };
 
 export class HttpHandler {
   private scheduleService: ScheduleService;
@@ -41,25 +52,16 @@ export class HttpHandler {
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2
   ): Promise<APIGatewayProxyResult> {
     logger.info('Processing HTTP request', {
-      path: this.getPath(event),
-      method: this.getMethod(event),
+      path: getPath(event),
+      method: getMethod(event),
     });
 
-    const method = this.getMethod(event);
-    const path = this.getPath(event);
+    const method = getMethod(event);
+    const path = getPath(event);
 
     // Handle OPTIONS requests for CORS
     if (method === 'OPTIONS') {
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-        body: '',
-      };
+      return createCorsPreflightResponse();
     }
 
     try {
@@ -158,7 +160,7 @@ export class HttpHandler {
     userId: string
   ): Promise<APIGatewayProxyResult> {
     try {
-      const body = this.getBody(event);
+      const body = getBody(event);
 
       let scheduleRequest;
       try {
@@ -217,7 +219,7 @@ export class HttpHandler {
     userId: string
   ): Promise<APIGatewayProxyResult> {
     try {
-      const body = this.getBody(event);
+      const body = getBody(event);
 
       let scheduleRequest;
       try {
@@ -276,7 +278,7 @@ export class HttpHandler {
     userId: string
   ): Promise<APIGatewayProxyResult> {
     try {
-      const queryParams = this.getQueryParams(event);
+      const queryParams = getQueryParams(event);
 
       // Brand ID is required for listing schedules
       if (!queryParams.brandId) {
@@ -360,34 +362,14 @@ export class HttpHandler {
         return createErrorResponse(403, 'Forbidden: You do not have access to this schedule');
       }
 
-      const body = this.getBody(event);
-      let updateRequest: Record<string, unknown>;
-      try {
-        const parsed = JSON.parse(body);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          return createErrorResponse(
-            400,
-            'Invalid JSON in request body',
-            undefined,
-            'INVALID_REQUEST_BODY'
-          );
-        }
-        updateRequest = parsed as Record<string, unknown>;
-      } catch {
-        return createErrorResponse(
-          400,
-          'Invalid JSON in request body',
-          undefined,
-          'INVALID_REQUEST_BODY'
-        );
+      const parsedUpdateRequest = this.parseUpdateRequest(event);
+      if ('errorResponse' in parsedUpdateRequest) {
+        return parsedUpdateRequest.errorResponse;
       }
+      const { updateRequest } = parsedUpdateRequest;
 
       // Never allow userId override (publisher token retrieval depends on schedule userId).
-      if (
-        typeof updateRequest.userId === 'string' &&
-        updateRequest.userId.length > 0 &&
-        updateRequest.userId !== userId
-      ) {
+      if (this.isUserIdOverrideAttempt(updateRequest, userId)) {
         logger.warn('Attempted userId override in schedule update request', {
           userId,
           scheduleId,
@@ -418,6 +400,44 @@ export class HttpHandler {
       logger.error('Failed to update schedule', { error, scheduleId });
       return createErrorResponse(500, 'Failed to update schedule');
     }
+  }
+
+  private parseUpdateRequest(
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+  ): ParsedUpdateRequestResult {
+    const body = getBody(event);
+    try {
+      const parsed = JSON.parse(body);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {
+          errorResponse: createErrorResponse(
+            400,
+            'Invalid JSON in request body',
+            undefined,
+            'INVALID_REQUEST_BODY'
+          ),
+        };
+      }
+
+      return { updateRequest: parsed as Record<string, unknown> };
+    } catch {
+      return {
+        errorResponse: createErrorResponse(
+          400,
+          'Invalid JSON in request body',
+          undefined,
+          'INVALID_REQUEST_BODY'
+        ),
+      };
+    }
+  }
+
+  private isUserIdOverrideAttempt(updateRequest: Record<string, unknown>, userId: string): boolean {
+    return (
+      typeof updateRequest.userId === 'string' &&
+      updateRequest.userId.length > 0 &&
+      updateRequest.userId !== userId
+    );
   }
 
   /**
@@ -478,52 +498,6 @@ export class HttpHandler {
       logger.error('Health check failed', { error });
       return createErrorResponse(503, 'Health check failed');
     }
-  }
-
-  // Utility methods for extracting data from different event types
-  private getMethod(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
-    if ('httpMethod' in event) {
-      return event.httpMethod; // API Gateway v1.0
-    }
-    return event.requestContext.http.method; // API Gateway v2.0 / Function URL
-  }
-
-  private getPath(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
-    if ('path' in event) {
-      return event.path; // API Gateway v1.0
-    }
-    return event.requestContext.http.path; // API Gateway v2.0 / Function URL
-  }
-
-  private getBody(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): string {
-    return event.body || '{}';
-  }
-
-  private getQueryParams(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
-  ): Record<string, string> {
-    if ('queryStringParameters' in event) {
-      // Filter out undefined values from query parameters
-      const params: Record<string, string> = {};
-      if (event.queryStringParameters) {
-        for (const [key, value] of Object.entries(event.queryStringParameters)) {
-          if (value !== undefined) {
-            params[key] = value;
-          }
-        }
-      }
-      return params;
-    }
-    // API Gateway v2.0 / Function URL
-    const params: Record<string, string> = {};
-    if (event.queryStringParameters) {
-      for (const [key, value] of Object.entries(event.queryStringParameters)) {
-        if (value !== undefined) {
-          params[key] = value;
-        }
-      }
-    }
-    return params;
   }
 
   /**

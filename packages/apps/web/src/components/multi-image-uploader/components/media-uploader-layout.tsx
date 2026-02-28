@@ -31,6 +31,135 @@ type MediaUploaderLayoutProps = {
   onResetError: () => void;
 };
 
+type DropzoneConfigProps = Pick<
+  MediaUploaderLayoutProps,
+  | 'allowMixedMedia'
+  | 'maxImages'
+  | 'maxSizeInMB'
+  | 'maxVideoSizeInMB'
+  | 'mediaItems'
+  | 'isDragging'
+  | 'isUploadInProgress'
+  | 'isUploadingVideo'
+  | 'videoUploadProgress'
+  | 'onDropzoneClick'
+  | 'onDropzoneDragOver'
+  | 'onDropzoneDragLeave'
+  | 'onDropzoneDrop'
+>;
+
+function UploadDropzone({
+  variant,
+  config,
+}: {
+  variant: 'full' | 'card';
+  config: DropzoneConfigProps;
+}) {
+  return (
+    <Dropzone
+      variant={variant}
+      allowMixedMedia={config.allowMixedMedia}
+      maxImages={config.maxImages}
+      maxSizeInMB={config.maxSizeInMB}
+      maxVideoSizeInMB={config.maxVideoSizeInMB}
+      mediaItemCount={config.mediaItems.length}
+      isDragging={config.isDragging}
+      isUploadInProgress={config.isUploadInProgress}
+      isUploadingVideo={config.isUploadingVideo}
+      videoUploadProgress={config.videoUploadProgress}
+      onClick={config.onDropzoneClick}
+      onDragOver={config.onDropzoneDragOver}
+      onDragLeave={config.onDropzoneDragLeave}
+      onDrop={config.onDropzoneDrop}
+    />
+  );
+}
+
+function MediaItemsGrid({
+  mediaItems,
+  enableUpload,
+  maxImages,
+  draggedIndex,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onRemove,
+  dropzoneConfig,
+}: {
+  mediaItems: MediaItem[];
+  enableUpload: boolean;
+  maxImages: number;
+  draggedIndex: number | null;
+  onDragStart: MediaUploaderLayoutProps['onDragStart'];
+  onDragOver: MediaUploaderLayoutProps['onDragOver'];
+  onDragEnd: MediaUploaderLayoutProps['onDragEnd'];
+  onRemove: MediaUploaderLayoutProps['onRemove'];
+  dropzoneConfig: DropzoneConfigProps;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+      {mediaItems.map((media, index) => (
+        <MediaCard
+          key={`${media.url}-${index}`}
+          type={media.type}
+          src={media.url}
+          index={index}
+          alt={`Upload ${index + 1}`}
+          draggable={enableUpload && !media.uploading}
+          onDragStart={enableUpload ? (event) => onDragStart(event, index) : undefined}
+          onDragOver={enableUpload ? (event) => onDragOver(event, index) : undefined}
+          onDragEnd={enableUpload ? onDragEnd : undefined}
+          onRemove={enableUpload && !media.uploading ? () => onRemove(index) : undefined}
+          isUploading={media.uploading}
+          progressPercent={media.progressPercent}
+          showDragHandle={enableUpload && media.type === 'image'}
+          className={cn(draggedIndex === index && 'opacity-50')}
+        />
+      ))}
+      {enableUpload && mediaItems.length < maxImages ? (
+        <UploadDropzone variant="card" config={dropzoneConfig} />
+      ) : null}
+    </div>
+  );
+}
+
+function VideoCard({
+  videoUrl,
+  isUploadingVideo,
+  videoUploadProgress,
+  onVideoChange,
+  onResetError,
+}: {
+  videoUrl: string | undefined;
+  isUploadingVideo: boolean;
+  videoUploadProgress: UploadProgress | null;
+  onVideoChange?: (url: string) => void;
+  onResetError: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+      <MediaCard
+        type="video"
+        src={videoUrl ?? ''}
+        index={0}
+        showOrderBadge
+        draggable={false}
+        onRemove={
+          onVideoChange
+            ? () => {
+                onVideoChange('');
+                onResetError();
+              }
+            : undefined
+        }
+        isUploading={isUploadingVideo}
+        progressPercent={videoUploadProgress?.percentage}
+        showDragHandle={false}
+      />
+    </div>
+  );
+}
+
 export function MediaUploaderLayout({
   enableUpload,
   allowMixedMedia,
@@ -56,90 +185,50 @@ export function MediaUploaderLayout({
   onVideoChange,
   onResetError,
 }: MediaUploaderLayoutProps) {
+  const dropzoneConfig: DropzoneConfigProps = {
+    allowMixedMedia,
+    maxImages,
+    maxSizeInMB,
+    maxVideoSizeInMB,
+    mediaItems,
+    isDragging,
+    isUploadInProgress,
+    isUploadingVideo,
+    videoUploadProgress,
+    onDropzoneClick,
+    onDropzoneDragOver,
+    onDropzoneDragLeave,
+    onDropzoneDrop,
+  };
+
   return (
     <>
       {!mediaItems.length && !hasVideo && enableUpload && (
-        <Dropzone
-          variant="full"
-          allowMixedMedia={allowMixedMedia}
-          maxImages={maxImages}
-          maxSizeInMB={maxSizeInMB}
-          maxVideoSizeInMB={maxVideoSizeInMB}
-          mediaItemCount={mediaItems.length}
-          isDragging={isDragging}
-          isUploadInProgress={isUploadInProgress}
-          isUploadingVideo={isUploadingVideo}
-          videoUploadProgress={videoUploadProgress}
-          onClick={onDropzoneClick}
-          onDragOver={onDropzoneDragOver}
-          onDragLeave={onDropzoneDragLeave}
-          onDrop={onDropzoneDrop}
-        />
+        <UploadDropzone variant="full" config={dropzoneConfig} />
       )}
 
       {mediaItems.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {mediaItems.map((media, index) => (
-            <MediaCard
-              key={`${media.url}-${index}`}
-              type={media.type}
-              src={media.url}
-              index={index}
-              alt={`Upload ${index + 1}`}
-              draggable={enableUpload && !media.uploading}
-              onDragStart={enableUpload ? (event) => onDragStart(event, index) : undefined}
-              onDragOver={enableUpload ? (event) => onDragOver(event, index) : undefined}
-              onDragEnd={enableUpload ? onDragEnd : undefined}
-              onRemove={enableUpload && !media.uploading ? () => onRemove(index) : undefined}
-              isUploading={media.uploading}
-              progressPercent={media.progressPercent}
-              showDragHandle={enableUpload && media.type === 'image'}
-              className={cn(draggedIndex === index && 'opacity-50')}
-            />
-          ))}
-
-          {enableUpload && mediaItems.length < maxImages && (
-            <Dropzone
-              variant="card"
-              allowMixedMedia={allowMixedMedia}
-              maxImages={maxImages}
-              maxSizeInMB={maxSizeInMB}
-              maxVideoSizeInMB={maxVideoSizeInMB}
-              mediaItemCount={mediaItems.length}
-              isDragging={isDragging}
-              isUploadInProgress={isUploadInProgress}
-              isUploadingVideo={isUploadingVideo}
-              videoUploadProgress={videoUploadProgress}
-              onClick={onDropzoneClick}
-              onDragOver={onDropzoneDragOver}
-              onDragLeave={onDropzoneDragLeave}
-              onDrop={onDropzoneDrop}
-            />
-          )}
-        </div>
+        <MediaItemsGrid
+          mediaItems={mediaItems}
+          enableUpload={enableUpload}
+          maxImages={maxImages}
+          draggedIndex={draggedIndex}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          onRemove={onRemove}
+          dropzoneConfig={dropzoneConfig}
+        />
       )}
 
       {!allowMixedMedia && !mediaItems.length && hasVideo && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          <MediaCard
-            type="video"
-            src={videoUrl ?? ''}
-            index={0}
-            showOrderBadge
-            draggable={false}
-            onRemove={
-              onVideoChange
-                ? () => {
-                    onVideoChange('');
-                    onResetError();
-                  }
-                : undefined
-            }
-            isUploading={isUploadingVideo}
-            progressPercent={videoUploadProgress?.percentage}
-            showDragHandle={false}
-          />
-        </div>
+        <VideoCard
+          videoUrl={videoUrl}
+          isUploadingVideo={isUploadingVideo}
+          videoUploadProgress={videoUploadProgress}
+          onVideoChange={onVideoChange}
+          onResetError={onResetError}
+        />
       )}
     </>
   );

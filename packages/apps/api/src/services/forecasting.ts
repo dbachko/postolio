@@ -1,4 +1,5 @@
 import { getDatabaseClient } from '../config/database.js';
+import { createDefaultForecastReport } from './forecasting-default-report.js';
 
 const prisma = getDatabaseClient();
 
@@ -75,7 +76,7 @@ export class ForecastingService {
 
     if (publications.length < 10) {
       // Not enough data for accurate forecasting
-      return this.getDefaultForecast(brandId, forecastDays);
+      return createDefaultForecastReport(brandId, forecastDays);
     }
 
     // Build time series data
@@ -97,12 +98,8 @@ export class ForecastingService {
     );
 
     // Calculate current values
-    const recentData = timeSeriesData.slice(-7);
-    const currentEngagement =
-      recentData.reduce((sum, d) => sum + d.engagement, 0) / recentData.length;
-    const currentEngagementRate =
-      recentData.reduce((sum, d) => sum + d.engagementRate, 0) / recentData.length;
-    const currentReach = recentData.reduce((sum, d) => sum + d.reach, 0) / recentData.length;
+    const { currentEngagement, currentEngagementRate, currentReach } =
+      this.calculateCurrentMetrics(timeSeriesData);
 
     // Generate recommendations
     const recommendations = this.generateRecommendations(
@@ -146,6 +143,20 @@ export class ForecastingService {
       },
       recommendations,
     };
+  }
+
+  private calculateCurrentMetrics(timeSeriesData: any[]): {
+    currentEngagement: number;
+    currentEngagementRate: number;
+    currentReach: number;
+  } {
+    const recentData = timeSeriesData.slice(-7);
+    const currentEngagement =
+      recentData.reduce((sum, d) => sum + d.engagement, 0) / recentData.length;
+    const currentEngagementRate =
+      recentData.reduce((sum, d) => sum + d.engagementRate, 0) / recentData.length;
+    const currentReach = recentData.reduce((sum, d) => sum + d.reach, 0) / recentData.length;
+    return { currentEngagement, currentEngagementRate, currentReach };
   }
 
   /**
@@ -277,7 +288,7 @@ export class ForecastingService {
     const dataPoints: ForecastDataPoint[] = [];
     let currentValue = recentAvg;
     // For stable trends, don't drift
-    const dailyChange = trend === 'stable' ? 0 : windowSize > 0 ? changeRate / windowSize : 0;
+    const dailyChange = this.calculateDailyChange(trend, changeRate, windowSize);
 
     const today = new Date();
     for (let i = 1; i <= forecastDays; i++) {
@@ -403,21 +414,17 @@ export class ForecastingService {
   }
 
   /**
-   * Calculate moving average
+   * Calculate per-day drift from recent change rate.
    */
-  private calculateMovingAverage(values: number[], windowSize: number): number[] {
-    const result: number[] = [];
-    // Protect against invalid window size
-    if (windowSize <= 0 || values.length === 0) {
-      return result;
+  private calculateDailyChange(
+    trend: 'increasing' | 'decreasing' | 'stable',
+    changeRate: number,
+    windowSize: number
+  ): number {
+    if (trend === 'stable' || windowSize <= 0) {
+      return 0;
     }
-
-    for (let i = windowSize - 1; i < values.length; i++) {
-      const window = values.slice(i - windowSize + 1, i + 1);
-      const avg = window.reduce((sum, v) => sum + v, 0) / windowSize;
-      result.push(avg);
-    }
-    return result;
+    return changeRate / windowSize;
   }
 
   /**
@@ -473,52 +480,6 @@ export class ForecastingService {
     }
 
     return recommendations;
-  }
-
-  /**
-   * Default forecast for brands with insufficient data
-   */
-  private getDefaultForecast(brandId: string, forecastDays: number): ForecastReport {
-    return {
-      brandId,
-      generatedAt: new Date(),
-      period: forecastDays,
-      forecasts: {
-        engagement: {
-          current: 0,
-          predicted: [],
-          trend: 'stable',
-          confidence: 0,
-        },
-        followerGrowth: {
-          current: 0,
-          predicted: [],
-          expectedGrowth: 0,
-          expectedFollowers: 0,
-          trend: 'stable',
-          confidence: 0,
-        },
-        engagementRate: {
-          current: 0,
-          predicted: [],
-          trend: 'stable',
-          confidence: 0,
-        },
-        reach: {
-          current: 0,
-          predicted: [],
-          expectedReach: 0,
-          trend: 'stable',
-          confidence: 0,
-        },
-      },
-      recommendations: [
-        'Publish more content',
-        'Publish more content to improve forecast accuracy.',
-        'Publish at least 10 posts to enable accurate forecasting.',
-        'Consistent posting over 2-3 weeks will improve prediction accuracy.',
-      ],
-    };
   }
 }
 

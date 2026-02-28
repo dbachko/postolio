@@ -418,7 +418,8 @@ describe('Social Platform Routes', () => {
 
       expect(response.statusCode).toBe(500);
       const payload = JSON.parse(response.payload);
-      expect(payload.error).toContain('Rate limit exceeded');
+      expect(payload.error).toBe('publish_failed');
+      expect(payload.message).toContain('Rate limit exceeded');
     });
   });
 

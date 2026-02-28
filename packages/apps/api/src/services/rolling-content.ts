@@ -167,12 +167,139 @@ class RollingContentService {
   /**
    * Generate and schedule new content to maintain queue
    */
+  private getGenerationPreferences(preferences: unknown) {
+    const defaults = {
+      themes: ['lifestyle', 'inspiration', 'behind-the-scenes'],
+      style: 'modern',
+    };
+    if (!preferences || typeof preferences !== 'object' || !('contentStrategy' in preferences)) {
+      return defaults;
+    }
+
+    const contentStrategyVal = (preferences as Record<string, unknown>).contentStrategy;
+    if (!contentStrategyVal || typeof contentStrategyVal !== 'object') {
+      return defaults;
+    }
+
+    const strategy = contentStrategyVal as { themes?: unknown; style?: unknown };
+    const themes = Array.isArray(strategy.themes)
+      ? strategy.themes.filter((theme): theme is string => typeof theme === 'string')
+      : defaults.themes;
+    const style = typeof strategy.style === 'string' ? strategy.style : defaults.style;
+    return {
+      themes: themes.length > 0 ? themes : defaults.themes,
+      style,
+    };
+  }
+
+  private async generateBatch(params: {
+    brandId: string;
+    brandName: string;
+    themes: string[];
+    style: string;
+    postsNeeded: number;
+  }) {
+    const generatedContent = [];
+    for (let i = 0; i < params.postsNeeded; i++) {
+      const theme = params.themes[i % params.themes.length];
+      const contentRequest: ContentGenerationRequest = {
+        brandId: params.brandId,
+        count: 1,
+        theme,
+        style: params.style,
+      };
+      const content = await generateInstagramContent(params.brandName, contentRequest);
+      generatedContent.push(...content);
+    }
+    return generatedContent;
+  }
+
+  private async tryAttachGeneratedAsset(params: {
+    generated: { imageUrl?: string; imageMetadata?: unknown };
+    contentId: string;
+    brandId: string;
+  }) {
+    if (!params.generated.imageUrl || !params.generated.imageMetadata) {
+      return;
+    }
+
+    try {
+      const asset = await resolveGeneratedImageAsset(
+        params.generated.imageUrl,
+        params.generated.imageMetadata as
+          | { source: string; originalPrompt: string; assetId?: string }
+          | undefined,
+        {
+          contentId: params.contentId,
+          brandId: params.brandId,
+        }
+      );
+      await attachAssetToContent({ contentId: params.contentId, asset });
+      rollingLogger.info(`[RollingContent] Asset imported for content ${params.contentId}`, {
+        brandId: params.brandId,
+        assetId: asset.id,
+      });
+    } catch (error) {
+      rollingLogger.error(
+        `[RollingContent] Failed to import asset for content ${params.contentId}; leaving post without media`,
+        {
+          brandId: params.brandId,
+          error:
+            error instanceof Error ? { name: error.name, message: error.message } : String(error),
+        }
+      );
+    }
+  }
+
+  private async saveAndScheduleGeneratedContent(params: {
+    brandId: string;
+    seriesId: string;
+    style: string;
+    generatedContent: Array<{
+      caption: string;
+      imagePrompt?: string;
+      imageUrl?: string;
+      imageMetadata?: unknown;
+    }>;
+  }) {
+    for (const generated of params.generatedContent) {
+      const savedContent = await prisma.content.create({
+        data: {
+          caption: generated.caption,
+          hashtags: extractHashtagsFromCaption(generated.caption),
+          brandId: params.brandId,
+          contentSeriesId: params.seriesId,
+          status: 'scheduled',
+          generationParams: {
+            source: 'rolling_generation',
+            theme: generated.imagePrompt || 'lifestyle',
+            style: params.style,
+            generatedAt: new Date().toISOString(),
+            rollingGeneration: true,
+          },
+        },
+      });
+
+      await this.tryAttachGeneratedAsset({
+        generated,
+        contentId: savedContent.id,
+        brandId: params.brandId,
+      });
+
+      const nextSlot = await this.getNextAvailableSlot(params.brandId);
+      await schedulerService.scheduleContent(savedContent.id, nextSlot);
+
+      rollingLogger.info(
+        `Generated and scheduled rolling content: ${savedContent.id} for ${nextSlot.toISOString()}`
+      );
+    }
+  }
+
   private async generateAndScheduleContent(
     brandId: string,
     queueStatus: QueueStatus
   ): Promise<void> {
     try {
-      // Get brand information and style profile
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
@@ -186,116 +313,29 @@ class RollingContentService {
         throw new Error(`Brand ${brandId} not found`);
       }
 
-      let themes = ['lifestyle', 'inspiration', 'behind-the-scenes']; // defaults
-      let style = 'modern'; // default
-      // Prefer brand-level content strategy (if configured).
-      const prefsRaw = brand.preferences as unknown;
-      let prefs: { themes?: string[]; style?: string } | undefined;
-      if (prefsRaw && typeof prefsRaw === 'object' && 'contentStrategy' in prefsRaw) {
-        const maybeRecord = prefsRaw as Record<string, unknown>;
-        const contentStrategyVal = maybeRecord.contentStrategy;
-        if (contentStrategyVal && typeof contentStrategyVal === 'object') {
-          const csObj = contentStrategyVal as {
-            themes?: unknown;
-            style?: unknown;
-          };
-          const themesVal = Array.isArray(csObj.themes)
-            ? csObj.themes.filter((t): t is string => typeof t === 'string')
-            : undefined;
-          const styleVal = typeof csObj.style === 'string' ? csObj.style : undefined;
-          prefs = { themes: themesVal, style: styleVal };
-        }
-      }
-      if (prefs) {
-        themes = prefs.themes || themes;
-        style = prefs.style || style;
-      }
+      const { themes, style } = this.getGenerationPreferences(brand.preferences as unknown);
       rollingLogger.info('Using brand preferences for rolling generation');
 
-      // Get or generate style profile
-
-      // Calculate how many posts to generate
       const postsNeeded = Math.min(
         DEFAULT_CONFIG.batchSize,
         DEFAULT_CONFIG.targetQueueSize - queueStatus.daysAhead
       );
 
       rollingLogger.info(`Generating ${postsNeeded} posts for brand: ${brand.name}`);
-
-      // Generate content
-      const generatedContent = [];
-      for (let i = 0; i < postsNeeded; i++) {
-        const theme = themes[i % themes.length];
-
-        const contentRequest: ContentGenerationRequest = {
-          brandId,
-          count: 1,
-          theme,
-          style,
-        };
-
-        const content = await generateInstagramContent(brand.name, contentRequest);
-        generatedContent.push(...content);
-      }
-
-      // Save and schedule the generated content
+      const generatedContent = await this.generateBatch({
+        brandId,
+        brandName: brand.name,
+        themes,
+        style,
+        postsNeeded,
+      });
       const rollingSeries = await this.ensureRollingSeries(brandId);
-      for (const content of generatedContent) {
-        // Save to database
-        const savedContent = await prisma.content.create({
-          data: {
-            caption: content.caption,
-            hashtags: extractHashtagsFromCaption(content.caption),
-            brandId,
-            contentSeriesId: rollingSeries.id,
-            status: 'scheduled', // Auto-schedule rolling content
-            generationParams: {
-              source: 'rolling_generation',
-              theme: content.imagePrompt || 'lifestyle',
-              style,
-              generatedAt: new Date().toISOString(),
-              rollingGeneration: true,
-            },
-          },
-        });
-
-        // Synchronous asset import via assets service to ensure media is attached
-        if (content.imageUrl && content.imageMetadata) {
-          const contentId = savedContent.id;
-          const { imageUrl, imageMetadata } = content;
-
-          try {
-            const asset = await resolveGeneratedImageAsset(imageUrl, imageMetadata, {
-              contentId,
-              brandId,
-            });
-            await attachAssetToContent({ contentId, asset });
-            rollingLogger.info(`[RollingContent] Asset imported for content ${contentId}`, {
-              brandId,
-              assetId: asset.id,
-            });
-          } catch (error) {
-            rollingLogger.error(
-              `[RollingContent] Failed to import asset for content ${contentId}; leaving post without media`,
-              {
-                brandId,
-                error:
-                  error instanceof Error
-                    ? { name: error.name, message: error.message }
-                    : String(error),
-              }
-            );
-          }
-        }
-
-        // Schedule the content
-        const nextSlot = await this.getNextAvailableSlot(brandId);
-        await schedulerService.scheduleContent(savedContent.id, nextSlot);
-
-        rollingLogger.info(
-          `Generated and scheduled rolling content: ${savedContent.id} for ${nextSlot.toISOString()}`
-        );
-      }
+      await this.saveAndScheduleGeneratedContent({
+        brandId,
+        seriesId: rollingSeries.id,
+        style,
+        generatedContent,
+      });
 
       rollingLogger.info(`Rolling generation complete for brand: ${brand.name}`);
     } catch (error) {

@@ -6,6 +6,20 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const profileCache = new Map<string, Cached<BrandProfileContext | null>>();
 
 const prisma = getDatabaseClient();
+type TopicCount = { value: string; count: number };
+
+type ProfileSummaryProjection = {
+  text?: { tone?: string[] };
+  visual?: { palette?: string[]; motifs?: string[]; composition?: string[] };
+  topics?: TopicCount[];
+} | null;
+
+type StyleProfileData = {
+  text?: { tone?: string[] };
+  visual?: { palette?: string[]; motifs?: string[]; composition?: string[] };
+  topics?: TopicCount[];
+  archetype?: string;
+} | null;
 
 export interface BrandProfileContext {
   brandId: string;
@@ -21,19 +35,11 @@ export interface BrandProfileContext {
   createdAt: string;
 }
 
-/**
- * Fetch the latest brand profile projection context for generation.
- * Falls back to minimal empty context if not found.
- */
-export async function getBrandProfileContext(brandId: string): Promise<BrandProfileContext | null> {
-  // Cache hit
-  const cached = profileCache.get(brandId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
-  }
-
-  // Helper: minimal fallback context
-  const buildMinimal = (overrides?: Partial<BrandProfileContext>): BrandProfileContext => ({
+function buildMinimalProfileContext(
+  brandId: string,
+  overrides?: Partial<BrandProfileContext>
+): BrandProfileContext {
+  return {
     brandId,
     profileVersion: 0,
     tones: [],
@@ -41,57 +47,95 @@ export async function getBrandProfileContext(brandId: string): Promise<BrandProf
     topicsTop: null,
     createdAt: new Date().toISOString(),
     ...(overrides || {}),
-  });
+  };
+}
+
+function getCachedProfile(brandId: string): BrandProfileContext | null | undefined {
+  const cached = profileCache.get(brandId);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    return undefined;
+  }
+  return cached.value;
+}
+
+function setCachedProfile(brandId: string, value: BrandProfileContext | null): void {
+  profileCache.set(brandId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? (value as string[]) : [];
+}
+
+function asOptionalStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? (value as string[]) : undefined;
+}
+
+function asTopicsTop(value: unknown): TopicCount[] | null {
+  return Array.isArray(value) ? (value as TopicCount[]) : null;
+}
+
+function mapProjectionRowToContext(row: any): BrandProfileContext {
+  const summary = row.summaryProjection as unknown as ProfileSummaryProjection;
+  return {
+    brandId: row.brandId,
+    profileVersion: row.profileVersion,
+    promptSetVersion: row.promptSetVersion ?? undefined,
+    archetype: (row.archetype as string | null) ?? undefined,
+    tones: asStringArray(row.primaryTones),
+    palette: asStringArray(row.primaryPalette),
+    topicsTop: asTopicsTop(row.topicsTop),
+    motifs: asOptionalStringArray(summary?.visual?.motifs),
+    composition: asOptionalStringArray(summary?.visual?.composition),
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function mapStyleProfileToContext(params: {
+  brandId: string;
+  brandName?: string | null;
+  styleProfile: StyleProfileData;
+  createdAt?: Date;
+}): BrandProfileContext {
+  const styleProfile = params.styleProfile;
+  return {
+    brandId: params.brandId,
+    brandName: params.brandName ?? undefined,
+    profileVersion: 0,
+    promptSetVersion: null,
+    archetype: styleProfile?.archetype ?? null,
+    tones: asStringArray(styleProfile?.text?.tone),
+    palette: asStringArray(styleProfile?.visual?.palette),
+    topicsTop: asTopicsTop(styleProfile?.topics),
+    motifs: asOptionalStringArray(styleProfile?.visual?.motifs),
+    composition: asOptionalStringArray(styleProfile?.visual?.composition),
+    createdAt: (params.createdAt || new Date()).toISOString(),
+  };
+}
+
+/**
+ * Fetch the latest brand profile projection context for generation.
+ * Falls back to minimal empty context if not found.
+ */
+export async function getBrandProfileContext(brandId: string): Promise<BrandProfileContext | null> {
+  const cached = getCachedProfile(brandId);
+  if (cached !== undefined) {
+    return cached;
+  }
 
   try {
     const row = await prisma.brandStyleProfileProjection.findUnique({ where: { brandId } });
-    if (!row) {
-      // Fallback to brand.styleProfile if projection missing
-      const derived = await deriveFromBrandStyleProfile(brandId);
-      const value = derived || buildMinimal();
-      profileCache.set(brandId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
-      return value;
-    }
-
-    // Try to extract motifs/composition from summaryProjection if present
-    const summary = row.summaryProjection as unknown as {
-      text?: { tone?: string[] };
-      visual?: { palette?: string[]; motifs?: string[]; composition?: string[] };
-      topics?: Array<{ value: string; count: number }>;
-    } | null;
-
-    const tones: string[] = Array.isArray(row.primaryTones) ? row.primaryTones : [];
-    const palette: string[] = Array.isArray(row.primaryPalette) ? row.primaryPalette : [];
-    const topicsTop = (row.topicsTop as unknown as Array<{ value: string; count: number }>) || null;
-    const motifs: string[] | undefined = Array.isArray(summary?.visual?.motifs)
-      ? (summary!.visual!.motifs as string[])
-      : undefined;
-    const composition: string[] | undefined = Array.isArray(summary?.visual?.composition)
-      ? (summary!.visual!.composition as string[])
-      : undefined;
-
-    const value: BrandProfileContext = {
-      brandId: row.brandId,
-      profileVersion: row.profileVersion,
-      promptSetVersion: row.promptSetVersion ?? undefined,
-      archetype: (row.archetype as string | null) ?? undefined,
-      tones,
-      palette,
-      topicsTop,
-      motifs,
-      composition,
-      createdAt: row.createdAt.toISOString(),
-    };
-
-    profileCache.set(brandId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+    const value = row
+      ? mapProjectionRowToContext(row)
+      : ((await deriveFromBrandStyleProfile(brandId)) ?? buildMinimalProfileContext(brandId));
+    setCachedProfile(brandId, value);
     return value;
   } catch (error) {
     // Prisma known request errors could indicate missing table/column after deploys
     const code = (error as { code?: string }).code;
     console.warn('Brand profile projection fetch failed; using fallback', { brandId, code });
-    const derived = await deriveFromBrandStyleProfile(brandId);
-    const value = derived || buildMinimal();
-    profileCache.set(brandId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+    const value =
+      (await deriveFromBrandStyleProfile(brandId)) ?? buildMinimalProfileContext(brandId);
+    setCachedProfile(brandId, value);
     return value;
   }
 }
@@ -110,36 +154,12 @@ async function deriveFromBrandStyleProfile(brandId: string): Promise<BrandProfil
       return null;
     }
 
-    const sp = brand.styleProfile as unknown as {
-      text?: { tone?: string[] };
-      visual?: { palette?: string[]; motifs?: string[]; composition?: string[] };
-      topics?: Array<{ value: string; count: number }>;
-      archetype?: string;
-    } | null;
-
-    const tones = Array.isArray(sp?.text?.tone) ? (sp!.text!.tone as string[]) : [];
-    const palette = Array.isArray(sp?.visual?.palette) ? (sp!.visual!.palette as string[]) : [];
-    const motifs = Array.isArray(sp?.visual?.motifs) ? (sp!.visual!.motifs as string[]) : undefined;
-    const composition = Array.isArray(sp?.visual?.composition)
-      ? (sp!.visual!.composition as string[])
-      : undefined;
-    const topicsTop = Array.isArray(sp?.topics)
-      ? (sp!.topics as Array<{ value: string; count: number }>)
-      : null;
-
-    return {
+    return mapStyleProfileToContext({
       brandId,
-      brandName: brand.name ?? undefined,
-      profileVersion: 0,
-      promptSetVersion: null,
-      archetype: sp?.archetype ?? null,
-      tones,
-      palette,
-      topicsTop,
-      motifs,
-      composition,
-      createdAt: (brand.createdAt || new Date()).toISOString(),
-    };
+      brandName: brand.name,
+      styleProfile: brand.styleProfile as unknown as StyleProfileData,
+      createdAt: brand.createdAt || undefined,
+    });
   } catch (e) {
     console.warn('Failed to derive brand profile from styleProfile JSON', {
       brandId,

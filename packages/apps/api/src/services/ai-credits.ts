@@ -1,48 +1,24 @@
 import { Prisma } from '@postolio/database';
+
 import { prisma } from '../config/database.js';
-import type { RecipeConfig, RecipeStep } from './recipes/config-schema.js';
+
+export type { RecipeCreditEstimate } from './ai-credits-estimation.js';
+export {
+  estimateOpenAiTextCostUsd,
+  estimateRecipeCredits,
+  getEstimatedCreditsForSkillCall,
+  getEstimatedUsdForSkillCall,
+} from './ai-credits-estimation.js';
 
 const USD_PER_CREDIT = 0.01;
-const BASE_RUN_CREDITS = 5;
-
-const ESTIMATE_COST_CREDITS = {
-  llm: 25,
-  webFetch: 1,
-  image: 90,
-  video: 260,
-  audio: 60,
-} as const;
-
-const SKILL_ID_TO_ESTIMATE_KEY = {
-  text_generation: 'llm',
-  web_fetch: 'webFetch',
-  image_generation: 'image',
-  video_gen: 'video',
-  audio_gen: 'audio',
-} as const;
-
-type StepCounts = {
-  llmCalls: number;
-  webFetchCalls: number;
-  imageCalls: number;
-  videoCalls: number;
-  audioCalls: number;
-};
-
-export type RecipeCreditEstimate = {
-  cadenceCount: number;
-  stepCounts: StepCounts;
-  billableCounts: StepCounts;
-  estimatedCredits: number;
-  estimatedUsd: string;
-};
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
-  const n = Number.parseInt(String(raw || ''), 10);
-  if (!Number.isFinite(n) || n <= 0) {
+  const parsed = Number.parseInt(String(raw || ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return fallback;
   }
-  return n;
+
+  return parsed;
 }
 
 export function isAiCreditEnforcementEnabled(): boolean {
@@ -65,213 +41,16 @@ export function creditsToUsd(credits: number): string {
   if (!Number.isFinite(credits) || credits <= 0) {
     return '0.0000';
   }
-  return toFixedUsd((Math.floor(credits) * USD_PER_CREDIT) / 1);
+
+  return toFixedUsd(Math.floor(credits) * USD_PER_CREDIT);
 }
 
 export function usdToCredits(usdAmount: number): number {
   if (!Number.isFinite(usdAmount) || usdAmount <= 0) {
     return 0;
   }
+
   return Math.max(1, Math.ceil(usdAmount / USD_PER_CREDIT));
-}
-
-export function getEstimatedCreditsForSkillCall(skillId: string): number {
-  const key = SKILL_ID_TO_ESTIMATE_KEY[skillId as keyof typeof SKILL_ID_TO_ESTIMATE_KEY] || null;
-  if (!key) {
-    return 0;
-  }
-  return ESTIMATE_COST_CREDITS[key];
-}
-
-export function getEstimatedUsdForSkillCall(skillId: string): number {
-  const credits = getEstimatedCreditsForSkillCall(skillId);
-  if (credits <= 0) {
-    return 0;
-  }
-  return Number((credits * USD_PER_CREDIT).toFixed(4));
-}
-
-function inferCadenceCount(config: RecipeConfig, input: unknown): number {
-  const inputRecord =
-    input && typeof input === 'object' && !Array.isArray(input)
-      ? (input as Record<string, unknown>)
-      : null;
-
-  const fromInputPostCountRaw =
-    inputRecord?.post_count ?? inputRecord?.rolling_post_limit ?? inputRecord?.count;
-  const fromInputPostCount =
-    typeof fromInputPostCountRaw === 'number'
-      ? fromInputPostCountRaw
-      : typeof fromInputPostCountRaw === 'string'
-        ? Number.parseInt(fromInputPostCountRaw, 10)
-        : null;
-  if (fromInputPostCount && Number.isFinite(fromInputPostCount) && fromInputPostCount > 0) {
-    return Math.max(1, Math.floor(fromInputPostCount));
-  }
-
-  const fromCadence =
-    config?.cadence &&
-    typeof config.cadence === 'object' &&
-    typeof config.cadence.count === 'number'
-      ? config.cadence.count
-      : null;
-  if (fromCadence && Number.isFinite(fromCadence) && fromCadence > 0) {
-    return Math.max(1, Math.floor(fromCadence));
-  }
-
-  const fromSummary =
-    config?.summary &&
-    typeof config.summary === 'object' &&
-    typeof config.summary.postsCount === 'number'
-      ? config.summary.postsCount
-      : null;
-  if (fromSummary && Number.isFinite(fromSummary) && fromSummary > 0) {
-    return Math.max(1, Math.floor(fromSummary));
-  }
-
-  return 1;
-}
-
-function addStepCount(counts: StepCounts, step: RecipeStep, multiplier: number): void {
-  if (step.type === 'llm') {
-    counts.llmCalls += multiplier;
-    return;
-  }
-
-  if (step.type === 'skill_call') {
-    switch (step.skill) {
-      case 'web_fetch':
-        counts.webFetchCalls += multiplier;
-        break;
-      case 'image_generation':
-        counts.imageCalls += multiplier;
-        break;
-      case 'video_gen':
-        counts.videoCalls += multiplier;
-        break;
-      case 'audio_gen':
-        counts.audioCalls += multiplier;
-        break;
-      default:
-        break;
-    }
-    return;
-  }
-}
-
-function collectStepCounts(
-  steps: RecipeStep[],
-  cadenceCount: number,
-  multiplier: number,
-  counts: StepCounts
-): void {
-  for (const step of steps) {
-    addStepCount(counts, step, multiplier);
-    if (step.type === 'foreach') {
-      collectStepCounts(step.do, cadenceCount, multiplier * cadenceCount, counts);
-    }
-  }
-}
-
-function emptyStepCounts(): StepCounts {
-  return {
-    llmCalls: 0,
-    webFetchCalls: 0,
-    imageCalls: 0,
-    videoCalls: 0,
-    audioCalls: 0,
-  };
-}
-
-export function estimateRecipeCredits(params: {
-  config: RecipeConfig;
-  input?: unknown;
-  managedSkillIds?: Set<string>;
-}): RecipeCreditEstimate {
-  const cadenceCount = inferCadenceCount(params.config, params.input);
-  const stepCounts = emptyStepCounts();
-  collectStepCounts(params.config.steps, cadenceCount, 1, stepCounts);
-
-  const managed = params.managedSkillIds || new Set<string>();
-  const billableCounts: StepCounts = {
-    llmCalls: managed.has('text_generation') ? stepCounts.llmCalls : 0,
-    webFetchCalls: managed.has('web_fetch') ? stepCounts.webFetchCalls : 0,
-    imageCalls: managed.has('image_generation') ? stepCounts.imageCalls : 0,
-    videoCalls: managed.has('video_gen') ? stepCounts.videoCalls : 0,
-    audioCalls: managed.has('audio_gen') ? stepCounts.audioCalls : 0,
-  };
-
-  const variableCredits =
-    billableCounts.llmCalls * ESTIMATE_COST_CREDITS.llm +
-    billableCounts.webFetchCalls * ESTIMATE_COST_CREDITS.webFetch +
-    billableCounts.imageCalls * ESTIMATE_COST_CREDITS.image +
-    billableCounts.videoCalls * ESTIMATE_COST_CREDITS.video +
-    billableCounts.audioCalls * ESTIMATE_COST_CREDITS.audio;
-
-  const hasBillableWork = variableCredits > 0;
-  const estimatedCredits = hasBillableWork ? BASE_RUN_CREDITS + variableCredits : 0;
-
-  return {
-    cadenceCount,
-    stepCounts,
-    billableCounts,
-    estimatedCredits,
-    estimatedUsd: creditsToUsd(estimatedCredits),
-  };
-}
-
-function pricingForOpenAiTextModel(modelRaw: string | null | undefined): {
-  inputPer1KUsd: number;
-  outputPer1KUsd: number;
-} {
-  const model = String(modelRaw || '')
-    .trim()
-    .toLowerCase();
-  if (!model) {
-    return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
-  }
-
-  if (model.includes('gpt-4o-mini')) {
-    return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
-  }
-  if (model.includes('gpt-4.1-mini')) {
-    return { inputPer1KUsd: 0.0004, outputPer1KUsd: 0.0016 };
-  }
-  if (model.includes('gpt-4.1-nano')) {
-    return { inputPer1KUsd: 0.0001, outputPer1KUsd: 0.0004 };
-  }
-  if (model.includes('gpt-4o')) {
-    return { inputPer1KUsd: 0.005, outputPer1KUsd: 0.015 };
-  }
-
-  return { inputPer1KUsd: 0.00015, outputPer1KUsd: 0.0006 };
-}
-
-export function estimateOpenAiTextCostUsd(params: {
-  model?: string | null;
-  inputTokens?: number | null;
-  outputTokens?: number | null;
-}): number {
-  const inputTokens =
-    typeof params.inputTokens === 'number' &&
-    Number.isFinite(params.inputTokens) &&
-    params.inputTokens > 0
-      ? params.inputTokens
-      : 0;
-  const outputTokens =
-    typeof params.outputTokens === 'number' &&
-    Number.isFinite(params.outputTokens) &&
-    params.outputTokens > 0
-      ? params.outputTokens
-      : 0;
-
-  if (inputTokens === 0 && outputTokens === 0) {
-    return 0;
-  }
-  const pricing = pricingForOpenAiTextModel(params.model);
-  const inputUsd = (inputTokens / 1000) * pricing.inputPer1KUsd;
-  const outputUsd = (outputTokens / 1000) * pricing.outputPer1KUsd;
-  return Number((inputUsd + outputUsd).toFixed(6));
 }
 
 async function ensureWalletTx(tx: Prisma.TransactionClient, brandId: string) {
@@ -326,9 +105,10 @@ export async function ensureAiCreditsWalletInitialized(params: {
   tx?: Prisma.TransactionClient;
 }) {
   if (params.tx) {
-    return await ensureWalletTx(params.tx, params.brandId);
+    return ensureWalletTx(params.tx, params.brandId);
   }
-  return await prisma.$transaction(async (tx) => ensureWalletTx(tx, params.brandId));
+
+  return prisma.$transaction(async (tx) => ensureWalletTx(tx, params.brandId));
 }
 
 export async function getAiCreditsSummary(brandId: string): Promise<{
@@ -338,6 +118,7 @@ export async function getAiCreditsSummary(brandId: string): Promise<{
   enforcementEnabled: boolean;
 }> {
   const wallet = await ensureAiCreditsWalletInitialized({ brandId });
+
   return {
     balanceCredits: wallet.balanceCredits,
     totalGrantedCredits: wallet.totalGrantedCredits,
@@ -355,6 +136,7 @@ export async function topUpAiCredits(params: {
   grantedCredits: number;
 }> {
   const credits = Math.max(1, Math.floor(params.credits));
+
   const wallet = await prisma.$transaction(async (tx) => {
     await ensureWalletTx(tx, params.brandId);
     const updated = await tx.brandAiCreditWallet.update({
@@ -400,7 +182,7 @@ export async function recordManagedUsageDebit(params: {
     return { balanceCredits: summary.balanceCredits, debitedCredits: 0 };
   }
 
-  return await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const wallet = await ensureWalletTx(tx, params.brandId);
     if (isAiCreditEnforcementEnabled() && wallet.balanceCredits < debitedCredits) {
       throw new Error(
@@ -447,6 +229,7 @@ export async function getRunManagedCreditsSpent(runId: string): Promise<number> 
     where: { runId, type: 'debit' },
     _sum: { deltaCredits: true },
   });
+
   const deltaSum = aggregate._sum.deltaCredits || 0;
   return Math.abs(Math.min(0, deltaSum));
 }

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { brand as brandApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -11,48 +19,61 @@ import { TopicList } from './components/topic-list';
 import type { AnalysisProfile, BrandAnalysisPanelProps, BrandAnalysisStatus } from './types';
 import { createChipStyleFor } from './utils';
 
-export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelProps) {
-  const qc = useQueryClient();
+type AnalysisProfileQueryData = AnalysisProfile | { error: string };
+
+function useBrandAnalysisRunner({
+  brandId,
+  triggerKey,
+  onCompleted,
+}: {
+  brandId: string;
+  triggerKey: number | undefined;
+  onCompleted: () => void;
+}) {
   const [runError, setRunError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState<BrandAnalysisStatus | null>(null);
   const pollTimer = useRef<number | null>(null);
 
   const stopPolling = useCallback(() => {
-    if (pollTimer.current) {
-      window.clearInterval(pollTimer.current);
-      pollTimer.current = null;
+    if (!pollTimer.current) {
+      return;
     }
+    window.clearInterval(pollTimer.current);
+    pollTimer.current = null;
   }, []);
 
   const startPolling = useCallback(() => {
     stopPolling();
     pollTimer.current = window.setInterval(async () => {
       try {
-        const s = await brandApi.getBrandAnalysisStatus(brandId);
-        const next: BrandAnalysisStatus = {
-          state: s.status as BrandAnalysisStatus['state'],
-          startedAt: s.startedAt,
-          completedAt: s.completedAt,
-          error: s.error,
+        const response = await brandApi.getBrandAnalysisStatus(brandId);
+        const nextStatus: BrandAnalysisStatus = {
+          state: response.status as BrandAnalysisStatus['state'],
+          startedAt: response.startedAt,
+          completedAt: response.completedAt,
+          error: response.error,
         };
-        setStatus(next);
-
-        if (next.state === 'completed' || next.state === 'failed' || next.state === 'none') {
+        setStatus(nextStatus);
+        if (
+          nextStatus.state === 'completed' ||
+          nextStatus.state === 'failed' ||
+          nextStatus.state === 'none'
+        ) {
           stopPolling();
           setIsRunning(false);
-          if (next.state === 'completed') {
-            qc.invalidateQueries({ queryKey: ['brand-analysis-profile', brandId] });
+          if (nextStatus.state === 'completed') {
+            onCompleted();
           }
-        } else {
-          setIsRunning(true);
+          return;
         }
-      } catch (_e) {
+        setIsRunning(true);
+      } catch {
         stopPolling();
         setIsRunning(false);
       }
     }, 3000);
-  }, [brandId, qc, stopPolling]);
+  }, [brandId, onCompleted, stopPolling]);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
@@ -63,24 +84,169 @@ export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelPr
     try {
       await brandApi.startBrandAnalysis(brandId, { force: true, maxPosts: 20 });
       startPolling();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to start analysis';
-      setRunError(msg);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start analysis';
+      setRunError(message);
       setIsRunning(false);
     }
   }, [brandId, startPolling]);
 
   useEffect(() => {
-    if (typeof triggerKey !== 'number') {
-      return;
-    }
-    if (isRunning) {
+    if (typeof triggerKey !== 'number' || isRunning) {
       return;
     }
     void runAnalysis();
   }, [triggerKey, isRunning, runAnalysis]);
 
-  const profileQuery = useQuery<AnalysisProfile | { error: string }>({
+  return { runError, isRunning, status, runAnalysis };
+}
+
+function StatusBanner({ status }: { status: BrandAnalysisStatus | null }) {
+  if (!status) {
+    return null;
+  }
+
+  return (
+    <div className="bg-muted mb-3 rounded-md px-3 py-2 text-xs">
+      {status.state === 'failed' ? (
+        <span>Analysis failed{status.error ? `: ${status.error}` : ''}</span>
+      ) : null}
+      {status.state === 'accepted' ? <span>Analysis accepted. Starting…</span> : null}
+      {status.state === 'running' ? <span>Analysis in progress…</span> : null}
+      {status.state === 'completed' ? <span>Analysis completed.</span> : null}
+    </div>
+  );
+}
+
+function PanelHeader({
+  isRunning,
+  onRefresh,
+  onRunAnalysis,
+}: {
+  isRunning: boolean;
+  onRefresh: () => void;
+  onRunAnalysis: () => void;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between">
+      <div>
+        <h2 className="text-foreground text-base font-semibold">Brand Analysis</h2>
+        <p className="text-muted-foreground mt-1 text-xs">
+          Extracted tone, topics, and visual style from recent Instagram posts.
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onRefresh}>
+          Refresh
+        </Button>
+        <Button size="sm" onClick={onRunAnalysis} disabled={isRunning} variant="purple">
+          {isRunning ? 'Running…' : 'Run Analysis'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ProfileSection({
+  title,
+  hasItems,
+  emptyText,
+  children,
+}: {
+  title: string;
+  hasItems: boolean;
+  emptyText: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <Heading title={title} />
+      {hasItems ? children : <p className="text-muted-foreground text-sm">{emptyText}</p>}
+    </div>
+  );
+}
+
+function ProfileGrid({
+  profile,
+  chipStyleFor,
+}: {
+  profile: AnalysisProfile;
+  chipStyleFor: (value: string) => CSSProperties;
+}) {
+  const tones = profile.text?.tone ?? [];
+  const topics = profile.topics ?? [];
+  const palette = profile.visual?.palette ?? [];
+  const motifs = profile.visual?.motifs ?? [];
+  const composition = profile.visual?.composition ?? [];
+
+  return (
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <ProfileSection
+        title="Brand Tone"
+        hasItems={tones.length > 0}
+        emptyText="No tone detected yet."
+      >
+        <ToneChips tones={tones} getChipStyle={chipStyleFor} />
+      </ProfileSection>
+
+      <ProfileSection
+        title="Top Topics"
+        hasItems={topics.length > 0}
+        emptyText="No topics extracted yet."
+      >
+        <TopicList topics={topics} getChipStyle={chipStyleFor} />
+      </ProfileSection>
+
+      <ProfileSection
+        title="Color Palette"
+        hasItems={palette.length > 0}
+        emptyText="No palette extracted."
+      >
+        <PaletteGrid colors={palette} />
+      </ProfileSection>
+
+      <div>
+        <ProfileSection
+          title="Visual Motifs"
+          hasItems={motifs.length > 0}
+          emptyText="No motifs identified."
+        >
+          <TagBadges items={motifs} getChipStyle={chipStyleFor} />
+        </ProfileSection>
+        <div className="mt-4">
+          <ProfileSection
+            title="Composition"
+            hasItems={composition.length > 0}
+            emptyText="No composition traits detected."
+          >
+            <TagBadges items={composition} getChipStyle={chipStyleFor} />
+          </ProfileSection>
+        </div>
+      </div>
+
+      <div className="sm:col-span-2">
+        <p className="text-muted-foreground mt-2 text-xs">
+          Version {profile.version} • Updated {new Date(profile.createdAt).toLocaleString()}
+          {profile.promptSetVersion ? ` • Prompt Set ${profile.promptSetVersion}` : ''}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelProps) {
+  const queryClient = useQueryClient();
+  const onCompleted = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['brand-analysis-profile', brandId] });
+  }, [brandId, queryClient]);
+
+  const { runError, isRunning, status, runAnalysis } = useBrandAnalysisRunner({
+    brandId,
+    triggerKey,
+    onCompleted,
+  });
+
+  const profileQuery = useQuery<AnalysisProfileQueryData>({
     queryKey: ['brand-analysis-profile', brandId],
     queryFn: async () => (await brandApi.getBrandAnalysisProfile(brandId)) as any,
     retry: 1,
@@ -90,7 +256,7 @@ export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelPr
     if (!profileQuery.data || 'error' in profileQuery.data) {
       return null;
     }
-    return profileQuery.data as AnalysisProfile;
+    return profileQuery.data;
   }, [profileQuery.data]);
 
   const chipStyleFor = useMemo(
@@ -98,52 +264,19 @@ export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelPr
     [profile?.visual?.palette]
   );
 
-  const headerAction = (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => qc.invalidateQueries({ queryKey: ['brand-analysis-profile', brandId] })}
-      >
-        Refresh
-      </Button>
-      <Button size="sm" onClick={() => void runAnalysis()} disabled={isRunning} variant="purple">
-        {isRunning ? 'Running…' : 'Run Analysis'}
-      </Button>
-    </div>
-  );
-
-  const statusBanner = status ? (
-    <div className="bg-muted mb-3 rounded-md px-3 py-2 text-xs">
-      {status.state === 'failed' ? (
-        <span>Analysis failed{status.error ? `: ${status.error}` : ''}</span>
-      ) : null}
-      {status.state === 'accepted' ? <span>Analysis accepted. Starting…</span> : null}
-      {status.state === 'running' ? <span>Analysis in progress…</span> : null}
-      {status.state === 'completed' ? <span>Analysis completed.</span> : null}
-    </div>
-  ) : null;
-
   return (
     <div className="bg-card rounded-lg p-4 shadow">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-foreground text-base font-semibold">Brand Analysis</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Extracted tone, topics, and visual style from recent Instagram posts.
-          </p>
-        </div>
-        {headerAction}
-      </div>
-
-      {statusBanner}
-
+      <PanelHeader
+        isRunning={isRunning}
+        onRefresh={() => onCompleted()}
+        onRunAnalysis={() => void runAnalysis()}
+      />
+      <StatusBanner status={status} />
       {profileQuery.isLoading ? (
         <div className="flex items-center justify-center py-6">
           <div className="border-foreground h-6 w-6 animate-spin rounded-full border-b-2" />
         </div>
       ) : null}
-
       {!profile && !profileQuery.isLoading ? (
         <EmptyState
           isRunning={isRunning}
@@ -151,62 +284,7 @@ export function BrandAnalysisPanel({ brandId, triggerKey }: BrandAnalysisPanelPr
           onRunAnalysis={() => void runAnalysis()}
         />
       ) : null}
-
-      {profile ? (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <Heading title="Brand Tone" />
-            {profile.text?.tone && profile.text.tone.length > 0 ? (
-              <ToneChips tones={profile.text.tone} getChipStyle={chipStyleFor} />
-            ) : (
-              <p className="text-muted-foreground text-sm">No tone detected yet.</p>
-            )}
-          </div>
-
-          <div>
-            <Heading title="Top Topics" />
-            {profile.topics && profile.topics.length > 0 ? (
-              <TopicList topics={profile.topics} getChipStyle={chipStyleFor} />
-            ) : (
-              <p className="text-muted-foreground text-sm">No topics extracted yet.</p>
-            )}
-          </div>
-
-          <div>
-            <Heading title="Color Palette" />
-            {profile.visual?.palette && profile.visual.palette.length > 0 ? (
-              <PaletteGrid colors={profile.visual.palette} />
-            ) : (
-              <p className="text-muted-foreground text-sm">No palette extracted.</p>
-            )}
-          </div>
-
-          <div>
-            <Heading title="Visual Motifs" />
-            {profile.visual?.motifs && profile.visual.motifs.length > 0 ? (
-              <TagBadges items={profile.visual.motifs} getChipStyle={chipStyleFor} />
-            ) : (
-              <p className="text-muted-foreground text-sm">No motifs identified.</p>
-            )}
-
-            <div className="mt-4">
-              <Heading title="Composition" />
-              {profile.visual?.composition && profile.visual.composition.length > 0 ? (
-                <TagBadges items={profile.visual.composition} getChipStyle={chipStyleFor} />
-              ) : (
-                <p className="text-muted-foreground text-sm">No composition traits detected.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="sm:col-span-2">
-            <p className="text-muted-foreground mt-2 text-xs">
-              Version {profile.version} • Updated {new Date(profile.createdAt).toLocaleString()}
-              {profile.promptSetVersion ? ` • Prompt Set ${profile.promptSetVersion}` : ''}
-            </p>
-          </div>
-        </div>
-      ) : null}
+      {profile ? <ProfileGrid profile={profile} chipStyleFor={chipStyleFor} /> : null}
     </div>
   );
 }

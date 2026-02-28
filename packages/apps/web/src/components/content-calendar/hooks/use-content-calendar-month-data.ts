@@ -10,6 +10,18 @@ type UseContentCalendarMonthDataArgs = {
   currentDate: Date;
 };
 
+function prefetchCalendarMonth(
+  queryClient: ReturnType<typeof useQueryClient>,
+  brandId: string,
+  monthKey: string
+) {
+  queryClient.prefetchQuery({
+    queryKey: ['calendar', brandId, monthKey],
+    queryFn: () => contentApi.getCalendarContent(brandId, monthKey),
+    staleTime: CACHE_TIMES.MEDIUM,
+  });
+}
+
 export function useContentCalendarMonthData({
   brandId,
   currentDate,
@@ -43,17 +55,8 @@ export function useContentCalendarMonthData({
 
   const queryClient = useQueryClient();
   useEffect(() => {
-    queryClient.prefetchQuery({
-      queryKey: ['calendar', brandId, prevMonthKey],
-      queryFn: () => contentApi.getCalendarContent(brandId, prevMonthKey),
-      staleTime: CACHE_TIMES.MEDIUM,
-    });
-
-    queryClient.prefetchQuery({
-      queryKey: ['calendar', brandId, nextMonthKey],
-      queryFn: () => contentApi.getCalendarContent(brandId, nextMonthKey),
-      staleTime: CACHE_TIMES.MEDIUM,
-    });
+    prefetchCalendarMonth(queryClient, brandId, prevMonthKey);
+    prefetchCalendarMonth(queryClient, brandId, nextMonthKey);
   }, [brandId, nextMonthKey, prevMonthKey, queryClient]);
 
   const mergedContent = useMemo(() => {

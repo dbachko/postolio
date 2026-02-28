@@ -49,327 +49,264 @@ function ensureAuth(
   return true;
 }
 
-const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
-  // Facebook OAuth callback - exchanges code for token and gets user info
-  fastify.post<{ Body: FacebookTokenBody }>('/facebook/callback', async (request, reply) => {
-    try {
-      const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body;
+async function exchangeCodeForAccessToken(code: string, redirectUri: string) {
+  const tokenResponse = await axios.get(fbGraph('oauth/access_token'), {
+    params: {
+      client_id: FACEBOOK_APP_ID,
+      client_secret: FACEBOOK_APP_SECRET,
+      redirect_uri: redirectUri,
+      code,
+    },
+  });
+  return tokenResponse.data?.access_token as string | undefined;
+}
 
+async function fetchFacebookUser(accessToken: string, fields: string) {
+  const userResponse = await axios.get(fbGraph('me'), {
+    params: {
+      fields,
+      access_token: accessToken,
+    },
+  });
+  return userResponse.data as FacebookUserInfo;
+}
+
+async function findOrCreateFacebookUser(fbUserInfo: FacebookUserInfo) {
+  const email = fbUserInfo.email || `${fbUserInfo.id}@facebook.local`;
+  let user = await prisma.user.findFirst({
+    where: { OR: [{ email }, { facebookId: fbUserInfo.id }] },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      facebookId: true,
+      subscriptionTier: true,
+      emailVerified: true,
+    },
+  });
+  let isNewUser = false;
+
+  if (user && !user.facebookId) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        facebookId: fbUserInfo.id,
+        profilePicture: fbUserInfo.picture?.data?.url || null,
+        ...(fbUserInfo.email && { emailVerified: true }),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        facebookId: true,
+        subscriptionTier: true,
+        emailVerified: true,
+      },
+    });
+  } else if (!user) {
+    const secureRandomPassword = randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
+    user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name: fbUserInfo.name,
+        facebookId: fbUserInfo.id,
+        profilePicture: fbUserInfo.picture?.data?.url || null,
+        emailVerified: !!fbUserInfo.email,
+        subscriptionTier: 'free',
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        facebookId: true,
+        subscriptionTier: true,
+        emailVerified: true,
+      },
+    });
+    isNewUser = true;
+  }
+
+  return { user, isNewUser };
+}
+
+async function issueSessionCookies(params: {
+  fastify: any;
+  request: any;
+  reply: any;
+  userId: string;
+}) {
+  const stableFingerprint = ensureDeviceId(params.request, params.reply);
+  if (stableFingerprint) {
+    await revokeSameDeviceSessions(params.userId, stableFingerprint, params.request);
+  }
+  const ipAddress = getClientIp(params.request);
+  const userAgent = getUserAgent(params.request);
+  const humanDeviceName = parseDeviceName(userAgent);
+  const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+    params.fastify,
+    params.userId,
+    ipAddress,
+    userAgent,
+    {
+      deviceFingerprint: stableFingerprint,
+      deviceName: humanDeviceName,
+      ipAddress,
+      userAgent,
+    }
+  );
+
+  params.reply.setCookie('auth_token', accessToken, {
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60,
+  });
+  params.reply.clearCookie('refresh_token', { path: '/' });
+  params.reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+  params.reply.setCookie('refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'lax',
+    path: '/api/auth',
+    maxAge: 30 * 24 * 60 * 60,
+  });
+}
+
+function sendFacebookAuthError(reply: FastifyReply, error: unknown, fallbackMessage: string) {
+  if (axios.isAxiosError(error)) {
+    const fbError = error.response?.data?.error;
+    if (fbError) {
+      return reply
+        .code(400)
+        .send({ error: fallbackMessage, details: fbError.message || 'Unknown Facebook error' });
+    }
+  }
+  return reply.code(500).send({
+    error: fallbackMessage,
+    details: error instanceof Error ? error.message : 'Unknown error',
+  });
+}
+
+function createFacebookCallbackHandler(fastify: any) {
+  return async (request: any, reply: any) => {
+    try {
+      const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body as FacebookTokenBody;
       if (!code) {
         return reply.code(400).send({ error: 'No authorization code provided' });
       }
-
-      // Exchange code for access token
-      const tokenResponse = await axios.get(fbGraph('oauth/access_token'), {
-        params: {
-          client_id: FACEBOOK_APP_ID,
-          client_secret: FACEBOOK_APP_SECRET,
-          redirect_uri: redirectUri,
-          code,
-        },
-      });
-
-      const { access_token } = tokenResponse.data;
-
-      if (!access_token) {
+      const accessToken = await exchangeCodeForAccessToken(code, redirectUri);
+      if (!accessToken) {
         return reply.code(401).send({ error: 'Failed to get access token from Facebook' });
       }
 
-      // Get user information from Facebook
-      const userResponse = await axios.get(fbGraph('me'), {
-        params: {
-          fields: 'id,email,name,picture',
-          access_token,
-        },
+      const fbUserInfo = await fetchFacebookUser(accessToken, 'id,email,name,picture');
+      const { user, isNewUser } = await findOrCreateFacebookUser(fbUserInfo);
+      await issueSessionCookies({ fastify, request, reply, userId: user.id });
+      await AuditLogger.logAuth(AuditEventType.OAUTH_LOGIN, user.id, user.email, request);
+      return reply.send({ user, isNewUser, message: 'Signed in with Facebook' });
+    } catch (error: unknown) {
+      return sendFacebookAuthError(reply, error, 'Authentication failed');
+    }
+  };
+}
+
+function createFacebookLinkHandler() {
+  return async (request: any, reply: any) => {
+    if (!ensureAuth(request, reply)) {
+      return;
+    }
+    try {
+      const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body as FacebookTokenBody;
+      const accessToken = await exchangeCodeForAccessToken(code, redirectUri);
+      const fbUserInfo = await fetchFacebookUser(String(accessToken || ''), 'id,picture');
+      const existingFacebookUser = await prisma.user.findFirst({
+        where: { facebookId: fbUserInfo.id, NOT: { id: request.user.id } },
       });
-
-      const fbUserInfo: FacebookUserInfo = userResponse.data;
-
-      // Facebook may not provide email in some cases
-      const email = fbUserInfo.email || `${fbUserInfo.id}@facebook.local`;
-
-      // Check if user exists with this email or Facebook ID
-      let user = await prisma.user.findFirst({
-        where: {
-          OR: [{ email }, { facebookId: fbUserInfo.id }],
+      if (existingFacebookUser) {
+        return reply
+          .code(409)
+          .send({ error: 'This Facebook account is already linked to another user' });
+      }
+      const updatedUser = await prisma.user.update({
+        where: { id: request.user.id },
+        data: {
+          facebookId: fbUserInfo.id,
+          profilePicture: fbUserInfo.picture?.data?.url || null,
         },
         select: {
           id: true,
           email: true,
           name: true,
           facebookId: true,
-          subscriptionTier: true,
-          emailVerified: true,
+          profilePicture: true,
         },
       });
+      return reply.send({ user: updatedUser, message: 'Facebook account linked successfully' });
+    } catch (error: unknown) {
+      return sendFacebookAuthError(reply, error, 'Failed to link Facebook account');
+    }
+  };
+}
 
-      let isNewUser = false;
-
-      if (user) {
-        // User exists - update Facebook ID if not set
-        if (!user.facebookId) {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              facebookId: fbUserInfo.id,
-              profilePicture: fbUserInfo.picture?.data?.url || null,
-              // If Facebook provided an email, it's verified
-              ...(fbUserInfo.email && { emailVerified: true }),
-            },
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              facebookId: true,
-              subscriptionTier: true,
-              emailVerified: true,
-            },
-          });
-        }
-      } else {
-        // Create new user with Facebook OAuth
-        // Generate a cryptographically secure random password for OAuth users
-        const secureRandomPassword = randomBytes(32).toString('hex');
-        const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
-
-        user = await prisma.user.create({
-          data: {
-            email,
-            password: hashedPassword,
-            name: fbUserInfo.name,
-            facebookId: fbUserInfo.id,
-            profilePicture: fbUserInfo.picture?.data?.url || null,
-            emailVerified: !!fbUserInfo.email, // Only verified if we got a real email
-            subscriptionTier: 'free',
-          },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            facebookId: true,
-            subscriptionTier: true,
-            emailVerified: true,
-          },
-        });
-        isNewUser = true;
-      }
-
-      // Resolve stable device identifier and set cookie if needed
-      const stableFingerprint = ensureDeviceId(request, reply);
-
-      // Revoke any existing active session for this device to avoid duplicates
-      if (stableFingerprint) {
-        await revokeSameDeviceSessions(user.id, stableFingerprint, request);
-      }
-
-      // Issue refresh + access tokens and create session
-      const ipAddress = getClientIp(request);
-      const userAgent = getUserAgent(request);
-      const humanDeviceName = parseDeviceName(userAgent);
-      const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
-        fastify,
-        user.id,
-        ipAddress,
-        userAgent,
-        {
-          deviceFingerprint: stableFingerprint,
-          deviceName: humanDeviceName,
-          ipAddress,
-          userAgent,
-        }
-      );
-
-      // Set access token cookie (short-lived)
-      reply.setCookie('auth_token', accessToken, {
-        httpOnly: true,
-        secure: isProductionEnv(),
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60, // 1 hour
+function createFacebookUnlinkHandler() {
+  return async (request: any, reply: any) => {
+    if (!ensureAuth(request, reply)) {
+      return;
+    }
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { facebookId: true },
       });
-
-      // Set refresh token cookie (scoped to /api/auth so logout can read it)
-      // Clear any legacy refresh token cookies on broader paths to avoid duplicate-name cookie confusion.
-      reply.clearCookie('refresh_token', { path: '/' });
-      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
-      reply.setCookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: isProductionEnv(),
-        sameSite: 'lax',
-        path: '/api/auth',
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-      });
-
-      // Log OAuth login
-      await AuditLogger.logAuth(AuditEventType.OAUTH_LOGIN, user.id, user.email, request);
-
-      return reply.send({ user, isNewUser, message: 'Signed in with Facebook' });
-    } catch (error) {
-      console.error('Facebook OAuth error:', error);
-
-      // Handle specific Facebook API errors
-      if (axios.isAxiosError(error)) {
-        const fbError = error.response?.data?.error;
-        if (fbError) {
-          return reply.code(400).send({
-            error: 'Facebook authentication failed',
-            details: fbError.message || 'Unknown Facebook error',
-          });
-        }
+      if (!user?.facebookId) {
+        return reply.code(400).send({ error: 'No Facebook account linked' });
       }
-
+      const updatedUser = await prisma.user.update({
+        where: { id: request.user.id },
+        data: { facebookId: null },
+        select: { id: true, email: true, name: true, facebookId: true },
+      });
+      return reply.send({ user: updatedUser, message: 'Facebook account unlinked successfully' });
+    } catch (error: unknown) {
       return reply.code(500).send({
-        error: 'Authentication failed',
+        error: 'Failed to unlink Facebook account',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }
-  });
+  };
+}
 
-  // Link existing account with Facebook
+async function facebookLoginUrlHandler(_request: FastifyRequest, reply: FastifyReply) {
+  const params = new URLSearchParams({
+    client_id: FACEBOOK_APP_ID,
+    redirect_uri: FACEBOOK_REDIRECT_URI,
+    scope: 'email,public_profile',
+    response_type: 'code',
+    auth_type: 'rerequest',
+    display: 'popup',
+  });
+  return reply.send({ url: `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}` });
+}
+
+const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post<{ Body: FacebookTokenBody }>(
+    '/facebook/callback',
+    createFacebookCallbackHandler(fastify)
+  );
   fastify.post<{ Body: FacebookTokenBody }>(
     '/facebook/link',
-    {
-      preHandler: fastify.authenticate,
-    },
-    async (request, reply) => {
-      if (!ensureAuth(request, reply)) {
-        return;
-      }
-      try {
-        const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body;
-        const userId = request.user.id;
-
-        // Exchange code for access token
-        const tokenResponse = await axios.get(fbGraph('oauth/access_token'), {
-          params: {
-            client_id: FACEBOOK_APP_ID,
-            client_secret: FACEBOOK_APP_SECRET,
-            redirect_uri: redirectUri,
-            code,
-          },
-        });
-
-        const { access_token } = tokenResponse.data;
-
-        // Get user information
-        const userResponse = await axios.get(fbGraph('me'), {
-          params: {
-            fields: 'id,picture',
-            access_token,
-          },
-        });
-
-        const fbUserInfo: FacebookUserInfo = userResponse.data;
-
-        // Check if this Facebook account is already linked to another user
-        const existingFacebookUser = await prisma.user.findFirst({
-          where: {
-            facebookId: fbUserInfo.id,
-            NOT: { id: userId },
-          },
-        });
-
-        if (existingFacebookUser) {
-          return reply.code(409).send({
-            error: 'This Facebook account is already linked to another user',
-          });
-        }
-
-        // Link Facebook account to current user
-        const updatedUser = await prisma.user.update({
-          where: { id: userId },
-          data: {
-            facebookId: fbUserInfo.id,
-            profilePicture: fbUserInfo.picture?.data?.url || null,
-          },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            facebookId: true,
-            profilePicture: true,
-          },
-        });
-
-        return reply.send({
-          user: updatedUser,
-          message: 'Facebook account linked successfully',
-        });
-      } catch (error) {
-        console.error('Facebook link error:', error);
-        return reply.code(500).send({
-          error: 'Failed to link Facebook account',
-          details: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
+    { preHandler: fastify.authenticate },
+    createFacebookLinkHandler()
   );
-
-  // Unlink Facebook account
   fastify.delete(
     '/facebook/unlink',
-    {
-      preHandler: fastify.authenticate,
-    },
-    async (request, reply) => {
-      if (!ensureAuth(request, reply)) {
-        return;
-      }
-      try {
-        const userId = request.user.id;
-
-        // Check if user has a Facebook account linked
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { facebookId: true },
-        });
-
-        if (!user?.facebookId) {
-          return reply.code(400).send({ error: 'No Facebook account linked' });
-        }
-
-        const updatedUser = await prisma.user.update({
-          where: { id: userId },
-          data: {
-            facebookId: null,
-          },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            facebookId: true,
-          },
-        });
-
-        return reply.send({
-          user: updatedUser,
-          message: 'Facebook account unlinked successfully',
-        });
-      } catch (error) {
-        console.error('Facebook unlink error:', error);
-        return reply.code(500).send({
-          error: 'Failed to unlink Facebook account',
-          details: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
+    { preHandler: fastify.authenticate },
+    createFacebookUnlinkHandler()
   );
-
-  // Get Facebook login URL
-  fastify.get('/facebook/login-url', async (request, reply) => {
-    const params = new URLSearchParams({
-      client_id: FACEBOOK_APP_ID,
-      redirect_uri: FACEBOOK_REDIRECT_URI,
-      scope: 'email,public_profile',
-      response_type: 'code',
-      auth_type: 'rerequest',
-      display: 'popup',
-    });
-
-    const loginUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
-
-    return reply.send({ url: loginUrl });
-  });
+  fastify.get('/facebook/login-url', facebookLoginUrlHandler);
 };
 
 export default facebookOAuthRoutes;

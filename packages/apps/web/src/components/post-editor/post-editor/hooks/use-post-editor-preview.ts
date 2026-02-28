@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react';
 
-import { useRightSidebarLayout } from '@/right-sidebar/right-sidebar-context';
 import type { SocialAccountsPickerOption } from '@/components/social/social-accounts-picker/types';
 import type { PostDetailData } from '@/hooks/usePostDetail';
 import type {
@@ -9,6 +8,7 @@ import type {
   PostPreviewItem,
 } from '@/components/post-preview/types';
 import { getPlatformConfig } from '@/lib/platform-config';
+import { useRightSidebarLayout } from '@/right-sidebar/right-sidebar-context';
 
 import type { PostEditorFormState } from '@/components/post-editor/post-editor-main-body/types';
 import type { ContentGroupTemplateFormState } from '@/components/post-editor/content-group-template-editor/types';
@@ -20,7 +20,7 @@ import {
   toPreviewAccountFromOption,
 } from '../utils';
 
-export function usePostEditorPreview(params: {
+type UsePostEditorPreviewParams = {
   id?: string;
   layout: PostEditorLayout;
   showHeader: boolean;
@@ -39,30 +39,10 @@ export function usePostEditorPreview(params: {
   groupDestinationPreviewData: Array<{ contentId: string; account: PostPreviewAccount }>;
   platformPickerOptions: SocialAccountsPickerOption[];
   selectedPlatformAccountIds: string[];
-}) {
-  const {
-    brandTimezone,
-    contentGroupSchedule,
-    disabled,
-    firstCommentOpen,
-    formData,
-    groupDestinationPreviewData,
-    hasChanges,
-    id,
-    isMultiDestinationGroup,
-    isTemplateTab,
-    layout,
-    platformPickerOptions,
-    post,
-    previewOpen,
-    selectedPlatformAccountIds,
-    showHeader,
-    templateFirstCommentOpen,
-    templateFormData,
-  } = params;
+};
 
+function usePreviewLayout(layout: PostEditorLayout, previewOpen: boolean, showHeader: boolean) {
   const rightSidebarLayout = useRightSidebarLayout();
-
   const previewLayout = layout === 'sidebar' && rightSidebarLayout?.isSmall ? 'page' : layout;
   const showPreviewAsBody = previewOpen && layout === 'sidebar';
   const showPreviewInColumn = previewOpen && previewLayout === 'sidebar' && !showPreviewAsBody;
@@ -80,9 +60,22 @@ export function usePostEditorPreview(params: {
     return () => rightSidebarLayout.setExtraWidthPx(0);
   }, [rightSidebarLayout, showPreviewInColumn]);
 
-  const showInlinePreviewToggle = !showHeader;
-  const previewPanelLayout: 'sidebar' | 'page' = showPreviewInColumn ? 'sidebar' : 'page';
+  return {
+    previewLayout,
+    showPreviewAsBody,
+    showPreviewInColumn,
+    showPreviewInline,
+    showInlinePreviewToggle: !showHeader,
+    previewPanelLayout: showPreviewInColumn ? ('sidebar' as const) : ('page' as const),
+  };
+}
 
+function usePreviewContent(
+  formData: PostEditorFormState,
+  firstCommentOpen: boolean,
+  templateFormData: ContentGroupTemplateFormState,
+  templateFirstCommentOpen: boolean
+) {
   const formPreviewMedia = useMemo(
     () => mapAssetReferencesToPreviewMedia(formData.carouselAssets),
     [formData.carouselAssets]
@@ -131,7 +124,14 @@ export function usePostEditorPreview(params: {
     ]
   );
 
-  const previewAccounts = useMemo(() => {
+  return { formPreviewMedia, formPreviewContent, templatePreviewMedia, templatePreviewContent };
+}
+
+function usePreviewAccounts(
+  platformPickerOptions: SocialAccountsPickerOption[],
+  selectedPlatformAccountIds: string[]
+) {
+  return useMemo(() => {
     if (!platformPickerOptions.length || selectedPlatformAccountIds.length === 0) {
       return [] as PostPreviewAccount[];
     }
@@ -141,18 +141,20 @@ export function usePostEditorPreview(params: {
       .filter(Boolean)
       .map((opt) => toPreviewAccountFromOption(opt as SocialAccountsPickerOption));
   }, [platformPickerOptions, selectedPlatformAccountIds]);
+}
 
-  const fallbackPreviewAccount = useMemo<PostPreviewAccount | null>(() => {
-    if (isMultiDestinationGroup) {
-      return null;
-    }
-    if (previewAccounts.length > 0) {
-      return null;
-    }
-    if (!post) {
-      return null;
-    }
+function useFallbackPreviewAccount(params: {
+  isMultiDestinationGroup: boolean;
+  previewAccounts: PostPreviewAccount[];
+  post: PostDetailData | undefined;
+  platformPickerOptions: SocialAccountsPickerOption[];
+}) {
+  const { isMultiDestinationGroup, platformPickerOptions, post, previewAccounts } = params;
 
+  return useMemo(() => {
+    if (isMultiDestinationGroup || previewAccounts.length > 0 || !post) {
+      return null;
+    }
     const targetId =
       typeof post.targetSocialAccountId === 'string' ? post.targetSocialAccountId.trim() : '';
     const preferred =
@@ -160,16 +162,37 @@ export function usePostEditorPreview(params: {
         ? platformPickerOptions.find((option) => option.id === targetId) || null
         : null;
     const fallback = preferred || platformPickerOptions[0] || null;
-    if (!fallback) {
-      return null;
-    }
-    return toPreviewAccountFromOption(fallback);
+    return fallback ? toPreviewAccountFromOption(fallback) : null;
   }, [isMultiDestinationGroup, platformPickerOptions, post, previewAccounts.length]);
+}
 
-  const previewItems = useMemo<PostPreviewItem[]>(() => {
+function usePreviewItems(params: {
+  fallbackPreviewAccount: PostPreviewAccount | null;
+  formPreviewContent: PostPreviewContent;
+  groupDestinationPreviewData: Array<{ contentId: string; account: PostPreviewAccount }>;
+  hasChanges: boolean;
+  id?: string;
+  isMultiDestinationGroup: boolean;
+  isTemplateTab: boolean;
+  previewAccounts: PostPreviewAccount[];
+  templatePreviewContent: PostPreviewContent;
+}) {
+  const {
+    fallbackPreviewAccount,
+    formPreviewContent,
+    groupDestinationPreviewData,
+    hasChanges,
+    id,
+    isMultiDestinationGroup,
+    isTemplateTab,
+    previewAccounts,
+    templatePreviewContent,
+  } = params;
+
+  return useMemo(() => {
     if (isMultiDestinationGroup) {
       if (groupDestinationPreviewData.length === 0) {
-        return [];
+        return [] as PostPreviewItem[];
       }
       if (isTemplateTab) {
         return groupDestinationPreviewData.map((dest) => ({
@@ -178,34 +201,21 @@ export function usePostEditorPreview(params: {
           note: getPlatformConfig(dest.account.platform).displayName,
         }));
       }
-
       const activeDestination = groupDestinationPreviewData.find((dest) => dest.contentId === id);
       if (!activeDestination) {
-        return [];
+        return [] as PostPreviewItem[];
       }
-      return [
-        {
-          account: activeDestination.account,
-          content: formPreviewContent,
-          note: hasChanges ? 'Editing' : undefined,
-        },
-      ];
+      const note = hasChanges ? 'Editing' : undefined;
+      return [{ account: activeDestination.account, content: formPreviewContent, note }];
     }
 
-    const effectivePreviewAccounts =
-      previewAccounts.length > 0
-        ? previewAccounts
-        : fallbackPreviewAccount
-          ? [fallbackPreviewAccount]
-          : [];
-
-    if (effectivePreviewAccounts.length === 0) {
-      return [];
+    if (previewAccounts.length > 0) {
+      return previewAccounts.map((account) => ({ account, content: formPreviewContent }));
     }
-    return effectivePreviewAccounts.map((account) => ({
-      account,
-      content: formPreviewContent,
-    }));
+    if (fallbackPreviewAccount) {
+      return [{ account: fallbackPreviewAccount, content: formPreviewContent }];
+    }
+    return [] as PostPreviewItem[];
   }, [
     fallbackPreviewAccount,
     formPreviewContent,
@@ -217,33 +227,55 @@ export function usePostEditorPreview(params: {
     previewAccounts,
     templatePreviewContent,
   ]);
+}
 
-  const publicationLinks = useMemo(() => {
-    const links: Array<{ platform: string; url: string }> = [];
-    if (post?.status === 'published' && post.instagramPermalink) {
-      links.push({ platform: 'instagram', url: String(post.instagramPermalink) });
-    }
-    return links;
-  }, [post?.instagramPermalink, post?.status]);
+function resolveOriginalScheduledForEditLabel(params: {
+  isMultiDestinationGroup: boolean;
+  contentGroupSchedule: { kind: 'none' | 'uniform' | 'mixed'; scheduledAt: string | null };
+  post: PostDetailData | undefined;
+  brandTimezone: string;
+}) {
+  if (!params.isMultiDestinationGroup) {
+    return formatScheduledInput(params.post?.scheduledAt, params.brandTimezone);
+  }
+  if (params.contentGroupSchedule.kind === 'uniform') {
+    return formatScheduledInput(params.contentGroupSchedule.scheduledAt, params.brandTimezone);
+  }
+  return '';
+}
 
-  const publicationPreview = useMemo(() => {
-    const isTemplatePreview = isTemplateTab && isMultiDestinationGroup;
-    const media = (isTemplatePreview ? templatePreviewMedia : formPreviewMedia) || [];
-    const contentType = isTemplatePreview ? templateFormData.contentType : formData.contentType;
-    return {
-      contentType,
-      media,
-    };
-  }, [
-    formData.contentType,
-    formPreviewMedia,
-    isMultiDestinationGroup,
-    isTemplateTab,
-    templateFormData.contentType,
-    templatePreviewMedia,
-  ]);
+function resolvePrimaryEditLabel(params: {
+  scheduleChanged: boolean;
+  hadScheduled: boolean;
+  hasScheduledInput: boolean;
+}) {
+  if (!params.scheduleChanged) {
+    return 'Save';
+  }
+  if (!params.hadScheduled && params.hasScheduledInput) {
+    return 'Save & Schedule';
+  }
+  if (params.hadScheduled && !params.hasScheduledInput) {
+    return 'Save as Draft';
+  }
+  if (params.hadScheduled && params.hasScheduledInput) {
+    return 'Save & Update Schedule';
+  }
+  return 'Save';
+}
 
-  const primaryEditCtaLabel = useMemo(() => {
+function usePrimaryEditCtaLabel(params: {
+  disabled: boolean;
+  isMultiDestinationGroup: boolean;
+  contentGroupSchedule: { kind: 'none' | 'uniform' | 'mixed'; scheduledAt: string | null };
+  post: PostDetailData | undefined;
+  formData: PostEditorFormState;
+  brandTimezone: string;
+}) {
+  const { brandTimezone, contentGroupSchedule, disabled, formData, isMultiDestinationGroup, post } =
+    params;
+
+  return useMemo(() => {
     if (disabled) {
       return 'Save';
     }
@@ -251,40 +283,93 @@ export function usePostEditorPreview(params: {
       ? contentGroupSchedule.kind !== 'none'
       : Boolean(post?.scheduledAt);
     const hasScheduledInput = Boolean(formData.scheduledAt);
-    const originalScheduled = isMultiDestinationGroup
-      ? contentGroupSchedule.kind === 'uniform'
-        ? formatScheduledInput(contentGroupSchedule.scheduledAt, brandTimezone)
-        : ''
-      : formatScheduledInput(post?.scheduledAt, brandTimezone);
+    const originalScheduled = resolveOriginalScheduledForEditLabel({
+      isMultiDestinationGroup,
+      contentGroupSchedule,
+      post,
+      brandTimezone,
+    });
     const scheduleChanged = (formData.scheduledAt || '') !== originalScheduled;
-
-    if (scheduleChanged && !hadScheduled && hasScheduledInput) {
-      return 'Save & Schedule';
-    }
-    if (scheduleChanged && hadScheduled && !hasScheduledInput) {
-      return 'Save as Draft';
-    }
-    if (scheduleChanged && hadScheduled && hasScheduledInput) {
-      return 'Save & Update Schedule';
-    }
-    return 'Save';
+    return resolvePrimaryEditLabel({ scheduleChanged, hadScheduled, hasScheduledInput });
   }, [
     brandTimezone,
-    contentGroupSchedule.kind,
-    contentGroupSchedule.scheduledAt,
+    contentGroupSchedule,
     disabled,
     formData.scheduledAt,
     isMultiDestinationGroup,
-    post?.scheduledAt,
+    post,
+  ]);
+}
+
+export function usePostEditorPreview(params: UsePostEditorPreviewParams) {
+  const layoutState = usePreviewLayout(params.layout, params.previewOpen, params.showHeader);
+  const previewContent = usePreviewContent(
+    params.formData,
+    params.firstCommentOpen,
+    params.templateFormData,
+    params.templateFirstCommentOpen
+  );
+  const previewAccounts = usePreviewAccounts(
+    params.platformPickerOptions,
+    params.selectedPlatformAccountIds
+  );
+  const fallbackPreviewAccount = useFallbackPreviewAccount({
+    isMultiDestinationGroup: params.isMultiDestinationGroup,
+    previewAccounts,
+    post: params.post,
+    platformPickerOptions: params.platformPickerOptions,
+  });
+
+  const previewItems = usePreviewItems({
+    fallbackPreviewAccount,
+    formPreviewContent: previewContent.formPreviewContent,
+    groupDestinationPreviewData: params.groupDestinationPreviewData,
+    hasChanges: params.hasChanges,
+    id: params.id,
+    isMultiDestinationGroup: params.isMultiDestinationGroup,
+    isTemplateTab: params.isTemplateTab,
+    previewAccounts,
+    templatePreviewContent: previewContent.templatePreviewContent,
+  });
+
+  const publicationLinks = useMemo(() => {
+    const links: Array<{ platform: string; url: string }> = [];
+    if (params.post?.status === 'published' && params.post.instagramPermalink) {
+      links.push({ platform: 'instagram', url: String(params.post.instagramPermalink) });
+    }
+    return links;
+  }, [params.post?.instagramPermalink, params.post?.status]);
+
+  const publicationPreview = useMemo(() => {
+    const isTemplatePreview = params.isTemplateTab && params.isMultiDestinationGroup;
+    return {
+      contentType: isTemplatePreview
+        ? params.templateFormData.contentType
+        : params.formData.contentType,
+      media: isTemplatePreview
+        ? previewContent.templatePreviewMedia
+        : previewContent.formPreviewMedia,
+    };
+  }, [
+    params.formData.contentType,
+    params.isMultiDestinationGroup,
+    params.isTemplateTab,
+    params.templateFormData.contentType,
+    previewContent.formPreviewMedia,
+    previewContent.templatePreviewMedia,
   ]);
 
+  const primaryEditCtaLabel = usePrimaryEditCtaLabel({
+    disabled: params.disabled,
+    isMultiDestinationGroup: params.isMultiDestinationGroup,
+    contentGroupSchedule: params.contentGroupSchedule,
+    post: params.post,
+    formData: params.formData,
+    brandTimezone: params.brandTimezone,
+  });
+
   return {
-    previewLayout,
-    showPreviewAsBody,
-    showPreviewInColumn,
-    showPreviewInline,
-    showInlinePreviewToggle,
-    previewPanelLayout,
+    ...layoutState,
     previewItems,
     publicationLinks,
     publicationPreview,

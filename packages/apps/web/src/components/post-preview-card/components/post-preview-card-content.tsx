@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { cn } from '@/lib/utils';
 import type { CalendarItem } from '@/types/calendar';
@@ -30,6 +37,121 @@ type PostPreviewCardContentProps = {
   socialAccountsById?: SocialAccountsById;
 };
 
+function useWideCard(ref: RefObject<HTMLDivElement | null>) {
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    if (!ref.current) {
+      return;
+    }
+    const element = ref.current;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width ?? 0;
+      setIsWide(width >= POST_PREVIEW_WIDE_MIN_WIDTH_PX);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return isWide;
+}
+
+function PostIndicators({
+  item,
+  hideDestinations,
+  socialAccountsById,
+}: Pick<PostPreviewCardContentProps, 'item' | 'hideDestinations' | 'socialAccountsById'>) {
+  if (item.type === 'placeholder') {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <SeriesIndicator item={item} />
+      <GenerationIndicator item={item} />
+      <DestinationIndicator
+        item={item}
+        hideDestinations={hideDestinations}
+        socialAccountsById={socialAccountsById}
+      />
+    </div>
+  );
+}
+
+function WidePostContent({
+  previewUrl,
+  showMediaBadge,
+  mediaBadgeType,
+  statusBadge,
+  captionMeta,
+}: {
+  previewUrl: string | null;
+  showMediaBadge: boolean;
+  mediaBadgeType: MediaBadgeType;
+  statusBadge: ReactNode;
+  captionMeta: PostPreviewCardContentProps['captionMeta'];
+}) {
+  return (
+    <>
+      <PreviewImage
+        previewUrl={previewUrl}
+        showMediaBadge={showMediaBadge}
+        mediaBadgeType={mediaBadgeType}
+        className="h-full w-14 self-stretch"
+      />
+      <ItemContent className="min-w-0">
+        <ItemTitle className="font-normal">{statusBadge}</ItemTitle>
+        <ItemDescription
+          className={cn(
+            'mt-1 line-clamp-1 min-h-[1.4em] text-[12px] leading-snug',
+            captionMeta.isFallback ? 'text-muted-foreground italic' : 'text-foreground'
+          )}
+        >
+          {captionMeta.text}
+        </ItemDescription>
+      </ItemContent>
+    </>
+  );
+}
+
+function NarrowPostContent({
+  item,
+  previewUrl,
+  showMediaBadge,
+  mediaBadgeType,
+  statusBadge,
+  captionMeta,
+}: {
+  item: CalendarItem;
+  previewUrl: string | null;
+  showMediaBadge: boolean;
+  mediaBadgeType: MediaBadgeType;
+  statusBadge: ReactNode;
+  captionMeta: PostPreviewCardContentProps['captionMeta'];
+}) {
+  return (
+    <>
+      <ItemTitle className="font-normal">{statusBadge}</ItemTitle>
+      <div className="flex min-w-0 items-start gap-2 text-[12px] leading-snug">
+        <PreviewImage
+          previewUrl={previewUrl}
+          showMediaBadge={showMediaBadge}
+          mediaBadgeType={mediaBadgeType}
+          className="h-[3em] w-[3em] shrink-0"
+        />
+        <ItemDescription
+          className={cn(
+            'line-clamp-2 min-w-0 flex-1',
+            captionMeta.isFallback ? 'text-muted-foreground italic' : 'text-foreground'
+          )}
+        >
+          {item.type === 'placeholder' ? '' : captionMeta.text}
+        </ItemDescription>
+      </div>
+    </>
+  );
+}
+
 export function PostPreviewCardContent({
   item,
   status,
@@ -46,37 +168,14 @@ export function PostPreviewCardContent({
   socialAccountsById,
 }: PostPreviewCardContentProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [isWide, setIsWide] = useState(false);
-
-  useEffect(() => {
-    if (!cardRef.current) {
-      return;
-    }
-    const el = cardRef.current;
-    const ro = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect?.width ?? 0;
-      setIsWide(width >= POST_PREVIEW_WIDE_MIN_WIDTH_PX);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const indicators = useMemo(() => {
-    if (item.type === 'placeholder') {
-      return null;
-    }
-    return (
-      <div className="flex items-center gap-1">
-        <SeriesIndicator item={item} />
-        <GenerationIndicator item={item} />
-        <DestinationIndicator
-          item={item}
-          hideDestinations={hideDestinations}
-          socialAccountsById={socialAccountsById}
-        />
-      </div>
-    );
-  }, [hideDestinations, item, socialAccountsById]);
+  const isWide = useWideCard(cardRef);
+  const indicators = (
+    <PostIndicators
+      item={item}
+      hideDestinations={hideDestinations}
+      socialAccountsById={socialAccountsById}
+    />
+  );
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -114,49 +213,22 @@ export function PostPreviewCardContent({
       ) : null}
 
       {isWide ? (
-        <>
-          <PreviewImage
-            previewUrl={previewUrl}
-            showMediaBadge={showMediaBadge}
-            mediaBadgeType={mediaBadgeType}
-            className="h-full w-14 self-stretch"
-          />
-
-          <ItemContent className="min-w-0">
-            <ItemTitle className="font-normal">{statusBadge}</ItemTitle>
-
-            <ItemDescription
-              className={cn(
-                'mt-1 line-clamp-1 min-h-[1.4em] text-[12px] leading-snug',
-                captionMeta.isFallback ? 'text-muted-foreground italic' : 'text-foreground'
-              )}
-            >
-              {captionMeta.text}
-            </ItemDescription>
-          </ItemContent>
-        </>
+        <WidePostContent
+          previewUrl={previewUrl}
+          showMediaBadge={showMediaBadge}
+          mediaBadgeType={mediaBadgeType}
+          statusBadge={statusBadge}
+          captionMeta={captionMeta}
+        />
       ) : (
-        <>
-          <ItemTitle className="font-normal">{statusBadge}</ItemTitle>
-
-          <div className="flex min-w-0 items-start gap-2 text-[12px] leading-snug">
-            <PreviewImage
-              previewUrl={previewUrl}
-              showMediaBadge={showMediaBadge}
-              mediaBadgeType={mediaBadgeType}
-              className="h-[3em] w-[3em] shrink-0"
-            />
-
-            <ItemDescription
-              className={cn(
-                'line-clamp-2 min-w-0 flex-1',
-                captionMeta.isFallback ? 'text-muted-foreground italic' : 'text-foreground'
-              )}
-            >
-              {item.type === 'placeholder' ? '' : captionMeta.text}
-            </ItemDescription>
-          </div>
-        </>
+        <NarrowPostContent
+          item={item}
+          previewUrl={previewUrl}
+          showMediaBadge={showMediaBadge}
+          mediaBadgeType={mediaBadgeType}
+          statusBadge={statusBadge}
+          captionMeta={captionMeta}
+        />
       )}
 
       {optimisticLabel ? <OptimisticIndicator label={optimisticLabel} /> : null}

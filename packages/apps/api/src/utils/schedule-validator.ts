@@ -178,47 +178,60 @@ export class ScheduleValidator {
   }
 
   private static validateNumericField(field: string, min: number, max: number): boolean {
-    // Handle wildcards and special characters
-    if (field === '*' || field === '?') {
+    if (this.isWildcardField(field)) {
       return true;
     }
-
-    // Handle ranges (e.g., "1-5")
     if (field.includes('-')) {
-      const parts = field.split('-');
-      if (parts.length !== 2) {
-        return false;
-      }
-      const start = Number(parts[0]);
-      const end = Number(parts[1]);
-      return !isNaN(start) && !isNaN(end) && start >= min && end <= max && start <= end;
+      return this.validateRangeField(field, min, max);
     }
-
-    // Handle step values (e.g., "*/5")
     if (field.includes('/')) {
-      const parts = field.split('/');
-      if (parts.length !== 2) {
-        return false;
-      }
-      const range = parts[0]!;
-      const step = parts[1]!;
-      const stepNum = parseInt(step, 10);
-      if (isNaN(stepNum) || stepNum <= 0) {
-        return false;
-      }
-      if (range === '*') {
-        return true;
-      }
-      return this.validateNumericField(range, min, max);
+      return this.validateStepField(field, min, max);
     }
-
-    // Handle comma-separated values (e.g., "1,3,5")
     if (field.includes(',')) {
-      const values = field.split(',');
-      return values.every((v) => this.validateNumericField(v.trim(), min, max));
+      return this.validateListField(field, min, max);
+    }
+    return this.validateSingleNumericField(field, min, max);
+  }
+
+  private static isWildcardField(field: string): boolean {
+    return field === '*' || field === '?';
+  }
+
+  private static validateRangeField(field: string, min: number, max: number): boolean {
+    const parts = field.split('-');
+    if (parts.length !== 2) {
+      return false;
     }
 
-    // Single numeric value
+    const start = Number(parts[0]);
+    const end = Number(parts[1]);
+    return !isNaN(start) && !isNaN(end) && start >= min && end <= max && start <= end;
+  }
+
+  private static validateStepField(field: string, min: number, max: number): boolean {
+    const parts = field.split('/');
+    if (parts.length !== 2) {
+      return false;
+    }
+
+    const range = parts[0]!;
+    const step = parts[1]!;
+    const stepNum = parseInt(step, 10);
+    if (isNaN(stepNum) || stepNum <= 0) {
+      return false;
+    }
+    if (range === '*') {
+      return true;
+    }
+    return this.validateNumericField(range, min, max);
+  }
+
+  private static validateListField(field: string, min: number, max: number): boolean {
+    const values = field.split(',');
+    return values.every((value) => this.validateNumericField(value.trim(), min, max));
+  }
+
+  private static validateSingleNumericField(field: string, min: number, max: number): boolean {
     const num = parseInt(field, 10);
     return !isNaN(num) && num >= min && num <= max;
   }

@@ -34,6 +34,102 @@ export function AnalyticsAccountTabLabel({ account }: { account: ConnectedAccoun
 
 const LINK_TABS: AnalyticsTabKey[] = ['posts', 'insights', 'recommendations', 'forecasts'];
 
+function DisconnectedAccountAlert({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
+  return (
+    <Alert>
+      <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+        <span>This account is disconnected.</span>
+        <Button variant="outline" onClick={() => navigate('/settings/social-accounts')}>
+          Manage connections
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function AccountOverviewLoadingState() {
+  return (
+    <Card>
+      <CardContent className="py-8">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-64 w-full rounded-lg" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryKpiGrid({
+  summary,
+}: {
+  summary: NonNullable<ReturnType<typeof useAccountSummary>['data']>['data'];
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <KPICard
+        title="Posts"
+        value={formatNumber(summary.totalPosts || 0)}
+        change={summary.previousPeriodComparison?.totalPosts?.change}
+        loading={false}
+      />
+      <KPICard
+        title="Views"
+        value={formatNumber(summary.totalImpressions || 0)}
+        change={summary.previousPeriodComparison?.impressions?.change}
+        loading={false}
+      />
+      <KPICard
+        title="Reach"
+        value={formatNumber(summary.totalReach || 0)}
+        change={summary.previousPeriodComparison?.reach?.change}
+        loading={false}
+      />
+      <KPICard
+        title="Engagement Rate"
+        value={formatPercent(summary.averageEngagementRate || 0)}
+        change={summary.previousPeriodComparison?.engagementRate?.change}
+        loading={false}
+      />
+    </div>
+  );
+}
+
+function tabLabel(tab: AnalyticsTabKey) {
+  if (tab === 'posts') {
+    return 'Posts';
+  }
+  if (tab === 'insights') {
+    return 'AI Insights';
+  }
+  if (tab === 'recommendations') {
+    return 'Recommendations';
+  }
+  return 'Forecasts';
+}
+
+function OverviewLinkTabs({
+  tabs,
+  onOpenTab,
+}: {
+  tabs: AnalyticsTabKey[];
+  onOpenTab: (tab: AnalyticsTabKey) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {tabs.map((tab) => (
+        <Button key={tab} type="button" variant="outline" onClick={() => onOpenTab(tab)}>
+          {tabLabel(tab)}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 export function AnalyticsAccountOverviewTab({
   account,
   period,
@@ -49,33 +145,11 @@ export function AnalyticsAccountOverviewTab({
   const healthQuery = useAccountHealth(account.disconnected ? undefined : account.id, period);
 
   if (account.disconnected) {
-    return (
-      <Alert>
-        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-          <span>This account is disconnected.</span>
-          <Button variant="outline" onClick={() => navigate('/settings/social-accounts')}>
-            Manage connections
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
+    return <DisconnectedAccountAlert navigate={navigate} />;
   }
 
   if (summaryQuery.isLoading) {
-    return (
-      <Card>
-        <CardContent className="py-8">
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-lg" />
-              ))}
-            </div>
-            <Skeleton className="h-64 w-full rounded-lg" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <AccountOverviewLoadingState />;
   }
 
   if (summaryQuery.isError || !summaryQuery.data?.data) {
@@ -91,46 +165,8 @@ export function AnalyticsAccountOverviewTab({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="Posts"
-          value={formatNumber(summary.totalPosts || 0)}
-          change={summary.previousPeriodComparison?.totalPosts?.change}
-          loading={false}
-        />
-        <KPICard
-          title="Views"
-          value={formatNumber(summary.totalImpressions || 0)}
-          change={summary.previousPeriodComparison?.impressions?.change}
-          loading={false}
-        />
-        <KPICard
-          title="Reach"
-          value={formatNumber(summary.totalReach || 0)}
-          change={summary.previousPeriodComparison?.reach?.change}
-          loading={false}
-        />
-        <KPICard
-          title="Engagement Rate"
-          value={formatPercent(summary.averageEngagementRate || 0)}
-          change={summary.previousPeriodComparison?.engagementRate?.change}
-          loading={false}
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {linkTabs.map((t) => (
-          <Button key={t} type="button" variant="outline" onClick={() => onOpenTab(t)}>
-            {t === 'posts'
-              ? 'Posts'
-              : t === 'insights'
-                ? 'AI Insights'
-                : t === 'recommendations'
-                  ? 'Recommendations'
-                  : 'Forecasts'}
-          </Button>
-        ))}
-      </div>
+      <SummaryKpiGrid summary={summary} />
+      <OverviewLinkTabs tabs={linkTabs} onOpenTab={onOpenTab} />
 
       <AccountHealthScore
         healthScore={healthQuery.data?.data || undefined}

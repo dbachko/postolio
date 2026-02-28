@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { getDatabaseClient } from '../config/database.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
 import { RedisTokenStore } from './redis-token-store.js';
+import { rotateRefreshToken } from './refresh-token/rotate-refresh-token.js';
 import { SessionService, type SessionMetadata } from './session.service.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -129,317 +130,26 @@ export class RefreshTokenService {
     accessToken: string;
     family: string;
   } | null> {
-    // Get old token data
-    const oldTokenParsed = await tokenStore.getToken(oldToken);
-
-    if (!oldTokenParsed) {
-      // Token doesn't exist or expired
-      return null;
-    }
-
-    // Check token expiry
-    if (new Date(oldTokenParsed.expiresAt) < new Date()) {
-      await tokenStore.deleteToken(oldToken);
-      return null;
-    }
-
-    // Check token family
-    const family = await tokenStore.getFamily(oldTokenParsed.family);
-
-    if (!family) {
-      // Family expired or doesn't exist - potential security issue
-      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
-      await AuditLogger.log({
-        userId: oldTokenParsed.userId,
-        eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
-        metadata: {
-          family: oldTokenParsed.family,
-          generation: oldTokenParsed.generation,
-          ipAddress,
-          userAgent,
-        },
-        success: false,
-      });
-      return null;
-    }
-
-    const currentGeneration = Number((family as any).currentGeneration);
-    if (!Number.isFinite(currentGeneration) || currentGeneration < 1) {
-      // Corrupt or unexpected family data - treat as security issue
-      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
-      await AuditLogger.log({
-        userId: oldTokenParsed.userId,
-        eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
-        metadata: {
-          family: oldTokenParsed.family,
-          expectedGeneration: (family as any).currentGeneration,
-          actualGeneration: oldTokenParsed.generation,
-          ipAddress,
-          userAgent,
-          reason: 'invalid_family_generation',
-        },
-        success: false,
-      });
-      return null;
-    }
-
-    // Check for token reuse (generation mismatch)
-    if (oldTokenParsed.generation !== currentGeneration) {
-      // Handle common false-positive: concurrent refresh requests racing each other.
-      // If the provided token is immediately previous and the family rotated very recently,
-      // return the current token instead of invalidating the whole family.
-      const lastRotatedAtRaw = (family as any).lastRotatedAt;
-      const lastRotatedAtMs =
-        typeof lastRotatedAtRaw === 'string' || typeof lastRotatedAtRaw === 'number'
-          ? new Date(lastRotatedAtRaw as any).getTime()
-          : 0;
-      const withinGrace =
-        Number.isFinite(lastRotatedAtMs) && Date.now() - lastRotatedAtMs <= this.ROTATION_GRACE_MS;
-      const isPreviousGeneration = oldTokenParsed.generation === currentGeneration - 1;
-      const sameUserAgent =
-        !oldTokenParsed.userAgent || !userAgent ? true : oldTokenParsed.userAgent === userAgent;
-
-      if (withinGrace && isPreviousGeneration && sameUserAgent) {
-        // Best-effort: fetch the current token for this family and return it
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const familyTokens = await tokenStore.getFamilyTokens(oldTokenParsed.family);
-          const current = familyTokens.find((t) => t.generation === currentGeneration);
-          if (current) {
-            // Ensure the DB session points at the current token (idempotent safety for timing races)
-            const session =
-              (await SessionService.findSessionByToken(current.token)) ||
-              (await SessionService.findSessionByToken(oldToken));
-            if (session) {
-              await SessionService.updateLastActivity(session.id);
-              await SessionService.updateRefreshTokenHash(session.id, current.token);
-            }
-
-            const user = await prisma.user.findUnique({
-              where: { id: oldTokenParsed.userId },
-              select: { id: true, email: true },
-            });
-            if (!user) {
-              throw new Error('User not found');
-            }
-
-            const accessToken = fastify.jwt.sign({
-              id: user.id,
-              email: user.email,
-              sid: session?.id,
-            });
-
-            await AuditLogger.log({
-              userId: oldTokenParsed.userId,
-              eventType: AuditEventType.REFRESH_TOKEN_ROTATED,
-              metadata: {
-                reason: 'concurrent_refresh_grace',
-                family: oldTokenParsed.family,
-                expectedGeneration: currentGeneration,
-                actualGeneration: oldTokenParsed.generation,
-                ipAddress,
-                userAgent,
-                sessionId: session?.id,
-              },
-              success: true,
-            });
-
-            return {
-              refreshToken: current.token,
-              accessToken,
-              family: oldTokenParsed.family,
-            };
-          }
-          // Wait a moment for the other in-flight rotation to persist the new token
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      }
-
-      // Token reuse detected - invalidate entire family
-      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
-      await AuditLogger.log({
-        userId: oldTokenParsed.userId,
-        eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
-        metadata: {
-          family: oldTokenParsed.family,
-          expectedGeneration: currentGeneration,
-          actualGeneration: oldTokenParsed.generation,
-          ipAddress,
-          userAgent,
-        },
-        success: false,
-      });
-      return null;
-    }
-
-    // Validate that the old token maps to an active session; if not, treat as invalid
-    let session = null;
-    try {
-      session = await SessionService.findSessionByToken(oldToken);
-    } catch {
-      // In dev, if Prisma client for sessions isn't initialized yet, fail gracefully
-      // Returning null will cause the refresh route to respond 401 instead of 500
-      return null;
-    }
-    if (!session) {
-      // Ensure any lingering old token is removed and stop rotation
-      await tokenStore.deleteToken(oldToken);
-      return null;
-    }
-
-    // Check max generations (maintenance: reset family without creating a new DB session)
-    if (oldTokenParsed.generation >= this.MAX_GENERATIONS) {
-      const newToken = randomBytes(this.TOKEN_LENGTH).toString('hex');
-      const newFamily = randomBytes(16).toString('hex');
-
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + this.TOKEN_EXPIRY_DAYS);
-
-      const newTokenData: RefreshToken = {
-        token: newToken,
-        userId: oldTokenParsed.userId,
-        family: newFamily,
-        generation: 1,
-        expiresAt,
-        createdAt: new Date(),
-        ipAddress,
-        userAgent,
-      };
-
-      await tokenStore.storeToken(newTokenData, this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
-      await tokenStore.storeFamily(
-        newFamily,
-        {
-          userId: oldTokenParsed.userId,
-          currentGeneration: 1,
-          createdAt: new Date(),
-        },
-        this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
-      );
-
-      // Keep the same session; just point it at the new token and refresh activity timestamps.
-      await SessionService.updateLastActivity(session.id);
-      await SessionService.updateRefreshTokenHash(session.id, newToken);
-
-      // Retire the old family tokens/data (this is NOT a reuse event).
-      await tokenStore.deleteFamilyTokens(oldTokenParsed.family);
-
-      const user = await prisma.user.findUnique({
-        where: { id: oldTokenParsed.userId },
-        select: { id: true, email: true },
-      });
-
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      const accessToken = fastify.jwt.sign(
-        { id: user.id, email: user.email, sid: session.id }
-        // Token expiry is configured in auth plugin (default 1h)
-      );
-
-      await AuditLogger.log({
-        userId: oldTokenParsed.userId,
-        eventType: AuditEventType.REFRESH_TOKEN_ROTATED,
-        metadata: {
-          reason: 'max_generations',
-          oldFamily: oldTokenParsed.family,
-          oldGeneration: oldTokenParsed.generation,
-          newFamily,
-          newGeneration: 1,
-          ipAddress,
-          userAgent,
-          sessionId: session.id,
-        },
-        success: true,
-      });
-
-      return {
-        refreshToken: newToken,
-        accessToken,
-        family: newFamily,
-      };
-    }
-
-    // Generate new token in same family
-    const newToken = randomBytes(this.TOKEN_LENGTH).toString('hex');
-    const newGeneration = oldTokenParsed.generation + 1;
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + this.TOKEN_EXPIRY_DAYS);
-
-    // Store new token
-    const newTokenData: RefreshToken = {
-      token: newToken,
-      userId: oldTokenParsed.userId,
-      family: oldTokenParsed.family,
-      generation: newGeneration,
-      expiresAt,
-      createdAt: new Date(),
+    return rotateRefreshToken({
+      fastify,
+      oldToken,
       ipAddress,
       userAgent,
-    };
-
-    // Store new token with efficient Set tracking
-    await tokenStore.storeToken(newTokenData, this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
-
-    // Update family generation
-    await tokenStore.storeFamily(
-      oldTokenParsed.family,
-      {
-        ...family,
-        currentGeneration: newGeneration,
-        lastRotatedAt: new Date(),
+      tokenLength: this.TOKEN_LENGTH,
+      tokenExpiryDays: this.TOKEN_EXPIRY_DAYS,
+      familyExpiryDays: this.FAMILY_EXPIRY_DAYS,
+      maxGenerations: this.MAX_GENERATIONS,
+      rotationGraceMs: this.ROTATION_GRACE_MS,
+      tokenStore,
+      prisma,
+      sessionService: SessionService,
+      auditLogger: AuditLogger,
+      auditEventType: {
+        REFRESH_TOKEN_REUSE_DETECTED: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
+        REFRESH_TOKEN_ROTATED: AuditEventType.REFRESH_TOKEN_ROTATED,
       },
-      this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
-    );
-
-    // Update session last activity and refresh token hash
-    await SessionService.updateLastActivity(session.id);
-    // Update the stored refreshTokenHash to the new token's hash
-    await SessionService.updateRefreshTokenHash(session.id, newToken);
-
-    // Retire old token briefly to tolerate concurrent refresh calls without triggering reuse invalidation.
-    // This keeps the old token addressable for a short grace window but removes it from tracking sets.
-    await tokenStore.retireToken(oldToken, Math.ceil(this.ROTATION_GRACE_MS / 1000), {
-      supersededBy: newToken,
-      supersededAt: new Date().toISOString(),
+      invalidateTokenFamily: (family, userId) => this.invalidateTokenFamily(family, userId),
     });
-
-    // Generate new access token (include session id if available)
-    const user = await prisma.user.findUnique({
-      where: { id: oldTokenParsed.userId },
-      select: { id: true, email: true },
-    });
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    const accessToken = fastify.jwt.sign(
-      { id: user.id, email: user.email, sid: session?.id }
-      // Token expiry is configured in auth plugin (default 1h)
-    );
-
-    // Log rotation
-    await AuditLogger.log({
-      userId: oldTokenParsed.userId,
-      eventType: AuditEventType.REFRESH_TOKEN_ROTATED,
-      metadata: {
-        family: oldTokenParsed.family,
-        oldGeneration: oldTokenParsed.generation,
-        newGeneration,
-        ipAddress,
-        userAgent,
-        sessionId: session?.id,
-      },
-      success: true,
-    });
-
-    return {
-      refreshToken: newToken,
-      accessToken,
-      family: oldTokenParsed.family,
-    };
   }
 
   /**

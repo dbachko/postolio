@@ -39,7 +39,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
         }
         try {
           if (isDebugFiltersEnabled()) {
-            console.debug('[filters] setSeries', { prev, next: series });
+            console.warn('[filters] setSeries', { prev, next: series });
           }
         } catch {}
         set({ series });
@@ -52,7 +52,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
         }
         try {
           if (isDebugFiltersEnabled()) {
-            console.debug('[filters] setStatuses', { prev, next: statuses });
+            console.warn('[filters] setStatuses', { prev, next: statuses });
           }
         } catch {}
         set({ statuses });
@@ -65,7 +65,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
             : [...state.statuses, status];
           try {
             if (isDebugFiltersEnabled()) {
-              console.debug('[filters] toggleStatus', { status, prev: state.statuses, next });
+              console.warn('[filters] toggleStatus', { status, prev: state.statuses, next });
             }
           } catch {}
           return { statuses: next };
@@ -74,7 +74,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
       setSearchQuery: (query) => {
         try {
           if (isDebugFiltersEnabled()) {
-            console.debug('[filters] setSearchQuery', { query });
+            console.warn('[filters] setSearchQuery', { query });
           }
         } catch {}
         set({ searchQuery: query });
@@ -83,7 +83,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
       clearAll: () => {
         try {
           if (isDebugFiltersEnabled()) {
-            console.debug('[filters] clearAll');
+            console.warn('[filters] clearAll');
           }
         } catch {}
         set(initialState);

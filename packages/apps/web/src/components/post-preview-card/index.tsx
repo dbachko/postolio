@@ -20,6 +20,18 @@ import { PostPreviewCardContent } from './components/post-preview-card-content';
 import { PostPreviewCardMenu } from './components/post-preview-card-menu';
 import { QueueSlotCard } from './components/queue-slot-card';
 
+function buildDuplicatePath(item: PostPreviewCardProps['item']): string {
+  const params = new URLSearchParams();
+  if (item.type === 'content' && item.caption) {
+    params.set('caption', item.caption);
+  }
+  const hashtags = extractHashtags(item);
+  if (hashtags.length > 0) {
+    params.set('hashtags', hashtags.join(' '));
+  }
+  return `/posts/create?${params.toString()}`;
+}
+
 export function PostPreviewCard({
   item,
   timezone,
@@ -68,18 +80,7 @@ export function PostPreviewCard({
       handleOpen();
       return;
     }
-
-    const params = new URLSearchParams();
-    if (item.caption) {
-      params.set('caption', item.caption);
-    }
-
-    const hashtags = extractHashtags(item);
-    if (hashtags.length > 0) {
-      params.set('hashtags', hashtags.join(' '));
-    }
-
-    navigate(`/posts/create?${params.toString()}`);
+    navigate(buildDuplicatePath(item));
   }, [handleOpen, item, navigate]);
 
   if (queueSlotMeta) {

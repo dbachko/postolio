@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Eye } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,53 @@ import { PostEditorCreateLayout } from './post-editor-layout-create';
 import { PostEditorSingleSidebarLayout } from './post-editor-layout-single-sidebar';
 import { PostEditorDefaultLayout } from './post-editor-layout-default';
 import { PostEditorFooter } from './post-editor-footer';
+
+function renderPostEditorLayout(params: {
+  state: PostEditorState;
+  isCreating: boolean;
+  previewPanel: ReactNode;
+  inlinePreviewPanel: ReactNode;
+  previewToggleButton: ReactNode;
+}) {
+  const { state, isCreating, previewPanel, inlinePreviewPanel, previewToggleButton } = params;
+  if (state.data.isMultiDestinationGroup) {
+    return (
+      <PostEditorMultiDestinationLayout
+        state={state}
+        previewPanel={previewPanel}
+        inlinePreviewPanel={inlinePreviewPanel}
+      />
+    );
+  }
+  if (isCreating) {
+    return (
+      <PostEditorCreateLayout
+        state={state}
+        previewPanel={previewPanel}
+        inlinePreviewPanel={inlinePreviewPanel}
+        previewToggleButton={previewToggleButton}
+      />
+    );
+  }
+  if (state.layout === 'sidebar' && state.id) {
+    return (
+      <PostEditorSingleSidebarLayout
+        state={state}
+        previewPanel={previewPanel}
+        inlinePreviewPanel={inlinePreviewPanel}
+        previewToggleButton={previewToggleButton}
+      />
+    );
+  }
+  return (
+    <PostEditorDefaultLayout
+      state={state}
+      previewPanel={previewPanel}
+      inlinePreviewPanel={inlinePreviewPanel}
+      previewToggleButton={previewToggleButton}
+    />
+  );
+}
 
 export function PostEditorShell({ state }: { state: PostEditorState }) {
   const isCreating = !state.id;
@@ -50,34 +98,13 @@ export function PostEditorShell({ state }: { state: PostEditorState }) {
     >
       <PostEditorHeader state={state} />
 
-      {state.data.isMultiDestinationGroup ? (
-        <PostEditorMultiDestinationLayout
-          state={state}
-          previewPanel={previewPanel}
-          inlinePreviewPanel={inlinePreviewPanel}
-        />
-      ) : isCreating ? (
-        <PostEditorCreateLayout
-          state={state}
-          previewPanel={previewPanel}
-          inlinePreviewPanel={inlinePreviewPanel}
-          previewToggleButton={previewToggleButton}
-        />
-      ) : state.layout === 'sidebar' && state.id ? (
-        <PostEditorSingleSidebarLayout
-          state={state}
-          previewPanel={previewPanel}
-          inlinePreviewPanel={inlinePreviewPanel}
-          previewToggleButton={previewToggleButton}
-        />
-      ) : (
-        <PostEditorDefaultLayout
-          state={state}
-          previewPanel={previewPanel}
-          inlinePreviewPanel={inlinePreviewPanel}
-          previewToggleButton={previewToggleButton}
-        />
-      )}
+      {renderPostEditorLayout({
+        state,
+        isCreating,
+        previewPanel,
+        inlinePreviewPanel,
+        previewToggleButton,
+      })}
 
       <PostEditorFooter state={state} />
     </div>

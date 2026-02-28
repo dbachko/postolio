@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { FullCalendar } from '@/components/calendar/FullCalendar/full-calendar';
 import { QueueSchedulesView } from '@/components/calendar/QueueSchedules/queue-schedules-view';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -42,6 +42,44 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
     return params.get('calendar') === 'off' || params.get('disableCalendar') === '1';
   }, []);
 
+  let calendarBody: ReactNode;
+  if (calendarDisabled) {
+    calendarBody = (
+      <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
+    );
+  } else if (viewMode === 'queue') {
+    calendarBody = (
+      <QueueSchedulesView
+        brandId={brandId}
+        brandTimezone={brandTimezone}
+        date={currentDate}
+        calendarContent={scopedContent}
+        selectedSocialAccountIds={
+          Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : null
+        }
+      />
+    );
+  } else {
+    calendarBody = (
+      <ErrorBoundary
+        fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
+      >
+        <FullCalendar
+          brandId={brandId}
+          brandTimezone={brandTimezone}
+          view={viewMode}
+          date={currentDate}
+          content={scopedContent}
+          placeholders={placeholders}
+          theme="monarch"
+          targetSocialAccountIds={
+            Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : null
+          }
+        />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <ContentCalendarHeader
@@ -56,36 +94,7 @@ export function ContentCalendar({ brandId }: ContentCalendarProps) {
         onBrandTimezoneChange={setBrandTimezone}
       />
 
-      {calendarDisabled ? (
-        <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
-      ) : viewMode === 'queue' ? (
-        <QueueSchedulesView
-          brandId={brandId}
-          brandTimezone={brandTimezone}
-          date={currentDate}
-          calendarContent={scopedContent}
-          selectedSocialAccountIds={
-            Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : null
-          }
-        />
-      ) : (
-        <ErrorBoundary
-          fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
-        >
-          <FullCalendar
-            brandId={brandId}
-            brandTimezone={brandTimezone}
-            view={viewMode}
-            date={currentDate}
-            content={scopedContent}
-            placeholders={placeholders}
-            theme="monarch"
-            targetSocialAccountIds={
-              Array.isArray(selectedSocialAccountIds) ? selectedSocialAccountIds : null
-            }
-          />
-        </ErrorBoundary>
-      )}
+      {calendarBody}
     </div>
   );
 }

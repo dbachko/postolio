@@ -7,7 +7,6 @@ import OpenAI from 'openai';
 import type { EventBridgeEvent as AwsEventBridgeEvent } from 'aws-lambda';
 import { initSentry, captureException } from '@postolio/observability';
 
-// Initialize Powertools
 const logger = new Logger({ serviceName: 'asset-ai-analyzer' });
 const tracer = new Tracer({ serviceName: 'asset-ai-analyzer' });
 const metrics = new Metrics({
@@ -19,16 +18,27 @@ initSentry({
   serviceName: 'asset-ai-analyzer',
 });
 
-// Initialize AWS SDK clients
 const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
-
-// Cache OpenAI client
 let openaiClient: OpenAI | null = null;
 
 interface ThumbnailsCompleteEvent {
   assetId: string;
   brandId: string;
   s3Key: string;
+  s3Bucket: string;
+  thumbnailKey: string;
+}
+
+interface AIAnalysis {
+  description: string;
+  tags: string[];
+  primaryColors: string[];
+  mood: string;
+  subjects: string[];
+}
+
+interface AnalyzeAssetInput {
+  assetId: string;
   s3Bucket: string;
   thumbnailKey: string;
 }
@@ -45,28 +55,78 @@ export const handler = async (
   });
 
   try {
-    // Get OpenAI API key from Secrets Manager
-    if (!openaiClient) {
-      const openaiKey = await getOpenAIKey();
-      openaiClient = new OpenAI({ apiKey: openaiKey });
-    }
+    await analyzeAsset({ assetId, s3Bucket, thumbnailKey });
+    metrics.addMetric('AIAnalysisSuccess', MetricUnit.Count, 1);
+  } catch (error) {
+    logger.error('Failed to analyze asset with AI', error as Error, { assetId });
+    captureException(error, {
+      assetId,
+      function: 'asset-ai-analyzer',
+    });
 
-    // Build CDN URL for the thumbnail (medium size)
-    const rawCdnDomain =
-      process.env.ASSETS_CDN_DOMAIN ||
-      process.env.CDN_DOMAIN ||
-      `https://${s3Bucket}.s3.amazonaws.com`;
-    const normalizedCdnDomain = rawCdnDomain.replace(/\/+$/, '');
-    const cdnDomain = /^https?:\/\//i.test(normalizedCdnDomain)
-      ? normalizedCdnDomain
-      : `https://${normalizedCdnDomain}`;
-    const normalizedThumbnailKey = thumbnailKey.replace(/^\/+/, '');
-    const imageUrl = `${cdnDomain}/${normalizedThumbnailKey}`;
+    await markAssetAnalysisFailed(assetId, error as Error);
+    metrics.addMetric('AIAnalysisFailure', MetricUnit.Count, 1);
+    throw error;
+  } finally {
+    metrics.publishStoredMetrics();
+  }
+};
 
-    logger.info('Analyzing image with OpenAI Vision', { imageUrl });
+async function analyzeAsset(input: AnalyzeAssetInput): Promise<void> {
+  const client = await getOpenAIClient();
+  const imageUrl = buildThumbnailUrl(input.s3Bucket, input.thumbnailKey);
 
-    // Analyze image with OpenAI Vision
-    const analysisPrompt = `Analyze this image and provide the following information in JSON format:
+  logger.info('Analyzing image with OpenAI Vision', { imageUrl });
+
+  const analysis = await generateImageAnalysis(client, imageUrl, input.assetId);
+  const embedding = await generateDescriptionEmbedding(client, analysis.description, input.assetId);
+
+  await prismaAssets.asset.update({
+    where: { id: input.assetId },
+    data: {
+      aiDescription: analysis.description,
+      aiTags: analysis.tags,
+      aiPrimaryColors: analysis.primaryColors,
+      aiMood: analysis.mood,
+      aiSubjects: analysis.subjects,
+      aiDescriptionEmbedding: embedding,
+      analyzedAt: new Date(),
+      processingStatus: 'ai_analyzed',
+      updatedAt: new Date(),
+    },
+  });
+
+  logger.info('Updated asset with AI metadata', {
+    assetId: input.assetId,
+    tagsCount: analysis.tags.length,
+    subjectsCount: analysis.subjects.length,
+  });
+}
+
+async function getOpenAIClient(): Promise<OpenAI> {
+  if (!openaiClient) {
+    const openaiKey = await getOpenAIKey();
+    openaiClient = new OpenAI({ apiKey: openaiKey });
+  }
+
+  return openaiClient;
+}
+
+function buildThumbnailUrl(s3Bucket: string, thumbnailKey: string): string {
+  const rawCdnDomain =
+    process.env.ASSETS_CDN_DOMAIN ||
+    process.env.CDN_DOMAIN ||
+    `https://${s3Bucket}.s3.amazonaws.com`;
+  const normalizedCdnDomain = rawCdnDomain.replace(/\/+$/, '');
+  const cdnDomain = /^https?:\/\//i.test(normalizedCdnDomain)
+    ? normalizedCdnDomain
+    : `https://${normalizedCdnDomain}`;
+  const normalizedThumbnailKey = thumbnailKey.replace(/^\/+/, '');
+  return `${cdnDomain}/${normalizedThumbnailKey}`;
+}
+
+function buildAnalysisPrompt(): string {
+  return `Analyze this image and provide the following information in JSON format:
 {
   "description": "A detailed description of the image (2-3 sentences)",
   "tags": ["array", "of", "relevant", "tags"],
@@ -76,106 +136,79 @@ export const handler = async (
 }
 
 Be concise, accurate, and focus on visual elements that would be useful for content marketing.`;
+}
 
-    const response = await openaiClient.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: analysisPrompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        },
-      ],
-      max_tokens: 500,
-      temperature: 0.3,
-    });
+async function generateImageAnalysis(
+  client: OpenAI,
+  imageUrl: string,
+  assetId: string
+): Promise<AIAnalysis> {
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildAnalysisPrompt() },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+    max_tokens: 500,
+    temperature: 0.3,
+  });
 
-    const analysisText = response.choices[0]?.message?.content;
-    if (!analysisText) {
-      throw new Error('No analysis received from OpenAI');
-    }
+  const analysisText = response.choices[0]?.message?.content;
+  if (!analysisText) {
+    throw new Error('No analysis received from OpenAI');
+  }
 
-    logger.info('Received AI analysis', {
-      assetId,
-      responseLength: analysisText.length,
-    });
+  logger.info('Received AI analysis', {
+    assetId,
+    responseLength: analysisText.length,
+  });
 
-    // Parse the JSON response
-    const analysis = parseAnalysis(analysisText);
+  return parseAnalysis(analysisText);
+}
 
-    // Generate embedding from description for AI image selection
-    const embeddingResponse = await openaiClient.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: analysis.description,
-    });
+async function generateDescriptionEmbedding(
+  client: OpenAI,
+  description: string,
+  assetId: string
+): Promise<number[]> {
+  const embeddingResponse = await client.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: description,
+  });
 
-    const embedding = embeddingResponse.data[0]?.embedding;
-    if (!embedding) {
-      throw new Error('No embedding received from OpenAI');
-    }
+  const embedding = embeddingResponse.data[0]?.embedding;
+  if (!embedding) {
+    throw new Error('No embedding received from OpenAI');
+  }
 
-    logger.info('Generated embedding', {
-      assetId,
-      embeddingDimensions: embedding.length,
-    });
+  logger.info('Generated embedding', {
+    assetId,
+    embeddingDimensions: embedding.length,
+  });
 
-    // Update asset in database with AI metadata
+  return embedding;
+}
+
+async function markAssetAnalysisFailed(assetId: string, error: Error): Promise<void> {
+  try {
     await prismaAssets.asset.update({
       where: { id: assetId },
       data: {
-        aiDescription: analysis.description,
-        aiTags: analysis.tags,
-        aiPrimaryColors: analysis.primaryColors,
-        aiMood: analysis.mood,
-        aiSubjects: analysis.subjects,
-        aiDescriptionEmbedding: embedding,
-        analyzedAt: new Date(),
-        processingStatus: 'ai_analyzed',
+        processingStatus: 'ai_analysis_failed',
+        processingError: error.message,
         updatedAt: new Date(),
       },
     });
-
-    logger.info('Updated asset with AI metadata', {
-      assetId,
-      tagsCount: analysis.tags.length,
-      subjectsCount: analysis.subjects.length,
-    });
-
-    metrics.addMetric('AIAnalysisSuccess', MetricUnit.Count, 1);
-  } catch (error) {
-    logger.error('Failed to analyze asset with AI', error as Error, {
-      assetId,
-    });
-
-    captureException(error, {
-      assetId,
-      function: 'asset-ai-analyzer',
-    });
-
-    // Update asset processing status to failed
-    try {
-      await prismaAssets.asset.update({
-        where: { id: assetId },
-        data: {
-          processingStatus: 'ai_analysis_failed',
-          processingError: (error as Error).message,
-          updatedAt: new Date(),
-        },
-      });
-    } catch (dbError) {
-      logger.error('Failed to update asset status', dbError as Error);
-    }
-
-    metrics.addMetric('AIAnalysisFailure', MetricUnit.Count, 1);
-    throw error;
-  } finally {
-    metrics.publishStoredMetrics();
+  } catch (dbError) {
+    logger.error('Failed to update asset status', dbError as Error);
   }
-};
+}
 
-// Helper to get OpenAI API key from Secrets Manager
 async function getOpenAIKey(): Promise<string> {
   const secretName = process.env.OPENAI_SECRET_NAME || 'postolio/openai-api-key';
 
@@ -199,21 +232,10 @@ async function getOpenAIKey(): Promise<string> {
   }
 }
 
-// Helper to parse AI analysis JSON response
-interface AIAnalysis {
-  description: string;
-  tags: string[];
-  primaryColors: string[];
-  mood: string;
-  subjects: string[];
-}
-
 function parseAnalysis(text: string): AIAnalysis {
   try {
-    // Try to extract JSON from markdown code blocks
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
     const jsonText = jsonMatch ? jsonMatch[1] || jsonMatch[0] : text;
-
     const parsed = JSON.parse(jsonText);
 
     return {
@@ -229,7 +251,6 @@ function parseAnalysis(text: string): AIAnalysis {
       text,
     });
 
-    // Fallback to basic parsing
     return {
       description: text.substring(0, 200),
       tags: [],

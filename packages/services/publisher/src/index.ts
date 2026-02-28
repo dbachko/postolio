@@ -132,14 +132,10 @@ export const handler = async (
           platformPostId: existing.platformPostId,
           permalink: existing.permalink,
         });
-        await updateScheduleStatus(
-          docClient,
-          event.scheduleId,
-          'published',
-          undefined,
-          existing.platformPostId,
-          existing.permalink
-        );
+        await updateScheduleStatus(docClient, event.scheduleId, 'published', {
+          platformPostId: existing.platformPostId,
+          platformUrl: existing.permalink,
+        });
 
         try {
           await schedulerClient.send(
@@ -186,14 +182,10 @@ export const handler = async (
       });
     }
 
-    await updateScheduleStatus(
-      docClient,
-      event.scheduleId,
-      'published',
-      undefined,
-      publishResult.platformPostId,
-      publishResult.platformUrl
-    );
+    await updateScheduleStatus(docClient, event.scheduleId, 'published', {
+      platformPostId: publishResult.platformPostId,
+      platformUrl: publishResult.platformUrl,
+    });
 
     if (
       publishableSchedule.firstComment &&
@@ -302,7 +294,9 @@ export const handler = async (
     });
     metrics.addMetric('PublishingError', MetricUnit.Count, 1);
 
-    await updateScheduleStatus(docClient, event.scheduleId, 'failed', err.message);
+    await updateScheduleStatus(docClient, event.scheduleId, 'failed', {
+      errorMessage: err.message,
+    });
 
     try {
       const schedule = await getSchedule(docClient, event.scheduleId).catch(

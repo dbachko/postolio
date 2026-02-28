@@ -2,7 +2,13 @@ import type { FastifyRequest } from 'fastify';
 
 export function getUserAgent(request: FastifyRequest): string | undefined {
   const ua = request.headers['user-agent'];
-  return typeof ua === 'string' ? ua : Array.isArray(ua) ? ua[0] : undefined;
+  if (typeof ua === 'string') {
+    return ua;
+  }
+  if (Array.isArray(ua)) {
+    return ua[0];
+  }
+  return undefined;
 }
 
 export function getClientIp(request: FastifyRequest): string {
@@ -38,53 +44,75 @@ export function getClientIp(request: FastifyRequest): string {
   return request.ip || 'unknown';
 }
 
+function detectOs(ua: string): string {
+  const isIPhone = /iPhone/i.test(ua);
+  if (isIPhone) {
+    return 'iPhone';
+  }
+
+  if (/iPad/i.test(ua)) {
+    return 'iPad';
+  }
+
+  if (/Android/i.test(ua)) {
+    return /Mobile/i.test(ua) ? 'Android Phone' : 'Android Tablet';
+  }
+
+  if (/Mac OS X|Macintosh/i.test(ua)) {
+    return 'macOS';
+  }
+
+  if (/Windows NT/i.test(ua)) {
+    return 'Windows';
+  }
+
+  if (/CrOS/i.test(ua)) {
+    return 'Chrome OS';
+  }
+
+  if (/Linux/i.test(ua)) {
+    return 'Linux';
+  }
+
+  return '';
+}
+
+function detectBrowser(ua: string): string {
+  const edge = ua.match(/Edg\/(\d+)/i);
+  if (edge) {
+    return `Edge ${edge[1]}`;
+  }
+
+  const opera = ua.match(/OPR\/(\d+)/i);
+  if (opera) {
+    return `Opera ${opera[1]}`;
+  }
+
+  const firefox = ua.match(/Firefox\/(\d+)/i);
+  if (firefox) {
+    return `Firefox ${firefox[1]}`;
+  }
+
+  const chrome = ua.match(/Chrome\/(\d+)/i) || ua.match(/CriOS\/(\d+)/i);
+  if (chrome) {
+    return `Chrome ${chrome[1]}`;
+  }
+
+  const safari = !/Chrome|CriOS|Chromium|Edg|OPR/i.test(ua) && ua.match(/Version\/(\d+).+Safari/i);
+  if (safari) {
+    return 'Safari';
+  }
+
+  return '';
+}
+
 export function parseDeviceName(userAgent?: string | null): string | undefined {
   if (!userAgent) {
     return undefined;
   }
   const ua = userAgent;
-
-  // Device type
-  const isIPhone = /iPhone/i.test(ua);
-  const isIPad = /iPad/i.test(ua);
-  const isAndroid = /Android/i.test(ua);
-  const isMobile = /Mobile/i.test(ua);
-
-  // OS
-  let os = '';
-  if (isIPhone || isIPad) {
-    os = isIPhone ? 'iPhone' : 'iPad';
-  } else if (isAndroid) {
-    os = isMobile ? 'Android Phone' : 'Android Tablet';
-  } else if (/Mac OS X|Macintosh/i.test(ua)) {
-    os = 'macOS';
-  } else if (/Windows NT/i.test(ua)) {
-    os = 'Windows';
-  } else if (/CrOS/i.test(ua)) {
-    os = 'Chrome OS';
-  } else if (/Linux/i.test(ua)) {
-    os = 'Linux';
-  }
-
-  // Browser
-  let browser = '';
-  const edge = ua.match(/Edg\/(\d+)/i);
-  const opr = ua.match(/OPR\/(\d+)/i);
-  const firefox = ua.match(/Firefox\/(\d+)/i);
-  const chrome = ua.match(/Chrome\/(\d+)/i) || ua.match(/CriOS\/(\d+)/i);
-  const safari = !/Chrome|CriOS|Chromium|Edg|OPR/i.test(ua) && ua.match(/Version\/(\d+).+Safari/i);
-
-  if (edge) {
-    browser = `Edge ${edge[1]}`;
-  } else if (opr) {
-    browser = `Opera ${opr[1]}`;
-  } else if (firefox) {
-    browser = `Firefox ${firefox[1]}`;
-  } else if (chrome) {
-    browser = `Chrome ${chrome[1]}`;
-  } else if (safari) {
-    browser = 'Safari';
-  }
+  const os = detectOs(ua);
+  const browser = detectBrowser(ua);
 
   if (!os && !browser) {
     return undefined;

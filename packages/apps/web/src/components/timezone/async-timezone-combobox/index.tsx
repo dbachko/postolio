@@ -21,16 +21,22 @@ function formatTimezoneLabel(timezone: string): string {
   return lastPart.replace(/_/g, ' ');
 }
 
-function TriggerPlaceholder(props: Props & { onRequestLoad: () => void; showSpinner: boolean }) {
+function getTriggerText(props: Props): string {
   const selectedValue = props.value;
   const allowClear = props.allowClear === true;
 
-  const triggerText =
-    selectedValue == null
-      ? allowClear
-        ? props.clearLabel
-        : props.placeholder || 'Select timezone'
-      : formatTimezoneLabel(selectedValue);
+  if (selectedValue == null) {
+    if (allowClear) {
+      return props.clearLabel;
+    }
+    return props.placeholder || 'Select timezone';
+  }
+
+  return formatTimezoneLabel(selectedValue);
+}
+
+function TriggerPlaceholder(props: Props & { onRequestLoad: () => void; showSpinner: boolean }) {
+  const triggerText = getTriggerText(props);
 
   return (
     <Button

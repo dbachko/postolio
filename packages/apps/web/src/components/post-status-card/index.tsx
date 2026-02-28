@@ -15,6 +15,54 @@ interface PostStatusCardProps {
   firstCommentError?: string | null;
 }
 
+function FirstCommentStatusSection({
+  status,
+  firstComment,
+  firstCommentStatus,
+  firstCommentError,
+}: Pick<
+  PostStatusCardProps,
+  'status' | 'firstComment' | 'firstCommentStatus' | 'firstCommentError'
+>) {
+  if (status !== 'published' || !firstComment) {
+    return null;
+  }
+  return (
+    <div className="border-border mt-3 border-t pt-3">
+      <div className="mb-1 text-sm font-medium">First Comment</div>
+      {firstCommentStatus === 'posted' && (
+        <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-500">
+          <span className="text-base">✅</span>
+          <span>Posted successfully</span>
+        </div>
+      )}
+      {firstCommentStatus === 'failed' && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-sm text-red-600 dark:text-red-500">
+            <span className="text-base">⚠️</span>
+            <span>Failed to post</span>
+          </div>
+          {firstCommentError && (
+            <div className="text-muted-foreground mt-1 ml-6 text-xs">{firstCommentError}</div>
+          )}
+        </div>
+      )}
+      {firstCommentStatus === 'retrying' && (
+        <div className="flex items-center gap-1.5 text-sm text-yellow-600 dark:text-yellow-500">
+          <span className="text-base">🔄</span>
+          <span>Retrying...</span>
+        </div>
+      )}
+      {firstCommentStatus === 'pending' && (
+        <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
+          <span className="text-base">⏳</span>
+          <span>Pending</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PostStatusCard({
   status,
   createdAt,
@@ -60,42 +108,12 @@ export function PostStatusCard({
           </AlertDescription>
         </Alert>
       ) : null}
-
-      {/* First Comment Status */}
-      {status === 'published' && firstComment && (
-        <div className="border-border mt-3 border-t pt-3">
-          <div className="mb-1 text-sm font-medium">First Comment</div>
-          {firstCommentStatus === 'posted' && (
-            <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-500">
-              <span className="text-base">✅</span>
-              <span>Posted successfully</span>
-            </div>
-          )}
-          {firstCommentStatus === 'failed' && (
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 text-sm text-red-600 dark:text-red-500">
-                <span className="text-base">⚠️</span>
-                <span>Failed to post</span>
-              </div>
-              {firstCommentError && (
-                <div className="text-muted-foreground mt-1 ml-6 text-xs">{firstCommentError}</div>
-              )}
-            </div>
-          )}
-          {firstCommentStatus === 'retrying' && (
-            <div className="flex items-center gap-1.5 text-sm text-yellow-600 dark:text-yellow-500">
-              <span className="text-base">🔄</span>
-              <span>Retrying...</span>
-            </div>
-          )}
-          {firstCommentStatus === 'pending' && (
-            <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
-              <span className="text-base">⏳</span>
-              <span>Pending</span>
-            </div>
-          )}
-        </div>
-      )}
+      <FirstCommentStatusSection
+        status={status}
+        firstComment={firstComment}
+        firstCommentStatus={firstCommentStatus}
+        firstCommentError={firstCommentError}
+      />
     </div>
   );
 }

@@ -1,333 +1,231 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { validatePublishNowRequest, validateScheduleRequest } from './schedule-validator';
 
-describe('Schedule Validator', () => {
-  describe('validateScheduleRequest', () => {
-    it('should validate a complete valid schedule request', () => {
-      const validRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
-        caption: 'Test content',
-        hashtags: ['test', 'content'],
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-        ],
-      };
+const DEFAULT_MEDIA_ASSET = {
+  key: 'images/2025-01-01/brand/content-123-abcd.jpg',
+  type: 'image',
+  order: 0,
+};
 
-      const result = validateScheduleRequest(validRequest);
+function hoursFromNowIso(hours: number): string {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function buildValidScheduleRequest(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    contentId: 'content-123',
+    brandId: 'brand-789',
+    userId: 'user-012',
+    platform: 'instagram',
+    contentType: 'post',
+    mediaType: 'image',
+    scheduledAt: hoursFromNowIso(1),
+    mediaAssets: [DEFAULT_MEDIA_ASSET],
+    ...overrides,
+  };
+}
+
+describe('validateScheduleRequest required fields', () => {
+  it('should validate a complete valid schedule request', () => {
+    const request = buildValidScheduleRequest({
+      caption: 'Test content',
+      hashtags: ['test', 'content'],
+    });
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should validate minimal required fields only', () => {
+    const request = buildValidScheduleRequest();
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should reject request with missing required fields', () => {
+    const invalidRequest = {
+      contentId: 'content-123',
+    };
+
+    const result = validateScheduleRequest(invalidRequest);
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('scheduledAt'))).toBe(true);
+  });
+
+  it('should reject empty strings for required fields', () => {
+    const invalidRequest = buildValidScheduleRequest({
+      contentId: '',
+      brandId: '',
+      userId: '',
+    });
+
+    const result = validateScheduleRequest(invalidRequest);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('contentId'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
+  });
+});
+
+describe('validateScheduleRequest enums and dates', () => {
+  it('should reject invalid platform values', () => {
+    const request = buildValidScheduleRequest({
+      platform: 'invalid-platform',
+    });
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
+  });
+
+  it('should reject past scheduledAt dates', () => {
+    const request = buildValidScheduleRequest({
+      scheduledAt: hoursFromNowIso(-1),
+    });
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('future'))).toBe(true);
+  });
+
+  it('should reject invalid ISO date strings', () => {
+    const request = buildValidScheduleRequest({
+      scheduledAt: 'not-a-date',
+    });
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('valid ISO'))).toBe(true);
+  });
+
+  it('should accept all valid platforms', () => {
+    const platforms = ['instagram', 'facebook', 'twitter', 'linkedin'];
+
+    platforms.forEach((platform) => {
+      const result = validateScheduleRequest(buildValidScheduleRequest({ platform }));
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
-    });
-
-    it('should validate minimal required fields only', () => {
-      const minimalRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-        ], // Required for image content
-      };
-
-      const result = validateScheduleRequest(minimalRequest);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
-    });
-
-    it('should reject request with missing required fields', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-        // missing brandId, userId, platform, contentType, scheduledAt
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('scheduledAt'))).toBe(true);
-    });
-
-    it('should reject invalid platform values', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'invalid-platform',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
-    });
-
-    it('should reject past scheduledAt dates', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('future'))).toBe(true);
-    });
-
-    it('should reject invalid ISO date strings', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: 'not-a-date',
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('valid ISO'))).toBe(true);
-    });
-
-    it('should accept all valid platforms', () => {
-      const platforms = ['instagram', 'facebook', 'twitter', 'linkedin'];
-
-      platforms.forEach((platform) => {
-        const request = {
-          contentId: 'content-123',
-          brandId: 'brand-789',
-          userId: 'user-012',
-          platform,
-          contentType: 'post',
-          mediaType: 'image',
-          scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-          mediaAssets: [
-            { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-          ], // Required for image content
-        };
-
-        const result = validateScheduleRequest(request);
-        expect(result.valid).toBe(true);
-        expect(result.errors).toEqual([]);
-      });
-    });
-
-    it('should validate array fields correctly', () => {
-      const requestWithArrays = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        hashtags: ['tag1', 'tag2', 'tag3'],
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/img1.jpg', type: 'image', order: 0 },
-          { key: 'images/2025-01-01/brand/img2.jpg', type: 'image', order: 1 },
-        ],
-      };
-
-      const result = validateScheduleRequest(requestWithArrays);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
-    });
-
-    it('should accept a valid firstComment within length limits', () => {
-      const request = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-        ],
-        firstComment: 'This is a first comment with hashtags #one #two',
-      };
-
-      const result = validateScheduleRequest(request);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
-    });
-
-    it('should reject non-string or overly long firstComment', () => {
-      const tooLong = 'x'.repeat(2201);
-      const nonStringRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-        ],
-        // @ts-expect-error intentional invalid type for test
-        firstComment: 123,
-      };
-
-      const nonStringResult = validateScheduleRequest(nonStringRequest);
-      expect(nonStringResult.valid).toBe(false);
-      expect(nonStringResult.errors.some((e) => e.includes('firstComment'))).toBe(true);
-
-      const tooLongRequest = {
-        ...nonStringRequest,
-        firstComment: tooLong,
-      };
-      const tooLongResult = validateScheduleRequest(tooLongRequest);
-      expect(tooLongResult.valid).toBe(false);
-      expect(tooLongResult.errors.some((e) => e.includes('firstComment'))).toBe(true);
-    });
-
-    it('should reject empty strings for required fields', () => {
-      const invalidRequest = {
-        contentId: '',
-        brandId: '',
-        userId: '',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('contentId'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
-    });
-
-    it('should validate content types correctly', () => {
-      const validContentTypes = ['post', 'reel', 'story'];
-
-      validContentTypes.forEach((contentType) => {
-        const request = {
-          contentId: 'content-123',
-          brandId: 'brand-789',
-          userId: 'user-012',
-          platform: 'instagram',
-          contentType,
-          mediaType: 'image',
-          scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-          mediaAssets: [
-            { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-          ], // Required for image media
-        };
-
-        const result = validateScheduleRequest(request);
-        expect(result.valid).toBe(true);
-        expect(result.errors).toEqual([]);
-      });
-    });
-
-    it('should reject invalid content types', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'invalid-type',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
-    });
-
-    it('should reject invalid array elements', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        hashtags: ['valid', 123, 'another-valid'], // 123 is not a string
-        mediaAssets: [{ key: 'images/2025-01-01/brand/img.jpg', type: 'image', order: 0 }, null], // null is not a string
-      };
-
-      const result = validateScheduleRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('hashtags'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('mediaAssets'))).toBe(true);
     });
   });
 
-  describe('validatePublishNowRequest', () => {
-    it('should validate a minimal publish-now request without scheduledAt', () => {
-      const request = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-        ],
-      };
+  it('should validate content types correctly', () => {
+    const validContentTypes = ['post', 'reel', 'story'];
 
-      const result = validatePublishNowRequest(request);
+    validContentTypes.forEach((contentType) => {
+      const result = validateScheduleRequest(buildValidScheduleRequest({ contentType }));
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
+  });
 
-    it('should allow a past scheduledAt value if provided (ignored by service)', () => {
-      const request = {
-        contentId: 'content-123',
-        brandId: 'brand-789',
-        userId: 'user-012',
-        platform: 'instagram',
-        contentType: 'post',
-        mediaType: 'image',
-        scheduledAt: new Date(Date.now() - 3600000).toISOString(),
-        mediaAssets: [
-          { key: 'images/2025-01-01/brand/content-123-abcd.jpg', type: 'image', order: 0 },
-        ],
-      };
-
-      const result = validatePublishNowRequest(request);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
+  it('should reject invalid content types', () => {
+    const request = buildValidScheduleRequest({
+      contentType: 'invalid-type',
     });
 
-    it('should reject request with missing required fields (but not require scheduledAt)', () => {
-      const invalidRequest = {
-        contentId: 'content-123',
-      };
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
+  });
+});
 
-      const result = validatePublishNowRequest(invalidRequest);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
-      expect(result.errors.some((error) => error.includes('scheduledAt'))).toBe(false);
+describe('validateScheduleRequest optional fields and arrays', () => {
+  it('should validate array fields correctly', () => {
+    const request = buildValidScheduleRequest({
+      hashtags: ['tag1', 'tag2', 'tag3'],
+      mediaAssets: [
+        { key: 'images/2025-01-01/brand/img1.jpg', type: 'image', order: 0 },
+        { key: 'images/2025-01-01/brand/img2.jpg', type: 'image', order: 1 },
+      ],
     });
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should accept a valid firstComment within length limits', () => {
+    const request = buildValidScheduleRequest({
+      firstComment: 'This is a first comment with hashtags #one #two',
+    });
+
+    const result = validateScheduleRequest(request);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should reject non-string or overly long firstComment', () => {
+    const tooLong = 'x'.repeat(2201);
+    const nonStringRequest = buildValidScheduleRequest({
+      // @ts-expect-error intentional invalid type for test
+      firstComment: 123,
+    });
+
+    const nonStringResult = validateScheduleRequest(nonStringRequest);
+    expect(nonStringResult.valid).toBe(false);
+    expect(nonStringResult.errors.some((error) => error.includes('firstComment'))).toBe(true);
+
+    const tooLongResult = validateScheduleRequest(
+      buildValidScheduleRequest({ firstComment: tooLong })
+    );
+    expect(tooLongResult.valid).toBe(false);
+    expect(tooLongResult.errors.some((error) => error.includes('firstComment'))).toBe(true);
+  });
+
+  it('should reject invalid array elements', () => {
+    const invalidRequest = buildValidScheduleRequest({
+      hashtags: ['valid', 123, 'another-valid'],
+      mediaAssets: [{ key: 'images/2025-01-01/brand/img.jpg', type: 'image', order: 0 }, null],
+    });
+
+    const result = validateScheduleRequest(invalidRequest);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('hashtags'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('mediaAssets'))).toBe(true);
+  });
+});
+
+describe('validatePublishNowRequest', () => {
+  it('should validate a minimal publish-now request without scheduledAt', () => {
+    const request = buildValidScheduleRequest();
+
+    const result = validatePublishNowRequest(request);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should allow a past scheduledAt value if provided (ignored by service)', () => {
+    const request = buildValidScheduleRequest({
+      scheduledAt: hoursFromNowIso(-1),
+    });
+
+    const result = validatePublishNowRequest(request);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should reject request with missing required fields (but not require scheduledAt)', () => {
+    const invalidRequest = {
+      contentId: 'content-123',
+    };
+
+    const result = validatePublishNowRequest(invalidRequest);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('scheduledAt'))).toBe(false);
   });
 });

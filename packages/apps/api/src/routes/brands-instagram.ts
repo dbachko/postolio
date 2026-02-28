@@ -1,27 +1,20 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+
+import { assertBrandOwnership, assertInstagramConnected } from '../services/ownership.js';
 import { instagramBestTimeService, type BestTimePayload } from '../services/instagram-best-time.js';
 import { getRedisClient, redisService } from '../services/redis.js';
-import { assertBrandOwnership, assertInstagramConnected } from '../services/ownership.js';
 
-/**
- * Instagram-specific features that don't have generic equivalents
- *
- * NOTE: Basic Instagram functionality (status, sync, disconnect, publish, insights)
- * is now handled by the generic social platform routes at /api/social/instagram/*
- *
- * This file contains ONLY Instagram-specific features:
- * - Sync status monitoring
- * - Best time to post analytics
- */
-const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/brands/:brandId/instagram/sync-status
+function parseCount(count: string | undefined): number | undefined {
+  return typeof count === 'string' && count.trim() ? Math.max(1, parseInt(count, 10)) : undefined;
+}
+
+function registerSyncStatusRoute(fastify: FastifyInstance): void {
   fastify.get<{ Params: { brandId: string } }>(
     '/:brandId/instagram/sync-status',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const { brandId } = request.params;
       const userId = request.user!.id;
-
       await assertBrandOwnership(userId, brandId);
 
       const redis = getRedisClient();
@@ -39,20 +32,19 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
             inProgress = true;
             lockTtl = ttl;
           }
-          const cdTtl = await redis.ttl(cooldownKey);
-          if (typeof cdTtl === 'number' && cdTtl > 0) {
-            cooldownRemaining = cdTtl;
+
+          const cooldownTtl = await redis.ttl(cooldownKey);
+          if (typeof cooldownTtl === 'number' && cooldownTtl > 0) {
+            cooldownRemaining = cooldownTtl;
           }
         }
-      } catch (e) {
-        request.log.warn({ err: e }, 'Failed to query sync status');
+      } catch (error) {
+        request.log.warn({ err: error }, 'Failed to query sync status');
       }
 
-      // Get last sync metadata
-      const metadataKey = `instagram_sync_metadata:${brandId}`;
       let lastSync: any = null;
       try {
-        const metadataJson = await redisService.get(metadataKey);
+        const metadataJson = await redisService.get(`instagram_sync_metadata:${brandId}`);
         if (metadataJson) {
           const metadata = JSON.parse(metadataJson);
           lastSync = {
@@ -62,13 +54,16 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
             options: metadata.options,
           };
         }
-      } catch {}
+      } catch {
+        // best-effort metadata lookup
+      }
 
       return reply.send({ inProgress, lockTtl, cooldownRemaining, lastSync });
     }
   );
+}
 
-  // GET /api/brands/:brandId/instagram/best-time
+function registerBestTimeRoutes(fastify: FastifyInstance): void {
   fastify.get(
     '/:brandId/instagram/best-time',
     { preHandler: fastify.authenticate },
@@ -81,14 +76,12 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       await assertInstagramConnected(brand.id);
 
       try {
-        const parsedCount =
-          typeof count === 'string' && count.trim() ? Math.max(1, parseInt(count, 10)) : undefined;
-        const rec = await instagramBestTimeService.getRecommendations(
+        const recommendations = await instagramBestTimeService.getRecommendations(
           brand.id,
           force === 'true',
-          parsedCount
+          parseCount(count)
         );
-        return reply.send(rec);
+        return reply.send(recommendations);
       } catch (error) {
         request.log.error({ err: error }, 'Failed to get best-time recommendations');
         throw error;
@@ -96,7 +89,6 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // POST /api/brands/:brandId/instagram/best-time/refresh
   fastify.post(
     '/:brandId/instagram/best-time/refresh',
     { preHandler: fastify.authenticate },
@@ -104,14 +96,17 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const { brandId } = request.params as { brandId: string };
       const userId = request.user!.id;
       const { count } = request.query as { count?: string };
+
       const brand = await assertBrandOwnership(userId, brandId);
       await assertInstagramConnected(brand.id);
 
       try {
-        const parsedCount =
-          typeof count === 'string' && count.trim() ? Math.max(1, parseInt(count, 10)) : undefined;
-        const rec = await instagramBestTimeService.getRecommendations(brand.id, true, parsedCount);
-        return reply.send({ success: true, recommendations: rec });
+        const recommendations = await instagramBestTimeService.getRecommendations(
+          brand.id,
+          true,
+          parseCount(count)
+        );
+        return reply.send({ success: true, recommendations });
       } catch (error) {
         request.log.error({ err: error }, 'Failed to refresh best-time recommendations');
         throw error;
@@ -119,7 +114,6 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/brands/:brandId/instagram/best-time/status
   fastify.get(
     '/:brandId/instagram/best-time/status',
     { preHandler: fastify.authenticate },
@@ -131,28 +125,36 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const key = `ig_best_time:${brandId}`;
       const redis = getRedisClient();
       let ttl = -1;
-      let meta: BestTimePayload | null = null;
+      let payload: BestTimePayload | null = null;
+
       try {
         if (redis) {
           ttl = await redis.ttl(key);
         }
+
         const cached = await redisService.get(key);
         if (cached) {
-          meta = JSON.parse(cached) as BestTimePayload;
+          payload = JSON.parse(cached) as BestTimePayload;
         }
-      } catch (e) {
-        request.log.warn({ err: e }, 'Failed to read cache status');
+      } catch (error) {
+        request.log.warn({ err: error }, 'Failed to read cache status');
       }
-      reply.send({
+
+      return reply.send({
         cacheTTL: ttl,
-        cached: !!meta,
-        source: meta?.source,
-        confidence: meta?.confidence,
-        generatedAt: meta?.generatedAt,
+        cached: Boolean(payload),
+        source: payload?.source,
+        confidence: payload?.confidence,
+        generatedAt: payload?.generatedAt,
         nextRefreshAt: ttl > 0 ? new Date(Date.now() + ttl * 1000).toISOString() : null,
       });
     }
   );
+}
+
+const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
+  registerSyncStatusRoute(fastify);
+  registerBestTimeRoutes(fastify);
 };
 
 export default brandsInstagramRoutes;

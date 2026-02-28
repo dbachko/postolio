@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, type ChangeEvent, type KeyboardEvent } from 'react';
 import { format } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,75 @@ interface PostSchedulerProps {
   min?: string;
 }
 
+interface SchedulerHandlersParams {
+  contentId?: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+function usePostSchedulerHandlers({ contentId, value, onChange }: SchedulerHandlersParams) {
+  const {
+    localValue,
+    editingContentId,
+    setLocalValue,
+    startEditing,
+    commitChanges,
+    clearScheduledTime,
+  } = usePostSchedulerStore();
+  const isEditing = contentId && editingContentId === contentId;
+  const displayValue = isEditing ? localValue : value;
+
+  const handleClear = useCallback(() => {
+    if (contentId) {
+      clearScheduledTime(contentId);
+    }
+    onChange('');
+  }, [contentId, onChange, clearScheduledTime]);
+
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const newValue = event.target.value;
+      if (contentId) {
+        if (!isEditing) {
+          startEditing(contentId, newValue);
+        } else {
+          setLocalValue(newValue);
+        }
+      } else {
+        onChange(newValue);
+      }
+    },
+    [contentId, isEditing, startEditing, setLocalValue, onChange]
+  );
+
+  const commitLocalChange = useCallback(() => {
+    if (contentId && isEditing) {
+      const hasChanged = commitChanges(contentId);
+      if (hasChanged) {
+        onChange(localValue);
+      }
+    }
+  }, [commitChanges, contentId, isEditing, localValue, onChange]);
+
+  const handleFocus = useCallback(() => {
+    if (contentId && !isEditing) {
+      startEditing(contentId, value);
+    }
+  }, [contentId, isEditing, startEditing, value]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitLocalChange();
+      }
+    },
+    [commitLocalChange]
+  );
+
+  return { displayValue, handleClear, handleChange, handleFocus, handleKeyDown, commitLocalChange };
+}
+
 export function PostScheduler({
   contentId,
   value,
@@ -28,80 +97,8 @@ export function PostScheduler({
   min,
 }: PostSchedulerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Get store actions and state
-  const {
-    localValue,
-    editingContentId,
-    setLocalValue,
-    startEditing,
-    commitChanges,
-    clearScheduledTime,
-  } = usePostSchedulerStore();
-
-  // Determine if this instance is currently being edited
-  const isEditing = contentId && editingContentId === contentId;
-
-  // Display value: use local value if editing, otherwise use prop value
-  const displayValue = isEditing ? localValue : value;
-
-  const handleClear = useCallback(() => {
-    if (contentId) {
-      clearScheduledTime(contentId);
-    }
-    onChange('');
-  }, [contentId, onChange, clearScheduledTime]);
-
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-
-      if (contentId) {
-        // Store-based management
-        if (!isEditing) {
-          startEditing(contentId, newValue);
-        } else {
-          setLocalValue(newValue);
-        }
-      } else {
-        // Direct callback for non-store usage
-        onChange(newValue);
-      }
-    },
-    [contentId, isEditing, startEditing, setLocalValue, onChange]
-  );
-
-  const handleBlur = useCallback(() => {
-    if (contentId && isEditing) {
-      // Commit changes and check if there was an actual change
-      const hasChanged = commitChanges(contentId);
-      if (hasChanged) {
-        // Only call onChange if value actually changed
-        onChange(localValue);
-      }
-    }
-  }, [contentId, isEditing, commitChanges, localValue, onChange]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (contentId && isEditing) {
-          const hasChanged = commitChanges(contentId);
-          if (hasChanged) {
-            onChange(localValue);
-          }
-        }
-      }
-    },
-    [contentId, isEditing, commitChanges, localValue, onChange]
-  );
-
-  const handleFocus = useCallback(() => {
-    if (contentId && !isEditing) {
-      startEditing(contentId, value);
-    }
-  }, [contentId, isEditing, startEditing, value]);
+  const { displayValue, handleClear, handleChange, handleFocus, handleKeyDown, commitLocalChange } =
+    usePostSchedulerHandlers({ contentId, value, onChange });
 
   return (
     <div className="space-y-2">
@@ -129,7 +126,7 @@ export function PostScheduler({
         value={displayValue}
         onChange={handleChange}
         onFocus={handleFocus}
-        onBlur={handleBlur}
+        onBlur={commitLocalChange}
         onKeyDown={handleKeyDown}
         disabled={disabled}
         min={min}

@@ -22,6 +22,94 @@ interface BrandImageProviderCardProps {
   onProviderChange: (value: ImageProvider | null) => void;
 }
 
+type ProviderDetails = {
+  displayName: string;
+  pricing: {
+    speedEstimate: string;
+    features: string[];
+  };
+};
+
+function ProviderSelect({
+  isLoading,
+  selectedProvider,
+  providers,
+  defaultProvider,
+  defaultProviderLabel,
+  onProviderChange,
+}: {
+  isLoading: boolean;
+  selectedProvider: ImageProvider | null;
+  providers: Array<{ name: string; displayName: string }>;
+  defaultProvider?: string | null;
+  defaultProviderLabel: string | null;
+  onProviderChange: (value: ImageProvider | null) => void;
+}) {
+  return (
+    <Select
+      disabled={isLoading}
+      value={selectedProvider || 'default'}
+      onValueChange={(value) =>
+        onProviderChange(value === 'default' ? null : (value as ImageProvider))
+      }
+    >
+      <SelectTrigger id="image-provider" className="w-full">
+        <SelectValue>
+          {selectedProvider
+            ? providers.find((provider) => provider.name === selectedProvider)?.displayName ||
+              selectedProvider
+            : `Use system default${defaultProviderLabel ? ` (${defaultProviderLabel})` : ''}`}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="default">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Use system default
+            {defaultProvider && (
+              <span className="text-muted-foreground text-xs">({defaultProviderLabel})</span>
+            )}
+          </div>
+        </SelectItem>
+        {providers.map((provider) => (
+          <SelectItem key={provider.name} value={provider.name}>
+            <div className="flex items-center justify-between gap-4">
+              <span>{provider.displayName}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function SelectedProviderDetails({
+  selectedProviderDetails,
+}: {
+  selectedProviderDetails: ProviderDetails | null;
+}) {
+  if (!selectedProviderDetails) {
+    return null;
+  }
+  return (
+    <div className="bg-muted rounded-lg p-3 text-sm">
+      <div className="space-y-1">
+        <div className="font-medium">{selectedProviderDetails.displayName}</div>
+        <div className="text-muted-foreground text-xs">
+          Speed: {selectedProviderDetails.pricing.speedEstimate}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {selectedProviderDetails.pricing.features.slice(0, 3).map((feature: string) => (
+            <span key={feature} className="bg-background rounded-md px-2 py-0.5 text-xs">
+              {feature}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BrandImageProviderCard({
   brandName,
   isSaving,
@@ -68,60 +156,17 @@ export default function BrandImageProviderCard({
 
         <div className="space-y-2">
           <Label htmlFor="image-provider">Image provider (optional)</Label>
-          <Select
-            disabled={isLoading}
-            value={selectedProvider || 'default'}
-            onValueChange={(value) =>
-              onProviderChange(value === 'default' ? null : (value as ImageProvider))
-            }
-          >
-            <SelectTrigger id="image-provider" className="w-full">
-              <SelectValue>
-                {selectedProvider
-                  ? providers.find((p) => p.name === selectedProvider)?.displayName ||
-                    selectedProvider
-                  : `Use system default${defaultProviderLabel ? ` (${defaultProviderLabel})` : ''}`}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Use system default
-                  {defaultProvider && (
-                    <span className="text-muted-foreground text-xs">({defaultProviderLabel})</span>
-                  )}
-                </div>
-              </SelectItem>
-              {providers.map((provider) => (
-                <SelectItem key={provider.name} value={provider.name}>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>{provider.displayName}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ProviderSelect
+            isLoading={isLoading}
+            selectedProvider={selectedProvider}
+            providers={providers}
+            defaultProvider={defaultProvider}
+            defaultProviderLabel={defaultProviderLabel}
+            onProviderChange={onProviderChange}
+          />
         </div>
 
-        {/* Show selected provider details */}
-        {selectedProviderDetails && (
-          <div className="bg-muted rounded-lg p-3 text-sm">
-            <div className="space-y-1">
-              <div className="font-medium">{selectedProviderDetails.displayName}</div>
-              <div className="text-muted-foreground text-xs">
-                Speed: {selectedProviderDetails.pricing.speedEstimate}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {selectedProviderDetails.pricing.features.slice(0, 3).map((feature: string) => (
-                  <span key={feature} className="bg-background rounded-md px-2 py-0.5 text-xs">
-                    {feature}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <SelectedProviderDetails selectedProviderDetails={selectedProviderDetails} />
 
         <Button
           onClick={onSave}

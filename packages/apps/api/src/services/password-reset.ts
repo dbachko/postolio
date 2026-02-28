@@ -9,6 +9,10 @@ import { createRedisClient } from './redis.js';
 const prisma = getDatabaseClient();
 const redis = createRedisClient();
 
+function logInfo(message: string): void {
+  process.stdout.write(`${message}\n`);
+}
+
 interface PasswordResetData {
   userId: string;
   email: string;
@@ -54,7 +58,7 @@ export class PasswordResetService {
 
       // Always return success for security (don't reveal if email exists)
       if (!user) {
-        console.log(`Password reset requested for non-existent email: ${email}`);
+        logInfo(`Password reset requested for non-existent email: ${email}`);
         return {
           success: true,
           message: 'If an account exists with this email, a password reset link has been sent.',
@@ -67,7 +71,7 @@ export class PasswordResetService {
 
       if (existingToken) {
         // Token already exists and is still valid
-        console.log(`Password reset token already exists for user: ${user.id}`);
+        logInfo(`Password reset token already exists for user: ${user.id}`);
         return {
           success: true,
           message: 'A password reset link has already been sent. Please check your email.',

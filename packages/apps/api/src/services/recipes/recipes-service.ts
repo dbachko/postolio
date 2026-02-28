@@ -9,34 +9,99 @@ export type ListRecipesParams = {
   status?: 'draft' | 'published' | 'archived';
 };
 
-export async function listRecipes(params: ListRecipesParams) {
-  const { q, category, status } = params;
-
-  await ensureCuratedRecipesSeeded();
-
+function buildListRecipesWhere(params: ListRecipesParams) {
   const where: any = {
     AND: [{ brandId: null, isCurated: true }],
   };
 
-  // Archived recipes should not appear in the default browse experience.
-  if (!status) {
+  if (!params.status) {
     where.AND.push({ status: { not: 'archived' } });
   }
-  if (status) {
-    where.AND.push({ status });
+  if (params.status) {
+    where.AND.push({ status: params.status });
   }
-  if (category) {
-    where.AND.push({ category });
+  if (params.category) {
+    where.AND.push({ category: params.category });
   }
-  if (q) {
+  if (params.q) {
     where.AND.push({
       OR: [
-        { name: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
+        { name: { contains: params.q, mode: 'insensitive' } },
+        { description: { contains: params.q, mode: 'insensitive' } },
       ],
     });
   }
 
+  return where;
+}
+
+function getVersionConfig(version: { configJson: unknown } | undefined) {
+  const config = version?.configJson;
+  if (!config || typeof config !== 'object') {
+    return null;
+  }
+  return config as Record<string, unknown>;
+}
+
+function getRecipeSummary(config: Record<string, unknown> | null) {
+  const summary = config?.summary;
+  if (!summary || typeof summary !== 'object') {
+    return null;
+  }
+
+  const summaryRecord = summary as Record<string, unknown>;
+  return {
+    produces: typeof summaryRecord.produces === 'string' ? summaryRecord.produces : null,
+    postsCount: typeof summaryRecord.postsCount === 'number' ? summaryRecord.postsCount : null,
+    cadence: typeof summaryRecord.cadence === 'string' ? summaryRecord.cadence : null,
+  };
+}
+
+function mapTemplateRecipe(t: {
+  id: string;
+  brandId: string | null;
+  slug: string;
+  name: string;
+  description: string | null;
+  category: string;
+  isCurated: boolean;
+  status: string;
+  updatedAt: Date;
+  versions: Array<{ id: string; version: number; createdAt: Date; configJson: unknown }>;
+}) {
+  const version = t.versions[0];
+  const config = getVersionConfig(version);
+  const inputFields = normalizeInputFields(config?.inputs);
+  const allSkillRequirements = normalizeSkillRequirements(config?.skills_required);
+
+  return {
+    id: t.id,
+    brandId: t.brandId,
+    slug: t.slug,
+    name: t.name,
+    description: t.description,
+    category: t.category,
+    isCurated: t.isCurated,
+    status: t.status,
+    updatedAt: t.updatedAt,
+    publishedVersion: version
+      ? { id: version.id, version: version.version, createdAt: version.createdAt }
+      : null,
+    summary: getRecipeSummary(config),
+    skillRequirements: allSkillRequirements,
+    skillsRequired: allSkillRequirements.filter((s) => !s.optional).map((s) => s.id),
+    inputSchema: { fields: inputFields.fields },
+    inputs: { required: inputFields.required, optional: inputFields.optional },
+    cadence:
+      config?.cadence && typeof config.cadence === 'object'
+        ? (config.cadence as Record<string, unknown>)
+        : null,
+  };
+}
+
+export async function listRecipes(params: ListRecipesParams) {
+  await ensureCuratedRecipesSeeded();
+  const where = buildListRecipesWhere(params);
   const templates = await prisma.recipeTemplate.findMany({
     where,
     orderBy: [{ isCurated: 'desc' }, { updatedAt: 'desc' }],
@@ -49,77 +114,5 @@ export async function listRecipes(params: ListRecipesParams) {
     },
   });
 
-  return templates.map((t) => ({
-    id: t.id,
-    brandId: t.brandId,
-    slug: t.slug,
-    name: t.name,
-    description: t.description,
-    category: t.category,
-    isCurated: t.isCurated,
-    status: t.status,
-    updatedAt: t.updatedAt,
-    publishedVersion: t.versions[0]
-      ? { id: t.versions[0].id, version: t.versions[0].version, createdAt: t.versions[0].createdAt }
-      : null,
-    summary: (() => {
-      const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') {
-        return null;
-      }
-      const summary = (cfg as any).summary;
-      if (!summary || typeof summary !== 'object') {
-        return null;
-      }
-      return {
-        produces: typeof (summary as any).produces === 'string' ? (summary as any).produces : null,
-        postsCount:
-          typeof (summary as any).postsCount === 'number' ? (summary as any).postsCount : null,
-        cadence: typeof (summary as any).cadence === 'string' ? (summary as any).cadence : null,
-      };
-    })(),
-    skillRequirements: (() => {
-      const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') {
-        return [];
-      }
-      return normalizeSkillRequirements((cfg as any).skills_required);
-    })(),
-    skillsRequired: (() => {
-      const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') {
-        return [];
-      }
-      return normalizeSkillRequirements((cfg as any).skills_required)
-        .filter((s) => !s.optional)
-        .map((s) => s.id);
-    })(),
-    inputSchema: (() => {
-      const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') {
-        return { fields: [] };
-      }
-      const inputs = normalizeInputFields((cfg as any).inputs);
-      return { fields: inputs.fields };
-    })(),
-    inputs: (() => {
-      const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') {
-        return { required: [], optional: [] };
-      }
-      const inputs = normalizeInputFields((cfg as any).inputs);
-      return { required: inputs.required, optional: inputs.optional };
-    })(),
-    cadence: (() => {
-      const cfg = t.versions[0]?.configJson;
-      if (!cfg || typeof cfg !== 'object') {
-        return null;
-      }
-      const cadence = (cfg as any).cadence;
-      if (!cadence || typeof cadence !== 'object') {
-        return null;
-      }
-      return cadence;
-    })(),
-  }));
+  return templates.map(mapTemplateRecipe);
 }

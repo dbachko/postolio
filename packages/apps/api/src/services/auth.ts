@@ -72,6 +72,193 @@ async function addTimingJitter(): Promise<void> {
 }
 
 export class AuthService {
+  private static lockedResult(): LoginResult {
+    return {
+      outcome: 'locked',
+      message:
+        'Account temporarily locked due to multiple failed login attempts. Please try again later.',
+    };
+  }
+
+  private static async authenticateCredentials(
+    email: string,
+    password: string,
+    request: FastifyRequest
+  ): Promise<
+    | { outcome: 'locked' | 'invalid_credentials'; result: LoginResult }
+    | {
+        outcome: 'authenticated_user';
+        user: {
+          id: string;
+          email: string;
+          name: string | null;
+          password: string | null;
+          subscriptionTier: string | null;
+        };
+      }
+  > {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        password: true,
+        subscriptionTier: true,
+      },
+    });
+
+    const dummyHash = '$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m';
+    const passwordToCheck = user?.password || dummyHash;
+    const validPassword = await bcrypt.compare(password, passwordToCheck);
+    await addTimingJitter();
+
+    if (user && validPassword) {
+      return { outcome: 'authenticated_user', user };
+    }
+
+    await AuditLogger.logAuthFailure(
+      AuditEventType.USER_LOGIN_FAILED,
+      email,
+      request,
+      !user ? 'User not found' : 'Invalid password'
+    );
+
+    const shouldLock = await AuditLogger.checkAccountLockout(email);
+    if (shouldLock) {
+      return { outcome: 'locked', result: this.lockedResult() };
+    }
+    return {
+      outcome: 'invalid_credentials',
+      result: {
+        outcome: 'invalid_credentials',
+        message: 'Invalid credentials',
+      },
+    };
+  }
+
+  private static async syncUserTimezoneOnLogin(request: FastifyRequest, userId: string) {
+    const userTimezone = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true, timezoneAutoDetected: true },
+    });
+
+    if (
+      !userTimezone?.timezone ||
+      userTimezone.timezone === 'UTC' ||
+      userTimezone.timezoneAutoDetected
+    ) {
+      const detectedTimezone = await TimezoneService.detectTimezone(request, userId);
+      if (detectedTimezone !== 'UTC') {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            timezone: detectedTimezone,
+            timezoneAutoDetected: true,
+          },
+        });
+        request.log.info(
+          {
+            userId,
+            timezone: detectedTimezone,
+          },
+          'Auto-detected and saved timezone during login'
+        );
+      }
+    }
+  }
+
+  private static async requireTwoFactorIfNeeded(params: {
+    userId: string;
+    email: string;
+    request: FastifyRequest;
+    redis: Redis;
+  }): Promise<LoginResult | null> {
+    const { userId, email, request, redis } = params;
+    const userWithTwoFactor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        twoFactorEnabled: true,
+        twoFactorMethod: true,
+      },
+    });
+    if (!userWithTwoFactor?.twoFactorEnabled) {
+      return null;
+    }
+
+    const pendingKey = `2fa-pending:${email}`;
+    const method = userWithTwoFactor.twoFactorMethod || null;
+    const { TwoFactorService } = await import('./two-factor.js');
+    const trustedDeviceToken = request.cookies?.trusted_device;
+
+    if (trustedDeviceToken) {
+      const trustedUserId = await TwoFactorService.isTrustedDevice(trustedDeviceToken);
+      if (trustedUserId === userId) {
+        return null;
+      }
+    }
+
+    await redis.setex(pendingKey, 300, userId);
+    if (method === 'email') {
+      await TwoFactorService.sendEmailCode(userId);
+    }
+    return {
+      outcome: '2fa_required',
+      method,
+      message: 'Two-factor authentication required',
+    };
+  }
+
+  private static async buildAuthenticatedLoginResult(params: {
+    fastify: FastifyInstance;
+    request: FastifyRequest;
+    user: {
+      id: string;
+      email: string;
+      name: string | null;
+      password: string | null;
+      subscriptionTier: string | null;
+    };
+    ipAddress: string;
+    userAgent: string | undefined;
+    stableFingerprint?: string | null;
+    deviceName?: string;
+  }): Promise<LoginResult> {
+    const { fastify, request, user, ipAddress, userAgent, stableFingerprint, deviceName } = params;
+
+    if (stableFingerprint) {
+      await revokeSameDeviceSessions(user.id, stableFingerprint, request);
+    }
+
+    const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+      fastify,
+      user.id,
+      ipAddress,
+      userAgent,
+      {
+        deviceFingerprint: stableFingerprint || undefined,
+        deviceName,
+        ipAddress,
+        userAgent,
+      }
+    );
+
+    await AuditLogger.logAuth(AuditEventType.USER_LOGIN, user.id, user.email, request);
+    await AuditLogger.resetFailedLoginAttempts(user.email);
+
+    return {
+      outcome: 'authenticated',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        subscriptionTier: user.subscriptionTier ?? null,
+      },
+      accessToken,
+      refreshToken,
+    };
+  }
+
   /**
    * Register a new user and issue tokens.
    * Assumes signup gating has already been performed at the route level.
@@ -144,178 +331,36 @@ export class AuthService {
       context;
     const { email, password } = input;
 
-    // Check if account is locked before proceeding
     const isLocked = await AuditLogger.isAccountLocked(email);
     if (isLocked) {
-      return {
-        outcome: 'locked',
-        message:
-          'Account temporarily locked due to multiple failed login attempts. Please try again later.',
-      };
+      return this.lockedResult();
     }
 
-    // Find user with password for verification
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        password: true,
-        subscriptionTier: true,
-      },
+    const authResult = await this.authenticateCredentials(email, password, request);
+    if (authResult.outcome !== 'authenticated_user') {
+      return authResult.result;
+    }
+    const user = authResult.user;
+    await this.syncUserTimezoneOnLogin(request, user.id);
+
+    const twoFactorResult = await this.requireTwoFactorIfNeeded({
+      userId: user.id,
+      email,
+      request,
+      redis,
     });
-
-    // Always perform password comparison to prevent timing attacks
-    // Use a dummy hash if user doesn't exist
-    const dummyHash = '$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m'; // Hash of 'dummy'
-    const passwordToCheck = user?.password || dummyHash;
-    const validPassword = await bcrypt.compare(password, passwordToCheck);
-
-    // Add random timing jitter to mitigate timing-based user enumeration
-    await addTimingJitter();
-
-    // Check both user existence and password validity
-    if (!user || !validPassword) {
-      // Log failed login attempt
-      await AuditLogger.logAuthFailure(
-        AuditEventType.USER_LOGIN_FAILED,
-        email,
-        request,
-        !user ? 'User not found' : 'Invalid password'
-      );
-
-      // Check for account lockout
-      const shouldLock = await AuditLogger.checkAccountLockout(email);
-      if (shouldLock) {
-        return {
-          outcome: 'locked',
-          message:
-            'Account temporarily locked due to multiple failed login attempts. Please try again later.',
-        };
-      }
-
-      return {
-        outcome: 'invalid_credentials',
-        message: 'Invalid credentials',
-      };
+    if (twoFactorResult) {
+      return twoFactorResult;
     }
 
-    // Auto-detect and save timezone if user doesn't have one set
-    const userTimezone = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { timezone: true, timezoneAutoDetected: true },
-    });
-
-    if (
-      !userTimezone?.timezone ||
-      userTimezone.timezone === 'UTC' ||
-      userTimezone.timezoneAutoDetected
-    ) {
-      const detectedTimezone = await TimezoneService.detectTimezone(request, user.id);
-      if (detectedTimezone !== 'UTC') {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            timezone: detectedTimezone,
-            timezoneAutoDetected: true,
-          },
-        });
-        request.log.info(
-          {
-            userId: user.id,
-            timezone: detectedTimezone,
-          },
-          'Auto-detected and saved timezone during login'
-        );
-      }
-    }
-
-    // Check if two-factor authentication is enabled
-    const userWithTwoFactor = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        twoFactorEnabled: true,
-        twoFactorMethod: true,
-      },
-    });
-
-    if (userWithTwoFactor?.twoFactorEnabled) {
-      const pendingKey = `2fa-pending:${email}`;
-      const method = userWithTwoFactor.twoFactorMethod || null;
-
-      const { TwoFactorService } = await import('./two-factor.js');
-      const trustedDeviceToken = request.cookies?.trusted_device;
-
-      if (trustedDeviceToken) {
-        const trustedUserId = await TwoFactorService.isTrustedDevice(trustedDeviceToken);
-        if (trustedUserId !== user.id) {
-          // Need 2FA verification
-          await redis.setex(pendingKey, 300, user.id); // 5 minutes to complete 2FA
-
-          if (method === 'email') {
-            await TwoFactorService.sendEmailCode(user.id);
-          }
-
-          return {
-            outcome: '2fa_required',
-            method,
-            message: 'Two-factor authentication required',
-          };
-        }
-        // Trusted device case: fall through and treat as authenticated below.
-      } else {
-        // No trusted device token; require 2FA
-        await redis.setex(pendingKey, 300, user.id); // 5 minutes to complete 2FA
-
-        if (method === 'email') {
-          await TwoFactorService.sendEmailCode(user.id);
-        }
-
-        return {
-          outcome: '2fa_required',
-          method,
-          message: 'Two-factor authentication required',
-        };
-      }
-    }
-
-    // Resolve stable device identifier has already been done in route; here we only use it
-    if (stableFingerprint) {
-      await revokeSameDeviceSessions(user.id, stableFingerprint, request);
-    }
-
-    // Generate tokens with refresh token rotation and session tracking
-    const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+    return this.buildAuthenticatedLoginResult({
       fastify,
-      user.id,
+      request,
+      user,
       ipAddress,
       userAgent,
-      {
-        deviceFingerprint: stableFingerprint || undefined,
-        deviceName,
-        ipAddress,
-        userAgent,
-      }
-    );
-
-    // Log successful login and reset failed attempts
-    await AuditLogger.logAuth(AuditEventType.USER_LOGIN, user.id, user.email, request);
-    await AuditLogger.resetFailedLoginAttempts(user.email);
-
-    const { password: _password, ...userWithoutPassword } = user;
-    void _password;
-
-    return {
-      outcome: 'authenticated',
-      user: {
-        id: userWithoutPassword.id,
-        email: userWithoutPassword.email,
-        name: userWithoutPassword.name,
-        subscriptionTier: userWithoutPassword.subscriptionTier ?? null,
-      },
-      accessToken,
-      refreshToken,
-    };
+      stableFingerprint,
+      deviceName,
+    });
   }
 }

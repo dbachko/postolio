@@ -1,39 +1,45 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { TwoFactorService, type TwoFactorMethod } from '../services/two-factor.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import { twoFactorSetupSchema, twoFactorVerifySchema } from '../schemas/auth.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { isProductionEnv } from '../utils/env-mode.js';
 
-const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
-  // Narrowed request types used in handlers
-  interface SessionData {
-    pendingUserId?: string;
-    userId?: string;
-    authenticated?: boolean;
-  }
-  interface AuthedRequest extends FastifyRequest {
-    user: { id: string; email: string };
-    session?: SessionData;
-  }
-  interface SessionRequest extends FastifyRequest {
-    session?: SessionData;
-  }
+interface SessionData {
+  pendingUserId?: string;
+  userId?: string;
+  authenticated?: boolean;
+}
 
-  function ensureAuth(request: FastifyRequest, reply: FastifyReply): request is AuthedRequest {
-    if (!('user' in request) || !request.user) {
-      reply.code(401).send({ error: 'Unauthorized' });
-      return false;
-    }
-    return true;
-  }
+interface AuthedRequest extends FastifyRequest {
+  user: { id: string; email: string };
+  session?: SessionData;
+}
 
-  // Setup two-factor authentication
-  // Schema likely validates a field named 'method' or 'type'; support both with union and normalize.
-  interface TwoFactorSetupBody {
-    type: 'totp' | 'sms' | 'email';
-    phoneNumber?: string;
+interface SessionRequest extends FastifyRequest {
+  session?: SessionData;
+}
+
+interface TwoFactorSetupBody {
+  type: 'totp' | 'sms' | 'email';
+  phoneNumber?: string;
+}
+
+type TwoFactorVerifyBody = { code: string; trustDevice: boolean };
+
+interface PasswordBody {
+  password: string;
+}
+
+function ensureAuth(request: FastifyRequest, reply: FastifyReply): request is AuthedRequest {
+  if (!('user' in request) || !request.user) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return false;
   }
+  return true;
+}
+
+function registerSetupRoute(fastify: FastifyInstance) {
   fastify.post<{ Body: TwoFactorSetupBody }>(
     '/2fa/setup',
     {
@@ -43,9 +49,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (!ensureAuth(request, reply)) {
         return;
       }
+
       const { type, phoneNumber } = request.body;
       const userId = request.user.id;
-
       const result = await TwoFactorService.setupTwoFactor(
         userId,
         type as TwoFactorMethod,
@@ -65,10 +71,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+}
 
-  // Verify two-factor setup
-  // Shared verification body matches sanitized schema (trustDevice defaults to false and is always boolean)
-  type TwoFactorVerifyBody = { code: string; trustDevice: boolean };
+function registerVerifySetupRoute(fastify: FastifyInstance) {
   fastify.post<{ Body: TwoFactorVerifyBody }>(
     '/2fa/verify-setup',
     {
@@ -78,62 +83,67 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (!ensureAuth(request, reply)) {
         return;
       }
-      const { code } = request.body; // trustDevice ignored for setup verification
-      const userId = request.user.id;
-      const ipAddress = request.ip;
 
-      const result = await TwoFactorService.verifySetup(userId, code, ipAddress);
+      const { code } = request.body;
+      const userId = request.user.id;
+      const result = await TwoFactorService.verifySetup(userId, code, request.ip);
 
       if (!result.success) {
         return reply.code(400).send({ error: result.message });
       }
 
-      return reply.send({
-        success: true,
-        message: result.message,
-      });
+      return reply.send({ success: true, message: result.message });
     }
   );
+}
 
-  // Verify two-factor code during login
+function completeLoginSession(request: SessionRequest, userId: string) {
+  const session = request.session;
+  if (!session) {
+    return;
+  }
+
+  delete session.pendingUserId;
+  session.userId = userId;
+  session.authenticated = true;
+}
+
+function setTrustedDeviceCookie(reply: FastifyReply, trustedToken: string | undefined) {
+  if (!trustedToken) {
+    return;
+  }
+
+  reply.setCookie('trusted_device', trustedToken, {
+    httpOnly: true,
+    secure: isProductionEnv(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60,
+  });
+}
+
+function registerVerifyLoginRoute(fastify: FastifyInstance) {
   fastify.post<{ Body: TwoFactorVerifyBody }>(
     '/2fa/verify',
     {
       preHandler: [validateAndSanitize(twoFactorVerifySchema), enhancedRateLimiters.strict()],
     },
     async (request, reply) => {
+      const sessionRequest = request as SessionRequest;
       const { code, trustDevice } = request.body;
-      const userId = (request as SessionRequest).session?.pendingUserId; // Set during login when 2FA is required
-      const ipAddress = request.ip;
+      const userId = sessionRequest.session?.pendingUserId;
 
       if (!userId) {
         return reply.code(401).send({ error: 'No pending authentication' });
       }
 
-      const result = await TwoFactorService.verifyCode(userId, code, trustDevice, ipAddress);
-
+      const result = await TwoFactorService.verifyCode(userId, code, trustDevice, request.ip);
       if (!result.success) {
         return reply.code(401).send({ error: result.message });
       }
 
-      // Complete login
-      const session = (request as SessionRequest).session;
-      if (session) {
-        delete session.pendingUserId;
-        session.userId = userId;
-        session.authenticated = true;
-      }
-
-      // Set trusted device cookie if requested
-      if (result.trustedToken) {
-        reply.setCookie('trusted_device', result.trustedToken, {
-          httpOnly: true,
-          secure: isProductionEnv(),
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 30 * 24 * 60 * 60, // 30 days
-        });
-      }
+      completeLoginSession(sessionRequest, userId);
+      setTrustedDeviceCookie(reply, result.trustedToken);
 
       return reply.send({
         success: true,
@@ -141,8 +151,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+}
 
-  // Send email code for email-based 2FA
+function registerSendCodeRoute(fastify: FastifyInstance) {
   fastify.post(
     '/2fa/send-code',
     {
@@ -152,25 +163,18 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (!ensureAuth(request, reply)) {
         return;
       }
-      const userId = request.user.id;
 
-      const result = await TwoFactorService.sendEmailCode(userId);
-
+      const result = await TwoFactorService.sendEmailCode(request.user.id);
       if (!result.success) {
         return reply.code(400).send({ error: result.message });
       }
 
-      return reply.send({
-        success: true,
-        message: result.message,
-      });
+      return reply.send({ success: true, message: result.message });
     }
   );
+}
 
-  // Disable two-factor authentication
-  interface PasswordBody {
-    password: string;
-  }
+function registerDisableRoute(fastify: FastifyInstance) {
   fastify.post<{ Body: PasswordBody }>(
     '/2fa/disable',
     {
@@ -180,28 +184,23 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (!ensureAuth(request, reply)) {
         return;
       }
-      const { password } = request.body;
-      const userId = request.user.id;
-      const ipAddress = request.ip;
 
+      const { password } = request.body;
       if (!password) {
         return reply.code(400).send({ error: 'Password is required' });
       }
 
-      const result = await TwoFactorService.disableTwoFactor(userId, password, ipAddress);
-
+      const result = await TwoFactorService.disableTwoFactor(request.user.id, password, request.ip);
       if (!result.success) {
         return reply.code(400).send({ error: result.message });
       }
 
-      return reply.send({
-        success: true,
-        message: result.message,
-      });
+      return reply.send({ success: true, message: result.message });
     }
   );
+}
 
-  // Regenerate backup codes
+function registerRegenerateBackupCodesRoute(fastify: FastifyInstance) {
   fastify.post<{ Body: PasswordBody }>(
     '/2fa/regenerate-backup-codes',
     {
@@ -211,15 +210,13 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (!ensureAuth(request, reply)) {
         return;
       }
-      const { password } = request.body;
-      const userId = request.user.id;
 
+      const { password } = request.body;
       if (!password) {
         return reply.code(400).send({ error: 'Password is required' });
       }
 
-      const result = await TwoFactorService.regenerateBackupCodes(userId, password);
-
+      const result = await TwoFactorService.regenerateBackupCodes(request.user.id, password);
       if (!result.success) {
         return reply.code(400).send({ error: result.message });
       }
@@ -231,8 +228,23 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+}
 
-  // Get two-factor status
+async function loadTwoFactorStatus(userId: string) {
+  const { getDatabaseClient } = await import('../config/database.js');
+  const prisma = getDatabaseClient();
+
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      twoFactorEnabled: true,
+      twoFactorMethod: true,
+      twoFactorPhoneNumber: true,
+    },
+  });
+}
+
+function registerStatusRoute(fastify: FastifyInstance) {
   fastify.get(
     '/2fa/status',
     {
@@ -242,20 +254,8 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (!ensureAuth(request, reply)) {
         return;
       }
-      const userId = request.user.id;
 
-      const { getDatabaseClient } = await import('../config/database.js');
-      const prisma = getDatabaseClient();
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          twoFactorEnabled: true,
-          twoFactorMethod: true,
-          twoFactorPhoneNumber: true,
-        },
-      });
-
+      const user = await loadTwoFactorStatus(request.user.id);
       return reply.send({
         enabled: user?.twoFactorEnabled || false,
         method: user?.twoFactorMethod || null,
@@ -265,6 +265,20 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+}
+
+function registerTwoFactorRoutes(fastify: FastifyInstance) {
+  registerSetupRoute(fastify);
+  registerVerifySetupRoute(fastify);
+  registerVerifyLoginRoute(fastify);
+  registerSendCodeRoute(fastify);
+  registerDisableRoute(fastify);
+  registerRegenerateBackupCodesRoute(fastify);
+  registerStatusRoute(fastify);
+}
+
+const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
+  registerTwoFactorRoutes(fastify);
 };
 
 export default twoFactorRoutes;

@@ -8,19 +8,63 @@ import { SIDEBAR_DISMISS_KEY, TOP_BANNER_DISMISS_KEY } from './constants';
 import type { PostingAction, PostingPopoverView, WriteItBarProps } from './types';
 import { formatScheduledAtLabel, isDismissedWithinTtl } from './utils';
 
-export function WriteItBar(props: WriteItBarProps) {
-  const [scheduleLimitDismissed, setScheduleLimitDismissed] = useState<boolean>(() => {
-    return (
-      isDismissedWithinTtl(TOP_BANNER_DISMISS_KEY) || isDismissedWithinTtl(SIDEBAR_DISMISS_KEY)
-    );
-  });
+type EditBarProps = Extract<WriteItBarProps, { mode: 'edit' }>;
 
+async function runEditPrimaryAction(props: EditBarProps, postingAction: PostingAction) {
+  if (postingAction === 'now') {
+    if (!props.onPublishNow) {
+      return;
+    }
+    if (props.publishNowDisabled || props.isPublishingNow || !props.validationOk) {
+      return;
+    }
+
+    if (props.hasChanges) {
+      const result = await props.onSave();
+      if (result === false) {
+        return;
+      }
+    }
+
+    props.onPublishNow();
+    return;
+  }
+
+  if (props.hasChanges) {
+    props.onSave();
+    return;
+  }
+
+  if (
+    postingAction === 'queue' &&
+    props.onAddToQueue &&
+    !props.queueDisabled &&
+    props.validationOk &&
+    !props.isQueueing
+  ) {
+    props.onAddToQueue();
+    return;
+  }
+
+  props.onSave();
+}
+
+function getWriteItBarClass(props: WriteItBarProps) {
+  return cn(
+    'border-border bg-card border-t pb-3',
+    props.mode === 'edit' ? 'pl-2 pr-4' : 'px-4',
+    props.previewHandle ? 'pt-8' : 'pt-3',
+    props.layout === 'sidebar' && 'sticky bottom-0 z-20',
+    props.previewHandle && 'relative'
+  );
+}
+
+function usePostingActionControls(props: WriteItBarProps) {
   const prevModeRef = useRef(props.mode);
   const postingActionManuallySetRef = useRef(false);
-  const [postingAction, setPostingAction] = useState<PostingAction>(() => {
-    const hasSchedule = Boolean(props.scheduledAt && props.scheduledAt.trim());
-    return hasSchedule ? 'datetime' : 'queue';
-  });
+  const [postingAction, setPostingAction] = useState<PostingAction>(() =>
+    props.scheduledAt?.trim() ? 'datetime' : 'queue'
+  );
   const [postingPopoverOpen, setPostingPopoverOpen] = useState(false);
   const [postingPopoverView, setPostingPopoverView] = useState<PostingPopoverView>('menu');
 
@@ -34,23 +78,51 @@ export function WriteItBar(props: WriteItBarProps) {
       return;
     }
     prevModeRef.current = props.mode;
-    const hasSchedule = Boolean(props.scheduledAt && props.scheduledAt.trim());
-    setPostingAction(hasSchedule ? 'datetime' : 'queue');
+    setPostingAction(props.scheduledAt?.trim() ? 'datetime' : 'queue');
     setPostingPopoverOpen(false);
     setPostingPopoverView('menu');
     postingActionManuallySetRef.current = false;
   }, [props.mode, props.scheduledAt]);
 
   useEffect(() => {
-    if (props.mode !== 'create') {
+    if (props.mode !== 'create' || postingActionManuallySetRef.current) {
       return;
     }
-    if (postingActionManuallySetRef.current) {
-      return;
-    }
-    const hasSchedule = Boolean(props.scheduledAt && props.scheduledAt.trim());
-    setPostingAction(hasSchedule ? 'datetime' : 'queue');
+    setPostingAction(props.scheduledAt?.trim() ? 'datetime' : 'queue');
   }, [props.mode, props.scheduledAt]);
+
+  return {
+    postingAction,
+    postingPopoverOpen,
+    postingPopoverView,
+    setPostingActionManual,
+    setPostingPopoverOpen,
+    setPostingPopoverView,
+  };
+}
+
+function dismissScheduleLimit(setScheduleLimitDismissed: (value: boolean) => void) {
+  try {
+    setLocalSetting<number>(SIDEBAR_DISMISS_KEY, Date.now());
+  } catch {}
+  setScheduleLimitDismissed(true);
+}
+
+export function WriteItBar(props: WriteItBarProps) {
+  const [scheduleLimitDismissed, setScheduleLimitDismissed] = useState<boolean>(() => {
+    return (
+      isDismissedWithinTtl(TOP_BANNER_DISMISS_KEY) || isDismissedWithinTtl(SIDEBAR_DISMISS_KEY)
+    );
+  });
+
+  const {
+    postingAction,
+    postingPopoverOpen,
+    postingPopoverView,
+    setPostingActionManual,
+    setPostingPopoverOpen,
+    setPostingPopoverView,
+  } = usePostingActionControls(props);
 
   const scheduledAtLabel = useMemo(
     () =>
@@ -62,52 +134,10 @@ export function WriteItBar(props: WriteItBarProps) {
     if (props.mode !== 'edit') {
       return;
     }
-
-    if (postingAction === 'now') {
-      if (!props.onPublishNow) {
-        return;
-      }
-      if (props.publishNowDisabled || props.isPublishingNow || !props.validationOk) {
-        return;
-      }
-
-      if (props.hasChanges) {
-        const result = await props.onSave();
-        if (result === false) {
-          return;
-        }
-      }
-
-      props.onPublishNow();
-      return;
-    }
-
-    if (props.hasChanges) {
-      props.onSave();
-      return;
-    }
-
-    if (
-      postingAction === 'queue' &&
-      props.onAddToQueue &&
-      !props.queueDisabled &&
-      props.validationOk &&
-      !props.isQueueing
-    ) {
-      props.onAddToQueue();
-      return;
-    }
-
-    props.onSave();
+    await runEditPrimaryAction(props, postingAction);
   };
 
-  const outerClass = cn(
-    'border-border bg-card border-t pb-3',
-    props.mode === 'edit' ? 'pl-2 pr-4' : 'px-4',
-    props.previewHandle ? 'pt-8' : 'pt-3',
-    props.layout === 'sidebar' && 'sticky bottom-0 z-20',
-    props.previewHandle && 'relative'
-  );
+  const outerClass = getWriteItBarClass(props);
 
   return (
     <div className={outerClass}>
@@ -119,12 +149,7 @@ export function WriteItBar(props: WriteItBarProps) {
         <WriteItBarCreate
           barProps={props}
           scheduleLimitDismissed={scheduleLimitDismissed}
-          onScheduleLimitDismiss={() => {
-            try {
-              setLocalSetting<number>(SIDEBAR_DISMISS_KEY, Date.now());
-            } catch {}
-            setScheduleLimitDismissed(true);
-          }}
+          onScheduleLimitDismiss={() => dismissScheduleLimit(setScheduleLimitDismissed)}
           postingAction={postingAction}
           scheduledAtLabel={scheduledAtLabel}
           postingPopoverOpen={postingPopoverOpen}

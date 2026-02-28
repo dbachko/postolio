@@ -22,6 +22,50 @@ interface DropzoneProps {
   onDrop: (e: DragEvent<HTMLElement>) => void;
 }
 
+function FullDropzoneContent({
+  allowMixedMedia,
+  maxImages,
+  maxSizeInMB,
+  maxVideoSizeInMB,
+  isUploadingVideo,
+  videoUploadProgress,
+}: {
+  allowMixedMedia: boolean;
+  maxImages: number;
+  maxSizeInMB: number;
+  maxVideoSizeInMB: number;
+  isUploadingVideo: boolean;
+  videoUploadProgress: UploadProgress | null;
+}) {
+  if (isUploadingVideo && videoUploadProgress) {
+    return (
+      <>
+        <div className="border-foreground h-10 w-10 animate-spin rounded-full border-b-2" />
+        <p className="text-muted-foreground text-sm">
+          Uploading video... {videoUploadProgress.percentage}%
+        </p>
+        <div className="w-full max-w-xs">
+          <Progress value={videoUploadProgress.percentage} className="h-2" />
+        </div>
+      </>
+    );
+  }
+  return (
+    <>
+      <Upload className="text-muted-foreground h-8 w-8" />
+      <div>
+        <p className="text-foreground text-sm font-medium">
+          Drop {allowMixedMedia ? 'images or videos' : 'images or a video'} here, or click to browse
+        </p>
+        <p className="text-muted-foreground mt-1 text-xs">
+          Images: up to {maxImages} (max {maxSizeInMB}MB each). Video: MP4/MOV/MPEG (max{' '}
+          {maxVideoSizeInMB}MB).
+        </p>
+      </div>
+    </>
+  );
+}
+
 export function Dropzone({
   variant,
   allowMixedMedia,
@@ -55,31 +99,14 @@ export function Dropzone({
         onDrop={onDrop}
       >
         <div className="flex flex-col items-center space-y-4">
-          {isUploadingVideo && videoUploadProgress ? (
-            <>
-              <div className="border-foreground h-10 w-10 animate-spin rounded-full border-b-2" />
-              <p className="text-muted-foreground text-sm">
-                Uploading video... {videoUploadProgress.percentage}%
-              </p>
-              <div className="w-full max-w-xs">
-                <Progress value={videoUploadProgress.percentage} className="h-2" />
-              </div>
-            </>
-          ) : (
-            <>
-              <Upload className="text-muted-foreground h-8 w-8" />
-              <div>
-                <p className="text-foreground text-sm font-medium">
-                  Drop {allowMixedMedia ? 'images or videos' : 'images or a video'} here, or click
-                  to browse
-                </p>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  Images: up to {maxImages} (max {maxSizeInMB}MB each). Video: MP4/MOV/MPEG (max{' '}
-                  {maxVideoSizeInMB}MB).
-                </p>
-              </div>
-            </>
-          )}
+          <FullDropzoneContent
+            allowMixedMedia={allowMixedMedia}
+            maxImages={maxImages}
+            maxSizeInMB={maxSizeInMB}
+            maxVideoSizeInMB={maxVideoSizeInMB}
+            isUploadingVideo={isUploadingVideo}
+            videoUploadProgress={videoUploadProgress}
+          />
         </div>
       </div>
     );

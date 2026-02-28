@@ -14,6 +14,37 @@ function summarizeCaptions(captions: string[], maxChars = 4000): string {
   return joined;
 }
 
+function normalizeToneResponse(res: { tone?: string[] } | undefined): string[] {
+  if (!Array.isArray(res?.tone)) {
+    return [];
+  }
+
+  return res.tone.filter((tone) => typeof tone === 'string' && tone.length > 0).slice(0, 8);
+}
+
+function buildFallbackTone(input: ToneExtractorInput): string[] {
+  const text = (input.captions || []).join(' ');
+  const exclam = (text.match(/!/g) || []).length;
+  const questions = (text.match(/\?/g) || []).length;
+  const emojis = (text.match(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu) || []).length;
+
+  const tone: string[] = [];
+  if (exclam > 5) {
+    tone.push('energetic');
+  }
+  if (questions > 3) {
+    tone.push('curious');
+  }
+  if (emojis > 10) {
+    tone.push('playful');
+  }
+  if (tone.length === 0) {
+    tone.push('informative');
+  }
+
+  return tone;
+}
+
 export async function runToneExtractor(input: ToneExtractorInput): Promise<ToneExtractorOutput> {
   const model =
     process.env.BRAND_ANALYSIS_LLM_MODEL || process.env.LLM_DEFAULT_MODEL || 'gpt-4o-mini';
@@ -43,29 +74,8 @@ export async function runToneExtractor(input: ToneExtractorInput): Promise<ToneE
       maxResponseChars: 4000,
       timeoutMs: Number(process.env.BRAND_ANALYSIS_LLM_TIMEOUT_MS || 30000),
     });
-    const tone = Array.isArray(res?.tone)
-      ? res!.tone.filter((t) => typeof t === 'string' && t.length > 0).slice(0, 8)
-      : [];
-    return { tone };
+    return { tone: normalizeToneResponse(res) };
   } catch {
-    // Heuristic fallback
-    const text = (input.captions || []).join(' ');
-    const exclam = (text.match(/!/g) || []).length;
-    const q = (text.match(/\?/g) || []).length;
-    const emojis = (text.match(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu) || []).length;
-    const tone: string[] = [];
-    if (exclam > 5) {
-      tone.push('energetic');
-    }
-    if (q > 3) {
-      tone.push('curious');
-    }
-    if (emojis > 10) {
-      tone.push('playful');
-    }
-    if (tone.length === 0) {
-      tone.push('informative');
-    }
-    return { tone };
+    return { tone: buildFallbackTone(input) };
   }
 }

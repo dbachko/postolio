@@ -123,28 +123,46 @@ export function mergeUniqueAssets(items: AssetReference[], limit: number): Asset
   return result;
 }
 
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null;
+}
+
+function readFirstApiError(normalized: any): string | null {
+  const errors = normalized?.data?.errors;
+  if (!Array.isArray(errors) || !errors[0]) {
+    return null;
+  }
+  return readNonEmptyString(errors[0]);
+}
+
 export function getScheduleErrorMessage(
   error: unknown,
   fallback = 'Failed to schedule post. Please try again.'
 ): string {
   const normalized = error as any;
-  if (
-    normalized?.data?.errors &&
-    Array.isArray(normalized.data.errors) &&
-    normalized.data.errors[0]
-  ) {
-    return normalized.data.errors[0];
+  return (
+    readFirstApiError(normalized) ||
+    readNonEmptyString(normalized?.data?.message) ||
+    readNonEmptyString(normalized?.data?.error) ||
+    readNonEmptyString(normalized?.message) ||
+    fallback
+  );
+}
+
+function resolveQueueDepthLimitMessage(maxAllowed: unknown): string {
+  if (typeof maxAllowed === 'number' && Number.isFinite(maxAllowed)) {
+    return `Queue limit reached for this social account (max ${maxAllowed}).`;
   }
-  if (typeof normalized?.data?.message === 'string' && normalized.data.message) {
-    return normalized.data.message;
-  }
-  if (normalized?.data?.error) {
-    return normalized.data.error;
-  }
-  if (typeof normalized?.message === 'string' && normalized.message) {
-    return normalized.message;
-  }
-  return fallback;
+  return 'Queue limit reached for this social account.';
+}
+
+function resolveQueueErrorCode(normalized: any): string | null {
+  return (
+    (typeof normalized === 'string' && normalized) ||
+    (typeof normalized?.data?.error === 'string' && normalized.data.error) ||
+    (typeof normalized?.message === 'string' && normalized.message) ||
+    null
+  );
 }
 
 export function getQueueErrorMessage(
@@ -152,26 +170,18 @@ export function getQueueErrorMessage(
   fallback = 'Failed to add to queue. Please try again.'
 ): string {
   const normalized = error as any;
-  const code =
-    (typeof normalized === 'string' && normalized) ||
-    (typeof normalized?.data?.error === 'string' && normalized.data.error) ||
-    (typeof normalized?.message === 'string' && normalized.message) ||
-    null;
+  const code = resolveQueueErrorCode(normalized);
 
   if (code === 'queue_depth_limit') {
-    const maxAllowed = normalized?.data?.maxAllowed;
-    if (typeof maxAllowed === 'number' && Number.isFinite(maxAllowed)) {
-      return `Queue limit reached for this social account (max ${maxAllowed}).`;
-    }
-    return 'Queue limit reached for this social account.';
+    return resolveQueueDepthLimitMessage(normalized?.data?.maxAllowed);
   }
-
-  if (code === 'missing_destination') {
-    return 'Pick a destination social account before adding to queue.';
-  }
-
-  if (code === 'missing_queue') {
-    return 'No default queue found for this social account.';
+  const fixedMessages: Record<string, string> = {
+    missing_destination: 'Pick a destination social account before adding to queue.',
+    missing_queue: 'No default queue found for this social account.',
+  };
+  const fixedMessage = code ? fixedMessages[code] : null;
+  if (fixedMessage) {
+    return fixedMessage;
   }
 
   return getScheduleErrorMessage(error, fallback);

@@ -3,6 +3,56 @@ import type { CalendarDataItem, CalendarEvent, CalendarFilters } from '../types'
 import { applyFilters } from '../utils/filtering';
 import { getEventBounds } from '../utils/timezone';
 
+function getEventStartTime(event: CalendarEvent): number {
+  const start = event.start;
+  return start instanceof Date ? start.getTime() : 0;
+}
+
+function isPlaceholderEvent(event: CalendarEvent): boolean {
+  return Boolean((event as any)?.resource?.placeholder);
+}
+
+function compareCalendarEvents(left: CalendarEvent, right: CalendarEvent): number {
+  const startDiff = getEventStartTime(left) - getEventStartTime(right);
+  if (startDiff !== 0) {
+    return startDiff;
+  }
+
+  const leftPlaceholder = isPlaceholderEvent(left);
+  const rightPlaceholder = isPlaceholderEvent(right);
+  if (leftPlaceholder !== rightPlaceholder) {
+    return leftPlaceholder ? 1 : -1;
+  }
+
+  return String(left.title ?? '').localeCompare(String(right.title ?? ''));
+}
+
+function toCalendarEvent(item: CalendarDataItem, timezone: string): CalendarEvent | null {
+  const bounds = getEventBounds(item, timezone);
+  if (!bounds) {
+    return null;
+  }
+
+  const record = item as unknown as Record<string, unknown>;
+  const isPlaceholder = item.type === 'placeholder';
+
+  return {
+    id: String(item.id),
+    title: buildTitle(item, record),
+    start: bounds.start,
+    end: bounds.end,
+    allDay: false,
+    resource: {
+      type: item.type,
+      status: isPlaceholder ? 'placeholder' : readString(record.status),
+      placeholder: isPlaceholder,
+      scheduledAt: readString(isPlaceholder ? item.scheduledAt : record.scheduledAt),
+      postedAt: readString(record.postedAt),
+      item,
+    },
+  };
+}
+
 export function useFilteredEvents(
   items: CalendarDataItem[],
   filters: CalendarFilters,
@@ -21,52 +71,13 @@ export function useFilteredEvents(
     const events: CalendarEvent[] = [];
 
     for (const item of filtered) {
-      const bounds = getEventBounds(item, timezone);
-      if (!bounds) {
-        continue;
+      const event = toCalendarEvent(item, timezone);
+      if (event) {
+        events.push(event);
       }
-
-      const record = item as unknown as Record<string, unknown>;
-      const isPlaceholder = item.type === 'placeholder';
-
-      const status = isPlaceholder ? 'placeholder' : readString(record.status);
-      const scheduledAt = readString(isPlaceholder ? item.scheduledAt : record.scheduledAt);
-      const postedAt = readString(record.postedAt);
-
-      const event: CalendarEvent = {
-        id: String(item.id),
-        title: buildTitle(item, record),
-        start: bounds.start,
-        end: bounds.end,
-        allDay: false,
-        resource: {
-          type: item.type,
-          status,
-          placeholder: isPlaceholder,
-          scheduledAt,
-          postedAt,
-          item,
-        },
-      };
-
-      events.push(event);
     }
 
-    events.sort((a, b) => {
-      const ta = a.start?.getTime?.() ?? 0;
-      const tb = b.start?.getTime?.() ?? 0;
-      if (ta !== tb) {
-        return ta - tb;
-      }
-
-      const aPlaceholder = Boolean((a as any)?.resource?.placeholder);
-      const bPlaceholder = Boolean((b as any)?.resource?.placeholder);
-      if (aPlaceholder !== bPlaceholder) {
-        return aPlaceholder ? 1 : -1;
-      }
-
-      return String(a.title ?? '').localeCompare(String(b.title ?? ''));
-    });
+    events.sort(compareCalendarEvents);
 
     return events;
   }, [items, series, statuses, searchQuery, timezone]);

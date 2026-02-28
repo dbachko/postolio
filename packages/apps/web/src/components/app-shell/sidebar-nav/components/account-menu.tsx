@@ -20,6 +20,17 @@ interface AccountMenuProps {
   onLogout: () => void;
 }
 
+function AccountMenuLabel({ userEmail }: { userEmail: string }) {
+  return (
+    <DropdownMenuLabel>
+      <div className="flex flex-col space-y-1">
+        <p className="text-sm leading-none font-medium">Account</p>
+        <p className="text-muted-foreground text-xs leading-none">{userEmail}</p>
+      </div>
+    </DropdownMenuLabel>
+  );
+}
+
 export function AccountMenu({
   userEmail,
   brands,
@@ -56,12 +67,7 @@ export function AccountMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="right" sideOffset={12} className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm leading-none font-medium">Account</p>
-            <p className="text-muted-foreground text-xs leading-none">{userEmail}</p>
-          </div>
-        </DropdownMenuLabel>
+        <AccountMenuLabel userEmail={userEmail} />
         <DropdownMenuSeparator />
 
         {brands.length > 0 && (

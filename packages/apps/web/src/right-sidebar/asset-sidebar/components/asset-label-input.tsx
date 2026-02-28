@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type KeyboardEvent,
+  type RefObject,
+  type SetStateAction,
+} from 'react';
+
 import type { LabelRecord } from '@/features/assets/api/client';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+
+import { AssetLabelInputView } from './asset-label-input-view';
 
 type SuggestionItem =
   | { kind: 'existing'; id: string; name: string }
@@ -46,64 +56,87 @@ function rankLabelMatch(labelName: string, term: string): number {
   return 3;
 }
 
-export function AssetLabelInput({
-  labels,
-  value,
-  onChange,
-  onCreateLabel,
-  disabled = false,
-  placeholder = 'Type label and press Enter',
-}: AssetLabelInputProps) {
+function buildSuggestions(params: {
+  labels: LabelRecord[];
+  value: string[];
+  inputValue: string;
+}): SuggestionItem[] {
+  const normalizedInput = normalizeLabelName(params.inputValue);
+  const available = params.labels.filter(
+    (label) => !params.value.includes(label.id) && !label.isArchived
+  );
+
+  const matching = available
+    .filter((label) =>
+      normalizedInput ? normalizeLabelName(label.name).includes(normalizedInput) : true
+    )
+    .sort((a, b) => {
+      const aRank = rankLabelMatch(a.name, normalizedInput);
+      const bRank = rankLabelMatch(b.name, normalizedInput);
+      if (aRank !== bRank) {
+        return aRank - bRank;
+      }
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 8)
+    .map<SuggestionItem>((label) => ({ kind: 'existing', id: label.id, name: label.name }));
+
+  const hasExactMatch = params.labels.some(
+    (label) => normalizeLabelName(label.name) === normalizedInput
+  );
+  const createName = toDisplayLabelName(params.inputValue);
+  const canCreate = normalizedInput.length > 0 && createName.length > 0 && !hasExactMatch;
+  return canCreate ? [{ kind: 'create', name: createName }, ...matching] : matching;
+}
+
+function resolveSuggestionFromInput(params: {
+  suggestion: SuggestionItem | undefined;
+  inputValue: string;
+  labels: LabelRecord[];
+}): SuggestionItem | undefined {
+  if (params.suggestion) {
+    return params.suggestion;
+  }
+
+  const normalizedInput = normalizeLabelName(params.inputValue);
+  if (normalizedInput.length === 0) {
+    return undefined;
+  }
+
+  const displayName = toDisplayLabelName(params.inputValue);
+  const exactExisting = params.labels.find(
+    (label) => normalizeLabelName(label.name) === normalizedInput
+  );
+  return exactExisting
+    ? { kind: 'existing', id: exactExisting.id, name: exactExisting.name }
+    : { kind: 'create', name: displayName };
+}
+
+function useAssetLabelSuggestionsState(labels: LabelRecord[], value: string[]) {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
-  const [isCreating, setIsCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const blurTimeoutRef = useRef<number | null>(null);
-
-  const labelById = useMemo(() => {
-    const entries = labels.map((label) => [label.id, label] as const);
-    return new Map(entries);
-  }, [labels]);
+  const clearBlurTimeout = useCallback(() => {
+    const timeoutId = blurTimeoutRef.current;
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+  }, []);
 
   const selectedLabels = useMemo(
     () =>
-      value.map((id) => labelById.get(id)).filter((label): label is LabelRecord => Boolean(label)),
-    [labelById, value]
+      value
+        .map((id) => labels.find((label) => label.id === id))
+        .filter((label): label is LabelRecord => Boolean(label)),
+    [labels, value]
   );
 
-  const suggestions = useMemo<SuggestionItem[]>(() => {
-    const normalizedInput = normalizeLabelName(inputValue);
-    const available = labels.filter((label) => !value.includes(label.id) && !label.isArchived);
-
-    const matching = available
-      .filter((label) =>
-        normalizedInput ? normalizeLabelName(label.name).includes(normalizedInput) : true
-      )
-      .sort((a, b) => {
-        const aRank = rankLabelMatch(a.name, normalizedInput);
-        const bRank = rankLabelMatch(b.name, normalizedInput);
-        if (aRank !== bRank) {
-          return aRank - bRank;
-        }
-        return a.name.localeCompare(b.name);
-      })
-      .slice(0, 8)
-      .map<SuggestionItem>((label) => ({ kind: 'existing', id: label.id, name: label.name }));
-
-    const hasExactMatch = labels.some(
-      (label) => normalizeLabelName(label.name) === normalizedInput
-    );
-    const createName = toDisplayLabelName(inputValue);
-    const canCreate = normalizedInput.length > 0 && createName.length > 0 && !hasExactMatch;
-
-    if (canCreate) {
-      return [{ kind: 'create' as const, name: createName }, ...matching];
-    }
-
-    return matching;
-  }, [inputValue, labels, value]);
-
+  const suggestions = useMemo(
+    () => buildSuggestions({ labels, value, inputValue }),
+    [inputValue, labels, value]
+  );
   const showSuggestions = isFocused && (suggestions.length > 0 || inputValue.trim().length > 0);
 
   useEffect(() => {
@@ -114,55 +147,68 @@ export function AssetLabelInput({
 
   useEffect(() => {
     return () => {
-      if (blurTimeoutRef.current) {
-        window.clearTimeout(blurTimeoutRef.current);
-      }
+      clearBlurTimeout();
     };
-  }, []);
+  }, [clearBlurTimeout]);
+
+  return {
+    inputValue,
+    setInputValue,
+    isFocused,
+    setIsFocused,
+    activeSuggestionIndex,
+    setActiveSuggestionIndex,
+    selectedLabels,
+    suggestions,
+    showSuggestions,
+    inputRef,
+    blurTimeoutRef,
+  };
+}
+
+function useAssetLabelCommitState(params: {
+  labels: LabelRecord[];
+  value: string[];
+  onChange: (next: string[]) => void;
+  onCreateLabel: (name: string) => Promise<LabelRecord>;
+  inputValue: string;
+  setInputValue: (value: string) => void;
+  disabled: boolean;
+  setActiveSuggestionIndex: Dispatch<SetStateAction<number>>;
+}) {
+  const [isCreating, setIsCreating] = useState(false);
 
   const removeLabel = useCallback(
     (labelId: string) => {
-      onChange(value.filter((id) => id !== labelId));
+      params.onChange(params.value.filter((id) => id !== labelId));
     },
-    [onChange, value]
+    [params]
   );
 
   const addExistingLabel = useCallback(
     (labelId: string) => {
-      if (value.includes(labelId)) {
-        setInputValue('');
+      if (params.value.includes(labelId)) {
+        params.setInputValue('');
         return;
       }
-      onChange([...value, labelId]);
-      setInputValue('');
-      setActiveSuggestionIndex(0);
+      params.onChange([...params.value, labelId]);
+      params.setInputValue('');
+      params.setActiveSuggestionIndex(0);
     },
-    [onChange, value]
+    [params]
   );
 
   const commitInput = useCallback(
     async (suggestion?: SuggestionItem) => {
-      if (disabled || isCreating) {
+      if (params.disabled || isCreating) {
         return;
       }
 
-      const normalizedInput = normalizeLabelName(inputValue);
-      const displayName = toDisplayLabelName(inputValue);
-
-      let nextSuggestion = suggestion;
-      if (!nextSuggestion && normalizedInput.length > 0) {
-        const exactExisting = labels.find(
-          (label) => normalizeLabelName(label.name) === normalizedInput
-        );
-        nextSuggestion = exactExisting
-          ? ({
-              kind: 'existing',
-              id: exactExisting.id,
-              name: exactExisting.name,
-            } satisfies SuggestionItem)
-          : ({ kind: 'create', name: displayName } satisfies SuggestionItem);
-      }
-
+      const nextSuggestion = resolveSuggestionFromInput({
+        suggestion,
+        inputValue: params.inputValue,
+        labels: params.labels,
+      });
       if (!nextSuggestion) {
         return;
       }
@@ -171,178 +217,156 @@ export function AssetLabelInput({
         addExistingLabel(nextSuggestion.id);
         return;
       }
-
       if (!nextSuggestion.name) {
         return;
       }
+
       setIsCreating(true);
       try {
-        const created = await onCreateLabel(nextSuggestion.name);
-        if (!value.includes(created.id)) {
-          onChange([...value, created.id]);
+        const created = await params.onCreateLabel(nextSuggestion.name);
+        if (!params.value.includes(created.id)) {
+          params.onChange([...params.value, created.id]);
         }
-        setInputValue('');
-        setActiveSuggestionIndex(0);
+        params.setInputValue('');
+        params.setActiveSuggestionIndex(0);
       } finally {
         setIsCreating(false);
       }
     },
-    [addExistingLabel, disabled, inputValue, isCreating, labels, onChange, onCreateLabel, value]
+    [addExistingLabel, isCreating, params]
   );
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (disabled) {
+  return { isCreating, removeLabel, commitInput };
+}
+
+function handleSuggestionNavigationKey(
+  event: KeyboardEvent<HTMLInputElement>,
+  params: {
+    suggestions: SuggestionItem[];
+    setActiveSuggestionIndex: Dispatch<SetStateAction<number>>;
+  }
+): boolean {
+  if (event.key === 'ArrowDown' && params.suggestions.length > 0) {
+    event.preventDefault();
+    params.setActiveSuggestionIndex((prev) => Math.min(prev + 1, params.suggestions.length - 1));
+    return true;
+  }
+  if (event.key === 'ArrowUp' && params.suggestions.length > 0) {
+    event.preventDefault();
+    params.setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
+    return true;
+  }
+  return false;
+}
+
+function handleCommitKey(
+  event: KeyboardEvent<HTMLInputElement>,
+  params: {
+    inputValue: string;
+    activeSuggestionIndex: number;
+    suggestions: SuggestionItem[];
+    commitInput: (suggestion?: SuggestionItem) => Promise<void>;
+  }
+): boolean {
+  const isCommitKey =
+    event.key === 'Enter' || event.key === ',' || (event.key === 'Tab' && params.inputValue.trim());
+  if (!isCommitKey || !params.inputValue.trim()) {
+    return false;
+  }
+
+  event.preventDefault();
+  void params.commitInput(params.suggestions[params.activeSuggestionIndex]);
+  return true;
+}
+
+function handleBackspaceKey(
+  event: KeyboardEvent<HTMLInputElement>,
+  params: { inputValue: string; value: string[]; onChange: (next: string[]) => void }
+): boolean {
+  if (!(event.key === 'Backspace' && !params.inputValue && params.value.length > 0)) {
+    return false;
+  }
+  event.preventDefault();
+  params.onChange(params.value.slice(0, -1));
+  return true;
+}
+
+function useAssetLabelKeyboard(params: {
+  disabled: boolean;
+  suggestions: SuggestionItem[];
+  activeSuggestionIndex: number;
+  setActiveSuggestionIndex: Dispatch<SetStateAction<number>>;
+  inputValue: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+  commitInput: (suggestion?: SuggestionItem) => Promise<void>;
+  inputRef: RefObject<HTMLInputElement | null>;
+  setIsFocused: (isFocused: boolean) => void;
+}) {
+  return useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (params.disabled) {
         return;
       }
-
-      if (event.key === 'ArrowDown' && suggestions.length > 0) {
-        event.preventDefault();
-        setActiveSuggestionIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+      if (handleSuggestionNavigationKey(event, params)) {
         return;
       }
-
-      if (event.key === 'ArrowUp' && suggestions.length > 0) {
-        event.preventDefault();
-        setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
+      if (handleCommitKey(event, params)) {
         return;
       }
-
-      if (
-        event.key === 'Enter' ||
-        event.key === ',' ||
-        (event.key === 'Tab' && inputValue.trim().length > 0)
-      ) {
-        if (inputValue.trim().length === 0) {
-          return;
-        }
-        event.preventDefault();
-        const activeSuggestion = suggestions[activeSuggestionIndex];
-        void commitInput(activeSuggestion);
+      if (handleBackspaceKey(event, params)) {
         return;
       }
-
-      if (event.key === 'Backspace' && inputValue.length === 0 && value.length > 0) {
-        event.preventDefault();
-        onChange(value.slice(0, -1));
-        return;
-      }
-
       if (event.key === 'Escape') {
         event.preventDefault();
-        setIsFocused(false);
-        inputRef.current?.blur();
+        params.setIsFocused(false);
+        params.inputRef.current?.blur();
       }
     },
-    [activeSuggestionIndex, commitInput, disabled, inputValue, onChange, suggestions, value]
+    [params]
   );
+}
+
+export function AssetLabelInput({
+  labels,
+  value,
+  onChange,
+  onCreateLabel,
+  disabled = false,
+  placeholder = 'Type label and press Enter',
+}: AssetLabelInputProps) {
+  const suggestionsState = useAssetLabelSuggestionsState(labels, value);
+  const commitState = useAssetLabelCommitState({
+    labels,
+    value,
+    onChange,
+    onCreateLabel,
+    inputValue: suggestionsState.inputValue,
+    setInputValue: suggestionsState.setInputValue,
+    disabled,
+    setActiveSuggestionIndex: suggestionsState.setActiveSuggestionIndex,
+  });
+
+  const handleKeyDown = useAssetLabelKeyboard({
+    disabled,
+    suggestions: suggestionsState.suggestions,
+    activeSuggestionIndex: suggestionsState.activeSuggestionIndex,
+    setActiveSuggestionIndex: suggestionsState.setActiveSuggestionIndex,
+    inputValue: suggestionsState.inputValue,
+    value,
+    onChange,
+    commitInput: commitState.commitInput,
+    inputRef: suggestionsState.inputRef,
+    setIsFocused: suggestionsState.setIsFocused,
+  });
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <div
-          className={cn(
-            'border-input bg-background ring-offset-background focus-within:ring-ring flex min-h-11 w-full flex-wrap items-center gap-1 rounded-md border px-2 py-1 focus-within:ring-1',
-            disabled && 'cursor-not-allowed opacity-60'
-          )}
-          onMouseDown={() => {
-            if (!disabled) {
-              inputRef.current?.focus();
-            }
-          }}
-        >
-          {selectedLabels.map((label) => (
-            <Badge
-              key={label.id}
-              variant="secondary"
-              className="gap-1 rounded-full px-2 py-0.5 text-xs"
-            >
-              <span>#{label.name}</span>
-              <button
-                type="button"
-                className="hover:text-foreground/80 text-muted-foreground"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  removeLabel(label.id);
-                }}
-                aria-label={`Remove ${label.name}`}
-                disabled={disabled || isCreating}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-          <input
-            ref={inputRef}
-            value={inputValue}
-            onChange={(event) => {
-              setInputValue(event.target.value);
-              setActiveSuggestionIndex(0);
-            }}
-            onFocus={() => {
-              if (blurTimeoutRef.current) {
-                window.clearTimeout(blurTimeoutRef.current);
-                blurTimeoutRef.current = null;
-              }
-              setIsFocused(true);
-            }}
-            onBlur={() => {
-              blurTimeoutRef.current = window.setTimeout(() => setIsFocused(false), 100);
-            }}
-            onKeyDown={handleKeyDown}
-            disabled={disabled || isCreating}
-            placeholder={selectedLabels.length === 0 ? placeholder : 'Add another label'}
-            className="placeholder:text-muted-foreground h-8 min-w-[140px] flex-1 bg-transparent px-1 text-sm outline-none"
-          />
-          {isCreating ? <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" /> : null}
-        </div>
-
-        {showSuggestions ? (
-          <div
-            className="bg-popover border-border absolute z-50 mt-1 w-full rounded-md border p-1 shadow-lg"
-            role="listbox"
-          >
-            {suggestions.length === 0 ? (
-              <div className="text-muted-foreground px-2 py-2 text-xs">
-                Press Enter to create this label
-              </div>
-            ) : (
-              suggestions.map((suggestion, index) => (
-                <button
-                  key={suggestion.kind === 'existing' ? suggestion.id : `create-${suggestion.name}`}
-                  type="button"
-                  className={cn(
-                    'hover:bg-accent hover:text-accent-foreground flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm',
-                    index === activeSuggestionIndex && 'bg-accent text-accent-foreground'
-                  )}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setActiveSuggestionIndex(index)}
-                  onClick={() => {
-                    void commitInput(suggestion);
-                    inputRef.current?.focus();
-                  }}
-                  role="option"
-                  aria-selected={index === activeSuggestionIndex}
-                >
-                  {suggestion.kind === 'existing' ? (
-                    <span>#{suggestion.name}</span>
-                  ) : (
-                    <span>
-                      Create <span className="font-medium">#{suggestion.name}</span>
-                    </span>
-                  )}
-                  {suggestion.kind === 'create' ? (
-                    <span className="text-muted-foreground text-[11px]">Enter</span>
-                  ) : null}
-                </button>
-              ))
-            )}
-          </div>
-        ) : null}
-      </div>
-      <p className="text-muted-foreground text-xs">
-        Enter, Tab, or comma to add. Backspace removes the last label.
-      </p>
-    </div>
+    <AssetLabelInputView
+      disabled={disabled}
+      placeholder={placeholder}
+      suggestionsState={suggestionsState}
+      commitState={commitState}
+      handleKeyDown={handleKeyDown}
+    />
   );
 }

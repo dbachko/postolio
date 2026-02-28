@@ -27,6 +27,19 @@ const ENTERPRISE_FEATURES = [
   'SLA and priority support',
 ];
 
+function FeatureList({ features }: { features: string[] }) {
+  return (
+    <div className="space-y-2 text-sm">
+      {features.map((feature) => (
+        <div key={feature} className="flex items-start gap-2">
+          <Check className="text-muted-foreground mt-0.5 h-4 w-4" />
+          <span>{feature}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PricingCards({ cycle, proPriceId, upgrading, onUpgrade }: PricingCardsProps) {
   const proPriceLabel = cycle === 'annual' ? '$290/year' : '$29/month';
 
@@ -68,14 +81,7 @@ export function PricingCards({ cycle, proPriceId, upgrading, onUpgrade }: Pricin
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-4">
           <div className="text-3xl font-semibold">{proPriceLabel}</div>
-          <div className="space-y-2 text-sm">
-            {PRO_FEATURES.map((feature) => (
-              <div key={feature} className="flex items-start gap-2">
-                <Check className="text-muted-foreground mt-0.5 h-4 w-4" />
-                <span>{feature}</span>
-              </div>
-            ))}
-          </div>
+          <FeatureList features={PRO_FEATURES} />
           <Button
             className="mt-auto w-full"
             disabled={upgrading || !proPriceId}
@@ -100,14 +106,7 @@ export function PricingCards({ cycle, proPriceId, upgrading, onUpgrade }: Pricin
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-4">
           <div className="text-3xl font-semibold">Custom</div>
-          <div className="space-y-2 text-sm">
-            {ENTERPRISE_FEATURES.map((feature) => (
-              <div key={feature} className="flex items-start gap-2">
-                <Check className="text-muted-foreground mt-0.5 h-4 w-4" />
-                <span>{feature}</span>
-              </div>
-            ))}
-          </div>
+          <FeatureList features={ENTERPRISE_FEATURES} />
           <Button asChild variant="outline" className="mt-auto w-full">
             <a href="mailto:hello@postolio.example?subject=Postolio%20Enterprise">Contact sales</a>
           </Button>

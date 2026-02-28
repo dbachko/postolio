@@ -46,30 +46,23 @@ export class NotificationsClient {
     brandId?: string;
   }) {
     const qs = new URLSearchParams();
-    if (params?.cursor) {
-      qs.set('cursor', params.cursor);
+    const query = {
+      cursor: params?.cursor,
+      limit: params?.limit ? String(params.limit) : undefined,
+      filter: params?.filter,
+      category: params?.category,
+      type: params?.type,
+      since: params?.since,
+      brandId: params?.brandId,
+    };
+    for (const [key, value] of Object.entries(query)) {
+      if (value) {
+        qs.set(key, value);
+      }
     }
-    if (params?.limit) {
-      qs.set('limit', String(params.limit));
-    }
-    if (params?.filter) {
-      qs.set('filter', params.filter);
-    }
-    if (params?.category) {
-      qs.set('category', params.category);
-    }
-    if (params?.type) {
-      qs.set('type', params.type);
-    }
-    if (params?.since) {
-      qs.set('since', params.since);
-    }
-    if (params?.brandId) {
-      qs.set('brandId', params.brandId);
-    }
-    const query = qs.toString();
+    const queryString = qs.toString();
     return this.request(
-      `/api/notifications${query ? `?${query}` : ''}`
+      `/api/notifications${queryString ? `?${queryString}` : ''}`
     ) as Promise<NotificationListResponse>;
   }
 

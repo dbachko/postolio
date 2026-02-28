@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import type { ThemePreference, WeekStartPreference } from '@postolio/database';
 import { TimezoneService } from '../services/timezone.js';
@@ -6,7 +6,6 @@ import { assertBrandOwnership } from '../services/ownership.js';
 
 const prisma = getDatabaseClient();
 
-// Type guards for proper input validation
 function isTimezoneUpdateBody(
   body: unknown
 ): body is { timezone: string; timezoneAutoDetected: boolean } {
@@ -15,7 +14,6 @@ function isTimezoneUpdateBody(
   }
 
   const obj = body as Record<string, unknown>;
-
   return typeof obj.timezone === 'string' && typeof obj.timezoneAutoDetected === 'boolean';
 }
 
@@ -25,11 +23,9 @@ function isBrandTimezoneUpdateBody(body: unknown): body is { timezone: string | 
   }
 
   const obj = body as Record<string, unknown>;
-
   return obj.timezone === null || typeof obj.timezone === 'string';
 }
 
-// Theme update body guard (single field)
 function isThemeUpdateBody(body: unknown): body is { theme: 'system' | 'light' | 'dark' } {
   if (!body || typeof body !== 'object') {
     return false;
@@ -39,7 +35,6 @@ function isThemeUpdateBody(body: unknown): body is { theme: 'system' | 'light' |
   return theme === 'system' || theme === 'light' || theme === 'dark';
 }
 
-// Week start update body guard
 function isWeekStartUpdateBody(body: unknown): body is { weekStart: 'monday' | 'sunday' } {
   if (!body || typeof body !== 'object') {
     return false;
@@ -48,39 +43,25 @@ function isWeekStartUpdateBody(body: unknown): body is { weekStart: 'monday' | '
   return obj.weekStart === 'monday' || obj.weekStart === 'sunday';
 }
 
-// Validation helpers using type guards
 function validateTimezoneUpdate(
   body: unknown
 ): { timezone: string; timezoneAutoDetected: boolean } | null {
-  if (isTimezoneUpdateBody(body)) {
-    return body;
-  }
-  return null;
+  return isTimezoneUpdateBody(body) ? body : null;
 }
 
 function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null } | null {
-  if (isBrandTimezoneUpdateBody(body)) {
-    return body;
-  }
-  return null;
+  return isBrandTimezoneUpdateBody(body) ? body : null;
 }
 
 function validateThemeUpdate(body: unknown): { theme: 'system' | 'light' | 'dark' } | null {
-  if (isThemeUpdateBody(body)) {
-    return body as { theme: 'system' | 'light' | 'dark' };
-  }
-  return null;
+  return isThemeUpdateBody(body) ? body : null;
 }
 
 function validateWeekStartUpdate(body: unknown): { weekStart: 'monday' | 'sunday' } | null {
-  if (isWeekStartUpdateBody(body)) {
-    return body as { weekStart: 'monday' | 'sunday' };
-  }
-  return null;
+  return isWeekStartUpdateBody(body) ? body : null;
 }
 
-const userRoutes: FastifyPluginAsync = async (fastify) => {
-  // Update user UI preferences: right sidebar width per type
+function registerSidebarWidthRoute(fastify: FastifyInstance) {
   fastify.patch(
     '/api/users/ui/sidebar-width',
     { preHandler: fastify.authenticate },
@@ -88,26 +69,29 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
       try {
         const body = request.body as { type?: string; width?: number };
-        const type = typeof body?.type === 'string' ? (body.type as string) : null;
+        const type = typeof body?.type === 'string' ? body.type : null;
         const width = Number(body?.width);
+
         if (!type || !Number.isFinite(width) || width <= 0) {
           return reply
             .status(400)
             .send({ error: 'Invalid body. Expected { type: string, width: number }' });
         }
+
         const existing = await prisma.user.findUnique({
           where: { id: userId },
           select: { uiPreferences: true },
         });
         const prefs = (existing?.uiPreferences as Record<string, unknown>) || {};
-        const right: Record<string, unknown> =
-          (prefs.rightSidebar as Record<string, unknown>) || {};
+        const right = (prefs.rightSidebar as Record<string, unknown>) || {};
         right[type] = width;
+
         const newPrefs: Record<string, unknown> = { ...prefs, rightSidebar: right };
         await prisma.user.update({
           where: { id: userId },
           data: { uiPreferences: newPrefs as any },
         });
+
         return { success: true };
       } catch (err) {
         request.log.error({ err }, 'Failed to update right sidebar width');
@@ -115,8 +99,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  // Update user timezone preferences
+function registerUserTimezoneRoute(fastify: FastifyInstance) {
   fastify.patch(
     '/api/users/timezone',
     { preHandler: fastify.authenticate },
@@ -124,7 +109,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Validate request body
         const validatedData = validateTimezoneUpdate(request.body);
         if (!validatedData) {
           return reply.status(400).send({
@@ -134,8 +118,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const { timezone, timezoneAutoDetected } = validatedData;
-
-        // Validate timezone if not auto-detected
         if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
           return reply.status(400).send({ error: 'Invalid timezone' });
         }
@@ -143,7 +125,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: {
-            timezone, // Store the actual timezone value even when auto-detected
+            timezone,
             timezoneAutoDetected,
           },
           select: {
@@ -160,8 +142,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  // Update user theme preference (system|light|dark)
+function registerThemeRoute(fastify: FastifyInstance) {
   fastify.patch(
     '/api/users/theme',
     { preHandler: fastify.authenticate },
@@ -176,12 +159,10 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        const { theme } = validated;
-
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: {
-            themePreference: theme as unknown as ThemePreference,
+            themePreference: validated.theme as unknown as ThemePreference,
           },
           select: {
             id: true,
@@ -202,8 +183,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  // Update user week start preference (monday|sunday)
+function registerWeekStartRoute(fastify: FastifyInstance) {
   fastify.patch(
     '/api/users/week-start',
     { preHandler: fastify.authenticate },
@@ -218,14 +200,15 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        const { weekStart } = validated;
-
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: {
-            weekStartPreference: weekStart as WeekStartPreference,
+            weekStartPreference: validated.weekStart as WeekStartPreference,
           },
-          select: { id: true, weekStartPreference: true },
+          select: {
+            id: true,
+            weekStartPreference: true,
+          },
         });
 
         return {
@@ -241,8 +224,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  // Get brand timezone
+function registerBrandTimezoneGetRoute(fastify: FastifyInstance) {
   fastify.get(
     '/api/brands/:brandId/timezone',
     { preHandler: fastify.authenticate },
@@ -250,9 +234,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
         const { brandId } = request.params as { brandId: string };
-
         const brand = await assertBrandOwnership(userId, brandId);
-
         return { timezone: brand.postingTimezone };
       } catch (err: unknown) {
         request.log.error({ err }, 'Failed to get brand timezone');
@@ -260,8 +242,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  // Update brand timezone
+function registerBrandTimezonePatchRoute(fastify: FastifyInstance) {
   fastify.patch(
     '/api/brands/:brandId/timezone',
     { preHandler: fastify.authenticate },
@@ -270,7 +253,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
         const { brandId } = request.params as { brandId: string };
 
-        // Validate request body
         const validatedData = validateBrandTimezoneUpdate(request.body);
         if (!validatedData) {
           return reply.status(400).send({
@@ -279,10 +261,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const { timezone } = validatedData;
-
         await assertBrandOwnership(userId, brandId);
 
-        // Validate timezone if provided
         if (timezone && !TimezoneService.isValidTimezone(timezone)) {
           return reply.status(400).send({ error: 'Invalid timezone' });
         }
@@ -305,6 +285,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
+
+function registerUserRoutes(fastify: FastifyInstance) {
+  registerSidebarWidthRoute(fastify);
+  registerUserTimezoneRoute(fastify);
+  registerThemeRoute(fastify);
+  registerWeekStartRoute(fastify);
+  registerBrandTimezoneGetRoute(fastify);
+  registerBrandTimezonePatchRoute(fastify);
+}
+
+const userRoutes: FastifyPluginAsync = async (fastify) => {
+  registerUserRoutes(fastify);
 };
 
 export default userRoutes;

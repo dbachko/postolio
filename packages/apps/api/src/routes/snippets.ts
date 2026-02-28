@@ -3,10 +3,22 @@
  * CRUD operations for managing reusable text snippets for social media captions
  */
 
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../config/database.js';
 import { logger as baseLogger } from '@postolio/logger';
 import { isSnippetsEnabledForUser } from '../utils/feature-flags.js';
+import {
+  buildSnippetUpdateData,
+  buildSnippetWhereFilter,
+  ensureSnippetTitleIsUniqueForUpdate,
+  normalizeTags,
+  type SnippetQueryParams,
+  trimNullableCategory,
+  type UpdateSnippetBody,
+  validateSnippetUpdateContent,
+  verifyBrandOwnership,
+  verifySnippetOwnership,
+} from './snippets.helpers.js';
 
 const logger = baseLogger.child({ module: 'snippets-routes' });
 
@@ -29,14 +41,6 @@ async function requireSnippetsFeature(request: AuthenticatedRequest, reply: Fast
   }
 }
 
-interface SnippetQueryParams {
-  search?: string;
-  tags?: string; // Comma-separated
-  category?: string;
-  limit?: number;
-  offset?: number;
-}
-
 interface CreateSnippetBody {
   title: string;
   content: string;
@@ -45,79 +49,37 @@ interface CreateSnippetBody {
   isFavorite?: boolean;
 }
 
-interface UpdateSnippetBody {
-  title?: string;
-  content?: string;
-  tags?: string[];
-  category?: string;
-  isFavorite?: boolean;
-  isArchived?: boolean;
+interface BrandRouteParams {
+  brandId: string;
 }
 
-const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
-  /**
-   * GET /api/brands/:brandId/snippets
-   * List all snippets for a brand with optional filtering
-   */
+interface SnippetRouteParams extends BrandRouteParams {
+  snippetId: string;
+}
+
+function registerListSnippetsRoute(fastify: FastifyInstance) {
   fastify.get<{
-    Params: { brandId: string };
+    Params: BrandRouteParams;
     Querystring: SnippetQueryParams;
   }>(
     '/brands/:brandId/snippets',
     { preHandler: [fastify.authenticate, requireSnippetsFeature] },
     async (request, reply) => {
       const { brandId } = request.params;
-      const { search, tags, category, limit = 100, offset = 0 } = request.query;
+      const { limit = 100, offset = 0, search, tags, category } = request.query;
       const userId = request.user!.id;
 
       try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
+        const isOwned = await verifyBrandOwnership(brandId, userId, reply);
+        if (!isOwned) {
+          return;
         }
 
-        // Build filter conditions
-        const where: any = {
-          brandId,
-          isArchived: false,
-        };
-
-        // Search in title and content
-        if (search) {
-          where.OR = [
-            { title: { contains: search, mode: 'insensitive' } },
-            { content: { contains: search, mode: 'insensitive' } },
-          ];
-        }
-
-        // Filter by tags (must include all specified tags)
-        if (tags) {
-          const tagArray = tags
-            .split(',')
-            .map((t) => t.trim())
-            .filter(Boolean);
-          if (tagArray.length > 0) {
-            where.tags = { hasEvery: tagArray };
-          }
-        }
-
-        // Filter by category
-        if (category) {
-          where.category = category;
-        }
-
+        const where = buildSnippetWhereFilter(brandId, request.query);
         const [snippets, total] = await Promise.all([
           prisma.snippet.findMany({
             where,
-            orderBy: [
-              { isFavorite: 'desc' }, // Favorites first
-              { lastUsedAt: 'desc' }, // Recently used
-              { createdAt: 'desc' }, // Then newest
-            ],
+            orderBy: [{ isFavorite: 'desc' }, { lastUsedAt: 'desc' }, { createdAt: 'desc' }],
             take: limit,
             skip: offset,
           }),
@@ -132,12 +94,7 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
           filters: { search, tags, category },
         });
 
-        return reply.send({
-          snippets,
-          total,
-          limit,
-          offset,
-        });
+        return reply.send({ snippets, total, limit, offset });
       } catch (error) {
         logger.error('Error fetching snippets', {
           brandId,
@@ -147,13 +104,11 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * POST /api/brands/:brandId/snippets
-   * Create a new snippet
-   */
+function registerCreateSnippetRoute(fastify: FastifyInstance) {
   fastify.post<{
-    Params: { brandId: string };
+    Params: BrandRouteParams;
     Body: CreateSnippetBody;
   }>(
     '/brands/:brandId/snippets',
@@ -164,29 +119,21 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: { id: brandId, userId },
-        });
-
-        if (!brand) {
-          return reply.code(404).send({ error: 'Brand not found' });
+        const isOwned = await verifyBrandOwnership(brandId, userId, reply);
+        if (!isOwned) {
+          return;
         }
 
-        // Validation
         if (!title?.trim()) {
           return reply.code(400).send({ error: 'Title is required' });
         }
-
         if (!content?.trim()) {
           return reply.code(400).send({ error: 'Content is required' });
         }
-
         if (content.length > 2000) {
           return reply.code(400).send({ error: 'Content must be 2000 characters or less' });
         }
 
-        // Check for duplicate title
         const existing = await prisma.snippet.findFirst({
           where: {
             brandId,
@@ -194,13 +141,9 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
             isArchived: false,
           },
         });
-
         if (existing) {
           return reply.code(409).send({ error: 'A snippet with this title already exists' });
         }
-
-        // Normalize tags to lowercase
-        const normalizedTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
 
         const snippet = await prisma.snippet.create({
           data: {
@@ -208,8 +151,8 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
             userId,
             title: title.trim(),
             content: content.trim(),
-            tags: normalizedTags,
-            category: category?.trim() || null,
+            tags: normalizeTags(tags),
+            category: trimNullableCategory(category),
             isFavorite,
           },
         });
@@ -231,13 +174,11 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * PUT /api/brands/:brandId/snippets/:snippetId
-   * Update an existing snippet
-   */
+function registerUpdateSnippetRoute(fastify: FastifyInstance) {
   fastify.put<{
-    Params: { brandId: string; snippetId: string };
+    Params: SnippetRouteParams;
     Body: UpdateSnippetBody;
   }>(
     '/brands/:brandId/snippets/:snippetId',
@@ -248,55 +189,30 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify snippet ownership
-        const snippet = await prisma.snippet.findFirst({
-          where: {
-            id: snippetId,
-            brandId,
-            brand: { userId },
-          },
-        });
-
+        const snippet = await verifySnippetOwnership(brandId, snippetId, userId, reply);
         if (!snippet) {
-          return reply.code(404).send({ error: 'Snippet not found' });
+          return;
         }
 
-        // Validation
-        if (content && content.length > 2000) {
-          return reply.code(400).send({ error: 'Content must be 2000 characters or less' });
+        const canProceedWithContent = validateSnippetUpdateContent(content, reply);
+        if (!canProceedWithContent) {
+          return;
         }
 
-        // Check for duplicate title if title is being updated
-        if (title && title.trim() !== snippet.title) {
-          const existing = await prisma.snippet.findFirst({
-            where: {
-              brandId,
-              title: title.trim(),
-              isArchived: false,
-              id: { not: snippetId },
-            },
-          });
-
-          if (existing) {
-            return reply.code(409).send({ error: 'A snippet with this title already exists' });
-          }
+        const hasUniqueTitle = await ensureSnippetTitleIsUniqueForUpdate({
+          brandId,
+          snippetId,
+          currentTitle: snippet.title,
+          incomingTitle: title,
+          reply,
+        });
+        if (!hasUniqueTitle) {
+          return;
         }
-
-        // Normalize tags to lowercase if provided
-        const normalizedTags = tags
-          ? tags.map((t) => t.trim().toLowerCase()).filter(Boolean)
-          : undefined;
 
         const updated = await prisma.snippet.update({
           where: { id: snippetId },
-          data: {
-            ...(title && { title: title.trim() }),
-            ...(content && { content: content.trim() }),
-            ...(normalizedTags !== undefined && { tags: normalizedTags }),
-            ...(category !== undefined && { category: category?.trim() || null }),
-            ...(isFavorite !== undefined && { isFavorite }),
-            ...(isArchived !== undefined && { isArchived }),
-          },
+          data: buildSnippetUpdateData({ title, content, tags, category, isFavorite, isArchived }),
         });
 
         logger.info('Updated snippet', {
@@ -316,13 +232,11 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * POST /api/brands/:brandId/snippets/:snippetId/usage
-   * Track snippet usage (increment count, update last used)
-   */
+function registerTrackSnippetUsageRoute(fastify: FastifyInstance) {
   fastify.post<{
-    Params: { brandId: string; snippetId: string };
+    Params: SnippetRouteParams;
   }>(
     '/brands/:brandId/snippets/:snippetId/usage',
     { preHandler: [fastify.authenticate, requireSnippetsFeature] },
@@ -331,17 +245,9 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify snippet ownership
-        const snippet = await prisma.snippet.findFirst({
-          where: {
-            id: snippetId,
-            brandId,
-            brand: { userId },
-          },
-        });
-
+        const snippet = await verifySnippetOwnership(brandId, snippetId, userId, reply);
         if (!snippet) {
-          return reply.code(404).send({ error: 'Snippet not found' });
+          return;
         }
 
         const updated = await prisma.snippet.update({
@@ -370,13 +276,11 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
 
-  /**
-   * DELETE /api/brands/:brandId/snippets/:snippetId
-   * Delete (archive) a snippet
-   */
+function registerDeleteSnippetRoute(fastify: FastifyInstance) {
   fastify.delete<{
-    Params: { brandId: string; snippetId: string };
+    Params: SnippetRouteParams;
   }>(
     '/brands/:brandId/snippets/:snippetId',
     { preHandler: [fastify.authenticate, requireSnippetsFeature] },
@@ -385,20 +289,11 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       try {
-        // Verify snippet ownership
-        const snippet = await prisma.snippet.findFirst({
-          where: {
-            id: snippetId,
-            brandId,
-            brand: { userId },
-          },
-        });
-
+        const snippet = await verifySnippetOwnership(brandId, snippetId, userId, reply);
         if (!snippet) {
-          return reply.code(404).send({ error: 'Snippet not found' });
+          return;
         }
 
-        // Soft delete (archive)
         await prisma.snippet.update({
           where: { id: snippetId },
           data: { isArchived: true },
@@ -421,6 +316,18 @@ const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+}
+
+function registerSnippetRoutes(fastify: FastifyInstance) {
+  registerListSnippetsRoute(fastify);
+  registerCreateSnippetRoute(fastify);
+  registerUpdateSnippetRoute(fastify);
+  registerTrackSnippetUsageRoute(fastify);
+  registerDeleteSnippetRoute(fastify);
+}
+
+const snippetsRoutes: FastifyPluginAsync = async (fastify) => {
+  registerSnippetRoutes(fastify);
 };
 
 export default snippetsRoutes;

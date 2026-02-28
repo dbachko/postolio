@@ -32,111 +32,122 @@ export interface ApproveContentBody {
   scheduledAt?: string;
 }
 
-/**
- * Validates the request body for content creation
- */
-export function validateRequestBody(body: CreateManualContentBody) {
-  if (!body || typeof body !== 'object') {
-    return {
-      ok: false,
-      error: {
-        error: 'Invalid request body',
-        details: ['Request body must be an object'],
-      },
-    };
-  }
+function buildValidationError(error: string, detail: string) {
+  return {
+    ok: false as const,
+    error: {
+      error,
+      details: [detail],
+    },
+  };
+}
 
+function validateCoreCreateBody(body: CreateManualContentBody) {
   if (!body.brandId || typeof body.brandId !== 'string') {
-    return {
-      ok: false,
-      error: {
-        error: 'brandId is required',
-        details: ['brandId is required'],
-      },
-    };
+    return buildValidationError('brandId is required', 'brandId is required');
   }
-
   if (body.caption == null || typeof body.caption !== 'string') {
-    return {
-      ok: false,
-      error: {
-        error: 'caption is required',
-        details: ['caption is required'],
-      },
-    };
+    return buildValidationError('caption is required', 'caption is required');
   }
-
   if (body.assetIds !== undefined && !Array.isArray(body.assetIds)) {
-    return {
-      ok: false,
-      error: {
-        error: 'assetIds must be an array if provided',
-        details: ['assetIds must be an array if provided'],
-      },
-    };
+    return buildValidationError(
+      'assetIds must be an array if provided',
+      'assetIds must be an array if provided'
+    );
   }
+  return null;
+}
 
-  if (body.firstComment !== undefined) {
-    if (typeof body.firstComment !== 'string') {
-      return {
-        ok: false,
-        error: {
-          error: 'firstComment must be a string if provided',
-          details: ['firstComment must be a string if provided'],
-        },
-      };
-    }
-    if (body.firstComment.length > 2200) {
-      return {
-        ok: false,
-        error: {
-          error: 'firstComment must be at most 2200 characters',
-          details: ['firstComment must be at most 2200 characters'],
-        },
-      };
-    }
+function validateFirstCommentBody(body: CreateManualContentBody) {
+  if (body.firstComment === undefined) {
+    return null;
   }
+  if (typeof body.firstComment !== 'string') {
+    return buildValidationError(
+      'firstComment must be a string if provided',
+      'firstComment must be a string if provided'
+    );
+  }
+  if (body.firstComment.length > 2200) {
+    return buildValidationError(
+      'firstComment must be at most 2200 characters',
+      'firstComment must be at most 2200 characters'
+    );
+  }
+  return null;
+}
 
+function validateTargetSocialAccountIdBody(body: CreateManualContentBody) {
   if (
     body.targetSocialAccountId !== undefined &&
     body.targetSocialAccountId !== null &&
     typeof body.targetSocialAccountId !== 'string'
   ) {
-    return {
-      ok: false,
-      error: {
-        error: 'targetSocialAccountId must be a string or null if provided',
-        details: ['targetSocialAccountId must be a string or null if provided'],
-      },
-    };
+    return buildValidationError(
+      'targetSocialAccountId must be a string or null if provided',
+      'targetSocialAccountId must be a string or null if provided'
+    );
+  }
+  return null;
+}
+
+function validateTargetSocialAccountIdsBody(body: CreateManualContentBody) {
+  if (body.targetSocialAccountIds === undefined) {
+    return null;
+  }
+  if (!Array.isArray(body.targetSocialAccountIds)) {
+    return buildValidationError(
+      'targetSocialAccountIds must be an array if provided',
+      'targetSocialAccountIds must be an array if provided'
+    );
   }
 
-  if (body.targetSocialAccountIds !== undefined) {
-    if (!Array.isArray(body.targetSocialAccountIds)) {
-      return {
-        ok: false,
-        error: {
-          error: 'targetSocialAccountIds must be an array if provided',
-          details: ['targetSocialAccountIds must be an array if provided'],
-        },
-      };
-    }
+  const normalized = body.targetSocialAccountIds
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
 
-    const normalized = body.targetSocialAccountIds
-      .filter((v): v is string => typeof v === 'string')
-      .map((v) => v.trim())
-      .filter((v) => v.length > 0);
+  if (normalized.length === 0 && body.scheduledAt) {
+    return buildValidationError(
+      'targetSocialAccountIds must include at least one destination',
+      'targetSocialAccountIds must include at least one destination'
+    );
+  }
+  return null;
+}
 
-    if (normalized.length === 0) {
-      if (body.scheduledAt) {
-        return {
-          ok: false,
-          error: {
-            error: 'targetSocialAccountIds must include at least one destination',
-            details: ['targetSocialAccountIds must include at least one destination'],
-          },
-        };
-      }
+function resolveInstagramMediaTypeHint(
+  normalizedContentType: ValidationContentType,
+  assets: AssetRecord[]
+): ValidationMediaType {
+  if (normalizedContentType === 'reel') {
+    return 'video';
+  }
+  if (assets.length === 1 && assets[0]?.fileType === 'video') {
+    return 'video';
+  }
+  return 'image';
+}
+
+/**
+ * Validates the request body for content creation
+ */
+export function validateRequestBody(body: CreateManualContentBody) {
+  if (!body || typeof body !== 'object') {
+    return buildValidationError('Invalid request body', 'Request body must be an object');
+  }
+
+  const checkers = [
+    validateCoreCreateBody,
+    validateFirstCommentBody,
+    validateTargetSocialAccountIdBody,
+    validateTargetSocialAccountIdsBody,
+  ] as const;
+
+  for (const checker of checkers) {
+    const result = checker(body);
+    if (result) {
+      return result;
     }
   }
 
@@ -181,12 +192,7 @@ export function validateInstagramContentForCreate(params: {
     type: (asset.fileType === 'video' ? 'video' : 'image') as ValidationMediaType,
   }));
 
-  const mediaTypeHint: ValidationMediaType =
-    normalizedContentType === 'reel'
-      ? 'video'
-      : assets.length === 1 && assets[0]?.fileType === 'video'
-        ? 'video'
-        : 'image';
+  const mediaTypeHint = resolveInstagramMediaTypeHint(normalizedContentType, assets);
 
   const validation = validateContentPayload({
     platform: 'instagram',
@@ -385,7 +391,7 @@ export async function handleScheduling(contentId: string, scheduledAt?: string) 
         return { upgradeRequired: true, message: scheduleResult.error };
       }
     } else {
-      console.log(`Content ${contentId} scheduled successfully in AWS`);
+      process.stdout.write(`Content ${contentId} scheduled successfully in AWS\n`);
     }
   } catch (scheduleError) {
     console.error('Error calling scheduler service:', scheduleError);

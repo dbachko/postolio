@@ -1,31 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
-import { type Session, session as sessionApi } from '@/lib/api';
-import { SessionCard } from '../session-card';
-import { RevokeSessionDialog } from '../revoke-session-dialog';
-import { RevokeAllSessionsDialog } from '../revoke-all-sessions-dialog';
-import { EditDeviceNameDialog } from '../edit-device-name-dialog';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { LogOut, Loader2, AlertCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+
+import { type Session, session as sessionApi } from '@/lib/api';
+import {
+  SessionListContent,
+  SessionListDialogs,
+  SessionListErrorState,
+  SessionListLoadingState,
+} from './components/session-list-sections';
 
 interface SessionListProps {
   onSessionsChange?: (count: number) => void;
 }
 
-export function SessionList({ onSessionsChange }: SessionListProps) {
+function useSessionData(onSessionsChange?: (count: number) => void) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Dialog states
-  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
-  const [isRevoking, setIsRevoking] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [revokeAllDialogOpen, setRevokeAllDialogOpen] = useState(false);
-  const [isRevokingAll, setIsRevokingAll] = useState(false);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -43,185 +34,203 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
   }, [onSessionsChange]);
 
   useEffect(() => {
-    loadSessions();
+    void loadSessions();
   }, [loadSessions]);
 
-  const handleRevoke = async (sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) {
-      return;
-    }
+  return { sessions, isLoading, error, loadSessions };
+}
 
-    setSelectedSession(session);
-    setRevokeDialogOpen(true);
-  };
+function useRevokeAllSessions(params: {
+  loadSessions: () => Promise<void>;
+  setRevokeAllDialogOpen: (open: boolean) => void;
+}) {
+  const [isRevokingAll, setIsRevokingAll] = useState(false);
 
-  const confirmRevoke = async () => {
-    if (!selectedSession) {
-      return;
-    }
-
-    setIsRevoking(true);
-    try {
-      await sessionApi.revokeSession(selectedSession.id);
-      toast.success('Session revoked successfully');
-      await loadSessions();
-    } catch (err) {
-      console.error('Failed to revoke session:', err);
-      toast.error('Failed to revoke session. Please try again.');
-    } finally {
-      setIsRevoking(false);
-      setRevokeDialogOpen(false);
-      setSelectedSession(null);
-    }
-  };
-
-  const handleEditDeviceName = async (sessionId: string, _currentName: string) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) {
-      return;
-    }
-
-    setSelectedSession(session);
-    setEditDialogOpen(true);
-  };
-
-  const confirmEditDeviceName = async (newName: string) => {
-    if (!selectedSession) {
-      return;
-    }
-
-    setIsUpdating(true);
-    try {
-      await sessionApi.updateSessionDeviceName(selectedSession.id, newName);
-      toast.success('Device name updated successfully');
-      await loadSessions();
-    } catch (err) {
-      console.error('Failed to update device name:', err);
-      toast.error('Failed to update device name. Please try again.');
-    } finally {
-      setIsUpdating(false);
-      setEditDialogOpen(false);
-      setSelectedSession(null);
-    }
-  };
-
-  const handleRevokeAll = () => {
-    setRevokeAllDialogOpen(true);
-  };
-
-  const confirmRevokeAll = async () => {
+  const confirmRevokeAll = useCallback(async () => {
     setIsRevokingAll(true);
     try {
       await sessionApi.revokeAllSessions();
       toast.success('All other sessions revoked successfully');
-      await loadSessions();
+      await params.loadSessions();
     } catch (err) {
       console.error('Failed to revoke all sessions:', err);
       toast.error('Failed to revoke sessions. Please try again.');
     } finally {
       setIsRevokingAll(false);
-      setRevokeAllDialogOpen(false);
+      params.setRevokeAllDialogOpen(false);
     }
+  }, [params]);
+
+  return { isRevokingAll, confirmRevokeAll };
+}
+
+function findSessionById(sessions: Session[], sessionId: string): Session | null {
+  return sessions.find((entry) => entry.id === sessionId) || null;
+}
+
+function useSessionMutationActions(params: {
+  selectedSession: Session | null;
+  loadSessions: () => Promise<void>;
+  setIsRevoking: (value: boolean) => void;
+  setRevokeDialogOpen: (open: boolean) => void;
+  setIsUpdating: (value: boolean) => void;
+  setEditDialogOpen: (open: boolean) => void;
+  setSelectedSession: (session: Session | null) => void;
+}) {
+  const confirmRevoke = useCallback(async () => {
+    if (!params.selectedSession) {
+      return;
+    }
+
+    params.setIsRevoking(true);
+    try {
+      await sessionApi.revokeSession(params.selectedSession.id);
+      toast.success('Session revoked successfully');
+      await params.loadSessions();
+    } catch (err) {
+      console.error('Failed to revoke session:', err);
+      toast.error('Failed to revoke session. Please try again.');
+    } finally {
+      params.setIsRevoking(false);
+      params.setRevokeDialogOpen(false);
+      params.setSelectedSession(null);
+    }
+  }, [params]);
+
+  const confirmEditDeviceName = useCallback(
+    async (newName: string) => {
+      if (!params.selectedSession) {
+        return;
+      }
+
+      params.setIsUpdating(true);
+      try {
+        await sessionApi.updateSessionDeviceName(params.selectedSession.id, newName);
+        toast.success('Device name updated successfully');
+        await params.loadSessions();
+      } catch (err) {
+        console.error('Failed to update device name:', err);
+        toast.error('Failed to update device name. Please try again.');
+      } finally {
+        params.setIsUpdating(false);
+        params.setEditDialogOpen(false);
+        params.setSelectedSession(null);
+      }
+    },
+    [params]
+  );
+
+  return { confirmEditDeviceName, confirmRevoke };
+}
+
+function useSessionActions(params: { sessions: Session[]; loadSessions: () => Promise<void> }) {
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [revokeAllDialogOpen, setRevokeAllDialogOpen] = useState(false);
+  const { isRevokingAll, confirmRevokeAll } = useRevokeAllSessions({
+    loadSessions: params.loadSessions,
+    setRevokeAllDialogOpen,
+  });
+
+  const handleRevoke = useCallback(
+    (sessionId: string) => {
+      const session = findSessionById(params.sessions, sessionId);
+      if (!session) {
+        return;
+      }
+      setSelectedSession(session);
+      setRevokeDialogOpen(true);
+    },
+    [params.sessions]
+  );
+
+  const handleEditDeviceName = useCallback(
+    (sessionId: string) => {
+      const session = findSessionById(params.sessions, sessionId);
+      if (!session) {
+        return;
+      }
+      setSelectedSession(session);
+      setEditDialogOpen(true);
+    },
+    [params.sessions]
+  );
+
+  const { confirmEditDeviceName, confirmRevoke } = useSessionMutationActions({
+    selectedSession,
+    loadSessions: params.loadSessions,
+    setIsRevoking,
+    setRevokeDialogOpen,
+    setIsUpdating,
+    setEditDialogOpen,
+    setSelectedSession,
+  });
+
+  return {
+    revokeDialogOpen,
+    setRevokeDialogOpen,
+    editDialogOpen,
+    setEditDialogOpen,
+    selectedSession,
+    isRevoking,
+    isUpdating,
+    revokeAllDialogOpen,
+    setRevokeAllDialogOpen,
+    isRevokingAll,
+    handleRevoke,
+    confirmRevoke,
+    handleEditDeviceName,
+    confirmEditDeviceName,
+    confirmRevokeAll,
   };
+}
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="text-foreground h-8 w-8 animate-spin" />
-      </div>
-    );
+export function SessionList({ onSessionsChange }: SessionListProps) {
+  const data = useSessionData(onSessionsChange);
+  const actions = useSessionActions({
+    sessions: data.sessions,
+    loadSessions: data.loadSessions,
+  });
+
+  if (data.isLoading) {
+    return <SessionListLoadingState />;
   }
 
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
+  if (data.error) {
+    return <SessionListErrorState error={data.error} />;
   }
 
-  const currentSession = sessions.find((s) => s.isCurrent);
-  const otherSessions = sessions.filter((s) => !s.isCurrent);
+  const currentSession = data.sessions.find((session) => session.isCurrent);
+  const otherSessions = data.sessions.filter((session) => !session.isCurrent);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Your Devices</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {sessions.length} active {sessions.length === 1 ? 'session' : 'sessions'}
-          </p>
-        </div>
-        {otherSessions.length > 0 && (
-          <Button variant="destructive" onClick={handleRevokeAll}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Log out of all other devices
-          </Button>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        {/* Current session first */}
-        {currentSession && (
-          <div>
-            <h3 className="text-muted-foreground mb-2 text-sm font-medium">Current Session</h3>
-            <SessionCard
-              session={currentSession}
-              onRevoke={handleRevoke}
-              onEditDeviceName={handleEditDeviceName}
-            />
-          </div>
-        )}
-
-        {/* Other sessions */}
-        {otherSessions.length > 0 && (
-          <div>
-            <h3 className="text-muted-foreground mb-2 text-sm font-medium">Other Sessions</h3>
-            <div className="space-y-3">
-              {otherSessions.map((session) => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  onRevoke={handleRevoke}
-                  onEditDeviceName={handleEditDeviceName}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {sessions.length === 0 && (
-          <div className="text-muted-foreground py-12 text-center">
-            <p>No active sessions found.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Dialogs */}
-      <RevokeSessionDialog
-        open={revokeDialogOpen}
-        onOpenChange={setRevokeDialogOpen}
-        sessionDeviceName={selectedSession?.deviceName || ''}
-        onConfirm={confirmRevoke}
-        isLoading={isRevoking}
+    <>
+      <SessionListContent
+        sessions={data.sessions}
+        currentSession={currentSession}
+        otherSessions={otherSessions}
+        onRevoke={actions.handleRevoke}
+        onEditDeviceName={actions.handleEditDeviceName}
+        onRevokeAll={() => actions.setRevokeAllDialogOpen(true)}
       />
-
-      <EditDeviceNameDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        currentName={selectedSession?.deviceName || ''}
-        onConfirm={confirmEditDeviceName}
-        isLoading={isUpdating}
+      <SessionListDialogs
+        revokeDialogOpen={actions.revokeDialogOpen}
+        setRevokeDialogOpen={actions.setRevokeDialogOpen}
+        selectedSession={actions.selectedSession}
+        confirmRevoke={actions.confirmRevoke}
+        isRevoking={actions.isRevoking}
+        editDialogOpen={actions.editDialogOpen}
+        setEditDialogOpen={actions.setEditDialogOpen}
+        confirmEditDeviceName={actions.confirmEditDeviceName}
+        isUpdating={actions.isUpdating}
+        revokeAllDialogOpen={actions.revokeAllDialogOpen}
+        setRevokeAllDialogOpen={actions.setRevokeAllDialogOpen}
+        confirmRevokeAll={actions.confirmRevokeAll}
+        isRevokingAll={actions.isRevokingAll}
       />
-
-      <RevokeAllSessionsDialog
-        open={revokeAllDialogOpen}
-        onOpenChange={setRevokeAllDialogOpen}
-        onConfirm={confirmRevokeAll}
-        isLoading={isRevokingAll}
-      />
-    </div>
+    </>
   );
 }

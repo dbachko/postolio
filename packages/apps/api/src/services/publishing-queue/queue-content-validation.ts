@@ -35,6 +35,100 @@ function normalizeContentType(raw: unknown): ValidationContentType {
   return 'post';
 }
 
+function validationFailure(
+  code: QueueContentValidationErrorCode,
+  message: string,
+  details?: unknown
+) {
+  return details !== undefined
+    ? { ok: false as const, code, message, details }
+    : { ok: false as const, code, message };
+}
+
+function validateMediaRules(
+  normalizedContentType: ValidationContentType,
+  validationPlatform: string,
+  resolvedAssets: AssetRecord[]
+) {
+  if (normalizedContentType === 'reel') {
+    if (resolvedAssets.length !== 1 || resolvedAssets[0]?.fileType !== 'video') {
+      return validationFailure('invalid_media', 'Reels require exactly one video asset.');
+    }
+  }
+
+  if (resolvedAssets.length > 1) {
+    const nonImages = resolvedAssets.filter((asset) => asset.fileType !== 'image');
+    if (nonImages.length > 0) {
+      return validationFailure('invalid_media', 'Carousels currently support images only.');
+    }
+  }
+
+  if (
+    validationPlatform === 'instagram' &&
+    resolvedAssets.length > 1 &&
+    !haveUniformAspectRatio(resolvedAssets)
+  ) {
+    return validationFailure(
+      'invalid_media',
+      'All carousel items must have the same aspect ratio before queueing. Please crop or resize your media so they match.'
+    );
+  }
+
+  return null;
+}
+
+function buildMediaValidationInputs(
+  normalizedContentType: ValidationContentType,
+  resolvedAssets: AssetRecord[]
+) {
+  const mediaAssetsForValidation = resolvedAssets.map((asset) => ({
+    key: asset.id,
+    type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
+  }));
+
+  const hasVideo = mediaAssetsForValidation.some((asset) => asset.type === 'video');
+  const mediaTypeHint: ValidationMediaType | undefined =
+    normalizedContentType === 'reel' || hasVideo
+      ? 'video'
+      : mediaAssetsForValidation.length > 0
+        ? 'image'
+        : undefined;
+
+  return { mediaAssetsForValidation, mediaTypeHint };
+}
+
+function resolveValidationPlatform(platform: string) {
+  const validationPlatform = toValidationPlatform(platform);
+  if (!validationPlatform) {
+    return validationFailure(
+      'unsupported_platform',
+      `Platform ${platform} is not supported for queue scheduling yet.`
+    );
+  }
+  if (!supportsScheduling(platform)) {
+    return validationFailure(
+      'unsupported_platform',
+      `Queue scheduling is not available for ${platform} yet.`
+    );
+  }
+  return { ok: true as const, validationPlatform };
+}
+
+async function resolveContentAssets(assetIds: string[]) {
+  const assetsClient = getAssetsClient();
+  const assets = assetIds.length ? await assetsClient.getBatchAssets(assetIds) : [];
+  const missingAssets = assets.map((asset, idx) => (!asset ? assetIds[idx] : null)).filter(Boolean);
+
+  if (missingAssets.length > 0) {
+    return validationFailure(
+      'missing_assets',
+      'One or more media assets are missing.',
+      missingAssets
+    );
+  }
+  return { ok: true as const, resolvedAssets: assets.filter(Boolean) as AssetRecord[] };
+}
+
 export async function validateQueueableContent(params: {
   contentId: string;
   brandId: string;
@@ -48,35 +142,20 @@ export async function validateQueueableContent(params: {
     select: { id: true, platform: true, metadata: true },
   });
   if (!destination) {
-    return {
-      ok: false,
-      code: 'destination_not_found',
-      message: 'Destination social account not found.',
-    };
+    return validationFailure('destination_not_found', 'Destination social account not found.');
   }
   if (isDisconnected(destination.metadata)) {
-    return {
-      ok: false,
-      code: 'destination_disconnected',
-      message: 'Destination social account is disconnected.',
-    };
+    return validationFailure(
+      'destination_disconnected',
+      'Destination social account is disconnected.'
+    );
   }
 
-  const validationPlatform = toValidationPlatform(String(destination.platform));
-  if (!validationPlatform) {
-    return {
-      ok: false,
-      code: 'unsupported_platform',
-      message: `Platform ${destination.platform} is not supported for queue scheduling yet.`,
-    };
+  const platformResult = resolveValidationPlatform(String(destination.platform));
+  if (!platformResult.ok) {
+    return platformResult;
   }
-  if (!supportsScheduling(String(destination.platform))) {
-    return {
-      ok: false,
-      code: 'unsupported_platform',
-      message: `Queue scheduling is not available for ${destination.platform} yet.`,
-    };
-  }
+  const { validationPlatform } = platformResult;
 
   const content = await prisma.content.findFirst({
     where: { id: params.contentId, brandId: params.brandId },
@@ -91,73 +170,29 @@ export async function validateQueueableContent(params: {
     },
   });
   if (!content) {
-    return { ok: false, code: 'content_not_found', message: 'Content not found.' };
+    return validationFailure('content_not_found', 'Content not found.');
   }
 
   const normalizedContentType = normalizeContentType(content.contentType);
   const assetIds = content.mediaAssets.map((m) => m.assetId);
-
-  const assetsClient = getAssetsClient();
-  const assets = assetIds.length ? await assetsClient.getBatchAssets(assetIds) : [];
-
-  const missingAssets = assets.map((asset, idx) => (!asset ? assetIds[idx] : null)).filter(Boolean);
-  if (missingAssets.length > 0) {
-    return {
-      ok: false,
-      code: 'missing_assets',
-      message: 'One or more media assets are missing.',
-      details: missingAssets,
-    };
+  const assetResult = await resolveContentAssets(assetIds);
+  if (!assetResult.ok) {
+    return assetResult;
+  }
+  const { resolvedAssets } = assetResult;
+  const mediaRuleValidation = validateMediaRules(
+    normalizedContentType,
+    validationPlatform,
+    resolvedAssets
+  );
+  if (mediaRuleValidation) {
+    return mediaRuleValidation;
   }
 
-  const resolvedAssets = assets.filter(Boolean) as AssetRecord[];
-
-  // Queue items must be publishable-ready.
-  if (normalizedContentType === 'reel') {
-    if (resolvedAssets.length !== 1 || resolvedAssets[0]?.fileType !== 'video') {
-      return {
-        ok: false,
-        code: 'invalid_media',
-        message: 'Reels require exactly one video asset.',
-      };
-    }
-  }
-  if (resolvedAssets.length > 1) {
-    const nonImages = resolvedAssets.filter((a) => a.fileType !== 'image');
-    if (nonImages.length > 0) {
-      return {
-        ok: false,
-        code: 'invalid_media',
-        message: 'Carousels currently support images only.',
-      };
-    }
-  }
-
-  // For Instagram carousels, keep aspect ratios consistent to avoid schedule-time failures.
-  if (
-    validationPlatform === 'instagram' &&
-    resolvedAssets.length > 1 &&
-    !haveUniformAspectRatio(resolvedAssets)
-  ) {
-    return {
-      ok: false,
-      code: 'invalid_media',
-      message:
-        'All carousel items must have the same aspect ratio before queueing. Please crop or resize your media so they match.',
-    };
-  }
-
-  const mediaAssetsForValidation = resolvedAssets.map((asset) => ({
-    key: asset.id,
-    type: asset.fileType === 'video' ? ('video' as const) : ('image' as const),
-  }));
-
-  const mediaTypeHint: ValidationMediaType | undefined =
-    normalizedContentType === 'reel' || mediaAssetsForValidation.some((a) => a.type === 'video')
-      ? 'video'
-      : mediaAssetsForValidation.length > 0
-        ? 'image'
-        : undefined;
+  const { mediaAssetsForValidation, mediaTypeHint } = buildMediaValidationInputs(
+    normalizedContentType,
+    resolvedAssets
+  );
 
   const validation = validateContentPayload({
     platform: validationPlatform,
@@ -168,12 +203,11 @@ export async function validateQueueableContent(params: {
   });
 
   if (!validation.ok) {
-    return {
-      ok: false,
-      code: 'invalid_content',
-      message: validation.errors[0]?.message || 'Invalid content payload.',
-      details: validation.errors,
-    };
+    return validationFailure(
+      'invalid_content',
+      validation.errors[0]?.message || 'Invalid content payload.',
+      validation.errors
+    );
   }
 
   return { ok: true };

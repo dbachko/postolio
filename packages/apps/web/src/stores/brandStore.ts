@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Brand } from '../lib/api';
 
-interface BrandState {
+export interface BrandState {
   brands: Brand[];
   selectedBrand: Brand | null;
   isLoading: boolean;

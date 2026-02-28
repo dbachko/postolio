@@ -120,6 +120,56 @@ export class MagicLinkService {
   /**
    * Verify a magic link token and sign in the user
    */
+  private static async createMagicLinkSignupUser(email: string) {
+    const secureRandomPassword = randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
+
+    return prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        emailVerified: true,
+        subscriptionTier: 'free',
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        subscriptionTier: true,
+        emailVerified: true,
+      },
+    });
+  }
+
+  private static async resolveMagicLinkUser(magicLinkData: MagicLinkData) {
+    const user = await prisma.user.findUnique({
+      where: { email: magicLinkData.email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        subscriptionTier: true,
+        emailVerified: true,
+      },
+    });
+
+    if (!user && magicLinkData.isSignUp) {
+      return this.createMagicLinkSignupUser(magicLinkData.email);
+    }
+    if (!user) {
+      return null;
+    }
+    if (!user.emailVerified) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+      user.emailVerified = true;
+    }
+
+    return user;
+  }
+
   static async verifyMagicLink(
     fastify: FastifyInstance,
     token: string
@@ -151,52 +201,12 @@ export class MagicLinkService {
       // Delete the token immediately (one-time use)
       await redis.del(magicLinkKey);
 
-      // Find or create user
-      let user = await prisma.user.findUnique({
-        where: { email: magicLinkData.email },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          subscriptionTier: true,
-          emailVerified: true,
-        },
-      });
-
-      if (!user && magicLinkData.isSignUp) {
-        // Create new user with cryptographically secure random password
-        const secureRandomPassword = randomBytes(32).toString('hex');
-        const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
-
-        user = await prisma.user.create({
-          data: {
-            email: magicLinkData.email,
-            password: hashedPassword, // Properly hashed password
-            emailVerified: true, // Email is verified through magic link
-            subscriptionTier: 'free',
-          },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            subscriptionTier: true,
-            emailVerified: true,
-          },
-        });
-      } else if (!user) {
+      const user = await this.resolveMagicLinkUser(magicLinkData);
+      if (!user) {
         return {
           success: false,
           message: 'No account found with this email',
         };
-      } else {
-        // Update email verification status
-        if (!user.emailVerified) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { emailVerified: true },
-          });
-          user.emailVerified = true;
-        }
       }
 
       // Generate JWT token

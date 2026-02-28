@@ -5,18 +5,23 @@ import './index.css';
 import App from './App.tsx';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
+function getReasonMessage(reason: unknown): string {
+  if (typeof reason === 'string') {
+    return reason;
+  }
+  if (reason && typeof reason === 'object' && 'message' in reason) {
+    return String((reason as { message?: unknown }).message ?? '');
+  }
+  return '';
+}
+
 const maybeReloadForChunkError = (reason: unknown) => {
   const key = 'postolio:reload-on-chunk-error';
   if (sessionStorage.getItem(key) === '1') {
     return;
   }
 
-  const message =
-    typeof reason === 'string'
-      ? reason
-      : reason && typeof reason === 'object' && 'message' in reason
-        ? String((reason as { message?: unknown }).message ?? '')
-        : '';
+  const message = getReasonMessage(reason);
 
   if (!message) {
     return;

@@ -26,6 +26,74 @@ export interface PublisherCredentials {
 const CACHE_TTL_SECONDS = 300;
 
 export class PublisherCredentialsService {
+  private static async cacheCredentials(
+    cacheKey: string,
+    cacheSubject: string,
+    credentials: PublisherCredentials
+  ) {
+    const redis = getRedisClient();
+    if (!redis) {
+      return;
+    }
+
+    try {
+      await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
+      credentialsLogger.info(`Cached credentials for ${cacheSubject} (TTL: ${CACHE_TTL_SECONDS}s)`);
+    } catch (cacheError) {
+      credentialsLogger.warn('Redis cache write failed', {
+        cacheKey,
+        ...formatError(cacheError),
+      });
+    }
+  }
+
+  private static async getCachedCredentials(
+    cacheKey: string
+  ): Promise<PublisherCredentials | null> {
+    const redis = getRedisClient();
+    if (!redis) {
+      return null;
+    }
+
+    try {
+      const cached = await redis.get(cacheKey);
+      return cached ? JSON.parse(cached) : null;
+    } catch (cacheError) {
+      credentialsLogger.warn('Redis cache read failed, falling back to Token Service', {
+        cacheKey,
+        ...formatError(cacheError),
+      });
+      return null;
+    }
+  }
+
+  private static async loadSocialAccount(socialAccountId: string) {
+    return prisma.socialAccount.findUnique({
+      where: { id: socialAccountId },
+      select: {
+        id: true,
+        platform: true,
+        externalAccountId: true,
+        externalPageId: true,
+        metadata: true,
+        brand: {
+          select: {
+            id: true,
+            name: true,
+            userId: true,
+          },
+        },
+      },
+    });
+  }
+
+  private static isDisconnectedSocialAccount(metadata: unknown): boolean {
+    if (!metadata || typeof metadata !== 'object') {
+      return false;
+    }
+    return Boolean((metadata as Record<string, unknown>).disconnected);
+  }
+
   /**
    * Fetch fresh Instagram credentials for a brand with caching
    * This should be called by the publisher Lambda at publish time
@@ -101,20 +169,7 @@ export class PublisherCredentialsService {
         platform: 'instagram',
       };
 
-      // Cache the result
-      if (redis) {
-        try {
-          await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
-          credentialsLogger.info(
-            `Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`
-          );
-        } catch (cacheError) {
-          credentialsLogger.warn('Redis cache write failed', {
-            cacheKey,
-            ...formatError(cacheError),
-          });
-        }
-      }
+      await this.cacheCredentials(cacheKey, `brand ${brandId}`, credentials);
 
       return credentials;
     } catch (error) {
@@ -132,59 +187,24 @@ export class PublisherCredentialsService {
     socialAccountId: string
   ): Promise<PublisherCredentials | null> {
     try {
-      const redis = getRedisClient();
       const cacheKey = `publisher:credentials:social:${socialAccountId}`;
-
-      if (redis) {
-        try {
-          const cached = await redis.get(cacheKey);
-          if (cached) {
-            credentialsLogger.info(`Cache hit for social account ${socialAccountId} credentials`);
-            return JSON.parse(cached);
-          }
-        } catch (cacheError) {
-          credentialsLogger.warn('Redis cache read failed, falling back to Token Service', {
-            cacheKey,
-            ...formatError(cacheError),
-          });
-        }
+      const cached = await this.getCachedCredentials(cacheKey);
+      if (cached) {
+        credentialsLogger.info(`Cache hit for social account ${socialAccountId} credentials`);
+        return cached;
       }
 
-      const account = await prisma.socialAccount.findUnique({
-        where: { id: socialAccountId },
-        select: {
-          id: true,
-          platform: true,
-          externalAccountId: true,
-          externalPageId: true,
-          metadata: true,
-          brand: {
-            select: {
-              id: true,
-              name: true,
-              userId: true,
-            },
-          },
-        },
-      });
-
+      const account = await this.loadSocialAccount(socialAccountId);
       if (!account?.brand) {
         credentialsLogger.error(`Social account not found: ${socialAccountId}`);
         return null;
       }
-
-      const accountMetadata = (account.metadata || {}) as Record<string, unknown>;
-      if (
-        accountMetadata &&
-        typeof accountMetadata === 'object' &&
-        (accountMetadata as any).disconnected
-      ) {
+      if (this.isDisconnectedSocialAccount(account.metadata)) {
         credentialsLogger.error(`Social account disconnected: ${socialAccountId}`);
         return null;
       }
 
       const platform = String(account.platform);
-
       const tokenServiceClient = await getTokenService();
       const tokenData = await tokenServiceClient.getTokenForSocialAccount(
         account.brand.userId,
@@ -206,19 +226,7 @@ export class PublisherCredentialsService {
         platform,
       };
 
-      if (redis) {
-        try {
-          await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
-          credentialsLogger.info(
-            `Cached credentials for social account ${socialAccountId} (TTL: ${CACHE_TTL_SECONDS}s)`
-          );
-        } catch (cacheError) {
-          credentialsLogger.warn('Redis cache write failed', {
-            cacheKey,
-            ...formatError(cacheError),
-          });
-        }
-      }
+      await this.cacheCredentials(cacheKey, `social account ${socialAccountId}`, credentials);
 
       return credentials;
     } catch (error) {

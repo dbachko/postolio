@@ -142,95 +142,16 @@ export class RetryStrategy {
    */
   analyzeError(error: Error | unknown): ErrorAnalysis {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const metadata = this.extractStructuredErrorMetadata(error);
+    const httpStatusCode =
+      metadata.httpStatusCode || this.extractHttpStatusCodeFromMessage(errorMessage);
 
-    // Prefer structured metadata if provided (from Publisher retry message)
-    let httpStatusCode: number | undefined;
-    let structuredCode: string | undefined;
-    if (error && typeof error === 'object') {
-      const obj = error as Record<string, unknown>;
-      const statusRaw = (obj.httpStatusCode || obj.httpStatus || obj.status) as unknown;
-      if (typeof statusRaw === 'number') {
-        httpStatusCode = statusRaw;
-      } else if (typeof statusRaw === 'string') {
-        const parsed = parseInt(statusRaw, 10);
-        if (!Number.isNaN(parsed)) {
-          httpStatusCode = parsed;
-        }
-      }
-      if (typeof obj.errorCode === 'string') {
-        structuredCode = obj.errorCode;
-      }
+    const statusClassification = this.classifyByHttpStatus(httpStatusCode, errorMessage);
+    if (statusClassification) {
+      return statusClassification;
     }
 
-    // Fallback: extract HTTP status code from message text if not provided
-    if (!httpStatusCode) {
-      const statusCodeMatch = errorMessage.match(/(?<!\d)(\d{3})(?!\d)/);
-      const parsedCode = statusCodeMatch ? parseInt(statusCodeMatch[1], 10) : undefined;
-      httpStatusCode =
-        parsedCode && parsedCode >= 400 && parsedCode <= 599 ? parsedCode : undefined;
-    }
-
-    // AWS/Industry standard error classification
-    if (httpStatusCode) {
-      switch (httpStatusCode) {
-        // Authentication/Authorization errors → Circuit breaker
-        case 401:
-        case 403:
-          return {
-            errorType: ErrorType.AUTHENTICATION,
-            isRetryable: false,
-            httpStatusCode,
-            errorMessage,
-          };
-
-        // Client errors (non-retryable)
-        case 400:
-        case 404:
-        case 409:
-          return {
-            errorType: ErrorType.NON_TRANSIENT,
-            isRetryable: false,
-            httpStatusCode,
-            errorMessage,
-          };
-
-        // Rate limiting
-        case 429:
-          return {
-            errorType: ErrorType.RATE_LIMITED,
-            isRetryable: true,
-            httpStatusCode,
-            errorMessage,
-          };
-
-        // Server errors (retryable)
-        case 500:
-        case 502:
-        case 503:
-        case 504:
-          return {
-            errorType: ErrorType.TRANSIENT,
-            isRetryable: true,
-            httpStatusCode,
-            errorMessage,
-          };
-
-        default:
-          return {
-            errorType: ErrorType.NON_TRANSIENT,
-            isRetryable: false,
-            httpStatusCode,
-            errorMessage,
-          };
-      }
-    }
-
-    // Network/timeout errors (retryable)
-    if (
-      errorMessage.includes('timeout') ||
-      errorMessage.includes('ECONNRESET') ||
-      errorMessage.includes('ENOTFOUND')
-    ) {
+    if (this.isNetworkError(errorMessage)) {
       return {
         errorType: ErrorType.TRANSIENT,
         isRetryable: true,
@@ -238,61 +159,170 @@ export class RetryStrategy {
       };
     }
 
-    // Structured error code handling (if provided)
-    if (structuredCode) {
-      const code = structuredCode.toUpperCase();
-      if (code === 'TOKEN_NOT_FOUND' || code === 'REQUEST_FAILED') {
-        return {
-          errorType: ErrorType.NON_TRANSIENT,
-          isRetryable: false,
-          httpStatusCode,
-          errorMessage,
-        };
-      }
-      if (code === 'UNAUTHORIZED') {
-        return {
-          errorType: ErrorType.AUTHENTICATION,
-          isRetryable: false,
-          httpStatusCode,
-          errorMessage,
-        };
-      }
-      if (code === 'RATE_LIMIT') {
-        return {
-          errorType: ErrorType.RATE_LIMITED,
-          isRetryable: true,
-          httpStatusCode,
-          errorMessage,
-        };
-      }
-      if (code === 'SERVICE_UNAVAILABLE' || code === 'NETWORK_ERROR') {
-        return { errorType: ErrorType.TRANSIENT, isRetryable: true, httpStatusCode, errorMessage };
-      }
-      if (code.startsWith('IG_')) {
-        // Default IG errors to non-transient unless status suggests retryable
-        if (httpStatusCode && [429, 500, 502, 503, 504].includes(httpStatusCode)) {
-          return {
-            errorType: ErrorType.TRANSIENT,
-            isRetryable: true,
-            httpStatusCode,
-            errorMessage,
-          };
-        }
-        return {
-          errorType: ErrorType.NON_TRANSIENT,
-          isRetryable: false,
-          httpStatusCode,
-          errorMessage,
-        };
-      }
+    const structuredCodeClassification = this.classifyByStructuredCode(
+      metadata.structuredCode,
+      httpStatusCode,
+      errorMessage
+    );
+    if (structuredCodeClassification) {
+      return structuredCodeClassification;
     }
 
-    // Default to non-transient for unknown errors
     return {
       errorType: ErrorType.NON_TRANSIENT,
       isRetryable: false,
       errorMessage,
     };
+  }
+
+  private extractStructuredErrorMetadata(error: Error | unknown): {
+    httpStatusCode?: number;
+    structuredCode?: string;
+  } {
+    if (!error || typeof error !== 'object') {
+      return {};
+    }
+
+    const errorObject = error as Record<string, unknown>;
+    return {
+      httpStatusCode: this.parseStatusCode(
+        (errorObject.httpStatusCode || errorObject.httpStatus || errorObject.status) as unknown
+      ),
+      structuredCode: typeof errorObject.errorCode === 'string' ? errorObject.errorCode : undefined,
+    };
+  }
+
+  private parseStatusCode(value: unknown): number | undefined {
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+
+    return undefined;
+  }
+
+  private extractHttpStatusCodeFromMessage(errorMessage: string): number | undefined {
+    const statusCodeMatch = errorMessage.match(/(?<!\d)(\d{3})(?!\d)/);
+    const parsedCode = statusCodeMatch ? parseInt(statusCodeMatch[1], 10) : undefined;
+    return parsedCode && parsedCode >= 400 && parsedCode <= 599 ? parsedCode : undefined;
+  }
+
+  private classifyByHttpStatus(
+    httpStatusCode: number | undefined,
+    errorMessage: string
+  ): ErrorAnalysis | undefined {
+    if (!httpStatusCode) {
+      return undefined;
+    }
+
+    if ([401, 403].includes(httpStatusCode)) {
+      return {
+        errorType: ErrorType.AUTHENTICATION,
+        isRetryable: false,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    if ([400, 404, 409].includes(httpStatusCode)) {
+      return {
+        errorType: ErrorType.NON_TRANSIENT,
+        isRetryable: false,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    if (httpStatusCode === 429) {
+      return {
+        errorType: ErrorType.RATE_LIMITED,
+        isRetryable: true,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    if ([500, 502, 503, 504].includes(httpStatusCode)) {
+      return {
+        errorType: ErrorType.TRANSIENT,
+        isRetryable: true,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    return {
+      errorType: ErrorType.NON_TRANSIENT,
+      isRetryable: false,
+      httpStatusCode,
+      errorMessage,
+    };
+  }
+
+  private isNetworkError(errorMessage: string): boolean {
+    return (
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ECONNRESET') ||
+      errorMessage.includes('ENOTFOUND')
+    );
+  }
+
+  private classifyByStructuredCode(
+    structuredCode: string | undefined,
+    httpStatusCode: number | undefined,
+    errorMessage: string
+  ): ErrorAnalysis | undefined {
+    if (!structuredCode) {
+      return undefined;
+    }
+
+    const code = structuredCode.toUpperCase();
+    if (code === 'TOKEN_NOT_FOUND' || code === 'REQUEST_FAILED') {
+      return {
+        errorType: ErrorType.NON_TRANSIENT,
+        isRetryable: false,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    if (code === 'UNAUTHORIZED') {
+      return {
+        errorType: ErrorType.AUTHENTICATION,
+        isRetryable: false,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    if (code === 'RATE_LIMIT') {
+      return { errorType: ErrorType.RATE_LIMITED, isRetryable: true, httpStatusCode, errorMessage };
+    }
+
+    if (code === 'SERVICE_UNAVAILABLE' || code === 'NETWORK_ERROR') {
+      return { errorType: ErrorType.TRANSIENT, isRetryable: true, httpStatusCode, errorMessage };
+    }
+
+    if (code.startsWith('IG_')) {
+      if (httpStatusCode && [429, 500, 502, 503, 504].includes(httpStatusCode)) {
+        return { errorType: ErrorType.TRANSIENT, isRetryable: true, httpStatusCode, errorMessage };
+      }
+
+      return {
+        errorType: ErrorType.NON_TRANSIENT,
+        isRetryable: false,
+        httpStatusCode,
+        errorMessage,
+      };
+    }
+
+    return undefined;
   }
 
   /**

@@ -32,6 +32,17 @@ type BrandsListProps = {
   onEditFieldChange: (brandId: string, field: keyof BrandFormState, value: string) => void;
 };
 
+function BrandsShell(props: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border shadow-sm">
+      <div className="border-b px-6 py-4">
+        <h2 className="text-lg font-medium">Your Brands</h2>
+      </div>
+      {props.children}
+    </div>
+  );
+}
+
 function BrandAnalysisSummary({
   brandId,
   profileAvailable,
@@ -147,200 +158,239 @@ function BrandEditForm({
   );
 }
 
-export function BrandsList({
-  isLoading,
-  brands,
-  selectedBrand,
-  editingBrandId,
-  editFormData,
-  profileAvailable,
-  profileSummaries,
-  updateErrorMessage,
-  isUpdating,
-  isDeleting,
-  onStartCreating,
-  onSelectBrand,
-  onEditStart,
-  onEditCancel,
-  onEditSubmit,
-  onDeleteBrand,
-  onEditFieldChange,
-}: BrandsListProps) {
-  if (isLoading) {
-    return (
-      <div className="rounded-lg border shadow-sm">
-        <div className="border-b px-6 py-4">
-          <h2 className="text-lg font-medium">Your Brands</h2>
-        </div>
-        <div className="flex items-center justify-center py-8">
-          <div className="border-foreground h-6 w-6 animate-spin rounded-full border-b-2" />
-        </div>
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center py-8">
+      <div className="border-foreground h-6 w-6 animate-spin rounded-full border-b-2" />
+    </div>
+  );
+}
+
+function EmptyState(props: { onStartCreating: () => void }) {
+  return (
+    <div className="py-8 text-center">
+      <p className="text-muted-foreground mb-4">No brands created yet.</p>
+      <Button variant="neutral" onClick={props.onStartCreating}>
+        Create Your First Brand
+      </Button>
+    </div>
+  );
+}
+
+function SelectedBrandHeader() {
+  return (
+    <div className="mb-2 flex items-start justify-between">
+      <div className="flex items-center space-x-2">
+        <h3 className="text-foreground text-sm font-medium">Selected Brand</h3>
+        <span className="bg-accent text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+          Current
+        </span>
       </div>
+    </div>
+  );
+}
+
+function SelectedBrandProfileSummary(props: {
+  brandId: string;
+  profileAvailable: Record<string, boolean>;
+  profileSummaries: Record<string, { tones: string[]; palette: string[] }>;
+}) {
+  if (!props.profileAvailable[props.brandId]) {
+    return null;
+  }
+  return (
+    <div className="flex items-center gap-3">
+      <div className="text-muted-foreground text-xs">
+        Tones: {props.profileSummaries[props.brandId]?.tones.join(', ') || '—'}
+      </div>
+      <div className="flex items-center gap-1">
+        {(props.profileSummaries[props.brandId]?.palette || []).map((hex) => (
+          <span
+            key={hex}
+            title={hex}
+            className="inline-block h-3 w-3 rounded-full border"
+            style={{ backgroundColor: hex }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SelectedBrandActions(props: {
+  brand: Brand;
+  isDeleting: boolean;
+  onEditStart: (brand: Brand) => void;
+  onDeleteBrand: (brand: Brand) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 sm:justify-end">
+      <Button variant="outline" onClick={() => props.onEditStart(props.brand)}>
+        Edit
+      </Button>
+      <Button
+        variant="destructive"
+        onClick={() => props.onDeleteBrand(props.brand)}
+        disabled={props.isDeleting}
+      >
+        {props.isDeleting ? 'Deleting...' : 'Delete'}
+      </Button>
+    </div>
+  );
+}
+
+function SelectedBrandSection(props: {
+  brand: Brand;
+  editingBrandId: string | null;
+  editFormData: Record<string, BrandFormState>;
+  updateErrorMessage?: string;
+  isUpdating: boolean;
+  isDeleting: boolean;
+  profileAvailable: Record<string, boolean>;
+  profileSummaries: Record<string, { tones: string[]; palette: string[] }>;
+  onEditStart: (brand: Brand) => void;
+  onEditCancel: (brandId: string) => void;
+  onEditSubmit: (e: React.FormEvent, brandId: string) => void;
+  onDeleteBrand: (brand: Brand) => void;
+  onEditFieldChange: (brandId: string, field: keyof BrandFormState, value: string) => void;
+}) {
+  return (
+    <div className="border-l-4 p-6">
+      <SelectedBrandHeader />
+
+      {props.editingBrandId === props.brand.id ? (
+        <BrandEditForm
+          brandId={props.brand.id}
+          data={
+            props.editFormData[props.brand.id] || { name: '', description: '', countryCode: '' }
+          }
+          updateErrorMessage={props.updateErrorMessage}
+          isUpdating={props.isUpdating}
+          onEditCancel={props.onEditCancel}
+          onEditSubmit={props.onEditSubmit}
+          onEditFieldChange={props.onEditFieldChange}
+        />
+      ) : (
+        <div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg font-medium">{props.brand.name}</h3>
+              {props.brand.description ? (
+                <p className="text-muted-foreground mt-1">{props.brand.description}</p>
+              ) : null}
+              <p className="text-muted-foreground mt-2 text-xs">
+                Created {new Date(props.brand.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+              <SelectedBrandProfileSummary
+                brandId={props.brand.id}
+                profileAvailable={props.profileAvailable}
+                profileSummaries={props.profileSummaries}
+              />
+              <SelectedBrandActions
+                brand={props.brand}
+                isDeleting={props.isDeleting}
+                onEditStart={props.onEditStart}
+                onDeleteBrand={props.onDeleteBrand}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      <div id="brand-analysis-panel" className="mt-6">
+        <BrandAnalysisPanel brandId={props.brand.id} />
+      </div>
+    </div>
+  );
+}
+
+function OtherBrandsSection(props: {
+  brands: Brand[];
+  selectedBrandId?: string;
+  profileAvailable: Record<string, boolean>;
+  profileSummaries: Record<string, { tones: string[]; palette: string[] }>;
+  onSelectBrand: (brand: Brand) => void;
+}) {
+  return (
+    <>
+      {props.brands
+        .filter((brand) => !props.selectedBrandId || brand.id !== props.selectedBrandId)
+        .map((brand) => (
+          <div
+            key={brand.id}
+            className="cursor-pointer p-6 transition-colors"
+            onClick={() => props.onSelectBrand(brand)}
+          >
+            <div className="mb-2 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="font-medium">{brand.name}</h3>
+                <BrandAnalysisSummary
+                  brandId={brand.id}
+                  profileAvailable={props.profileAvailable}
+                  profileSummaries={props.profileSummaries}
+                />
+              </div>
+            </div>
+
+            {brand.description ? (
+              <p className="text-muted-foreground mb-2 text-sm">{brand.description}</p>
+            ) : null}
+            <p className="text-muted-foreground text-xs">
+              Created {new Date(brand.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        ))}
+    </>
+  );
+}
+
+export function BrandsList(props: BrandsListProps) {
+  if (props.isLoading) {
+    return (
+      <BrandsShell>
+        <LoadingState />
+      </BrandsShell>
     );
   }
 
-  if (brands.length === 0) {
+  if (props.brands.length === 0) {
     return (
-      <div className="rounded-lg border shadow-sm">
-        <div className="border-b px-6 py-4">
-          <h2 className="text-lg font-medium">Your Brands</h2>
-        </div>
-        <div className="py-8 text-center">
-          <p className="text-muted-foreground mb-4">No brands created yet.</p>
-          <Button variant="neutral" onClick={onStartCreating}>
-            Create Your First Brand
-          </Button>
-        </div>
-      </div>
+      <BrandsShell>
+        <EmptyState onStartCreating={props.onStartCreating} />
+      </BrandsShell>
     );
   }
 
   return (
-    <div className="rounded-lg border shadow-sm">
-      <div className="border-b px-6 py-4">
-        <h2 className="text-lg font-medium">Your Brands</h2>
-      </div>
-
+    <BrandsShell>
       <div className="divide-y">
-        {selectedBrand ? (
-          <div key={selectedBrand.id} className="border-l-4 p-6">
-            <div className="mb-2 flex items-start justify-between">
-              <div className="flex items-center space-x-2">
-                <h3 className="text-foreground text-sm font-medium">Selected Brand</h3>
-                <span className="bg-accent text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
-                  Current
-                </span>
-              </div>
-            </div>
-
-            {editingBrandId === selectedBrand.id ? (
-              <BrandEditForm
-                brandId={selectedBrand.id}
-                data={
-                  editFormData[selectedBrand.id] || { name: '', description: '', countryCode: '' }
-                }
-                updateErrorMessage={updateErrorMessage}
-                isUpdating={isUpdating}
-                onEditCancel={onEditCancel}
-                onEditSubmit={onEditSubmit}
-                onEditFieldChange={onEditFieldChange}
-              />
-            ) : (
-              <div>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-medium">{selectedBrand.name}</h3>
-                    {selectedBrand.description ? (
-                      <p className="text-muted-foreground mt-1">{selectedBrand.description}</p>
-                    ) : null}
-                    <p className="text-muted-foreground mt-2 text-xs">
-                      Created {new Date(selectedBrand.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                    {profileAvailable[selectedBrand.id] ? (
-                      <div className="flex items-center gap-3">
-                        <div className="text-muted-foreground text-xs">
-                          Tones: {profileSummaries[selectedBrand.id]?.tones.join(', ') || '—'}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {(profileSummaries[selectedBrand.id]?.palette || []).map((hex) => (
-                            <span
-                              key={hex}
-                              title={hex}
-                              className="inline-block h-3 w-3 rounded-full border"
-                              style={{ backgroundColor: hex }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="flex flex-wrap gap-2 sm:justify-end">
-                      <Button variant="outline" onClick={() => onEditStart(selectedBrand)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => onDeleteBrand(selectedBrand)}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? 'Deleting...' : 'Delete'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div id="brand-analysis-panel" className="mt-6">
-              <BrandAnalysisPanel brandId={selectedBrand.id} />
-            </div>
-          </div>
+        {props.selectedBrand ? (
+          <SelectedBrandSection
+            brand={props.selectedBrand}
+            editingBrandId={props.editingBrandId}
+            editFormData={props.editFormData}
+            updateErrorMessage={props.updateErrorMessage}
+            isUpdating={props.isUpdating}
+            isDeleting={props.isDeleting}
+            profileAvailable={props.profileAvailable}
+            profileSummaries={props.profileSummaries}
+            onEditStart={props.onEditStart}
+            onEditCancel={props.onEditCancel}
+            onEditSubmit={props.onEditSubmit}
+            onDeleteBrand={props.onDeleteBrand}
+            onEditFieldChange={props.onEditFieldChange}
+          />
         ) : null}
 
-        {brands
-          .filter((brand) => brand.id !== selectedBrand?.id)
-          .map((brand) => (
-            <div key={brand.id} className="p-6">
-              {editingBrandId === brand.id ? (
-                <BrandEditForm
-                  brandId={brand.id}
-                  data={editFormData[brand.id] || { name: '', description: '', countryCode: '' }}
-                  updateErrorMessage={updateErrorMessage}
-                  isUpdating={isUpdating}
-                  onEditCancel={onEditCancel}
-                  onEditSubmit={onEditSubmit}
-                  onEditFieldChange={onEditFieldChange}
-                />
-              ) : (
-                <div>
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-medium">{brand.name}</h3>
-                      {brand.description ? (
-                        <p className="text-muted-foreground mt-1">{brand.description}</p>
-                      ) : null}
-                      <p className="text-muted-foreground mt-2 text-xs">
-                        Created {new Date(brand.createdAt).toLocaleDateString()}
-                      </p>
-                      {brand.countryCode ? (
-                        <p className="text-muted-foreground text-xs">
-                          Country: {brand.countryCode}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                      <BrandAnalysisSummary
-                        brandId={brand.id}
-                        profileAvailable={profileAvailable}
-                        profileSummaries={profileSummaries}
-                      />
-                      <div className="flex flex-wrap gap-2 sm:justify-end">
-                        <Button
-                          variant={selectedBrand?.id === brand.id ? 'secondary' : 'outline'}
-                          onClick={() => onSelectBrand(brand)}
-                        >
-                          {selectedBrand?.id === brand.id ? 'Selected' : 'Select'}
-                        </Button>
-                        <Button variant="outline" onClick={() => onEditStart(brand)}>
-                          Edit
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={() => onDeleteBrand(brand)}
-                          disabled={isDeleting}
-                        >
-                          {isDeleting ? 'Deleting...' : 'Delete'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+        <OtherBrandsSection
+          brands={props.brands}
+          selectedBrandId={props.selectedBrand?.id}
+          profileAvailable={props.profileAvailable}
+          profileSummaries={props.profileSummaries}
+          onSelectBrand={props.onSelectBrand}
+        />
       </div>
-    </div>
+    </BrandsShell>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { brand as brandApi } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
@@ -66,6 +66,25 @@ export function PublishingScheduleSidebar({ id }: { id?: string }) {
     return allAccounts.find((account) => account.id === accountId) ?? null;
   }, [accountId, allAccounts]);
 
+  let body: ReactNode;
+  if (!selectedBrand) {
+    body = (
+      <div className="text-muted-foreground text-sm">
+        Select a brand to configure publishing time slots.
+      </div>
+    );
+  } else if (accountsQuery.isLoading) {
+    body = <div className="bg-muted h-24 animate-pulse rounded-lg" />;
+  } else {
+    body = (
+      <SocialAccountQueueSettingsPanel
+        account={selectedAccount}
+        allAccounts={allAccounts}
+        onClose={close}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="bg-card sticky top-0 z-30 flex h-12 items-center justify-between border-b px-4">
@@ -81,21 +100,7 @@ export function PublishingScheduleSidebar({ id }: { id?: string }) {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-4">
-        {!selectedBrand ? (
-          <div className="text-muted-foreground text-sm">
-            Select a brand to configure publishing time slots.
-          </div>
-        ) : accountsQuery.isLoading ? (
-          <div className="bg-muted h-24 animate-pulse rounded-lg" />
-        ) : (
-          <SocialAccountQueueSettingsPanel
-            account={selectedAccount}
-            allAccounts={allAccounts}
-            onClose={close}
-          />
-        )}
-      </ScrollArea>
+      <ScrollArea className="flex-1 px-4 py-4">{body}</ScrollArea>
     </div>
   );
 }

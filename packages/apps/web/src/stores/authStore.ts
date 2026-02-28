@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { auth as authApi, type User } from '../lib/api';
 import { generateDeviceFingerprint, getDeviceName } from '../lib/device-fingerprint';
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;

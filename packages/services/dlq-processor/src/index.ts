@@ -15,6 +15,86 @@ initSentry({
   serviceName: 'dlq-processor',
 });
 
+type DlqRecord = SQSEvent['Records'][number];
+type QueueContext = {
+  region: string;
+  accountId: string;
+  queueName: string;
+};
+
+function parseQueueContext(record: DlqRecord): QueueContext | null {
+  const arn = record.eventSourceARN || '';
+  // arn:aws:sqs:region:account:queueName
+  const [, , , region, accountId, queueName] = arn.split(':');
+  if (!region || !accountId || !queueName) {
+    console.warn('DLQ record missing ARN components; skipping', { arn });
+    return null;
+  }
+  return { region, accountId, queueName };
+}
+
+async function readSsmParameter(name: string): Promise<string | undefined> {
+  try {
+    const result = await ssmClient.send(new GetParameterCommand({ Name: name }));
+    return result.Parameter?.Value || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveConfiguredTargetQueueUrl(): Promise<string | undefined> {
+  if (process.env.RETRY_QUEUE_URL) {
+    return process.env.RETRY_QUEUE_URL;
+  }
+  if (process.env.PUBLISHING_QUEUE_URL) {
+    return process.env.PUBLISHING_QUEUE_URL;
+  }
+
+  const env = process.env.ENVIRONMENT || 'dev';
+  const retryUrl = await readSsmParameter(`/postolio/${env}/publishing/retry-queue-url`);
+  if (retryUrl) {
+    return retryUrl;
+  }
+  return readSsmParameter(`/postolio/${env}/publishing/queue-url`);
+}
+
+function resolveTargetQueue(context: QueueContext, configuredTarget: string | undefined) {
+  const originalQueueName = configuredTarget
+    ? configuredTarget.split('/').pop() || ''
+    : context.queueName.replace(/-dlq$/i, '');
+  const queueUrl =
+    configuredTarget ||
+    `https://sqs.${context.region}.amazonaws.com/${context.accountId}/${originalQueueName}`;
+  return { originalQueueName, queueUrl };
+}
+
+async function forwardDlqRecord(record: DlqRecord): Promise<boolean> {
+  const context = parseQueueContext(record);
+  if (!context) {
+    return false;
+  }
+
+  const configuredTarget = await resolveConfiguredTargetQueueUrl();
+  const { originalQueueName, queueUrl } = resolveTargetQueue(context, configuredTarget);
+
+  await sqsClient.send(
+    new SendMessageCommand({
+      QueueUrl: queueUrl,
+      MessageBody: record.body,
+      MessageAttributes: record.messageAttributes as
+        | Record<string, MessageAttributeValue>
+        | undefined,
+    })
+  );
+
+  console.warn('Forwarded DLQ message to original queue', {
+    messageId: record.messageId,
+    originalQueueName,
+    targetQueueUrl: queueUrl,
+  });
+  return true;
+}
+
 /**
  * Lambda handler for processing messages delivered from an SQS DLQ event source.
  * For each DLQ record, attempts to forward the original message body to the corresponding
@@ -31,65 +111,10 @@ export const handler = async (
     processed += 1;
 
     try {
-      const arn = record.eventSourceARN || '';
-      // arn:aws:sqs:region:account:queueName
-      const [, , , region, accountId, queueName] = arn.split(':');
-      if (!region || !accountId || !queueName) {
-        console.warn('DLQ record missing ARN components; skipping', { arn });
-        continue;
+      const didForward = await forwardDlqRecord(record);
+      if (didForward) {
+        forwarded += 1;
       }
-
-      // Prefer explicit mapping via environment or SSM Parameter Store
-      let configuredTarget = process.env.RETRY_QUEUE_URL || process.env.PUBLISHING_QUEUE_URL;
-      if (!configuredTarget) {
-        try {
-          const env = process.env.ENVIRONMENT || 'dev';
-          const retryParam = await ssmClient.send(
-            new GetParameterCommand({
-              Name: `/postolio/${env}/publishing/retry-queue-url`,
-            })
-          );
-          configuredTarget = retryParam.Parameter?.Value || undefined;
-        } catch {
-          // ignore and try publishing queue
-        }
-      }
-      if (!configuredTarget) {
-        try {
-          const env = process.env.ENVIRONMENT || 'dev';
-          const pubParam = await ssmClient.send(
-            new GetParameterCommand({
-              Name: `/postolio/${env}/publishing/queue-url`,
-            })
-          );
-          configuredTarget = pubParam.Parameter?.Value || undefined;
-        } catch {
-          // ignore and fall back to heuristic
-        }
-      }
-      const originalQueueName = configuredTarget
-        ? configuredTarget.split('/').pop() || ''
-        : queueName.replace(/-dlq$/i, '');
-      const queueUrl =
-        configuredTarget || `https://sqs.${region}.amazonaws.com/${accountId}/${originalQueueName}`;
-
-      await sqsClient.send(
-        new SendMessageCommand({
-          QueueUrl: queueUrl,
-          MessageBody: record.body,
-          // Forward message attributes if present
-          MessageAttributes: record.messageAttributes as
-            | Record<string, MessageAttributeValue>
-            | undefined,
-        })
-      );
-
-      forwarded += 1;
-      console.log('Forwarded DLQ message to original queue', {
-        messageId: record.messageId,
-        originalQueueName,
-        targetQueueUrl: queueUrl,
-      });
     } catch (error) {
       console.error('Failed to forward DLQ message', {
         messageId: record.messageId,

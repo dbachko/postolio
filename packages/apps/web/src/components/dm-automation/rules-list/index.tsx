@@ -19,26 +19,49 @@ import { RulesListHeader } from './components/rules-list-header';
 import { RulesListLoading } from './components/rules-list-loading';
 import type { RulesListProps, RulesListStatusFilter } from './types';
 
-export function RulesList({ brandId }: RulesListProps) {
-  const queryClient = useQueryClient();
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<DMAutomationRule | null>(null);
-  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+function filterRulesBySearchAndStatus(
+  rules: DMAutomationRule[],
+  statusFilter: RulesListStatusFilter,
+  searchQuery: string
+) {
+  return rules.filter((rule) => {
+    if (statusFilter !== 'all' && rule.status !== statusFilter) {
+      return false;
+    }
 
-  const [statusFilter, setStatusFilter] = useState<RulesListStatusFilter>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+    if (!searchQuery.trim()) {
+      return true;
+    }
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['dm-automation-rules', brandId],
-    queryFn: () => dmAutomation.listRules(brandId),
+    const query = searchQuery.toLowerCase();
+    const searchableText = [
+      rule.name,
+      ...rule.triggerConfig.keywords,
+      rule.messageTemplate || '',
+      rule.commentReplyTemplate || '',
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(query);
   });
+}
+
+function useRulesListMutations({
+  brandId,
+  onDeleteSuccess,
+}: {
+  brandId: string;
+  onDeleteSuccess: () => void;
+}) {
+  const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
     mutationFn: (ruleId: string) => dmAutomation.deleteRule(brandId, ruleId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dm-automation-rules', brandId] });
       toast.success('Rule archived successfully');
-      setDeletingRuleId(null);
+      onDeleteSuccess();
     },
     onError: () => {
       toast.error('Failed to archive rule');
@@ -55,6 +78,55 @@ export function RulesList({ brandId }: RulesListProps) {
     onError: () => {
       toast.error('Failed to update rule status');
     },
+  });
+
+  return { deleteMutation, toggleStatusMutation };
+}
+
+function ArchiveRuleDialog({
+  deletingRuleId,
+  onOpenChange,
+  onConfirm,
+}: {
+  deletingRuleId: string | null;
+  onOpenChange: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={Boolean(deletingRuleId)} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Archive Rule?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This rule will be archived and stop processing events. You can view archived rules
+            later.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Archive</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+export function RulesList({ brandId }: RulesListProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<DMAutomationRule | null>(null);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+
+  const [statusFilter, setStatusFilter] = useState<RulesListStatusFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['dm-automation-rules', brandId],
+    queryFn: () => dmAutomation.listRules(brandId),
+  });
+
+  const { deleteMutation, toggleStatusMutation } = useRulesListMutations({
+    brandId,
+    onDeleteSuccess: () => setDeletingRuleId(null),
   });
 
   const handleEdit = (rule: DMAutomationRule) => {
@@ -77,32 +149,11 @@ export function RulesList({ brandId }: RulesListProps) {
     toggleStatusMutation.mutate({ ruleId: rule.id, status: newStatus });
   };
 
-  const rules = data?.rules || [];
-  const filteredRules = useMemo(() => {
-    return rules.filter((rule) => {
-      if (statusFilter !== 'all' && rule.status !== statusFilter) {
-        return false;
-      }
-
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const searchableText = [
-          rule.name,
-          ...rule.triggerConfig.keywords,
-          rule.messageTemplate || '',
-          rule.commentReplyTemplate || '',
-        ]
-          .join(' ')
-          .toLowerCase();
-
-        if (!searchableText.includes(query)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [rules, searchQuery, statusFilter]);
+  const rules = useMemo(() => data?.rules ?? [], [data?.rules]);
+  const filteredRules = useMemo(
+    () => filterRulesBySearchAndStatus(rules, statusFilter, searchQuery),
+    [rules, searchQuery, statusFilter]
+  );
 
   if (isLoading) {
     return <RulesListLoading />;
@@ -143,25 +194,11 @@ export function RulesList({ brandId }: RulesListProps) {
         />
       ) : null}
 
-      <AlertDialog open={Boolean(deletingRuleId)} onOpenChange={() => setDeletingRuleId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Archive Rule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This rule will be archived and stop processing events. You can view archived rules
-              later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deletingRuleId && deleteMutation.mutate(deletingRuleId)}
-            >
-              Archive
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ArchiveRuleDialog
+        deletingRuleId={deletingRuleId}
+        onOpenChange={() => setDeletingRuleId(null)}
+        onConfirm={() => deletingRuleId && deleteMutation.mutate(deletingRuleId)}
+      />
     </>
   );
 }

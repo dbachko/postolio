@@ -1,8 +1,9 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import { validateBody, validateQuery, validateParams } from '../middleware/validation.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation.js';
 import { assertBrandOwnership } from '../services/ownership.js';
+import { enqueueRecipeRun } from '../services/recipe-runs/queue.js';
 import {
   cancelRun,
   createRun,
@@ -13,7 +14,6 @@ import {
   listRuns,
   markRunEnqueueFailed,
 } from '../services/recipe-runs/runs-service.js';
-import { enqueueRecipeRun } from '../services/recipe-runs/queue.js';
 
 const ListRunsQuerySchema = z.object({
   brandId: z.string().min(1),
@@ -21,12 +21,12 @@ const ListRunsQuerySchema = z.object({
   limit: z
     .string()
     .optional()
-    .transform((v) => {
-      const n = Number(v ?? 50);
-      if (!Number.isFinite(n)) {
+    .transform((value) => {
+      const parsed = Number(value ?? 50);
+      if (!Number.isFinite(parsed)) {
         return 50;
       }
-      return Math.max(1, Math.min(200, Math.floor(n)));
+      return Math.max(1, Math.min(200, Math.floor(parsed)));
     }),
 });
 
@@ -43,41 +43,36 @@ const EstimateRunBodySchema = z.object({
   input: z.unknown().optional().default({}),
 });
 
-const CreditsQuerySchema = z.object({
-  brandId: z.string().min(1),
-});
+const CreditsQuerySchema = z.object({ brandId: z.string().min(1) });
 
 const TopUpCreditsBodySchema = z.object({
   brandId: z.string().min(1),
   credits: z.number().int().positive().max(100000).default(1000),
 });
 
-const RunIdParamsSchema = z.object({
-  runId: z.string().min(1),
-});
+const RunIdParamsSchema = z.object({ runId: z.string().min(1) });
 
-export const runsRoutes: FastifyPluginAsync = async (fastify) => {
+function registerListRunsRoute(fastify: FastifyInstance): void {
   fastify.get<{ Querystring: z.infer<typeof ListRunsQuerySchema> }>(
     '/',
     { preHandler: [fastify.authenticate, validateQuery(ListRunsQuerySchema)] },
     async (request, reply) => {
       const { brandId, status, limit } = request.query;
-      const userId = request.user!.id;
-
-      await assertBrandOwnership(userId, brandId);
+      await assertBrandOwnership(request.user!.id, brandId);
 
       const runs = await listRuns({ brandId, status, limit: limit ?? 50 });
       return reply.send({ runs });
     }
   );
+}
 
+function registerCreateRunRoute(fastify: FastifyInstance): void {
   fastify.post<{ Body: z.infer<typeof CreateRunBodySchema> }>(
     '/',
     { preHandler: [fastify.authenticate, validateBody(CreateRunBodySchema)] },
     async (request, reply) => {
       const userId = request.user!.id;
       const body = request.body;
-
       await assertBrandOwnership(userId, body.brandId);
 
       const { runId, status, costEstimate } = await createRun({
@@ -104,15 +99,16 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send({ runId, status, costEstimate });
     }
   );
+}
 
+function registerEstimateRoute(fastify: FastifyInstance): void {
   fastify.post<{ Body: z.infer<typeof EstimateRunBodySchema> }>(
     '/estimate',
     { preHandler: [fastify.authenticate, validateBody(EstimateRunBodySchema)] },
     async (request, reply) => {
-      const userId = request.user!.id;
       const body = request.body;
+      await assertBrandOwnership(request.user!.id, body.brandId);
 
-      await assertBrandOwnership(userId, body.brandId);
       const estimate = await estimateRunCost({
         brandId: body.brandId,
         recipeVersionId: body.recipeVersionId,
@@ -134,14 +130,15 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+}
 
+function registerCreditsRoutes(fastify: FastifyInstance): void {
   fastify.get<{ Querystring: z.infer<typeof CreditsQuerySchema> }>(
     '/credits',
     { preHandler: [fastify.authenticate, validateQuery(CreditsQuerySchema)] },
     async (request, reply) => {
-      const userId = request.user!.id;
       const { brandId } = request.query;
-      await assertBrandOwnership(userId, brandId);
+      await assertBrandOwnership(request.user!.id, brandId);
       const credits = await getRunCredits(brandId);
       return reply.send({ credits });
     }
@@ -151,31 +148,27 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
     '/credits/top-up',
     { preHandler: [fastify.authenticate, validateBody(TopUpCreditsBodySchema)] },
     async (request, reply) => {
-      const userId = request.user!.id;
       const body = request.body;
-      await assertBrandOwnership(userId, body.brandId);
-      const topUp = await grantRunCredits({
-        brandId: body.brandId,
-        credits: body.credits,
-      });
+      await assertBrandOwnership(request.user!.id, body.brandId);
+
+      const topUp = await grantRunCredits({ brandId: body.brandId, credits: body.credits });
       return reply.send({ topUp });
     }
   );
+}
 
+function registerRunByIdRoutes(fastify: FastifyInstance): void {
   fastify.get<{ Params: z.infer<typeof RunIdParamsSchema> }>(
     '/:runId',
     { preHandler: [fastify.authenticate, validateParams(RunIdParamsSchema)] },
     async (request, reply) => {
-      const userId = request.user!.id;
       const { runId } = request.params;
-
       const data = await getRun(runId);
       if (!data) {
         return reply.code(404).send({ error: 'Run not found' });
       }
 
-      await assertBrandOwnership(userId, data.run.brandId);
-
+      await assertBrandOwnership(request.user!.id, data.run.brandId);
       return reply.send(data);
     }
   );
@@ -184,20 +177,25 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
     '/:runId/cancel',
     { preHandler: [fastify.authenticate, validateParams(RunIdParamsSchema)] },
     async (request, reply) => {
-      const userId = request.user!.id;
       const { runId } = request.params;
-
       const data = await getRun(runId);
       if (!data) {
         return reply.code(404).send({ error: 'Run not found' });
       }
 
-      await assertBrandOwnership(userId, data.run.brandId);
-
+      await assertBrandOwnership(request.user!.id, data.run.brandId);
       const canceled = await cancelRun(runId);
       return reply.send(canceled);
     }
   );
+}
+
+export const runsRoutes: FastifyPluginAsync = async (fastify) => {
+  registerListRunsRoute(fastify);
+  registerCreateRunRoute(fastify);
+  registerEstimateRoute(fastify);
+  registerCreditsRoutes(fastify);
+  registerRunByIdRoutes(fastify);
 };
 
 export default runsRoutes;

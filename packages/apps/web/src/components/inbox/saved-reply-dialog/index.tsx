@@ -23,6 +23,94 @@ interface SavedReplyDialogProps {
   isSaving: boolean;
 }
 
+function DialogCopy({ isEditing }: { isEditing: boolean }) {
+  return (
+    <>
+      <DialogTitle>{isEditing ? 'Edit Saved Reply' : 'Create Saved Reply'}</DialogTitle>
+      <DialogDescription>
+        {isEditing
+          ? 'Update your saved reply template.'
+          : 'Create a new quick response template for your DM conversations.'}
+      </DialogDescription>
+    </>
+  );
+}
+
+type SavedReplyFormFieldsProps = {
+  title: string;
+  body: string;
+  isDefault: boolean;
+  isSaving: boolean;
+  onTitleChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onDefaultChange: (checked: boolean) => void;
+};
+
+function SavedReplyFormFields({
+  title,
+  body,
+  isDefault,
+  isSaving,
+  onTitleChange,
+  onBodyChange,
+  onDefaultChange,
+}: SavedReplyFormFieldsProps) {
+  return (
+    <div className="space-y-4 py-4">
+      <div className="space-y-2">
+        <Label htmlFor="title">
+          Title <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="title"
+          placeholder="e.g., Welcome Message, Product Inquiry"
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          maxLength={100}
+          disabled={isSaving}
+          autoFocus
+        />
+        <p className="text-muted-foreground text-xs">
+          A short name to identify this saved reply ({title.length}/100)
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="body">
+          Message <span className="text-destructive">*</span>
+        </Label>
+        <Textarea
+          id="body"
+          placeholder="Type your message template here..."
+          value={body}
+          onChange={(e) => onBodyChange(e.target.value)}
+          className="min-h-[150px]"
+          maxLength={1000}
+          disabled={isSaving}
+        />
+        <p className="text-muted-foreground text-xs">
+          The message that will be inserted when you select this reply ({body.length}/1000)
+        </p>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="isDefault"
+          checked={isDefault}
+          onCheckedChange={(checked) => onDefaultChange(checked === true)}
+          disabled={isSaving}
+        />
+        <label
+          htmlFor="isDefault"
+          className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Mark as default reply
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export function SavedReplyDialog({
   open,
   onOpenChange,
@@ -68,70 +156,19 @@ export function SavedReplyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Saved Reply' : 'Create Saved Reply'}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? 'Update your saved reply template.'
-              : 'Create a new quick response template for your DM conversations.'}
-          </DialogDescription>
+          <DialogCopy isEditing={isEditing} />
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            {/* Title field */}
-            <div className="space-y-2">
-              <Label htmlFor="title">
-                Title <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="title"
-                placeholder="e.g., Welcome Message, Product Inquiry"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={100}
-                disabled={isSaving}
-                autoFocus
-              />
-              <p className="text-muted-foreground text-xs">
-                A short name to identify this saved reply ({title.length}/100)
-              </p>
-            </div>
-
-            {/* Body field */}
-            <div className="space-y-2">
-              <Label htmlFor="body">
-                Message <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="body"
-                placeholder="Type your message template here..."
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                className="min-h-[150px]"
-                maxLength={1000}
-                disabled={isSaving}
-              />
-              <p className="text-muted-foreground text-xs">
-                The message that will be inserted when you select this reply ({body.length}/1000)
-              </p>
-            </div>
-
-            {/* Is Default checkbox */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="isDefault"
-                checked={isDefault}
-                onCheckedChange={(checked) => setIsDefault(checked === true)}
-                disabled={isSaving}
-              />
-              <label
-                htmlFor="isDefault"
-                className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Mark as default reply
-              </label>
-            </div>
-          </div>
+          <SavedReplyFormFields
+            title={title}
+            body={body}
+            isDefault={isDefault}
+            isSaving={isSaving}
+            onTitleChange={setTitle}
+            onBodyChange={setBody}
+            onDefaultChange={setIsDefault}
+          />
 
           <DialogFooter>
             <Button

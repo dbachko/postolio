@@ -17,6 +17,10 @@ export interface OptionalEnvironmentVariables {
   INSTAGRAM_REDIRECT_URI?: string;
 }
 
+function logInfo(message: string): void {
+  process.stdout.write(`${message}\n`);
+}
+
 /**
  * Validates that all required environment variables are present
  * @throws Error if any required variables are missing
@@ -55,13 +59,13 @@ export function validateRequiredEnvironment(): void {
  */
 
 export function validateEnvironment(): void {
-  console.log('Validating environment configuration...');
+  logInfo('Validating environment configuration...');
 
   // Check required variables
   validateRequiredEnvironment();
 
   // Scheduler uses SSM Parameter Store for service discovery
-  console.log('Scheduler integration: enabled (via SSM Parameter Store)');
+  logInfo('Scheduler integration: enabled (via SSM Parameter Store)');
 
   // Validate format of specific variables
   if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('postgresql://')) {
@@ -73,11 +77,11 @@ export function validateEnvironment(): void {
     if (!process.env.REDIS_URL.match(/^redis:\/\//)) {
       console.warn('REDIS_URL should start with redis://');
     }
-    console.log(`Redis configured via REDIS_URL: ${process.env.REDIS_URL}`);
+    logInfo(`Redis configured via REDIS_URL: ${process.env.REDIS_URL}`);
   } else if (process.env.REDIS_HOST) {
     const redisPort = process.env.REDIS_PORT || '6379';
-    console.log(`Redis configured via REDIS_HOST: redis://${process.env.REDIS_HOST}:${redisPort}`);
+    logInfo(`Redis configured via REDIS_HOST: redis://${process.env.REDIS_HOST}:${redisPort}`);
   }
 
-  console.log('Environment validation completed successfully');
+  logInfo('Environment validation completed successfully');
 }

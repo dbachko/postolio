@@ -2,6 +2,38 @@ import { describe, it, expect } from 'vitest';
 import { luxon } from '@postolio/calendar';
 import { toWallTimeDate } from '../utils/timezone';
 
+function runRealBugScenarioRegressionTests() {
+  describe('Real bug scenario regression tests', () => {
+    it('REGRESSION: should not show 3:31 PM when scheduled for 11:31 PM EST', () => {
+      const scheduledForEST = '2025-01-16T04:31:00Z'; // 11:31 PM EST
+      const brandTimezone = 'America/New_York';
+      const date = toWallTimeDate(scheduledForEST, brandTimezone);
+      const localizer = luxon.create({ timezone: brandTimezone });
+      const displayed = localizer.format(date!, 'h:mm a');
+
+      expect(displayed).toBe('11:31 PM');
+      expect(displayed).not.toBe('3:31 PM');
+    });
+
+    it('REGRESSION: should show correct time regardless of user location', () => {
+      const scheduledAtUTC = '2025-01-16T04:31:00Z'; // 11:31 PM EST
+      const brandTimezone = 'America/New_York';
+      const date = toWallTimeDate(scheduledAtUTC, brandTimezone);
+      const localizer = luxon.create({ timezone: brandTimezone });
+      const displayedTime = localizer.format(date!, 'h:mm a');
+
+      expect(displayedTime).toBe('11:31 PM');
+    });
+
+    it('REGRESSION: wall-time approach was wrong', () => {
+      const utcDate = new Date('2025-01-16T04:31:00Z');
+      const result = toWallTimeDate(utcDate.toISOString(), 'America/New_York');
+
+      expect(result?.toISOString()).toBe(utcDate.toISOString());
+    });
+  });
+}
+
 describe('Calendar Timezone Integration', () => {
   describe('End-to-end timezone flow', () => {
     it('should display correct time: Database → Calendar → Display', () => {
@@ -206,49 +238,5 @@ describe('Calendar Timezone Integration', () => {
     });
   });
 
-  describe('Real bug scenario regression tests', () => {
-    it('REGRESSION: should not show 3:31 PM when scheduled for 11:31 PM EST', () => {
-      // This was the actual bug reported
-      const scheduledForEST = '2025-01-16T04:31:00Z'; // 11:31 PM EST
-      const brandTimezone = 'America/New_York';
-
-      const date = toWallTimeDate(scheduledForEST, brandTimezone);
-      const localizer = luxon.create({ timezone: brandTimezone });
-      const displayed = localizer.format(date!, 'h:mm a');
-
-      // MUST be 11:31 PM, not 3:31 PM
-      expect(displayed).toBe('11:31 PM');
-      expect(displayed).not.toBe('3:31 PM');
-    });
-
-    it('REGRESSION: should show correct time regardless of user location', () => {
-      const scheduledAtUTC = '2025-01-16T04:31:00Z'; // 11:31 PM EST
-      const brandTimezone = 'America/New_York';
-
-      // Simulate users in different browser timezones viewing the same event
-      // All should see 11:31 PM because calendar is configured with brand timezone
-
-      const date = toWallTimeDate(scheduledAtUTC, brandTimezone);
-      const localizer = luxon.create({ timezone: brandTimezone });
-
-      // What EVERY user sees (regardless of their browser timezone)
-      const displayedTime = localizer.format(date!, 'h:mm a');
-
-      expect(displayedTime).toBe('11:31 PM');
-    });
-
-    it('REGRESSION: wall-time approach was wrong', () => {
-      // The wall-time approach tried to create dates in browser's local timezone
-      // This test ensures we're NOT doing that anymore
-
-      const utcDate = new Date('2025-01-16T04:31:00Z');
-      const result = toWallTimeDate(utcDate.toISOString(), 'America/New_York');
-
-      // Should return UTC date unchanged, NOT a wall-time date
-      expect(result?.toISOString()).toBe(utcDate.toISOString());
-
-      // Should NOT create a new Date with brand timezone components in local timezone
-      // (that was the broken approach)
-    });
-  });
+  runRealBugScenarioRegressionTests();
 });

@@ -5,6 +5,59 @@ import { cn } from '@/lib/utils';
 import { SocialAccountAvatar } from '@/components/social/social-account-avatar';
 import type { SocialAvatarMultiSelectProps } from './types';
 
+function SocialAvatarOptionButton({
+  tooltipLabel,
+  selected,
+  optionDisabled,
+  onClick,
+  platform,
+  avatarName,
+  avatarUrl,
+  size,
+}: {
+  tooltipLabel: string;
+  selected: boolean;
+  optionDisabled: boolean;
+  onClick: () => void;
+  platform: SocialAvatarMultiSelectProps['options'][number]['platform'];
+  avatarName: string;
+  avatarUrl?: string | null;
+  size: NonNullable<SocialAvatarMultiSelectProps['size']>;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn(
+            'h-auto rounded-full p-0',
+            !optionDisabled && 'cursor-pointer',
+            optionDisabled && 'cursor-not-allowed'
+          )}
+          onClick={onClick}
+          disabled={optionDisabled}
+          role="option"
+          aria-selected={selected}
+          aria-label={tooltipLabel}
+        >
+          <SocialAccountAvatar
+            platform={platform}
+            name={avatarName}
+            src={avatarUrl}
+            size={size}
+            selected={selected}
+            disabled={optionDisabled}
+          />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="text-sm">{tooltipLabel}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function SocialAvatarMultiSelect({
   options,
   value,
@@ -55,36 +108,17 @@ export function SocialAvatarMultiSelect({
           const avatarName = opt.avatarName?.trim() || shortLabel || platformLabel;
           const optionDisabled = disabled || (Boolean(opt.disabled) && !selected);
           return (
-            <Tooltip key={opt.id}>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className={cn(
-                    'h-auto rounded-full p-0',
-                    !optionDisabled && 'cursor-pointer',
-                    optionDisabled && 'cursor-not-allowed'
-                  )}
-                  onClick={() => toggle(opt.id)}
-                  disabled={optionDisabled}
-                  role="option"
-                  aria-selected={selected}
-                  aria-label={tooltipLabel}
-                >
-                  <SocialAccountAvatar
-                    platform={opt.platform}
-                    name={avatarName}
-                    src={opt.avatarUrl}
-                    size={size}
-                    selected={selected}
-                    disabled={optionDisabled}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-sm">{tooltipLabel}</p>
-              </TooltipContent>
-            </Tooltip>
+            <SocialAvatarOptionButton
+              key={opt.id}
+              tooltipLabel={tooltipLabel}
+              selected={selected}
+              optionDisabled={optionDisabled}
+              onClick={() => toggle(opt.id)}
+              platform={opt.platform}
+              avatarName={avatarName}
+              avatarUrl={opt.avatarUrl}
+              size={size}
+            />
           );
         })}
       </div>

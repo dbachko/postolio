@@ -9,55 +9,47 @@ interface LoginHistoryProps {
   history: LoginHistoryItem[];
 }
 
-export function LoginHistory({ history }: LoginHistoryProps) {
-  const getLocationString = (location?: { city?: string; country?: string } | null) => {
-    if (!location) {
-      return null;
-    }
-    const parts = [];
-    if (location.city) {
-      parts.push(location.city);
-    }
-    if (location.country) {
-      parts.push(location.country);
-    }
-    return parts.length > 0 ? parts.join(', ') : null;
-  };
+const REVOKED_REASON_MAP: Record<string, string> = {
+  user_requested: 'Logged out by user',
+  expired: 'Session expired',
+  sliding_timeout: 'Inactivity timeout',
+  absolute_timeout: 'Maximum session duration reached',
+  admin_revoked: 'Revoked by administrator',
+};
 
-  const getStatusBadge = (item: LoginHistoryItem) => {
-    if (item.status === 'active') {
-      return (
-        <Badge variant="default">
-          <CheckCircle className="mr-1 h-3 w-3" />
-          Active
-        </Badge>
-      );
-    }
+function getLocationString(location?: { city?: string; country?: string } | null) {
+  if (!location) {
+    return null;
+  }
+  const parts = [location.city, location.country].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : null;
+}
 
+function getStatusBadge(item: LoginHistoryItem) {
+  if (item.status === 'active') {
     return (
-      <Badge variant="secondary">
-        <XCircle className="mr-1 h-3 w-3" />
-        Revoked
+      <Badge variant="default">
+        <CheckCircle className="mr-1 h-3 w-3" />
+        Active
       </Badge>
     );
-  };
+  }
+  return (
+    <Badge variant="secondary">
+      <XCircle className="mr-1 h-3 w-3" />
+      Revoked
+    </Badge>
+  );
+}
 
-  const getRevokedReasonText = (reason?: string | null) => {
-    if (!reason) {
-      return null;
-    }
+function getRevokedReasonText(reason?: string | null) {
+  if (!reason) {
+    return null;
+  }
+  return REVOKED_REASON_MAP[reason] || reason;
+}
 
-    const reasonMap: Record<string, string> = {
-      user_requested: 'Logged out by user',
-      expired: 'Session expired',
-      sliding_timeout: 'Inactivity timeout',
-      absolute_timeout: 'Maximum session duration reached',
-      admin_revoked: 'Revoked by administrator',
-    };
-
-    return reasonMap[reason] || reason;
-  };
-
+export function LoginHistory({ history }: LoginHistoryProps) {
   if (history.length === 0) {
     return (
       <Card>

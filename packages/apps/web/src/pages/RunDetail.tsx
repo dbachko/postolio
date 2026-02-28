@@ -5,10 +5,11 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { runs as runsApi } from '@/lib/api';
-import type { RunStatus, RunArtifact, RunStep } from '@/lib/api/runs-client';
+import type { RunArtifact, RunStatus } from '@/lib/api/runs-client';
+
+import { CostTab, InputsTab, OutputTab, TraceTab } from './run-detail/components/run-detail-tabs';
 
 function statusBadgeVariant(
   status: RunStatus
@@ -25,31 +26,18 @@ function statusBadgeVariant(
   return 'outline';
 }
 
-function jsonPretty(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function artifactTitle(a: RunArtifact): string {
-  if (a.kind === 'asset') {
-    return a.assetId ? `${a.name} (${a.assetId})` : a.name;
-  }
-  return a.name;
-}
-
 function parseCreatedContent(artifacts: RunArtifact[]): null | {
   contentSeriesId: string | null;
   contentIds: string[];
 } {
-  const a = artifacts.find((x) => x.kind === 'json' && x.name === 'created_content.json');
-  if (!a?.contentText) {
+  const artifact = artifacts.find(
+    (value) => value.kind === 'json' && value.name === 'created_content.json'
+  );
+  if (!artifact?.contentText) {
     return null;
   }
   try {
-    const parsed = JSON.parse(a.contentText) as any;
+    const parsed = JSON.parse(artifact.contentText) as any;
     const contentSeriesId =
       typeof parsed?.contentSeriesId === 'string' ? parsed.contentSeriesId : null;
     const contentIds = Array.isArray(parsed?.contentIds)
@@ -64,18 +52,97 @@ function parseCreatedContent(artifacts: RunArtifact[]): null | {
   }
 }
 
-function stepDuration(step: RunStep): string | null {
-  if (!step.startedAt || !step.finishedAt) {
-    return null;
-  }
-  const ms = new Date(step.finishedAt).getTime() - new Date(step.startedAt).getTime();
-  if (!Number.isFinite(ms) || ms < 0) {
-    return null;
-  }
-  if (ms < 1000) {
-    return `${ms}ms`;
-  }
-  return `${(ms / 1000).toFixed(1)}s`;
+function RunDetailHeader({
+  data,
+  status,
+  canCancel,
+  cancelPending,
+  onBack,
+  onCancel,
+}: {
+  data: any;
+  status: RunStatus | undefined;
+  canCancel: boolean;
+  cancelPending: boolean;
+  onBack: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <h1 className="text-foreground text-2xl font-semibold">
+            {data.recipe?.name || 'Generation'}
+          </h1>
+          <Badge variant={status ? statusBadgeVariant(status) : 'outline'}>{status}</Badge>
+        </div>
+        <div className="text-muted-foreground text-sm">
+          Generation ID: <span className="font-mono">{data.run.id}</span>
+        </div>
+        {data.run.errorMessage ? (
+          <div className="text-destructive text-sm">{data.run.errorMessage}</div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onBack}>
+          Back
+        </Button>
+        {canCancel ? (
+          <Button variant="destructive" onClick={onCancel} disabled={cancelPending}>
+            Cancel
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function RunDetailContent({
+  data,
+  status,
+  canCancel,
+  cancelPending,
+  createdContent,
+  artifactsByKind,
+  onBack,
+  onCancel,
+}: {
+  data: any;
+  status: RunStatus | undefined;
+  canCancel: boolean;
+  cancelPending: boolean;
+  createdContent: { contentSeriesId: string | null; contentIds: string[] } | null;
+  artifactsByKind: Record<string, RunArtifact[]>;
+  onBack: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <RunDetailHeader
+        data={data}
+        status={status}
+        canCancel={canCancel}
+        cancelPending={cancelPending}
+        onBack={onBack}
+        onCancel={onCancel}
+      />
+
+      <Tabs defaultValue="output">
+        <TabsList>
+          <TabsTrigger value="output">Output</TabsTrigger>
+          <TabsTrigger value="trace">Trace</TabsTrigger>
+          <TabsTrigger value="inputs">Inputs</TabsTrigger>
+          <TabsTrigger value="cost">Cost</TabsTrigger>
+        </TabsList>
+
+        <OutputTab data={data} createdContent={createdContent} artifactsByKind={artifactsByKind} />
+        <TraceTab data={data} />
+        <InputsTab data={data} />
+        <CostTab data={data} />
+      </Tabs>
+    </div>
+  );
 }
 
 export function RunDetail() {
@@ -89,10 +156,7 @@ export function RunDetail() {
     queryFn: async () => await runsApi.getRun(runId!),
     refetchInterval: (query) => {
       const status = (query.state.data as any)?.run?.status as RunStatus | undefined;
-      if (status === 'queued' || status === 'running') {
-        return 1500;
-      }
-      return false;
+      return status === 'queued' || status === 'running' ? 1500 : false;
     },
   });
 
@@ -103,22 +167,21 @@ export function RunDetail() {
       await queryClient.invalidateQueries({ queryKey: ['run', runId] });
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
     },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to cancel generation');
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel generation');
     },
   });
 
   const data = runQuery.data;
   const status = data?.run?.status as RunStatus | undefined;
-
   const canCancel = status === 'queued' || status === 'running';
 
   const artifactsByKind = useMemo(() => {
     const artifacts = data?.artifacts ?? [];
     const groups: Record<string, RunArtifact[]> = {};
-    for (const a of artifacts) {
-      groups[a.kind] = groups[a.kind] || [];
-      groups[a.kind].push(a);
+    for (const artifact of artifacts) {
+      groups[artifact.kind] = groups[artifact.kind] || [];
+      groups[artifact.kind].push(artifact);
     }
     return groups;
   }, [data?.artifacts]);
@@ -130,21 +193,10 @@ export function RunDetail() {
   const didInvalidateCalendarRef = useRef(false);
 
   useEffect(() => {
-    if (didInvalidateCalendarRef.current) {
+    if (didInvalidateCalendarRef.current || data?.run.status !== 'success' || !createdContent) {
       return;
     }
-    if (!data) {
-      return;
-    }
-    if (data.run.status !== 'success') {
-      return;
-    }
-    if (!createdContent) {
-      return;
-    }
-
     didInvalidateCalendarRef.current = true;
-    // Refresh calendar + series list so created posts appear immediately without waiting for staleTime.
     queryClient.invalidateQueries({ queryKey: ['calendar', data.run.brandId] }).catch(() => {});
     queryClient
       .invalidateQueries({ queryKey: ['content-series', data.run.brandId] })
@@ -154,11 +206,9 @@ export function RunDetail() {
   if (!runId) {
     return <div className="text-muted-foreground text-sm">Missing generation id.</div>;
   }
-
   if (!data && runQuery.isLoading) {
     return <div className="text-muted-foreground text-sm">Loading…</div>;
   }
-
   if (!data) {
     return (
       <div className="space-y-3">
@@ -171,223 +221,15 @@ export function RunDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-foreground text-2xl font-semibold">
-              {data.recipe?.name || 'Generation'}
-            </h1>
-            <Badge variant={status ? statusBadgeVariant(status) : 'outline'}>{status}</Badge>
-          </div>
-          <div className="text-muted-foreground text-sm">
-            Generation ID: <span className="font-mono">{data.run.id}</span>
-          </div>
-          {data.run.errorMessage ? (
-            <div className="text-destructive text-sm">{data.run.errorMessage}</div>
-          ) : null}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/runs')}>
-            Back
-          </Button>
-          {canCancel ? (
-            <Button
-              variant="destructive"
-              onClick={() => cancelMutation.mutate()}
-              disabled={cancelMutation.isPending}
-            >
-              Cancel
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <Tabs defaultValue="output">
-        <TabsList>
-          <TabsTrigger value="output">Output</TabsTrigger>
-          <TabsTrigger value="trace">Trace</TabsTrigger>
-          <TabsTrigger value="inputs">Inputs</TabsTrigger>
-          <TabsTrigger value="cost">Cost</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="output" className="space-y-4">
-          {createdContent ? (
-            <Card className="bg-card border-border">
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-foreground text-base">Created content</CardTitle>
-                <div className="text-muted-foreground text-xs">
-                  Series: <span className="font-mono">{createdContent.contentSeriesId || '—'}</span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {createdContent.contentIds.length === 0 ? (
-                  <div className="text-muted-foreground text-sm">No content ids recorded.</div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {createdContent.contentIds.map((id) => (
-                      <Button
-                        key={id}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/posts/${id}`)}
-                      >
-                        {id.slice(0, 8)}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center justify-end gap-2">
-                  {createdContent.contentSeriesId ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/series/${createdContent.contentSeriesId}`)}
-                    >
-                      Open series
-                    </Button>
-                  ) : null}
-                  <Button variant="outline" size="sm" onClick={() => navigate('/content')}>
-                    Open calendar
-                  </Button>
-                </div>
-                <div className="text-muted-foreground text-xs">
-                  Tip: open the calendar and filter by the series to see the full schedule.
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {data.artifacts.length === 0 ? (
-            <div className="text-muted-foreground text-sm">No artifacts yet.</div>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {Object.values(artifactsByKind)
-                .flat()
-                .map((a) => (
-                  <Card key={a.id} className="bg-card border-border">
-                    <CardHeader className="space-y-1">
-                      <CardTitle className="text-foreground text-sm">{artifactTitle(a)}</CardTitle>
-                      <div className="text-muted-foreground text-xs">{a.kind}</div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {a.kind === 'asset' ? (
-                        <div className="space-y-2">
-                          <div className="text-muted-foreground text-sm">
-                            Asset ID: <span className="font-mono">{a.assetId || '—'}</span>
-                          </div>
-                          {a.assetId ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => navigate(`/assets/${a.assetId}`)}
-                            >
-                              View asset
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <pre className="bg-muted text-foreground max-h-[420px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                          {a.contentText || '—'}
-                        </pre>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="trace" className="space-y-3">
-          {data.steps.length === 0 ? (
-            <div className="text-muted-foreground text-sm">No steps yet.</div>
-          ) : (
-            <div className="space-y-3">
-              {data.steps.map((s) => (
-                <details key={s.id} className="bg-card border-border rounded-md border p-4">
-                  <summary className="text-foreground flex cursor-pointer list-none items-center justify-between gap-4">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Badge variant="outline">{s.status}</Badge>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{s.name}</div>
-                        <div className="text-muted-foreground truncate text-xs">{s.type}</div>
-                      </div>
-                    </div>
-                    <div className="text-muted-foreground text-xs">{stepDuration(s) || ''}</div>
-                  </summary>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                    <div>
-                      <div className="text-muted-foreground mb-1 text-xs">Input</div>
-                      <pre className="bg-muted text-foreground max-h-[320px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                        {jsonPretty(s.inputJsonRedacted)}
-                      </pre>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground mb-1 text-xs">Output</div>
-                      <pre className="bg-muted text-foreground max-h-[320px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                        {jsonPretty(s.outputJsonRedacted)}
-                      </pre>
-                    </div>
-                  </div>
-                  {s.errorMessage ? (
-                    <div className="text-destructive mt-3 text-sm">{s.errorMessage}</div>
-                  ) : null}
-                </details>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="inputs" className="space-y-3">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground text-base">Inputs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="bg-muted text-foreground overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                {jsonPretty(data.run.input)}
-              </pre>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="cost" className="space-y-3">
-          <Card className="bg-card border-border">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-foreground text-sm">Cost summary</CardTitle>
-            </CardHeader>
-            <CardContent className="text-muted-foreground space-y-1 text-sm">
-              <div>Total input tokens: {data.costSummary?.totalInputTokens ?? 0}</div>
-              <div>Total output tokens: {data.costSummary?.totalOutputTokens ?? 0}</div>
-              <div>Total estimated cost: {data.costSummary?.totalEstimatedCostUsd || '—'}</div>
-              <div>Managed credits spent: {data.costSummary?.managedCreditsSpent ?? 0}</div>
-            </CardContent>
-          </Card>
-
-          {data.costs.length === 0 ? (
-            <div className="text-muted-foreground text-sm">No cost data yet.</div>
-          ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {data.costs.map((c) => (
-                <Card key={c.id} className="bg-card border-border">
-                  <CardHeader className="space-y-1">
-                    <CardTitle className="text-foreground text-sm">
-                      {c.provider} · {c.mode}
-                    </CardTitle>
-                    <div className="text-muted-foreground text-xs">{c.notes || '—'}</div>
-                  </CardHeader>
-                  <CardContent className="text-muted-foreground space-y-1 text-sm">
-                    <div>Input tokens: {c.inputTokens}</div>
-                    <div>Output tokens: {c.outputTokens}</div>
-                    <div>Estimated cost: {c.estimatedCostUsd || '—'}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
+    <RunDetailContent
+      data={data}
+      status={status}
+      canCancel={canCancel}
+      cancelPending={cancelMutation.isPending}
+      createdContent={createdContent}
+      artifactsByKind={artifactsByKind}
+      onBack={() => navigate('/runs')}
+      onCancel={() => cancelMutation.mutate()}
+    />
   );
 }

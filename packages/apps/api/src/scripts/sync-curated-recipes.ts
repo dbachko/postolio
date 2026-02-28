@@ -6,9 +6,13 @@ import {
   getCuratedRecipeCatalogInfo,
 } from '../services/recipes/seed.js';
 
+function logInfo(message: string): void {
+  process.stdout.write(`${message}\n`);
+}
+
 async function main() {
   const catalog = getCuratedRecipeCatalogInfo();
-  console.log(
+  logInfo(
     `[curated-recipes] Syncing catalog version=${catalog.catalogVersion} hash=${catalog.catalogHash.slice(
       0,
       12
@@ -17,7 +21,7 @@ async function main() {
 
   const result = await ensureCuratedRecipesSeeded({ force: true });
 
-  console.log(
+  logInfo(
     `[curated-recipes] Synced skipped=${result.skipped} createdTemplates=${result.createdTemplates} updatedTemplates=${result.updatedTemplates} archivedTemplates=${result.archivedTemplates} createdVersions=${result.createdVersions} unchangedVersions=${result.unchangedVersions}`
   );
 }

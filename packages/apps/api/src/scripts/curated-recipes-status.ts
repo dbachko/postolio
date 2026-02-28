@@ -5,6 +5,14 @@ import {
   getCuratedRecipeCatalogInfo,
 } from '../services/recipes/seed.js';
 
+function logInfo(message: string): void {
+  process.stdout.write(`${message}\n`);
+}
+
+function logJson(value: unknown): void {
+  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
 function hasArg(flag: string): boolean {
   return process.argv.includes(flag);
 }
@@ -14,7 +22,7 @@ async function main() {
   const catalog = getCuratedRecipeCatalogInfo();
 
   if (doSync) {
-    console.log(
+    logInfo(
       `[curated-recipes] Syncing before status version=${catalog.catalogVersion} hash=${catalog.catalogHash.slice(
         0,
         12
@@ -53,25 +61,19 @@ async function main() {
     (t) => !t.versions.some((v) => v.isPublished)
   ).length;
 
-  console.log('[curated-recipes] Catalog status');
-  console.log(
-    JSON.stringify(
-      {
-        catalogVersion: catalog.catalogVersion,
-        catalogHash: catalog.catalogHash,
-        catalogSize: catalog.catalogSize,
-        dbTotalTemplates: templates.length,
-        dbActiveTemplates: activeCount,
-        dbArchivedTemplates: archivedCount,
-        dbMissingPublishedVersion: missingPublishedCount,
-      },
-      null,
-      2
-    )
-  );
+  logInfo('[curated-recipes] Catalog status');
+  logJson({
+    catalogVersion: catalog.catalogVersion,
+    catalogHash: catalog.catalogHash,
+    catalogSize: catalog.catalogSize,
+    dbTotalTemplates: templates.length,
+    dbActiveTemplates: activeCount,
+    dbArchivedTemplates: archivedCount,
+    dbMissingPublishedVersion: missingPublishedCount,
+  });
 
   if (rows.length > 0) {
-    console.table(rows);
+    logJson(rows);
   }
 
   if (activeCount !== catalog.catalogSize) {

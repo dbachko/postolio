@@ -28,142 +28,164 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SocialAccountsPicker } from '@/components/social/social-accounts-picker';
 
+function BasicInputsCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Buttons & Inputs</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Button>Default</Button>
+          <Button variant="outline">Outline</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="ghost">Ghost</Button>
+        </div>
+        <div className="grid max-w-md gap-2">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" placeholder="John Doe" />
+          <Label htmlFor="bio">Bio</Label>
+          <Textarea id="bio" rows={3} placeholder="Short bio..." />
+        </div>
+        <div className="flex items-center gap-4">
+          <Checkbox id="terms" />
+          <Label htmlFor="terms">Accept terms</Label>
+          <Switch />
+        </div>
+        <div className="max-w-sm">
+          <Label>Favorite</Label>
+          <Select>
+            <SelectTrigger>
+              <SelectValue placeholder="Pick one" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="a">Option A</SelectItem>
+              <SelectItem value="b">Option B</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InteractionsCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Tabs, Tooltip & Dialog</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Tabs defaultValue="one" className="max-w-lg">
+          <TabsList>
+            <TabsTrigger value="one">One</TabsTrigger>
+            <TabsTrigger value="two">Two</TabsTrigger>
+          </TabsList>
+          <TabsContent value="one">Tab One Content</TabsContent>
+          <TabsContent value="two">Tab Two Content</TabsContent>
+        </Tabs>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline">Hover me</Button>
+            </TooltipTrigger>
+            <TooltipContent>Tooltip content</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>Open Dialog</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Dialog Title</DialogTitle>
+            </DialogHeader>
+            <div>Dialog content area</div>
+          </DialogContent>
+        </Dialog>
+        <Alert>
+          <AlertDescription>Informational alert</AlertDescription>
+        </Alert>
+        <Separator />
+        <RadioGroup defaultValue="1" className="flex gap-4">
+          <div className="flex items-center gap-2">
+            <RadioGroupItem id="r1" value="1" />
+            <Label htmlFor="r1">One</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem id="r2" value="2" />
+            <Label htmlFor="r2">Two</Label>
+          </div>
+        </RadioGroup>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SocialPickerCard({
+  platforms,
+  onChange,
+}: {
+  platforms: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Social Accounts Picker</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2">
+          <Label className="text-sm">Platforms</Label>
+          <SocialAccountsPicker
+            options={[
+              {
+                id: 'instagram',
+                platform: 'instagram',
+                label: '@postolio',
+                tooltipLabel: 'Instagram · @postolio',
+                avatarName: 'Postolio',
+                avatarUrl: '/postolio-icon.svg',
+              },
+              {
+                id: 'facebook',
+                platform: 'facebook',
+                label: 'Postolio Page',
+                tooltipLabel: 'Facebook · Postolio Page',
+                avatarName: 'Postolio Page',
+                avatarUrl: null,
+              },
+              {
+                id: 'linkedin',
+                platform: 'linkedin',
+                label: 'Coming soon',
+                tooltipLabel: 'LinkedIn (coming soon)',
+                avatarName: 'LinkedIn',
+                avatarUrl: null,
+                disabled: true,
+              },
+            ]}
+            value={platforms}
+            onChange={onChange}
+            addButtonText="Add platforms"
+          />
+        </div>
+        <div className="text-muted-foreground text-xs">
+          Selected: {platforms.length ? platforms.join(', ') : 'none'}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UiKitchenSink() {
   const [platforms, setPlatforms] = useState<string[]>(['instagram']);
 
   return (
     <div className="mx-auto w-full space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Buttons & Inputs</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button>Default</Button>
-            <Button variant="outline">Outline</Button>
-            <Button variant="secondary">Secondary</Button>
-            <Button variant="ghost">Ghost</Button>
-          </div>
-          <div className="grid max-w-md gap-2">
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" placeholder="John Doe" />
-            <Label htmlFor="bio">Bio</Label>
-            <Textarea id="bio" rows={3} placeholder="Short bio..." />
-          </div>
-          <div className="flex items-center gap-4">
-            <Checkbox id="terms" />
-            <Label htmlFor="terms">Accept terms</Label>
-            <Switch />
-          </div>
-          <div className="max-w-sm">
-            <Label>Favorite</Label>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Pick one" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="a">Option A</SelectItem>
-                <SelectItem value="b">Option B</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Tabs, Tooltip & Dialog</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Tabs defaultValue="one" className="max-w-lg">
-            <TabsList>
-              <TabsTrigger value="one">One</TabsTrigger>
-              <TabsTrigger value="two">Two</TabsTrigger>
-            </TabsList>
-            <TabsContent value="one">Tab One Content</TabsContent>
-            <TabsContent value="two">Tab Two Content</TabsContent>
-          </Tabs>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline">Hover me</Button>
-              </TooltipTrigger>
-              <TooltipContent>Tooltip content</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>Open Dialog</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Dialog Title</DialogTitle>
-              </DialogHeader>
-              <div>Dialog content area</div>
-            </DialogContent>
-          </Dialog>
-          <Alert>
-            <AlertDescription>Informational alert</AlertDescription>
-          </Alert>
-          <Separator />
-          <RadioGroup defaultValue="1" className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <RadioGroupItem id="r1" value="1" />
-              <Label htmlFor="r1">One</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem id="r2" value="2" />
-              <Label htmlFor="r2">Two</Label>
-            </div>
-          </RadioGroup>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Social Accounts Picker</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label className="text-sm">Platforms</Label>
-            <SocialAccountsPicker
-              options={[
-                {
-                  id: 'instagram',
-                  platform: 'instagram',
-                  label: '@postolio',
-                  tooltipLabel: 'Instagram · @postolio',
-                  avatarName: 'Postolio',
-                  avatarUrl: '/postolio-icon.svg',
-                },
-                {
-                  id: 'facebook',
-                  platform: 'facebook',
-                  label: 'Postolio Page',
-                  tooltipLabel: 'Facebook · Postolio Page',
-                  avatarName: 'Postolio Page',
-                  avatarUrl: null,
-                },
-                {
-                  id: 'linkedin',
-                  platform: 'linkedin',
-                  label: 'Coming soon',
-                  tooltipLabel: 'LinkedIn (coming soon)',
-                  avatarName: 'LinkedIn',
-                  avatarUrl: null,
-                  disabled: true,
-                },
-              ]}
-              value={platforms}
-              onChange={setPlatforms}
-              addButtonText="Add platforms"
-            />
-          </div>
-          <div className="text-muted-foreground text-xs">
-            Selected: {platforms.length ? platforms.join(', ') : 'none'}
-          </div>
-        </CardContent>
-      </Card>
+      <BasicInputsCard />
+      <InteractionsCard />
+      <SocialPickerCard platforms={platforms} onChange={setPlatforms} />
     </div>
   );
 }

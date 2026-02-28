@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
 import { dmAutomation, type CreateRuleInput } from '@/lib/api';
 import { AppSidebar } from '@/components/ui/app-sidebar';
 import { Button } from '@/components/ui/button';
@@ -12,114 +14,279 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
+
 import { DMTemplateEditor } from '../dm-template-editor';
-import type { RuleFormProps } from './types';
 import { ActionTypeField } from './components/action-type-field';
 import { KeywordsField } from './components/keywords-field';
 import { MatchTypeField } from './components/match-type-field';
+import type { RuleFormProps } from './types';
 import { isActionValidForTrigger, isKeywordTrigger } from './utils';
 
-export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
-  const queryClient = useQueryClient();
-  const isEditing = !!rule;
+function createInitialFormData(rule: RuleFormProps['rule']): CreateRuleInput {
+  if (!rule) {
+    return {
+      name: '',
+      triggerType: 'comment_keyword',
+      triggerConfig: { keywords: [], matchType: 'exact' },
+      actionType: 'send_dm',
+      messageTemplate: '',
+      commentReplyTemplate: undefined,
+      priority: 0,
+    };
+  }
 
-  const [formData, setFormData] = useState<CreateRuleInput>({
-    name: rule?.name || '',
-    triggerType: rule?.triggerType || 'comment_keyword',
+  return {
+    name: rule.name ?? '',
+    triggerType: rule.triggerType ?? 'comment_keyword',
     triggerConfig: {
-      keywords: rule?.triggerConfig.keywords || [],
-      matchType: rule?.triggerConfig.matchType || 'exact',
+      keywords: rule.triggerConfig.keywords ?? [],
+      matchType: rule.triggerConfig.matchType ?? 'exact',
     },
-    actionType: rule?.actionType || 'send_dm',
-    messageTemplate: rule?.messageTemplate || '',
-    commentReplyTemplate: rule?.commentReplyTemplate || undefined,
-    priority: rule?.priority || 0,
-  });
+    actionType: rule.actionType ?? 'send_dm',
+    messageTemplate: rule.messageTemplate ?? '',
+    commentReplyTemplate: rule.commentReplyTemplate ?? undefined,
+    priority: rule.priority ?? 0,
+  };
+}
 
-  const createMutation = useMutation({
-    mutationFn: (data: CreateRuleInput) => dmAutomation.createRule(brandId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dm-automation-rules', brandId] });
-      toast.success('Rule created successfully');
-      onSuccess();
-    },
-    onError: () => {
-      toast.error('Failed to create rule');
-    },
-  });
+function validateRuleForm(formData: CreateRuleInput): string | null {
+  if (!formData.name.trim()) {
+    return 'Please enter a rule name';
+  }
+  if (isKeywordTrigger(formData.triggerType) && formData.triggerConfig.keywords.length === 0) {
+    return 'Please add at least one keyword';
+  }
+  if (
+    (formData.actionType === 'send_dm' || formData.actionType === 'send_dm_and_reply') &&
+    !formData.messageTemplate.trim()
+  ) {
+    return 'Please enter a message template';
+  }
+  if (
+    (formData.actionType === 'reply_comment' || formData.actionType === 'send_dm_and_reply') &&
+    !formData.commentReplyTemplate?.trim()
+  ) {
+    return 'Please enter a comment reply template';
+  }
+  return null;
+}
 
-  const updateMutation = useMutation({
-    mutationFn: (data: CreateRuleInput) => dmAutomation.updateRule(brandId, rule!.id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dm-automation-rules', brandId] });
-      toast.success('Rule updated successfully');
-      onSuccess();
-    },
-    onError: () => {
-      toast.error('Failed to update rule');
-    },
-  });
+function useRuleFormState(rule: RuleFormProps['rule']) {
+  const [formData, setFormData] = useState<CreateRuleInput>(() => createInitialFormData(rule));
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
-  const submitLabel = useMemo(() => {
-    if (isSaving) {
-      return 'Saving...';
-    }
-    return isEditing ? 'Update Rule' : 'Create Rule';
-  }, [isEditing, isSaving]);
-
-  const handleTriggerTypeChange = (newTriggerType: CreateRuleInput['triggerType']) => {
-    const updates: Partial<CreateRuleInput> = { triggerType: newTriggerType };
-
-    if (
-      !isActionValidForTrigger({ actionType: formData.actionType, triggerType: newTriggerType })
-    ) {
+  const handleTriggerTypeChange = (triggerType: CreateRuleInput['triggerType']) => {
+    const updates: Partial<CreateRuleInput> = { triggerType };
+    if (!isActionValidForTrigger({ actionType: formData.actionType, triggerType })) {
       updates.actionType = 'send_dm';
       updates.commentReplyTemplate = undefined;
     }
-
-    setFormData({ ...formData, ...updates });
+    setFormData((prev) => ({ ...prev, ...updates }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  return {
+    formData,
+    setFormData,
+    showKeywords: isKeywordTrigger(formData.triggerType),
+    handleTriggerTypeChange,
+  };
+}
 
-    if (!formData.name.trim()) {
-      toast.error('Please enter a rule name');
-      return;
+function useRuleFormMutations(params: {
+  brandId: string;
+  rule: RuleFormProps['rule'];
+  onSuccess: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: (data: CreateRuleInput) => dmAutomation.createRule(params.brandId, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dm-automation-rules', params.brandId] });
+      toast.success('Rule created successfully');
+      params.onSuccess();
+    },
+    onError: () => toast.error('Failed to create rule'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: CreateRuleInput) =>
+      dmAutomation.updateRule(params.brandId, params.rule!.id, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dm-automation-rules', params.brandId] });
+      toast.success('Rule updated successfully');
+      params.onSuccess();
+    },
+    onError: () => toast.error('Failed to update rule'),
+  });
+
+  return {
+    createMutation,
+    updateMutation,
+    isSaving: createMutation.isPending || updateMutation.isPending,
+  };
+}
+
+function RuleTriggerFields(props: {
+  brandId: string;
+  formData: CreateRuleInput;
+  setFormData: Dispatch<SetStateAction<CreateRuleInput>>;
+  showKeywords: boolean;
+  handleTriggerTypeChange: (next: CreateRuleInput['triggerType']) => void;
+}) {
+  return (
+    <>
+      <div>
+        <Label htmlFor="name">Rule Name</Label>
+        <Input
+          id="name"
+          value={props.formData.name}
+          onChange={(event) => props.setFormData({ ...props.formData, name: event.target.value })}
+          placeholder="e.g., Promo Code Giveaway"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="triggerType">Trigger Type</Label>
+        <Select
+          value={props.formData.triggerType}
+          onValueChange={(value) =>
+            props.handleTriggerTypeChange(value as CreateRuleInput['triggerType'])
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="comment_keyword">Comment Keyword</SelectItem>
+            <SelectItem value="dm_keyword">DM Keyword</SelectItem>
+            <SelectItem value="comment_any">Any Comment</SelectItem>
+            <SelectItem value="dm_any">Any DM</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {props.showKeywords ? (
+        <KeywordsField
+          triggerConfig={props.formData.triggerConfig}
+          onChange={(next) => props.setFormData({ ...props.formData, triggerConfig: next })}
+        />
+      ) : null}
+
+      {props.showKeywords ? (
+        <MatchTypeField
+          value={props.formData.triggerConfig.matchType}
+          onChange={(next) =>
+            props.setFormData({
+              ...props.formData,
+              triggerConfig: { ...props.formData.triggerConfig, matchType: next },
+            })
+          }
+        />
+      ) : null}
+
+      <ActionTypeField
+        value={props.formData.actionType}
+        triggerType={props.formData.triggerType}
+        onChange={(next) => props.setFormData({ ...props.formData, actionType: next })}
+      />
+    </>
+  );
+}
+
+function RuleMessageFields(props: {
+  brandId: string;
+  formData: CreateRuleInput;
+  setFormData: Dispatch<SetStateAction<CreateRuleInput>>;
+}) {
+  return (
+    <>
+      {props.formData.actionType === 'send_dm' ||
+      props.formData.actionType === 'send_dm_and_reply' ? (
+        <DMTemplateEditor
+          id="messageTemplate"
+          label="DM Message Template"
+          value={props.formData.messageTemplate}
+          onChange={(value) => props.setFormData({ ...props.formData, messageTemplate: value })}
+          placeholder="Hi {{name}}! Thanks for your interest..."
+          brandId={props.brandId}
+          required
+          rows={4}
+          helperText="Use template variables, emojis, and hashtags to personalize your message"
+        />
+      ) : null}
+
+      {props.formData.actionType === 'reply_comment' ||
+      props.formData.actionType === 'send_dm_and_reply' ? (
+        <DMTemplateEditor
+          id="commentReplyTemplate"
+          label="Comment Reply Template"
+          value={props.formData.commentReplyTemplate || ''}
+          onChange={(value) =>
+            props.setFormData({ ...props.formData, commentReplyTemplate: value || undefined })
+          }
+          placeholder="Thanks for your comment, {{name}}!"
+          brandId={props.brandId}
+          maxLength={500}
+          rows={2}
+          helperText="Keep it short - Instagram comment replies have a 500 character limit"
+        />
+      ) : null}
+    </>
+  );
+}
+
+function RuleFormFields(props: {
+  brandId: string;
+  formData: CreateRuleInput;
+  setFormData: Dispatch<SetStateAction<CreateRuleInput>>;
+  showKeywords: boolean;
+  handleTriggerTypeChange: (next: CreateRuleInput['triggerType']) => void;
+}) {
+  return (
+    <>
+      <RuleTriggerFields {...props} />
+      <RuleMessageFields
+        brandId={props.brandId}
+        formData={props.formData}
+        setFormData={props.setFormData}
+      />
+    </>
+  );
+}
+
+export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
+  const isEditing = Boolean(rule);
+  const state = useRuleFormState(rule);
+
+  const mutations = useRuleFormMutations({
+    brandId,
+    rule,
+    onSuccess,
+  });
+
+  const submitLabel = useMemo(() => {
+    if (mutations.isSaving) {
+      return 'Saving...';
     }
+    return isEditing ? 'Update Rule' : 'Create Rule';
+  }, [isEditing, mutations.isSaving]);
 
-    if (isKeywordTrigger(formData.triggerType) && formData.triggerConfig.keywords.length === 0) {
-      toast.error('Please add at least one keyword');
-      return;
-    }
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
 
-    if (
-      (formData.actionType === 'send_dm' || formData.actionType === 'send_dm_and_reply') &&
-      !formData.messageTemplate.trim()
-    ) {
-      toast.error('Please enter a message template');
-      return;
-    }
-
-    if (
-      (formData.actionType === 'reply_comment' || formData.actionType === 'send_dm_and_reply') &&
-      !formData.commentReplyTemplate?.trim()
-    ) {
-      toast.error('Please enter a comment reply template');
+    const errorMessage = validateRuleForm(state.formData);
+    if (errorMessage) {
+      toast.error(errorMessage);
       return;
     }
 
     if (isEditing) {
-      updateMutation.mutate(formData);
+      mutations.updateMutation.mutate(state.formData);
       return;
     }
 
-    createMutation.mutate(formData);
+    mutations.createMutation.mutate(state.formData);
   };
-
-  const showKeywords = isKeywordTrigger(formData.triggerType);
 
   return (
     <AppSidebar
@@ -131,101 +298,20 @@ export function RuleForm({ brandId, rule, onClose, onSuccess }: RuleFormProps) {
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" form="rule-form" disabled={isSaving}>
+          <Button type="submit" form="rule-form" disabled={mutations.isSaving}>
             {submitLabel}
           </Button>
         </div>
       }
     >
       <form id="rule-form" onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="name">Rule Name</Label>
-          <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="e.g., Promo Code Giveaway"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="triggerType">Trigger Type</Label>
-          <Select
-            value={formData.triggerType}
-            onValueChange={(v) => handleTriggerTypeChange(v as any)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="comment_keyword">Comment Keyword</SelectItem>
-              <SelectItem value="dm_keyword">DM Keyword</SelectItem>
-              <SelectItem value="comment_any">Any Comment</SelectItem>
-              <SelectItem value="dm_any">Any DM</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {showKeywords && (
-          <KeywordsField
-            triggerConfig={formData.triggerConfig}
-            onChange={(next) =>
-              setFormData({
-                ...formData,
-                triggerConfig: next,
-              })
-            }
-          />
-        )}
-
-        {showKeywords && (
-          <MatchTypeField
-            value={formData.triggerConfig.matchType}
-            onChange={(next) =>
-              setFormData({
-                ...formData,
-                triggerConfig: { ...formData.triggerConfig, matchType: next },
-              })
-            }
-          />
-        )}
-
-        <ActionTypeField
-          value={formData.actionType}
-          triggerType={formData.triggerType}
-          onChange={(next) => setFormData({ ...formData, actionType: next })}
+        <RuleFormFields
+          brandId={brandId}
+          formData={state.formData}
+          setFormData={state.setFormData}
+          showKeywords={state.showKeywords}
+          handleTriggerTypeChange={state.handleTriggerTypeChange}
         />
-
-        {(formData.actionType === 'send_dm' || formData.actionType === 'send_dm_and_reply') && (
-          <DMTemplateEditor
-            id="messageTemplate"
-            label="DM Message Template"
-            value={formData.messageTemplate}
-            onChange={(value) => setFormData({ ...formData, messageTemplate: value })}
-            placeholder="Hi {{name}}! Thanks for your interest..."
-            brandId={brandId}
-            required
-            rows={4}
-            helperText="Use template variables, emojis, and hashtags to personalize your message"
-          />
-        )}
-
-        {(formData.actionType === 'reply_comment' ||
-          formData.actionType === 'send_dm_and_reply') && (
-          <DMTemplateEditor
-            id="commentReplyTemplate"
-            label="Comment Reply Template"
-            value={formData.commentReplyTemplate || ''}
-            onChange={(value) =>
-              setFormData({ ...formData, commentReplyTemplate: value || undefined })
-            }
-            placeholder="Thanks for your comment, {{name}}!"
-            brandId={brandId}
-            maxLength={500}
-            rows={2}
-            helperText="Keep it short - Instagram comment replies have a 500 character limit"
-          />
-        )}
       </form>
     </AppSidebar>
   );

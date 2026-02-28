@@ -1,6 +1,35 @@
 import { describe, it, expect } from 'vitest';
 import { toWallTimeDate, formatGmtOffset } from '../timezone';
 
+function runPerformanceAndEdgeCasesTests() {
+  describe('Performance and edge cases', () => {
+    it('should handle very old dates', () => {
+      const oldDate = '1970-01-01T00:00:00Z';
+      const result = toWallTimeDate(oldDate);
+
+      expect(result?.toISOString()).toBe('1970-01-01T00:00:00.000Z');
+    });
+
+    it('should handle far future dates', () => {
+      const futureDate = '2099-12-31T23:59:59Z';
+      const result = toWallTimeDate(futureDate);
+
+      expect(result?.toISOString()).toBe('2099-12-31T23:59:59.000Z');
+    });
+
+    it('should be performant with many calls', () => {
+      const start = Date.now();
+
+      for (let i = 0; i < 1000; i++) {
+        toWallTimeDate('2025-01-16T04:31:00Z', 'America/New_York');
+      }
+
+      const duration = Date.now() - start;
+      expect(duration).toBeLessThan(100);
+    });
+  });
+}
+
 describe('Calendar Timezone Utilities', () => {
   describe('toWallTimeDate()', () => {
     it('should return UTC date directly (localizer handles timezone)', () => {
@@ -204,31 +233,5 @@ describe('Calendar Timezone Utilities', () => {
     });
   });
 
-  describe('Performance and edge cases', () => {
-    it('should handle very old dates', () => {
-      const oldDate = '1970-01-01T00:00:00Z';
-      const result = toWallTimeDate(oldDate);
-
-      expect(result?.toISOString()).toBe('1970-01-01T00:00:00.000Z');
-    });
-
-    it('should handle far future dates', () => {
-      const futureDate = '2099-12-31T23:59:59Z';
-      const result = toWallTimeDate(futureDate);
-
-      expect(result?.toISOString()).toBe('2099-12-31T23:59:59.000Z');
-    });
-
-    it('should be performant with many calls', () => {
-      const start = Date.now();
-
-      for (let i = 0; i < 1000; i++) {
-        toWallTimeDate('2025-01-16T04:31:00Z', 'America/New_York');
-      }
-
-      const duration = Date.now() - start;
-      // Should complete 1000 calls in under 100ms
-      expect(duration).toBeLessThan(100);
-    });
-  });
+  runPerformanceAndEdgeCasesTests();
 });

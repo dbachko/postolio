@@ -1,50 +1,22 @@
 import type { HttpRequest } from '../http/http';
 
 import type { ImageProvider } from '@/types/image-providers';
-import type { Platform } from '@/lib/platform-config';
-
-type BrandImageProviderPreference = {
-  imageProvider: ImageProvider | null;
-  defaultProvider: ImageProvider | null;
-};
-
-type ImageAnalyticsResponse = {
-  overall: {
-    totalGenerated: number;
-    totalCost: number;
-    avgCostPerImage: number;
-  };
-  byProvider: Record<
-    string,
-    {
-      count: number;
-      totalCost: number;
-      totalTime: number;
-      avgCost: number;
-      avgTime: number;
-    }
-  >;
-  recentLogs: Array<{
-    id: string;
-    provider: string;
-    cost: number;
-    generationTime: number;
-    status: string;
-    createdAt: string;
-  }>;
-};
-
-type ContentSeriesSummary = {
-  id: string;
-  key: string | null;
-  name: string;
-  description: string | null;
-  color: string | null;
-  kind: 'batch' | 'rolling';
-  status: 'active' | 'paused' | 'archived';
-  createdAt: string;
-  updatedAt: string;
-};
+import {
+  buildIngestInboxCommentsQuery,
+  buildIngestInboxDMsQuery,
+  buildInboxItemsQuery,
+} from './brand-client-inbox';
+import type {
+  BrandImageProviderPreference,
+  ContentSeriesSummary,
+  GetInboxItemsOptions,
+  GetInboxItemsResponse,
+  ImageAnalyticsResponse,
+  IngestInboxCommentsOptions,
+  IngestInboxCommentsResponse,
+  IngestInboxDMsOptions,
+  IngestInboxDMsResponse,
+} from './brand-client-types';
 
 export class BrandClient {
   constructor(private request: HttpRequest) {}
@@ -93,188 +65,34 @@ export class BrandClient {
   }
 
   // Inbox: Unified items (comments + DMs)
-  getInboxItems(
-    brandId: string,
-    options?: {
-      socialAccountIds?: string[];
-      channels?: Array<'comments' | 'dms'>;
-      platforms?: string[];
-      view?: 'to_review' | 'all';
-      limit?: number;
-    }
-  ) {
-    const params = new URLSearchParams();
-
-    const socialAccountIds = options?.socialAccountIds || [];
-    for (const id of socialAccountIds) {
-      if (!id) {
-        continue;
-      }
-      params.append('socialAccountId', id);
-    }
-
-    const channels = options?.channels || [];
-    for (const channel of channels) {
-      if (!channel) {
-        continue;
-      }
-      params.append('channel', channel);
-    }
-
-    const platforms = options?.platforms || [];
-    for (const platform of platforms) {
-      if (!platform) {
-        continue;
-      }
-      params.append('platform', platform);
-    }
-
-    if (options?.view) {
-      params.set('view', options.view);
-    }
-    if (options?.limit) {
-      params.set('limit', String(options.limit));
-    }
-
-    const qs = params.toString();
+  getInboxItems(brandId: string, options?: GetInboxItemsOptions): Promise<GetInboxItemsResponse> {
+    const query = buildInboxItemsQuery(options);
     return this.request(
-      `/api/brands/${encodeURIComponent(brandId)}/inbox/items${qs ? `?${qs}` : ''}`
-    ) as Promise<{
-      items: Array<
-        | {
-            type: 'comment_thread';
-            platform: Platform;
-            socialAccountId: string;
-            publicationId: string;
-            postId: string;
-            caption: string | null;
-            primaryAssetId: string | null;
-            permalink: string | null;
-            postedAt: string | null;
-            totalComments: number;
-            resolvedCount: number;
-            newCount: number;
-            lastActivityAt: string | null;
-            previewText: string | null;
-            previewAuthorUsername: string | null;
-          }
-        | {
-            type: 'dm_conversation';
-            platform: Platform;
-            socialAccountId: string;
-            conversationId: string;
-            state: 'active' | 'archived' | 'spam';
-            participantUsername: string;
-            lastMessageAt: string;
-            lastMessageText: string | null;
-            lastMessageDirection: 'inbound' | 'outbound' | null;
-            messageCount: number;
-          }
-      >;
-    }>;
+      `/api/brands/${encodeURIComponent(brandId)}/inbox/items${query}`
+    ) as Promise<GetInboxItemsResponse>;
   }
 
   ingestInboxComments(
     brandId: string,
-    options?: {
-      socialAccountIds?: string[];
-      sync?: boolean;
-      maxPosts?: number;
-      perPostLimit?: number;
-    }
-  ) {
-    const params = new URLSearchParams();
-
-    const socialAccountIds = options?.socialAccountIds || [];
-    for (const id of socialAccountIds) {
-      if (!id) {
-        continue;
-      }
-      params.append('socialAccountId', id);
-    }
-
-    if (options?.sync) {
-      params.set('sync', 'true');
-    }
-    if (options?.maxPosts) {
-      params.set('maxPosts', String(options.maxPosts));
-    }
-    if (options?.perPostLimit) {
-      params.set('perPostLimit', String(options.perPostLimit));
-    }
-
-    const qs = params.toString();
+    options?: IngestInboxCommentsOptions
+  ): Promise<IngestInboxCommentsResponse> {
+    const query = buildIngestInboxCommentsQuery(options);
     return this.request(
-      `/api/brands/${encodeURIComponent(brandId)}/inbox/comments/ingest${qs ? `?${qs}` : ''}`,
-      { method: 'POST' }
-    ) as Promise<
-      | {
-          success: true;
-          enqueued: true;
-          jobId?: string | number | null;
-          nextAllowed?: string | null;
-        }
-      | {
-          success: true;
-          enqueued: false;
-          result: { postsProcessed: number; commentsUpserted: number };
-        }
-      | { success: false; error: string; nextAllowed?: string }
-    >;
+      `/api/brands/${encodeURIComponent(brandId)}/inbox/comments/ingest${query}`,
+      {
+        method: 'POST',
+      }
+    ) as Promise<IngestInboxCommentsResponse>;
   }
 
   ingestInboxDMs(
     brandId: string,
-    options?: {
-      socialAccountIds?: string[];
-      sync?: boolean;
-      maxThreads?: number;
-      perThreadLimit?: number;
-    }
-  ) {
-    const params = new URLSearchParams();
-
-    const socialAccountIds = options?.socialAccountIds || [];
-    for (const id of socialAccountIds) {
-      if (!id) {
-        continue;
-      }
-      params.append('socialAccountId', id);
-    }
-
-    if (options?.sync) {
-      params.set('sync', 'true');
-    }
-    if (options?.maxThreads) {
-      params.set('maxThreads', String(options.maxThreads));
-    }
-    if (options?.perThreadLimit) {
-      params.set('perThreadLimit', String(options.perThreadLimit));
-    }
-
-    const qs = params.toString();
-    return this.request(
-      `/api/brands/${encodeURIComponent(brandId)}/inbox/dms/ingest${qs ? `?${qs}` : ''}`,
-      { method: 'POST' }
-    ) as Promise<
-      | {
-          success: true;
-          enqueued: true;
-          jobId?: string | number | null;
-          nextAllowed?: string | null;
-        }
-      | {
-          success: true;
-          enqueued: false;
-          result: {
-            accountsProcessed: number;
-            threadsProcessed: number;
-            conversationsUpserted: number;
-            messagesInserted: number;
-          };
-        }
-      | { success: false; error: string; nextAllowed?: string }
-    >;
+    options?: IngestInboxDMsOptions
+  ): Promise<IngestInboxDMsResponse> {
+    const query = buildIngestInboxDMsQuery(options);
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/inbox/dms/ingest${query}`, {
+      method: 'POST',
+    }) as Promise<IngestInboxDMsResponse>;
   }
 
   // CRUD

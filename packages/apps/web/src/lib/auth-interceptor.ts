@@ -43,7 +43,7 @@ export class AuthInterceptor {
     if (this.refreshTimer) {
       return;
     }
-    console.log('[Auth] Starting automatic token refresh (every 12 minutes)');
+    console.warn('[Auth] Starting automatic token refresh (every 12 minutes)');
 
     if (!this.listenersAttached) {
       document.addEventListener('visibilitychange', () => {
@@ -253,12 +253,12 @@ export class AuthInterceptor {
       }
 
       try {
-        console.log(`[Auth] Refreshing token (trigger: ${trigger})...`);
+        console.warn(`[Auth] Refreshing token (trigger: ${trigger})...`);
         await authApi.refreshToken();
         const refreshedAt = Date.now();
         this.lastRefreshTime = refreshedAt;
         this.setSharedLastRefreshTime(refreshedAt);
-        console.log(`[Auth] Token refreshed successfully (trigger: ${trigger})`);
+        console.warn(`[Auth] Token refreshed successfully (trigger: ${trigger})`);
       } catch (error) {
         // Update last refresh time to avoid tight retry loops if user is logged out
         const failedAt = Date.now();

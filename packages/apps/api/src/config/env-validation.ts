@@ -56,42 +56,61 @@ function normalizeNodeEnv(value: string): 'dev' | 'prod' | 'test' | null {
   return null;
 }
 
+function collectMissingEnvVars(varNames: readonly string[]): string[] {
+  return varNames.filter((varName) => !process.env[varName]);
+}
+
+function buildMissingRequiredVarsMessage(missingVars: string[]): string {
+  const messageParts = [`Missing required environment variables: ${missingVars.join(', ')}`];
+  if (missingVars.some((name) => name.startsWith('ASSETS_API_'))) {
+    messageParts.push(
+      'Assets API integration requires ASSETS_API_BASE_URL and ASSETS_API_SERVICE_TOKEN to be configured.'
+    );
+  }
+  return messageParts.join(' ');
+}
+
+function assertJwtSecretValid(jwtSecret: string): void {
+  if (jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters long for security');
+  }
+}
+
+function parsePort(value: string | undefined): number {
+  const port = parseInt(value || '3000', 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error('PORT must be a valid port number between 1 and 65535');
+  }
+  return port;
+}
+
+function warnMissingOptionalVars(
+  missingOptional: string[],
+  nodeEnv: 'dev' | 'prod' | 'test'
+): void {
+  if (missingOptional.length === 0 || nodeEnv !== 'prod') {
+    return;
+  }
+  console.warn(
+    `Warning: Missing optional environment variables in production: ${missingOptional.join(', ')}`
+  );
+}
+
 /**
  * Validate and parse environment variables
  */
 export function validateEnvironment(): EnvironmentConfig {
-  const missingVars: string[] = [];
-
-  // Check required variables
-  for (const varName of requiredEnvVars) {
-    if (!process.env[varName]) {
-      missingVars.push(varName);
-    }
-  }
+  const missingVars = collectMissingEnvVars(requiredEnvVars);
 
   if (missingVars.length > 0) {
-    const messageParts = [`Missing required environment variables: ${missingVars.join(', ')}`];
-    if (missingVars.some((name) => name.startsWith('ASSETS_API_'))) {
-      messageParts.push(
-        'Assets API integration requires ASSETS_API_BASE_URL and ASSETS_API_SERVICE_TOKEN to be configured.'
-      );
-    }
-    throw new Error(messageParts.join(' '));
+    throw new Error(buildMissingRequiredVarsMessage(missingVars));
   }
 
-  // Validate JWT_SECRET length
   const jwtSecret = process.env.JWT_SECRET!;
-  if (jwtSecret.length < 32) {
-    throw new Error('JWT_SECRET must be at least 32 characters long for security');
-  }
+  assertJwtSecretValid(jwtSecret);
 
-  // Validate PORT
-  const port = parseInt(process.env.PORT || '3000', 10);
-  if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error('PORT must be a valid port number between 1 and 65535');
-  }
+  const port = parsePort(process.env.PORT);
 
-  // Validate NODE_ENV
   const normalizedNodeEnv = normalizeNodeEnv(process.env.NODE_ENV || 'dev');
   if (!normalizedNodeEnv) {
     throw new Error(
@@ -100,19 +119,8 @@ export function validateEnvironment(): EnvironmentConfig {
   }
   process.env.NODE_ENV = normalizedNodeEnv;
 
-  // Warning for missing optional but important variables
-  const missingOptional: string[] = [];
-  for (const varName of optionalEnvVars) {
-    if (!process.env[varName]) {
-      missingOptional.push(varName);
-    }
-  }
-
-  if (missingOptional.length > 0 && normalizedNodeEnv === 'prod') {
-    console.warn(
-      `Warning: Missing optional environment variables in production: ${missingOptional.join(', ')}`
-    );
-  }
+  const missingOptional = collectMissingEnvVars(optionalEnvVars);
+  warnMissingOptionalVars(missingOptional, normalizedNodeEnv);
 
   return {
     DATABASE_URL: process.env.DATABASE_URL!,

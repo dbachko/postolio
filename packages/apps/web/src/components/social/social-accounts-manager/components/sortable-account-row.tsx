@@ -10,6 +10,72 @@ import { Button } from '@/components/ui/button';
 
 import type { SortableAccountRowProps } from '../types';
 
+function getTokenBadgeConfig(status: string) {
+  switch (status) {
+    case 'healthy':
+      return { longLabel: 'Token OK', shortLabel: 'OK', variant: 'success' as const };
+    case 'expiring':
+      return { longLabel: 'Token expiring', shortLabel: 'Expiring', variant: 'warning' as const };
+    case 'expired':
+      return { longLabel: 'Token expired', shortLabel: 'Expired', variant: 'destructive' as const };
+    case 'disconnected':
+      return {
+        longLabel: 'Disconnected',
+        shortLabel: 'Disconnected',
+        variant: 'secondary' as const,
+      };
+    default:
+      return { longLabel: 'Token unknown', shortLabel: 'Unknown', variant: 'outline' as const };
+  }
+}
+
+function TokenStatusBadge({ account }: { account: SortableAccountRowProps['account'] }) {
+  const status = account.tokenStatus || (account.disconnected ? 'disconnected' : 'unknown');
+  const config = getTokenBadgeConfig(status);
+  const title = account.tokenExpiresAt ? `Expires at ${account.tokenExpiresAt}` : undefined;
+  return (
+    <Badge variant={config.variant} className="shrink-0" title={title}>
+      <span className="sm:hidden">{config.shortLabel}</span>
+      <span className="hidden sm:inline">{config.longLabel}</span>
+    </Badge>
+  );
+}
+
+function AccountActions({
+  isSyncing,
+  onSync,
+  onQueueSettings,
+  onDisconnect,
+}: Pick<SortableAccountRowProps, 'isSyncing' | 'onSync' | 'onQueueSettings' | 'onDisconnect'>) {
+  return (
+    <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onQueueSettings}
+        aria-label="Publishing Schedule"
+      >
+        <Calendar className="h-4 w-4" aria-hidden="true" />
+        <span className="hidden sm:inline">Publishing Schedule</span>
+      </Button>
+      {onSync ? (
+        <Button variant="outline" size="sm" disabled={isSyncing} onClick={onSync} aria-label="Sync">
+          {isSyncing ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          )}
+          <span className="hidden sm:inline">{isSyncing ? 'Syncing…' : 'Sync'}</span>
+        </Button>
+      ) : null}
+      <Button variant="outline" size="sm" onClick={onDisconnect} aria-label="Disconnect">
+        <Unlink className="h-4 w-4" aria-hidden="true" />
+        <span className="hidden sm:inline">Disconnect</span>
+      </Button>
+    </div>
+  );
+}
+
 export function SortableAccountRow({
   account,
   isPrimary,
@@ -23,48 +89,6 @@ export function SortableAccountRow({
     account.platform === 'instagram' && account.username
       ? formatSocialAccountHandle(account.platform, account.username)
       : null;
-  const tokenBadge = (() => {
-    const status = account.tokenStatus || (account.disconnected ? 'disconnected' : 'unknown');
-    const { longLabel, shortLabel } = (() => {
-      switch (status) {
-        case 'healthy':
-          return { longLabel: 'Token OK', shortLabel: 'OK' };
-        case 'expiring':
-          return { longLabel: 'Token expiring', shortLabel: 'Expiring' };
-        case 'expired':
-          return { longLabel: 'Token expired', shortLabel: 'Expired' };
-        case 'disconnected':
-          return { longLabel: 'Disconnected', shortLabel: 'Disconnected' };
-        case 'unknown':
-        default:
-          return { longLabel: 'Token unknown', shortLabel: 'Unknown' };
-      }
-    })();
-
-    const variant = (() => {
-      switch (status) {
-        case 'healthy':
-          return 'success' as const;
-        case 'expiring':
-          return 'warning' as const;
-        case 'expired':
-          return 'destructive' as const;
-        case 'disconnected':
-          return 'secondary' as const;
-        case 'unknown':
-        default:
-          return 'outline' as const;
-      }
-    })();
-
-    const title = account.tokenExpiresAt ? `Expires at ${account.tokenExpiresAt}` : undefined;
-    return (
-      <Badge variant={variant} className="shrink-0" title={title}>
-        <span className="sm:hidden">{shortLabel}</span>
-        <span className="hidden sm:inline">{longLabel}</span>
-      </Badge>
-    );
-  })();
 
   const {
     attributes,
@@ -119,42 +143,17 @@ export function SortableAccountRow({
                 Primary
               </Badge>
             )}
-            {tokenBadge}
+            <TokenStatusBadge account={account} />
           </div>
           {subtitle && <div className="text-muted-foreground truncate text-xs">{subtitle}</div>}
         </div>
       </div>
-      <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onQueueSettings}
-          aria-label="Publishing Schedule"
-        >
-          <Calendar className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Publishing Schedule</span>
-        </Button>
-        {onSync ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isSyncing}
-            onClick={onSync}
-            aria-label="Sync"
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">{isSyncing ? 'Syncing…' : 'Sync'}</span>
-          </Button>
-        ) : null}
-        <Button variant="outline" size="sm" onClick={onDisconnect} aria-label="Disconnect">
-          <Unlink className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Disconnect</span>
-        </Button>
-      </div>
+      <AccountActions
+        isSyncing={isSyncing}
+        onSync={onSync}
+        onQueueSettings={onQueueSettings}
+        onDisconnect={onDisconnect}
+      />
     </div>
   );
 }

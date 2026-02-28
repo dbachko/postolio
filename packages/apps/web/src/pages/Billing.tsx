@@ -9,27 +9,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import SettingsLayout from './settings/SettingsLayout';
 
-export function Billing() {
-  const queryClient = useQueryClient();
-
+function useBillingData() {
   const subscriptionQuery = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: () => billing.getSubscription(),
     staleTime: 30_000,
   });
-
   const invoicesQuery = useQuery({
     queryKey: ['billing', 'invoices'],
     queryFn: () => billing.getInvoices(20),
     staleTime: 30_000,
   });
-
   const brandsQuery = useQuery({
     queryKey: ['billing', 'brands'],
     queryFn: () => brand.getBrands() as Promise<{ brands: Array<{ id: string; name: string }> }>,
     staleTime: 60_000,
   });
 
+  const tier = subscriptionQuery.data?.tier || 'free';
+  const subscription = subscriptionQuery.data?.subscription || null;
+  const invoices = invoicesQuery.data?.invoices || [];
+  const brands = useMemo(() => brandsQuery.data?.brands || [], [brandsQuery.data]);
+
+  return { tier, subscription, invoices, brands, brandsQuery };
+}
+
+function useBillingActions() {
+  const queryClient = useQueryClient();
   const cancelMutation = useMutation({
     mutationFn: () => billing.cancelSubscription(),
     onSuccess: async () => {
@@ -40,7 +46,6 @@ export function Billing() {
       toast.error(error instanceof Error ? error.message : 'Failed to cancel subscription.');
     },
   });
-
   const reactivateMutation = useMutation({
     mutationFn: () => billing.reactivateSubscription(),
     onSuccess: async () => {
@@ -51,7 +56,6 @@ export function Billing() {
       toast.error(error instanceof Error ? error.message : 'Failed to reactivate subscription.');
     },
   });
-
   const portalMutation = useMutation({
     mutationFn: () => billing.createPortalSession(window.location.href),
     onSuccess: (result) => {
@@ -65,7 +69,6 @@ export function Billing() {
       toast.error(error instanceof Error ? error.message : 'Failed to open billing portal.');
     },
   });
-
   const topupMutation = useMutation({
     mutationFn: ({ brandId, creditPack }: { brandId: string; creditPack: CreditPack }) =>
       billing.createCreditCheckout({
@@ -86,10 +89,12 @@ export function Billing() {
     },
   });
 
-  const tier = subscriptionQuery.data?.tier || 'free';
-  const subscription = subscriptionQuery.data?.subscription || null;
-  const invoices = invoicesQuery.data?.invoices || [];
-  const brands = useMemo(() => brandsQuery.data?.brands || [], [brandsQuery.data]);
+  return { cancelMutation, reactivateMutation, portalMutation, topupMutation };
+}
+
+export function Billing() {
+  const { tier, subscription, invoices, brands, brandsQuery } = useBillingData();
+  const { cancelMutation, reactivateMutation, portalMutation, topupMutation } = useBillingActions();
   const processingSubscription = cancelMutation.isPending || reactivateMutation.isPending;
 
   return (

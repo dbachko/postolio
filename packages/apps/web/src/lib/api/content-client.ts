@@ -1,6 +1,6 @@
 import type { HttpRequest } from '../http/http';
 import type { InstagramContentType } from '@postolio/content-validation';
-import { assetsApi } from '@/features/assets/api/client';
+import { assetsApi } from './assets-client';
 
 export class ContentClient {
   constructor(private request: HttpRequest) {}

@@ -1,5 +1,5 @@
 import { getPlatformConfig } from '@/lib/platform-config';
-import { getPlatformIcon } from '@/lib/platform-icons';
+import { getPlatformIcon } from '@/components/icons/platform-icons';
 
 import { parsePlatformPrefixedMessage } from '../utils';
 

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { ProfileAvatar, type ProfileAvatarProps } from '@/components/ui/profile-avatar';
 import { getPlatformConfig } from '@/lib/platform-config';
-import { getPlatformIcon } from '@/lib/platform-icons';
+import { getPlatformIcon } from '@/components/icons/platform-icons';
 import { cn } from '@/lib/utils';
 import type { SocialAccountAvatarProps } from './types';
 

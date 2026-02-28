@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mail, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
@@ -12,88 +12,115 @@ interface VerificationStatus {
   canResend: boolean;
 }
 
-export function EmailVerificationBanner() {
-  const [status, setStatus] = useState<VerificationStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
-  const [hasError, setHasError] = useState(false);
+async function fetchVerificationStatus(
+  setStatus: (status: VerificationStatus | null) => void,
+  setHasError: (value: boolean) => void,
+  setIsLoading: (value: boolean) => void
+) {
+  try {
+    const data = await httpGet('/api/auth/email/verification-status');
+    setStatus(data);
+    setHasError(false);
+  } catch (error) {
+    console.error('Failed to check verification status:', error);
+    setHasError(true);
+  } finally {
+    setIsLoading(false);
+  }
+}
 
-  const checkVerificationStatus = async () => {
-    try {
-      const data = await httpGet('/api/auth/email/verification-status');
-      setStatus(data);
-      setHasError(false);
-    } catch (error) {
-      console.error('Failed to check verification status:', error);
-      setHasError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const sendVerificationEmail = async () => {
-    setIsSending(true);
-    try {
-      const data = await httpPost('/api/auth/email/send-verification', {});
-      if (data?.success) {
-        toast.success('Verification email sent!', {
-          description: 'Check your inbox for the verification link.',
-          icon: <CheckCircle className="text-foreground" />,
-          duration: TIMEOUTS.TOAST_DURATION,
-        });
-
-        // Update status to reflect that email was sent
-        setStatus((prev) => (prev ? { ...prev, canResend: false } : null));
-      } else {
-        toast.error('Failed to send email', {
-          description: data?.error || 'Please try again later',
-        });
-      }
-    } catch (e: any) {
-      toast.error('Network error', {
-        description: e?.message || 'Failed to send verification email',
+async function resendVerificationEmail({
+  setIsSending,
+  setStatus,
+}: {
+  setIsSending: (value: boolean) => void;
+  setStatus: Dispatch<SetStateAction<VerificationStatus | null>>;
+}) {
+  setIsSending(true);
+  try {
+    const data = await httpPost('/api/auth/email/send-verification', {});
+    if (data?.success) {
+      toast.success('Verification email sent!', {
+        description: 'Check your inbox for the verification link.',
+        icon: <CheckCircle className="text-foreground" />,
+        duration: TIMEOUTS.TOAST_DURATION,
       });
-    } finally {
-      setIsSending(false);
+      setStatus((prev) => (prev ? { ...prev, canResend: false } : null));
+      return;
     }
-  };
 
-  useEffect(() => {
-    checkVerificationStatus();
-  }, []);
-
-  if (isLoading) {
-    return null;
+    toast.error('Failed to send email', {
+      description: data?.error || 'Please try again later',
+    });
+  } catch (error: any) {
+    toast.error('Network error', {
+      description: error?.message || 'Failed to send verification email',
+    });
+  } finally {
+    setIsSending(false);
   }
+}
 
-  // Fallback banner when we can't determine verification status
-  if (hasError) {
-    return (
-      <Alert className="bg-card/95 rounded-none border-0 border-b p-0 shadow-sm">
-        <AlertDescription className="flex min-h-12 w-full items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
-          <div className="text-foreground flex min-w-0 items-center gap-2">
-            <AlertCircle className="text-foreground h-4 w-4 flex-shrink-0" />
-            <div className="truncate text-sm">
-              <span className="font-medium">We couldn&apos;t check your verification status.</span>
-              <span className="text-muted-foreground ml-2">
-                You can request a new verification email from your account settings.
-              </span>
-            </div>
+function VerificationStatusErrorBanner() {
+  return (
+    <Alert className="bg-card/95 rounded-none border-0 border-b p-0 shadow-sm">
+      <AlertDescription className="flex min-h-12 w-full items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
+        <div className="text-foreground flex min-w-0 items-center gap-2">
+          <AlertCircle className="text-foreground h-4 w-4 flex-shrink-0" />
+          <div className="truncate text-sm">
+            <span className="font-medium">We couldn&apos;t check your verification status.</span>
+            <span className="text-muted-foreground ml-2">
+              You can request a new verification email from your account settings.
+            </span>
           </div>
-        </AlertDescription>
-      </Alert>
-    );
-  }
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+}
 
-  // Don't show banner if verified or no status
-  if (!status || status.verified) {
+function VerificationPromptBanner({
+  status,
+  isSending,
+  onResend,
+}: {
+  status: VerificationStatus;
+  isSending: boolean;
+  onResend: () => void;
+}) {
+  const renderResendState = () => {
+    if (status.canResend) {
+      return (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onResend}
+          disabled={isSending}
+          className="hover:bg-muted"
+        >
+          {isSending ? (
+            <>
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              Sending...
+            </>
+          ) : (
+            <>
+              <Mail className="mr-2 h-3 w-3" />
+              Resend Email
+            </>
+          )}
+        </Button>
+      );
+    }
+    if (!isSending) {
+      return <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>;
+    }
     return null;
-  }
+  };
 
   return (
     <Alert className="bg-card/95 rounded-none border-0 border-b p-0 shadow-sm">
       <AlertDescription className="flex min-h-12 w-full items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
-        {/* Left: message */}
         <div className="text-foreground flex min-w-0 items-center gap-2">
           <Mail className="text-foreground h-4 w-4 flex-shrink-0" />
           <div className="truncate text-sm">
@@ -104,34 +131,43 @@ export function EmailVerificationBanner() {
           </div>
         </div>
 
-        {/* Right: action */}
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {status.canResend && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={sendVerificationEmail}
-              disabled={isSending}
-              className="hover:bg-muted"
-            >
-              {isSending ? (
-                <>
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Mail className="mr-2 h-3 w-3" />
-                  Resend Email
-                </>
-              )}
-            </Button>
-          )}
-          {!status.canResend && !isSending && (
-            <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
-          )}
-        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">{renderResendState()}</div>
       </AlertDescription>
     </Alert>
+  );
+}
+
+export function EmailVerificationBanner() {
+  const [status, setStatus] = useState<VerificationStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  const sendVerificationEmail = () => void resendVerificationEmail({ setIsSending, setStatus });
+
+  useEffect(() => {
+    void fetchVerificationStatus(setStatus, setHasError, setIsLoading);
+  }, []);
+
+  if (isLoading) {
+    return null;
+  }
+
+  // Fallback banner when we can't determine verification status
+  if (hasError) {
+    return <VerificationStatusErrorBanner />;
+  }
+
+  // Don't show banner if verified or no status
+  if (!status || status.verified) {
+    return null;
+  }
+
+  return (
+    <VerificationPromptBanner
+      status={status}
+      isSending={isSending}
+      onResend={sendVerificationEmail}
+    />
   );
 }

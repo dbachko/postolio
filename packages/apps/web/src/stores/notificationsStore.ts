@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { notifications as notificationsApi, type Notification } from '@/lib/api';
 
-interface NotificationsState {
+export interface NotificationsState {
   items: Notification[];
   nextCursor?: string;
   unreadCount: number;

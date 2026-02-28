@@ -86,51 +86,70 @@ function normalizeTokens(s: string): string[] {
     .filter((t) => t.length > 1);
 }
 
-function inferSeasonalLabel(post: MinimalPost, countryCode?: string): string | undefined {
+function collectPostTokens(post: MinimalPost): Set<string> {
   const tokens = new Set<string>();
   if (post.caption) {
-    for (const t of normalizeTokens(post.caption)) {
-      tokens.add(t);
+    for (const token of normalizeTokens(post.caption)) {
+      tokens.add(token);
     }
   }
-  for (const h of post.hashtags || []) {
-    for (const t of normalizeTokens(h)) {
-      tokens.add(t);
+
+  for (const hashtag of post.hashtags || []) {
+    for (const token of normalizeTokens(hashtag)) {
+      tokens.add(token);
     }
   }
+
+  return tokens;
+}
+
+function findBestSeasonalKeywordLabel(tokens: Set<string>): string | undefined {
   let best: { label: string; hits: number } | undefined;
-  for (const [label, kws] of Object.entries(SEASONAL_KEYWORDS)) {
-    const hits = kws.reduce((acc, kw) => acc + (tokens.has(kw) ? 1 : 0), 0);
+  for (const [label, keywords] of Object.entries(SEASONAL_KEYWORDS)) {
+    const hits = keywords.reduce((acc, keyword) => acc + (tokens.has(keyword) ? 1 : 0), 0);
     if (hits > 0 && (!best || hits > best.hits)) {
       best = { label, hits };
     }
   }
-  if (best?.label) {
-    return best.label;
+
+  return best?.label;
+}
+
+function inferCalendarSeasonalLabel(post: MinimalPost, countryCode?: string): string | undefined {
+  if (!post.timestamp || !countryCode) {
+    return undefined;
   }
-  // Calendar-based heuristic for markets (if no keyword match)
-  if (post.timestamp && countryCode) {
-    const dt = new Date(post.timestamp);
-    const month = dt.getUTCMonth() + 1;
-    const day = dt.getUTCDate();
-    const market = (countryCode || '').toUpperCase();
-    const events = PER_MARKET_CALENDAR[market];
-    if (events && events.length > 0) {
-      for (const ev of events) {
-        if (ev.month !== month) {
-          continue;
-        }
-        if (!ev.day) {
-          continue;
-        }
-        const diff = Math.abs(day - ev.day);
-        if (diff <= (ev.windowDays || 3)) {
-          return ev.label;
-        }
-      }
+
+  const date = new Date(post.timestamp);
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const market = countryCode.toUpperCase();
+  const events = PER_MARKET_CALENDAR[market];
+  if (!events?.length) {
+    return undefined;
+  }
+
+  for (const event of events) {
+    if (event.month !== month || !event.day) {
+      continue;
+    }
+
+    const diff = Math.abs(day - event.day);
+    if (diff <= (event.windowDays || 3)) {
+      return event.label;
     }
   }
+
   return undefined;
+}
+
+function inferSeasonalLabel(post: MinimalPost, countryCode?: string): string | undefined {
+  const keywordLabel = findBestSeasonalKeywordLabel(collectPostTokens(post));
+  if (keywordLabel) {
+    return keywordLabel;
+  }
+
+  return inferCalendarSeasonalLabel(post, countryCode);
 }
 
 function isExcludedFromCore(p: MinimalPost): boolean {
@@ -147,6 +166,52 @@ function isExcludedFromCore(p: MinimalPost): boolean {
     return true;
   }
   return false;
+}
+
+type PostBuckets = {
+  seasonalBuckets: Record<string, MinimalPost[]>;
+  seasonalPosts: MinimalPost[];
+  trendingPosts: MinimalPost[];
+  coreCandidates: MinimalPost[];
+};
+
+function addPostToBuckets(
+  post: MinimalPost,
+  label: string | undefined,
+  isTrending: boolean,
+  buckets: PostBuckets
+): void {
+  if (label) {
+    buckets.seasonalPosts.push(post);
+    buckets.seasonalBuckets[label] = buckets.seasonalBuckets[label] || [];
+    buckets.seasonalBuckets[label].push(post);
+    return;
+  }
+
+  if (isTrending) {
+    buckets.trendingPosts.push(post);
+  }
+
+  buckets.coreCandidates.push(post);
+}
+
+function resolveDominantSeasonality(
+  seasonalBuckets: Record<string, MinimalPost[]>,
+  minSeasonal: number,
+  now: number,
+  ttlDays: number
+): { seasonalLabel?: string; seasonalExpiresAt?: string } {
+  const dominant = Object.entries(seasonalBuckets)
+    .map(([label, posts]) => ({ label, count: posts.length }))
+    .sort((a, b) => b.count - a.count)[0];
+  if (!dominant || dominant.count < minSeasonal) {
+    return {};
+  }
+
+  return {
+    seasonalLabel: dominant.label,
+    seasonalExpiresAt: new Date(now + ttlDays * 24 * 60 * 60 * 1000).toISOString(),
+  };
 }
 
 export function classifyPosts(
@@ -179,28 +244,20 @@ export function classifyPosts(
     const label = inferSeasonalLabel(p, opts.countryCode);
     const ts = p.timestamp ? Date.parse(p.timestamp) : Number.NaN;
     const isTrending = !Number.isNaN(ts) && now - ts <= trendingHorizonMs;
-    if (label) {
-      seasonalPosts.push(p);
-      seasonalBuckets[label] = seasonalBuckets[label] || [];
-      seasonalBuckets[label].push(p);
-    } else if (isTrending) {
-      trendingPosts.push(p);
-      coreCandidates.push(p);
-    } else {
-      coreCandidates.push(p);
-    }
+    addPostToBuckets(p, label, isTrending, {
+      seasonalBuckets,
+      seasonalPosts,
+      trendingPosts,
+      coreCandidates,
+    });
   }
 
-  // Choose dominant seasonal label if any
-  let seasonalLabel: string | undefined;
-  let seasonalExpiresAt: string | undefined;
-  const dominant = Object.entries(seasonalBuckets)
-    .map(([label, arr]) => ({ label, count: arr.length }))
-    .sort((a, b) => b.count - a.count)[0];
-  if (dominant && dominant.count >= minSeasonal) {
-    seasonalLabel = dominant.label;
-    seasonalExpiresAt = new Date(now + ttlDays * 24 * 60 * 60 * 1000).toISOString();
-  }
+  const { seasonalLabel, seasonalExpiresAt } = resolveDominantSeasonality(
+    seasonalBuckets,
+    minSeasonal,
+    now,
+    ttlDays
+  );
 
   return {
     corePosts: coreCandidates,

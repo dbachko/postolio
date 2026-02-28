@@ -5,6 +5,61 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
+const appPackageNames = ['api', '@postolio/assets-api', '@postolio/web'];
+
+const servicePackageNames = [
+  '@postolio/analytics-ingestor',
+  '@postolio/asset-ai-analyzer',
+  '@postolio/asset-thumbnail-generator',
+  '@postolio/brand-analysis',
+  '@postolio/brand-analysis-projection',
+  '@postolio/brand-analysis-scheduler',
+  '@postolio/dlq-processor',
+  '@postolio/publisher',
+  '@postolio/retry-handler',
+  '@postolio/schedule-cleanup',
+  '@postolio/schedule-management',
+  '@postolio/session-cleanup',
+  '@postolio/social-accounts',
+  '@postolio/status-sync',
+  '@postolio/token-service',
+  '@postolio/video-processor',
+];
+
+const noWorkspaceInternalsPatterns = [
+  {
+    group: ['@postolio/*/src/**', '@postolio/*/dist/**'],
+    message:
+      'Import from package public entry points (or documented subpath exports), never from another package src/ or dist/ internals.',
+  },
+];
+
+const noLegacyRootPatterns = [
+  {
+    group: ['backend/**', 'frontend/**', 'microservices/**', 'shared/**'],
+    message:
+      'Legacy root folders are not valid import targets. Place product code inside packages/{apps,services,libs} and import through package APIs.',
+  },
+];
+
+const disallowImportsInLibs = [...appPackageNames, ...servicePackageNames].map((name) => ({
+  name,
+  message:
+    'Libraries must remain foundational. Do not import apps/services from libs; move shared logic into libs instead.',
+}));
+
+const disallowImportsInServices = [...appPackageNames, ...servicePackageNames].map((name) => ({
+  name,
+  message:
+    'Services must not import apps or other services directly. Share cross-service logic through @postolio/libs packages.',
+}));
+
+const disallowImportsInBackendApps = [...appPackageNames, ...servicePackageNames].map((name) => ({
+  name,
+  message:
+    'Apps must not import sibling apps/services runtime packages. Depend on shared libs and call services over APIs/contracts.',
+}));
+
 export default tseslint.config(
   // ─── Global ignores ──────────────────────────────────────────────────────────
   {
@@ -55,13 +110,13 @@ export default tseslint.config(
       // Files over 400 meaningful lines (blank/comment lines excluded) are a
       // maintenance liability — they grow harder to review, test, and reason
       // about in isolation. Keeping files small forces modular design.
-      'max-lines': ['warn', { max: 400, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
 
       // Functions longer than 80 meaningful lines are difficult to understand
       // without scrolling. A function should do one thing; if it can't fit in
       // 80 lines it's doing too much. IIFEs count as they can hide complexity.
       'max-lines-per-function': [
-        'warn',
+        'error',
         { max: 80, skipBlankLines: true, skipComments: true, IIFEs: true },
       ],
 
@@ -177,6 +232,117 @@ export default tseslint.config(
     },
   },
 
+  // ─── Import boundaries: layer direction and public package APIs only ─────────
+  {
+    files: ['packages/libs/**/src/**/*.{ts,tsx,js,jsx,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: disallowImportsInLibs,
+          patterns: [...noWorkspaceInternalsPatterns, ...noLegacyRootPatterns],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/services/**/src/**/*.{ts,tsx,js,jsx,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: disallowImportsInServices,
+          patterns: [...noWorkspaceInternalsPatterns, ...noLegacyRootPatterns],
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'packages/services/**/src/domain/**/*.{ts,tsx,js,jsx,mts,cts}',
+      'packages/services/**/src/repositories/**/*.{ts,tsx,js,jsx,mts,cts}',
+      'packages/services/**/src/adapters/**/*.{ts,tsx,js,jsx,mts,cts}',
+      'packages/services/**/src/types/**/*.{ts,tsx,js,jsx,mts,cts}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: disallowImportsInServices,
+          patterns: [
+            ...noWorkspaceInternalsPatterns,
+            ...noLegacyRootPatterns,
+            {
+              group: [
+                '../handlers/**',
+                '../../handlers/**',
+                '../../../handlers/**',
+                '../../../../handlers/**',
+              ],
+              message:
+                'Service core modules (domain/repositories/adapters/types) must not depend on transport handlers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'packages/apps/api/src/**/*.{ts,tsx,js,jsx,mts,cts}',
+      'packages/apps/assets-api/src/**/*.{ts,tsx,js,jsx,mts,cts}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: disallowImportsInBackendApps,
+          patterns: [...noWorkspaceInternalsPatterns, ...noLegacyRootPatterns],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/apps/api/src/services/**/*.{ts,tsx,js,jsx,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: disallowImportsInBackendApps,
+          patterns: [
+            ...noWorkspaceInternalsPatterns,
+            ...noLegacyRootPatterns,
+            {
+              group: ['../routes/**', '../../routes/**', '../../../routes/**'],
+              message:
+                'API services are application/use-case modules and must not depend on HTTP route handlers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/apps/assets-api/src/services/**/*.{ts,tsx,js,jsx,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: disallowImportsInBackendApps,
+          patterns: [
+            ...noWorkspaceInternalsPatterns,
+            ...noLegacyRootPatterns,
+            {
+              group: ['../routes/**', '../../routes/**', '../../../routes/**'],
+              message:
+                'Assets API services are application/use-case modules and must not depend on HTTP route handlers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // ─── Test file overrides (relaxed limits) ────────────────────────────────────
   // Tests are naturally verbose: each test case often sets up fixtures, acts,
   // and asserts — patterns that inflate line counts without reflecting real
@@ -194,8 +360,8 @@ export default tseslint.config(
       '**/__tests__/**/*.tsx',
     ],
     rules: {
-      'max-lines': ['warn', { max: 600, skipBlankLines: true, skipComments: true }],
-      'max-lines-per-function': ['warn', { max: 150, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['error', { max: 150, skipBlankLines: true, skipComments: true }],
       'max-params': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',

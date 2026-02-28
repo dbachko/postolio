@@ -37,6 +37,42 @@ function toRegionLabel(timezone: TzdbTimezone, fallback: string): string {
   return timezone.countryName || timezone.countryCode || fallback;
 }
 
+function addUtcRegion(
+  regionsByKey: Map<string, TimezoneRegion>,
+  timezoneToRegionKey: Record<string, string>
+) {
+  const regionKey = 'UTC';
+  const region = regionsByKey.get(regionKey) || {
+    key: regionKey,
+    label: regionKey,
+    timezones: [],
+  };
+  region.timezones.push('UTC');
+  regionsByKey.set(regionKey, region);
+  timezoneToRegionKey.UTC = regionKey;
+}
+
+function resolveOwner(
+  timezoneName: string,
+  recordByName: Map<string, TzdbTimezone>,
+  ownersByMissingTimezone: Map<string, TzdbTimezone[]>
+): TzdbTimezone | undefined {
+  const directOwner = recordByName.get(timezoneName);
+  if (directOwner) {
+    return directOwner;
+  }
+  const owners = ownersByMissingTimezone.get(timezoneName) || [];
+  if (owners.length <= 1) {
+    return owners[0];
+  }
+  const preferredCountryCode = MULTI_OWNER_PREFERRED_COUNTRY_CODE[timezoneName];
+  return (
+    (preferredCountryCode
+      ? owners.find((candidate) => candidate.countryCode === preferredCountryCode)
+      : undefined) || owners[0]
+  );
+}
+
 export async function loadTimezoneOptions(): Promise<TimezoneOptions> {
   if (cachedTimezoneOptionsPromise) {
     return cachedTimezoneOptionsPromise;
@@ -74,32 +110,11 @@ export async function loadTimezoneOptions(): Promise<TimezoneOptions> {
 
     for (const timezoneName of allTimezones) {
       if (timezoneName === 'UTC') {
-        const regionKey = 'UTC';
-        const regionLabel = 'UTC';
-        const region = regionsByKey.get(regionKey) || {
-          key: regionKey,
-          label: regionLabel,
-          timezones: [],
-        };
-        region.timezones.push(timezoneName);
-        regionsByKey.set(regionKey, region);
-        timezoneToRegionKey[timezoneName] = regionKey;
+        addUtcRegion(regionsByKey, timezoneToRegionKey);
         continue;
       }
 
-      let owner = recordByName.get(timezoneName);
-      if (!owner) {
-        const owners = ownersByMissingTimezone.get(timezoneName) || [];
-        if (owners.length === 1) {
-          owner = owners[0];
-        } else if (owners.length > 1) {
-          const preferredCountryCode = MULTI_OWNER_PREFERRED_COUNTRY_CODE[timezoneName];
-          owner =
-            (preferredCountryCode
-              ? owners.find((candidate) => candidate.countryCode === preferredCountryCode)
-              : undefined) || owners[0];
-        }
-      }
+      const owner = resolveOwner(timezoneName, recordByName, ownersByMissingTimezone);
 
       const fallbackKey = timezoneName.split('/')[0] || timezoneName;
       const regionKey = owner ? toRegionKey(owner, fallbackKey) : fallbackKey;

@@ -15,6 +15,72 @@ interface ContentTypeSelectorProps {
   disabledReasons: Record<InstagramContentType, string | null>;
 }
 
+function ContentTypeLabel({
+  id,
+  label,
+  icon,
+  disabledReason,
+}: {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  disabledReason: string | null;
+}) {
+  const isDisabled = Boolean(disabledReason);
+  const base = (
+    <Label
+      htmlFor={id}
+      aria-disabled={isDisabled}
+      className={cn(
+        'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-all sm:text-sm',
+        isDisabled
+          ? 'cursor-not-allowed opacity-50'
+          : 'hover:bg-accent hover:text-accent-foreground cursor-pointer'
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </Label>
+  );
+  if (!disabledReason) {
+    return base;
+  }
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>{base}</TooltipTrigger>
+      <TooltipContent>
+        <p className="text-sm">{disabledReason}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ContentTypeOption({
+  value,
+  id,
+  label,
+  icon,
+  disabledReason,
+}: {
+  value: InstagramContentType;
+  id: string;
+  label: string;
+  icon: ReactNode;
+  disabledReason: string | null;
+}) {
+  return (
+    <div className="flex-1">
+      <RadioGroupItem
+        value={value}
+        id={id}
+        className="peer sr-only"
+        disabled={Boolean(disabledReason)}
+      />
+      <ContentTypeLabel id={id} label={label} icon={icon} disabledReason={disabledReason} />
+    </div>
+  );
+}
+
 export function ContentTypeSelector({
   mode,
   disabled,
@@ -23,42 +89,9 @@ export function ContentTypeSelector({
   onValueChange,
   disabledReasons,
 }: ContentTypeSelectorProps) {
-  const renderLabel = (opts: {
-    id: string;
-    label: string;
-    icon: ReactNode;
-    disabledReason: string | null;
-  }) => {
-    const isDisabled = Boolean(opts.disabledReason);
-    const base = (
-      <Label
-        htmlFor={opts.id}
-        aria-disabled={isDisabled}
-        className={cn(
-          'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex h-10 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-all sm:text-sm',
-          isDisabled
-            ? 'cursor-not-allowed opacity-50'
-            : 'hover:bg-accent hover:text-accent-foreground cursor-pointer'
-        )}
-      >
-        {opts.icon}
-        <span>{opts.label}</span>
-      </Label>
-    );
-
-    if (!opts.disabledReason) {
-      return base;
-    }
-
-    return (
-      <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>{base}</TooltipTrigger>
-        <TooltipContent>
-          <p className="text-sm">{opts.disabledReason}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  };
+  const postId = mode === 'create' ? 'type-post' : 'edit-type-post';
+  const reelId = mode === 'create' ? 'type-reel' : 'edit-type-reel';
+  const storyId = mode === 'create' ? 'type-story' : 'edit-type-story';
 
   return (
     <div className="space-y-2">
@@ -72,48 +105,27 @@ export function ContentTypeSelector({
           className="flex gap-2"
           disabled={disabled || selectedPlatformsLength === 0}
         >
-          <div className="flex-1">
-            <RadioGroupItem
-              value="post"
-              id={mode === 'create' ? 'type-post' : 'edit-type-post'}
-              className="peer sr-only"
-              disabled={Boolean(disabledReasons.post)}
-            />
-            {renderLabel({
-              id: mode === 'create' ? 'type-post' : 'edit-type-post',
-              label: 'Post',
-              icon: <ImageIcon className="h-3.5 w-3.5" />,
-              disabledReason: disabledReasons.post,
-            })}
-          </div>
-          <div className="flex-1">
-            <RadioGroupItem
-              value="reel"
-              id={mode === 'create' ? 'type-reel' : 'edit-type-reel'}
-              className="peer sr-only"
-              disabled={Boolean(disabledReasons.reel)}
-            />
-            {renderLabel({
-              id: mode === 'create' ? 'type-reel' : 'edit-type-reel',
-              label: 'Reel',
-              icon: <Film className="h-3.5 w-3.5" />,
-              disabledReason: disabledReasons.reel,
-            })}
-          </div>
-          <div className="flex-1">
-            <RadioGroupItem
-              value="story"
-              id={mode === 'create' ? 'type-story' : 'edit-type-story'}
-              className="peer sr-only"
-              disabled={Boolean(disabledReasons.story)}
-            />
-            {renderLabel({
-              id: mode === 'create' ? 'type-story' : 'edit-type-story',
-              label: 'Story',
-              icon: <CircleFadingPlus className="h-3.5 w-3.5" />,
-              disabledReason: disabledReasons.story,
-            })}
-          </div>
+          <ContentTypeOption
+            value="post"
+            id={postId}
+            label="Post"
+            icon={<ImageIcon className="h-3.5 w-3.5" />}
+            disabledReason={disabledReasons.post}
+          />
+          <ContentTypeOption
+            value="reel"
+            id={reelId}
+            label="Reel"
+            icon={<Film className="h-3.5 w-3.5" />}
+            disabledReason={disabledReasons.reel}
+          />
+          <ContentTypeOption
+            value="story"
+            id={storyId}
+            label="Story"
+            icon={<CircleFadingPlus className="h-3.5 w-3.5" />}
+            disabledReason={disabledReasons.story}
+          />
         </RadioGroup>
       </TooltipProvider>
     </div>

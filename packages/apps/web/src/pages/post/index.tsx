@@ -1,109 +1,75 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ExternalLink, Instagram } from 'lucide-react';
 
-import { content as contentApi, analytics } from '@/lib/api';
 import { PostEditor } from '@/components/post-editor/post-editor';
-import { useTimezone } from '@/contexts/TimezoneContext';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { usePostDetail } from '@/hooks/usePostDetail';
 import { usePageMeta } from '@/contexts/PageMetaContext';
-import { useAuthStore } from '@/stores/authStore';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { usePostDetail } from '@/hooks/usePostDetail';
+import { content as contentApi, analytics } from '@/lib/api';
 import { isMultiDestinationEnabled } from '@/lib/feature-flags';
+import { useAuthStore } from '@/stores/authStore';
 
-import type { PostInsights } from './types';
+import { PostActionsCard } from './components/post-actions-card';
 import { PostDetailsCard } from './components/post-details-card';
 import { PostInformationCard } from './components/post-information-card';
 import { PostPerformanceCard } from './components/post-performance-card';
-import { PostActionsCard } from './components/post-actions-card';
+import { usePublicationButtons } from './publication-buttons';
+import type { PostInsights } from './types';
 
-type PublicationLink = { key: string; platform: string; permalink: string };
-
-export default function PostPage() {
-  const { postId } = useParams<{ postId?: string }>();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { timezone, getBrandTimezone } = useTimezone();
-  const { setOverride: setPageMetaOverride } = usePageMeta();
-  const user = useAuthStore((state) => state.user);
-  const multiDestinationEnabled = isMultiDestinationEnabled(user);
-
-  const isCreate = !postId;
-  const resolvedPostId = postId || '';
-
-  const { data: post, isLoading } = usePostDetail(postId);
-  const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
-
-  const isPosted = Boolean(post?.postedAt) || post?.status === 'published';
-
-  const contentGroupId = useMemo(() => {
-    const raw = post?.contentGroupId;
-    if (typeof raw !== 'string') {
-      return null;
-    }
-    const trimmed = raw.trim();
-    return trimmed.length ? trimmed : null;
-  }, [post?.contentGroupId]);
-
-  const contentGroupQuery = useQuery({
-    queryKey: ['content-group', contentGroupId],
-    enabled: Boolean(contentGroupId) && multiDestinationEnabled,
-    queryFn: () => contentApi.getContentGroup(contentGroupId!),
-    staleTime: 10000,
-  });
-
-  const isMultiDestinationGroup = useMemo(() => {
-    if (!contentGroupId || !multiDestinationEnabled) {
-      return false;
-    }
-    const raw = contentGroupQuery.data as any;
-    const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
-    return destinations.length > 1;
-  }, [contentGroupId, contentGroupQuery.data, multiDestinationEnabled]);
-
+function usePostPageMeta(params: {
+  isCreate: boolean;
+  isPosted: boolean;
+  post: ReturnType<typeof usePostDetail>['data'];
+  setPageMetaOverride: (value: { title: string; description?: string } | null) => void;
+}) {
   useEffect(() => {
-    if (isCreate) {
-      setPageMetaOverride({
+    if (params.isCreate) {
+      params.setPageMetaOverride({
         title: 'Create Post',
         description: 'Create and schedule a new post.',
       });
-      return () => setPageMetaOverride(null);
+      return () => params.setPageMetaOverride(null);
     }
 
-    const title = isPosted ? 'View Post' : 'Edit Post';
+    const title = params.isPosted ? 'View Post' : 'Edit Post';
     const description = (() => {
-      if (!post) {
+      if (!params.post) {
         return undefined;
       }
-      if (isPosted) {
+      if (params.isPosted) {
         return 'Published posts are read-only.';
       }
-      if (post.status === 'scheduled') {
+      if (params.post.status === 'scheduled') {
         return 'Tip: Update the time or unschedule to draft.';
       }
       return 'Tip: Set a time below to schedule when ready.';
     })();
-    setPageMetaOverride({
-      title: post ? title : 'Post',
-      description,
-    });
-    return () => setPageMetaOverride(null);
-  }, [isCreate, isPosted, post, setPageMetaOverride]);
+
+    params.setPageMetaOverride({ title: params.post ? title : 'Post', description });
+    return () => params.setPageMetaOverride(null);
+  }, [params]);
+}
+
+function useBrandTimezone(
+  postBrandId: string | undefined,
+  timezone: string,
+  getBrandTimezone: (id: string) => Promise<string | null>
+) {
+  const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
 
   useEffect(() => {
     let mounted = true;
-    const resolveBrandTimezone = async () => {
-      const brandId = post?.brand?.id;
-      if (!brandId) {
+    const resolveTimezone = async () => {
+      if (!postBrandId) {
         return;
       }
       try {
-        const tz = await getBrandTimezone(brandId);
-        if (mounted && tz) {
-          setBrandTimezone(tz);
+        const resolved = await getBrandTimezone(postBrandId);
+        if (mounted && resolved) {
+          setBrandTimezone(resolved);
         }
       } catch {
         if (mounted) {
@@ -111,16 +77,26 @@ export default function PostPage() {
         }
       }
     };
-    void resolveBrandTimezone();
+
+    void resolveTimezone();
     return () => {
       mounted = false;
     };
-  }, [getBrandTimezone, post?.brand?.id, timezone]);
+  }, [getBrandTimezone, postBrandId, timezone]);
 
+  return brandTimezone;
+}
+
+function usePublicationData(params: {
+  postId?: string;
+  resolvedPostId: string;
+  postStatus?: string;
+  postInstagramPermalink?: string | null;
+}) {
   const publicationsQuery = useQuery<{ success: boolean; data: any[] }>({
-    queryKey: ['v2-publications', postId],
-    queryFn: async () => analytics.getPublicationsByContent(resolvedPostId),
-    enabled: Boolean(postId) && post?.status === 'published',
+    queryKey: ['v2-publications', params.postId],
+    queryFn: async () => analytics.getPublicationsByContent(params.resolvedPostId),
+    enabled: Boolean(params.postId) && params.postStatus === 'published',
     staleTime: 30000,
   });
 
@@ -129,7 +105,7 @@ export default function PostPage() {
     if (!pubs.length) {
       return undefined;
     }
-    const preferred = pubs.find((p: any) => p.platform === 'instagram');
+    const preferred = pubs.find((pub: any) => pub.platform === 'instagram');
     return (preferred || pubs[0])?.id as string | undefined;
   }, [publicationsQuery.data?.data]);
 
@@ -162,142 +138,127 @@ export default function PostPage() {
     };
   }, [latestQuery.data?.data]);
 
-  const { data: commentsData } = useQuery<{
-    comments: Array<{ username: string; text: string }>;
-  }>({
-    queryKey: ['post-comments', postId],
-    queryFn: async () => (await contentApi.getPostComments(resolvedPostId)).data,
-    enabled: Boolean(postId) && post?.status === 'published',
-    staleTime: 60000,
-  });
+  const publicationButtons = usePublicationButtons(
+    publicationsQuery.data?.data || [],
+    params.postStatus,
+    params.postInstagramPermalink
+  );
 
-  const refreshPublication = async (successMessage: string) => {
-    if (!selectedPublicationId) {
-      return;
-    }
-    try {
-      await analytics.refreshPublication(selectedPublicationId);
-      toast.success(successMessage);
-    } catch {
-      toast.error('Unable to enqueue refresh');
-    }
-  };
+  return { publicationsQuery, selectedPublicationId, insights, publicationButtons };
+}
 
+function refreshPublicationWithToast(
+  selectedPublicationId: string | undefined,
+  successMessage: string
+) {
+  if (!selectedPublicationId) {
+    return;
+  }
+  void analytics
+    .refreshPublication(selectedPublicationId)
+    .then(() => toast.success(successMessage))
+    .catch(() => toast.error('Unable to enqueue refresh'));
+}
+
+function usePostMutations(params: {
+  queryClient: ReturnType<typeof useQueryClient>;
+  navigate: ReturnType<typeof useNavigate>;
+  postId?: string;
+  resolvedPostId: string;
+  isMultiDestinationGroup: boolean;
+  contentGroupId: string | null;
+}) {
   const publishNowMutation = useMutation({
-    mutationFn: async () => {
-      if (isMultiDestinationGroup && contentGroupId) {
-        return contentApi.publishContentGroupNow(contentGroupId);
-      }
-      return contentApi.publishNow(resolvedPostId);
-    },
+    mutationFn: async () =>
+      params.isMultiDestinationGroup && params.contentGroupId
+        ? contentApi.publishContentGroupNow(params.contentGroupId)
+        : contentApi.publishNow(params.resolvedPostId),
     onSuccess: () => {
       toast.success(
-        isMultiDestinationGroup ? 'Publishing started for all destinations' : 'Publishing started'
+        params.isMultiDestinationGroup
+          ? 'Publishing started for all destinations'
+          : 'Publishing started'
       );
-      queryClient.invalidateQueries({ queryKey: ['post', postId] });
-      if (contentGroupId) {
-        queryClient.invalidateQueries({ queryKey: ['content-group', contentGroupId] });
+      params.queryClient.invalidateQueries({ queryKey: ['post', params.postId] });
+      if (params.contentGroupId) {
+        params.queryClient.invalidateQueries({
+          queryKey: ['content-group', params.contentGroupId],
+        });
       }
     },
     onError: () => toast.error('Failed to publish post'),
   });
 
   const deletePostMutation = useMutation({
-    mutationFn: async () => {
-      if (isMultiDestinationGroup && contentGroupId) {
-        return contentApi.deleteContentGroup(contentGroupId);
-      }
-      return contentApi.deletePost(resolvedPostId);
-    },
+    mutationFn: async () =>
+      params.isMultiDestinationGroup && params.contentGroupId
+        ? contentApi.deleteContentGroup(params.contentGroupId)
+        : contentApi.deletePost(params.resolvedPostId),
     onSuccess: () => {
       toast.success('Post deleted successfully');
-      navigate(-1);
+      params.navigate(-1);
     },
     onError: () => toast.error('Failed to delete post'),
   });
 
-  const publicationButtons = useMemo(() => {
-    const platformLabel = (platform: string) => {
-      const normalized = String(platform || '').toLowerCase();
-      const labels: Record<string, string> = {
-        instagram: 'Instagram',
-        tiktok: 'TikTok',
-        linkedin: 'LinkedIn',
-        youtube: 'YouTube',
-        facebook: 'Facebook',
-        threads: 'Threads',
-        x: 'X',
-      };
-      if (labels[normalized]) {
-        return labels[normalized];
-      }
-      if (!platform) {
-        return 'Link';
-      }
-      return platform.charAt(0).toUpperCase() + platform.slice(1);
-    };
+  return { publishNowMutation, deletePostMutation };
+}
 
-    const pubs = (publicationsQuery.data?.data || []) as any[];
-    const links: PublicationLink[] = pubs
-      .filter((pub) => Boolean(pub?.permalink))
-      .map((pub: any) => ({
-        key: String(pub.id || `${pub.platform || 'platform'}:${pub.permalink}`),
-        platform: String(pub.platform || ''),
-        permalink: String(pub.permalink || ''),
-      }));
+function usePostPageGroupState(params: {
+  post: ReturnType<typeof usePostDetail>['data'];
+  multiDestinationEnabled: boolean;
+}) {
+  const contentGroupId = useMemo(() => {
+    const raw = params.post?.contentGroupId;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  }, [params.post?.contentGroupId]);
 
-    if (post?.status === 'published' && post.instagramPermalink) {
-      links.push({
-        key: 'post:instagramPermalink',
-        platform: 'instagram',
-        permalink: String(post.instagramPermalink),
-      });
+  const contentGroupQuery = useQuery({
+    queryKey: ['content-group', contentGroupId],
+    enabled: Boolean(contentGroupId) && params.multiDestinationEnabled,
+    queryFn: () => contentApi.getContentGroup(contentGroupId!),
+    staleTime: 10000,
+  });
+
+  const isMultiDestinationGroup = useMemo(() => {
+    if (!contentGroupId || !params.multiDestinationEnabled) {
+      return false;
     }
+    const raw = contentGroupQuery.data as any;
+    const destinations = Array.isArray(raw?.destinations) ? raw.destinations : [];
+    return destinations.length > 1;
+  }, [contentGroupId, contentGroupQuery.data, params.multiDestinationEnabled]);
 
-    const seen = new Set<string>();
-    const deduped = links.filter((link) => {
-      const permalink = String(link.permalink || '').trim();
-      if (!permalink) {
-        return false;
-      }
-      if (seen.has(permalink)) {
-        return false;
-      }
-      seen.add(permalink);
-      return true;
-    });
+  return { contentGroupId, isMultiDestinationGroup };
+}
 
-    deduped.sort((a, b) => {
-      const aIsIg = a.platform === 'instagram';
-      const bIsIg = b.platform === 'instagram';
-      if (aIsIg === bIsIg) {
-        return 0;
-      }
-      return aIsIg ? -1 : 1;
-    });
-
-    return deduped.map((link) => (
-      <Button
-        key={link.key}
-        variant="outline"
-        size="sm"
-        onClick={() => window.open(link.permalink, '_blank', 'noopener,noreferrer')}
-        className="w-full justify-start gap-2"
-      >
-        {link.platform === 'instagram' ? (
-          <Instagram className="h-4 w-4" />
-        ) : (
-          <ExternalLink className="h-4 w-4" />
-        )}
-        <span className="truncate">View on {platformLabel(link.platform)}</span>
-      </Button>
-    ));
-  }, [publicationsQuery.data?.data, post?.instagramPermalink, post?.status]);
-
-  if (isCreate) {
-    return <PostEditor layout="page" showHeader={false} />;
-  }
-
+function PostPageContent({
+  postId,
+  isLoading,
+  post,
+  isPosted,
+  brandTimezone,
+  publicationButtons,
+  insights,
+  comments,
+  selectedPublicationId,
+  publishNowMutation,
+  deletePostMutation,
+  isMultiDestinationGroup,
+}: {
+  postId?: string;
+  isLoading: boolean;
+  post: ReturnType<typeof usePostDetail>['data'];
+  isPosted: boolean;
+  brandTimezone: string;
+  publicationButtons: React.ReactNode[];
+  insights: PostInsights | undefined;
+  comments: Array<{ username: string; text: string }>;
+  selectedPublicationId: string | undefined;
+  publishNowMutation: ReturnType<typeof usePostMutations>['publishNowMutation'];
+  deletePostMutation: ReturnType<typeof usePostMutations>['deletePostMutation'];
+  isMultiDestinationGroup: boolean;
+}) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
       <div className="lg:col-span-2">
@@ -316,20 +277,18 @@ export default function PostPage() {
               isPosted={isPosted}
               publicationButtons={publicationButtons}
             />
-
             <PostInformationCard post={post} brandTimezone={brandTimezone} />
-
             {post.status === 'published' ? (
               <PostPerformanceCard
                 insights={insights}
-                comments={commentsData?.comments || []}
+                comments={comments}
                 selectedPublicationId={selectedPublicationId}
-                onRefreshMetrics={() => {
-                  void refreshPublication('Metrics refresh enqueued');
-                }}
-                onRefreshComments={() => {
-                  void refreshPublication('Comments refresh enqueued');
-                }}
+                onRefreshMetrics={() =>
+                  refreshPublicationWithToast(selectedPublicationId, 'Metrics refresh enqueued')
+                }
+                onRefreshComments={() =>
+                  refreshPublicationWithToast(selectedPublicationId, 'Comments refresh enqueued')
+                }
               />
             ) : null}
 
@@ -346,5 +305,71 @@ export default function PostPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PostPage() {
+  const { postId } = useParams<{ postId?: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { timezone, getBrandTimezone } = useTimezone();
+  const { setOverride: setPageMetaOverride } = usePageMeta();
+  const user = useAuthStore((state) => state.user);
+
+  const isCreate = !postId;
+  const resolvedPostId = postId || '';
+  const multiDestinationEnabled = isMultiDestinationEnabled(user);
+
+  const { data: post, isLoading } = usePostDetail(postId);
+  const isPosted = Boolean(post?.postedAt) || post?.status === 'published';
+  const { contentGroupId, isMultiDestinationGroup } = usePostPageGroupState({
+    post,
+    multiDestinationEnabled,
+  });
+
+  usePostPageMeta({ isCreate, isPosted, post, setPageMetaOverride });
+
+  const brandTimezone = useBrandTimezone(post?.brand?.id, timezone, getBrandTimezone);
+  const publicationData = usePublicationData({
+    postId,
+    resolvedPostId,
+    postStatus: post?.status,
+    postInstagramPermalink: post?.instagramPermalink,
+  });
+
+  const commentsQuery = useQuery<{ comments: Array<{ username: string; text: string }> }>({
+    queryKey: ['post-comments', postId],
+    queryFn: async () => (await contentApi.getPostComments(resolvedPostId)).data,
+    enabled: Boolean(postId) && post?.status === 'published',
+    staleTime: 60000,
+  });
+  const mutations = usePostMutations({
+    queryClient,
+    navigate,
+    postId,
+    resolvedPostId,
+    isMultiDestinationGroup,
+    contentGroupId,
+  });
+
+  if (isCreate) {
+    return <PostEditor layout="page" showHeader={false} />;
+  }
+
+  return (
+    <PostPageContent
+      postId={postId}
+      isLoading={isLoading}
+      post={post}
+      isPosted={isPosted}
+      brandTimezone={brandTimezone}
+      publicationButtons={publicationData.publicationButtons}
+      insights={publicationData.insights}
+      comments={commentsQuery.data?.comments || []}
+      selectedPublicationId={publicationData.selectedPublicationId}
+      publishNowMutation={mutations.publishNowMutation}
+      deletePostMutation={mutations.deletePostMutation}
+      isMultiDestinationGroup={isMultiDestinationGroup}
+    />
   );
 }

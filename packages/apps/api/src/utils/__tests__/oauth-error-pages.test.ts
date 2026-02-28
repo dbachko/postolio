@@ -18,7 +18,8 @@ describe('generateErrorPage', () => {
 
       expect(html).toContain('id="close-button"');
       expect(html).toContain('id="retry-button"');
-      expect(html).toContain('<details class="technical-details">');
+      expect(html).toContain('<section class="details">');
+      expect(html).toContain('Technical details');
       expect(html).toContain('Debug details');
       expect(html).toContain("document.getElementById('close-button')");
       expect(html).toContain('parentOrigin');

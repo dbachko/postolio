@@ -21,6 +21,51 @@ interface SelectionBarProps {
   deleteVariant?: 'destructive' | 'secondary';
 }
 
+interface SelectionDeleteButtonProps {
+  pending?: boolean;
+  disabled: boolean;
+  tooltip?: string;
+  label: string;
+  variant: SelectionBarProps['deleteVariant'];
+  onDelete: () => void;
+}
+
+function SelectionDeleteButton({
+  pending,
+  disabled,
+  tooltip,
+  label,
+  variant,
+  onDelete,
+}: SelectionDeleteButtonProps) {
+  const icon = pending ? (
+    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+  ) : (
+    <Trash2 className="mr-2 h-4 w-4" />
+  );
+  const button = (
+    <Button variant={variant} size="sm" onClick={onDelete} disabled={disabled}>
+      {icon}
+      {label}
+    </Button>
+  );
+  if (!tooltip) {
+    return button;
+  }
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex" aria-disabled={disabled} tabIndex={disabled ? 0 : -1}>
+            {button}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function SelectionBar({
   count,
   onClear,
@@ -64,43 +109,14 @@ export function SelectionBar({
           <Sparkles className="mr-2 h-4 w-4" />
           Create Post
         </Button>
-        {deleteTooltip ? (
-          <TooltipProvider delayDuration={150}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="inline-flex"
-                  aria-disabled={isDeleteDisabled}
-                  tabIndex={isDeleteDisabled ? 0 : -1}
-                >
-                  <Button
-                    variant={deleteVariant}
-                    size="sm"
-                    onClick={onDelete}
-                    disabled={isDeleteDisabled}
-                  >
-                    {deletePending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="mr-2 h-4 w-4" />
-                    )}
-                    {deleteLabel}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{deleteTooltip}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <Button variant={deleteVariant} size="sm" onClick={onDelete} disabled={isDeleteDisabled}>
-            {deletePending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="mr-2 h-4 w-4" />
-            )}
-            {deleteLabel}
-          </Button>
-        )}
+        <SelectionDeleteButton
+          pending={deletePending}
+          disabled={isDeleteDisabled}
+          tooltip={deleteTooltip}
+          label={deleteLabel}
+          variant={deleteVariant}
+          onDelete={onDelete}
+        />
       </div>
     </div>
   );

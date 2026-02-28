@@ -33,210 +33,198 @@ const TokenResponseSchema = z.object({
   pageId: z.string().optional(),
 });
 
+type InternalTokenRequest = z.infer<typeof GetTokenSchema>;
+
+function parseBrandPreferences(preferences: unknown) {
+  if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) {
+    return null;
+  }
+  return preferences as Record<string, unknown>;
+}
+
+function computeDaysUntilExpiry(expiresAt: string) {
+  const expiryDate = new Date(expiresAt);
+  return Math.floor((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+async function emitInstagramTokenExpiryNotification(params: {
+  brand: { id: string; user: { id: string } };
+  daysUntilExpiry: number;
+  fastify: any;
+}) {
+  const severity = params.daysUntilExpiry <= 1 ? 'error' : 'warning';
+  const title =
+    params.daysUntilExpiry <= 1 ? 'Instagram token expiring soon' : 'Instagram token expiring';
+  const body =
+    params.daysUntilExpiry <= 1
+      ? 'Your Instagram access token expires within 24 hours. Reconnect to avoid publishing failures.'
+      : `Your Instagram access token expires in ${params.daysUntilExpiry} days. Consider reconnecting to avoid disruptions.`;
+
+  try {
+    const { notificationsService } = await import('../services/notifications.js');
+    await notificationsService.emitEvent({
+      userId: params.brand.user.id,
+      brandId: params.brand.id,
+      type: 'accounts.token_expiring',
+      category: 'accounts',
+      severity,
+      title,
+      body,
+      linkUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/brands`,
+    });
+  } catch (error: unknown) {
+    params.fastify.log.error({ err: error }, 'Failed to emit token expiring notification');
+  }
+}
+
+async function resolveTokenForBrandPlatform(params: {
+  brand: { id: string; user: { id: string } };
+  platform: InternalTokenRequest['platform'];
+}) {
+  const tokenServiceClient = await getTokenService();
+  const primaryAccount =
+    params.platform === 'instagram' || params.platform === 'facebook'
+      ? await resolvePrimarySocialAccount(params.brand.id, params.platform)
+      : null;
+  const token =
+    primaryAccount && (params.platform === 'instagram' || params.platform === 'facebook')
+      ? await tokenServiceClient.getTokenForSocialAccount(
+          params.brand.user.id,
+          params.brand.id,
+          params.platform,
+          primaryAccount.id
+        )
+      : await tokenServiceClient.getToken(params.brand.user.id, params.brand.id, params.platform);
+
+  return { token, primaryAccount };
+}
+
+async function buildInstagramTokenData(params: {
+  token: { accessToken: string; metadata?: Record<string, any> };
+  primaryAccount: { externalAccountId?: string | null; externalPageId?: string | null } | null;
+  brand: { id: string; user: { id: string }; preferences?: unknown };
+  fastify: any;
+}) {
+  const tokenData: {
+    accessToken: string;
+    accountId?: string | null;
+    pageId?: string | null;
+    expiresAt?: string;
+  } = {
+    accessToken: params.token.accessToken,
+    accountId: params.token.metadata?.accountId || params.primaryAccount?.externalAccountId,
+    pageId: params.token.metadata?.pageId || params.primaryAccount?.externalPageId,
+  };
+
+  const preferences = parseBrandPreferences(params.brand.preferences);
+  const tokenExpiresAt =
+    preferences && typeof preferences.tokenExpiresAt === 'string'
+      ? preferences.tokenExpiresAt
+      : undefined;
+  if (!tokenExpiresAt) {
+    return tokenData;
+  }
+
+  tokenData.expiresAt = tokenExpiresAt;
+  const daysUntilExpiry = computeDaysUntilExpiry(tokenExpiresAt);
+  if (daysUntilExpiry >= 7) {
+    return tokenData;
+  }
+
+  params.fastify.log.info({
+    action: 'token.refresh.needed',
+    brandId: params.brand.id,
+    platform: 'instagram',
+    daysUntilExpiry,
+  });
+  params.fastify.log.warn(
+    `Instagram token for brand ${params.brand.id} expires in ${daysUntilExpiry} days`
+  );
+  await emitInstagramTokenExpiryNotification({
+    brand: params.brand,
+    daysUntilExpiry,
+    fastify: params.fastify,
+  });
+  return tokenData;
+}
+
+async function loadAuthorizedBrand(params: { brandId: string; requesterId: string; fastify: any }) {
+  const brand = await prisma.brand.findUnique({
+    where: { id: params.brandId },
+    include: { user: { select: { id: true, email: true } } },
+  });
+  if (brand?.userId === params.requesterId) {
+    return brand;
+  }
+
+  params.fastify.log.warn({
+    action: 'token.access.denied',
+    reason: !brand ? 'brand_not_found' : 'unauthorized',
+    brandId: params.brandId,
+    requesterId: params.requesterId,
+    actualOwnerId: brand?.userId,
+  });
+  return null;
+}
+
+function createInternalTokenGetHandler(fastify: any) {
+  return async (request: any, reply: any) => {
+    try {
+      const { brandId, platform, requesterId } = GetTokenSchema.parse(request.body);
+      fastify.log.info({
+        action: 'token.access.requested',
+        brandId,
+        platform,
+        requesterId,
+        source: request.headers['user-agent'] || 'unknown',
+        ip: request.ip,
+      });
+
+      const brand = await loadAuthorizedBrand({ brandId, requesterId, fastify });
+      if (!brand) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
+
+      const { token, primaryAccount } = await resolveTokenForBrandPlatform({ brand, platform });
+      if (!token) {
+        return reply.code(404).send({ error: `No ${platform} token found for brand` });
+      }
+
+      if (platform === 'facebook') {
+        return reply.code(501).send({ error: 'Facebook platform not yet implemented' });
+      }
+      if (platform === 'linkedin') {
+        return reply.code(501).send({ error: 'LinkedIn platform not yet implemented' });
+      }
+
+      const tokenData = await buildInstagramTokenData({
+        token,
+        primaryAccount,
+        brand,
+        fastify,
+      });
+      fastify.log.info({ action: 'token.access.granted', brandId, platform, requesterId });
+      return reply.send(TokenResponseSchema.parse(tokenData));
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'Invalid request', details: error.issues });
+      }
+      fastify.log.error({
+        action: 'token.access.error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  };
+}
+
 const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
-  // Internal token retrieval endpoint (for service-to-service communication)
   fastify.post(
     '/api/internal/tokens/get',
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        // Parse and validate request
-        const { brandId, platform, requesterId } = GetTokenSchema.parse(request.body);
-
-        // Log token access for audit
-        fastify.log.info({
-          action: 'token.access.requested',
-          brandId,
-          platform,
-          requesterId,
-          source: request.headers['user-agent'] || 'unknown',
-          ip: request.ip,
-        });
-
-        // Verify the requester owns this brand
-        const brand = await prisma.brand.findUnique({
-          where: { id: brandId },
-          include: {
-            user: {
-              select: { id: true, email: true },
-            },
-          },
-        });
-
-        if (brand?.userId !== requesterId) {
-          fastify.log.warn({
-            action: 'token.access.denied',
-            reason: !brand ? 'brand_not_found' : 'unauthorized',
-            brandId,
-            requesterId,
-            actualOwnerId: brand?.userId,
-          });
-          return reply.code(404).send({
-            error: 'Brand not found',
-          });
-        }
-
-        // Get the token from Token Service
-        const tokenServiceClient = await getTokenService();
-        const primaryAccount =
-          platform === 'instagram' || platform === 'facebook'
-            ? await resolvePrimarySocialAccount(brand.id, platform)
-            : null;
-
-        const token =
-          primaryAccount && (platform === 'instagram' || platform === 'facebook')
-            ? await tokenServiceClient.getTokenForSocialAccount(
-                brand.user.id,
-                brand.id,
-                platform,
-                primaryAccount.id
-              )
-            : await tokenServiceClient.getToken(brand.user.id, brand.id, platform);
-
-        if (!token) {
-          return reply.code(404).send({
-            error: `No ${platform} token found for brand`,
-          });
-        }
-
-        interface TokenDataBase {
-          accessToken: string;
-          accountId?: string | null;
-          pageId?: string | null;
-          expiresAt?: string;
-        }
-        let tokenData: TokenDataBase | undefined;
-
-        switch (platform) {
-          case 'instagram': {
-            // Get accountId and pageId from SocialAccount if not in token metadata
-            let accountId = token.metadata?.accountId;
-            let pageId = token.metadata?.pageId;
-
-            if (!accountId || !pageId) {
-              accountId = accountId || primaryAccount?.externalAccountId || undefined;
-              pageId = pageId || primaryAccount?.externalPageId || undefined;
-            }
-
-            tokenData = {
-              accessToken: token.accessToken,
-              accountId,
-              pageId,
-            };
-
-            // Token Service handles refresh automatically
-            const preferences =
-              typeof brand.preferences === 'object' &&
-              brand.preferences &&
-              !Array.isArray(brand.preferences)
-                ? (brand.preferences as Record<string, unknown>)
-                : undefined;
-            const tokenExpiresAt =
-              preferences && typeof preferences.tokenExpiresAt === 'string'
-                ? preferences.tokenExpiresAt
-                : undefined;
-            if (tokenExpiresAt) {
-              const expiryDate = new Date(tokenExpiresAt);
-              const daysUntilExpiry = Math.floor(
-                (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-              );
-
-              // Refresh if expiring in less than 7 days
-              if (daysUntilExpiry < 7) {
-                fastify.log.info({
-                  action: 'token.refresh.needed',
-                  brandId,
-                  platform,
-                  daysUntilExpiry,
-                });
-
-                // TODO: Implement token refresh logic
-                // For now, just log a warning
-                fastify.log.warn(
-                  `Instagram token for brand ${brandId} expires in ${daysUntilExpiry} days`
-                );
-
-                // Emit notification for token expiring
-                try {
-                  const { notificationsService } = await import('../services/notifications.js');
-                  await notificationsService.emitEvent({
-                    userId: brand.user.id,
-                    brandId: brand.id,
-                    type: 'accounts.token_expiring',
-                    category: 'accounts',
-                    severity: daysUntilExpiry <= 1 ? 'error' : 'warning',
-                    title:
-                      daysUntilExpiry <= 1
-                        ? 'Instagram token expiring soon'
-                        : 'Instagram token expiring',
-                    body:
-                      daysUntilExpiry <= 1
-                        ? 'Your Instagram access token expires within 24 hours. Reconnect to avoid publishing failures.'
-                        : `Your Instagram access token expires in ${daysUntilExpiry} days. Consider reconnecting to avoid disruptions.`,
-                    linkUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/brands`,
-                  });
-                } catch (e) {
-                  fastify.log.error({ e }, 'Failed to emit token expiring notification');
-                }
-              }
-
-              tokenData.expiresAt = tokenExpiresAt;
-            }
-            break;
-          }
-
-          case 'facebook':
-            // TODO: Implement Facebook token retrieval
-            return reply.code(501).send({
-              error: 'Facebook platform not yet implemented',
-            });
-
-          case 'linkedin':
-            // TODO: Implement LinkedIn token retrieval
-            return reply.code(501).send({
-              error: 'LinkedIn platform not yet implemented',
-            });
-
-          default:
-            return reply.code(400).send({
-              error: `Unsupported platform: ${platform}`,
-            });
-        }
-
-        // Log successful token access
-        fastify.log.info({
-          action: 'token.access.granted',
-          brandId,
-          platform,
-          requesterId,
-        });
-
-        // Return token data
-        return reply.send(
-          TokenResponseSchema.parse(tokenData || { accessToken: token.accessToken })
-        );
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({
-            error: 'Invalid request',
-            details: error.issues,
-          });
-        }
-
-        fastify.log.error({
-          action: 'token.access.error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-
-        return reply.code(500).send({
-          error: 'Internal server error',
-        });
-      }
-    }
+    createInternalTokenGetHandler(fastify)
   );
-
-  // Token encryption endpoint removed - tokens are now stored in Token Service
 };
 
 export default internalTokenRoutes;

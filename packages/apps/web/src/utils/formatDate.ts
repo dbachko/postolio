@@ -97,6 +97,42 @@ export function formatDateTime(dateString?: string | null): string {
   return `${datePart} at ${timePart}`;
 }
 
+function formatRelativeAmount(value: number, unit: string, suffix: string): string {
+  return `${value} ${value === 1 ? unit : `${unit}s`} ${suffix}`;
+}
+
+function formatRelativeDistance(diffMs: number): string {
+  const diffSec = Math.floor(Math.abs(diffMs) / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  const diffWeek = Math.floor(diffDay / 7);
+  const diffMonth = Math.floor(diffDay / 30);
+  const diffYear = Math.floor(diffDay / 365);
+
+  if (diffSec < 60) {
+    return 'just now';
+  }
+
+  const suffix = diffMs > 0 ? 'ago' : 'from now';
+  if (diffMin < 60) {
+    return formatRelativeAmount(diffMin, 'minute', suffix);
+  }
+  if (diffHour < 24) {
+    return formatRelativeAmount(diffHour, 'hour', suffix);
+  }
+  if (diffDay < 7) {
+    return formatRelativeAmount(diffDay, 'day', suffix);
+  }
+  if (diffWeek < 4) {
+    return formatRelativeAmount(diffWeek, 'week', suffix);
+  }
+  if (diffMonth < 12) {
+    return formatRelativeAmount(diffMonth, 'month', suffix);
+  }
+  return formatRelativeAmount(diffYear, 'year', suffix);
+}
+
 /**
  * Formats a date to relative time (e.g., "2 hours ago", "in 3 days")
  * @param dateString - ISO date string or null/undefined
@@ -115,39 +151,8 @@ export function formatRelativeTime(dateString?: string | null): string {
     if (isNaN(date.getTime())) {
       return '—';
     }
-
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(Math.abs(diffMs) / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-    const diffWeek = Math.floor(diffDay / 7);
-    const diffMonth = Math.floor(diffDay / 30);
-    const diffYear = Math.floor(diffDay / 365);
-
-    const past = diffMs > 0;
-    const suffix = past ? 'ago' : 'from now';
-
-    if (diffSec < 60) {
-      return `just now`;
-    }
-    if (diffMin < 60) {
-      return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ${suffix}`;
-    }
-    if (diffHour < 24) {
-      return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ${suffix}`;
-    }
-    if (diffDay < 7) {
-      return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ${suffix}`;
-    }
-    if (diffWeek < 4) {
-      return `${diffWeek} ${diffWeek === 1 ? 'week' : 'weeks'} ${suffix}`;
-    }
-    if (diffMonth < 12) {
-      return `${diffMonth} ${diffMonth === 1 ? 'month' : 'months'} ${suffix}`;
-    }
-    return `${diffYear} ${diffYear === 1 ? 'year' : 'years'} ${suffix}`;
+    const diffMs = Date.now() - date.getTime();
+    return formatRelativeDistance(diffMs);
   } catch (error) {
     console.error(`Error formatting relative time: ${dateString}`, error);
     return '—';

@@ -2,33 +2,59 @@ import { TimezoneService } from './timezone.js';
 
 const MIN_SLOT_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 
+function normalizePostingTimes(postingTime: string, postingTimes: string[]): string[] {
+  return (Array.isArray(postingTimes) && postingTimes.length > 0 ? postingTimes : [postingTime])
+    .filter(Boolean)
+    .map((time) => {
+      const [hours, minutes] = time.split(':');
+      const hh = String(parseInt(hours ?? '0', 10)).padStart(2, '0');
+      const mm = String(parseInt(minutes ?? '0', 10)).padStart(2, '0');
+      return `${hh}:${mm}`;
+    })
+    .filter((value, index, allValues) => allValues.indexOf(value) === index);
+}
+
+function resolveIntervalDays(frequency: 'daily' | 'every2days' | '3weekly' | string): number {
+  if (frequency === 'daily') {
+    return 1;
+  }
+  if (frequency === 'every2days') {
+    return 2;
+  }
+  if (frequency === '3weekly') {
+    return 1;
+  }
+  return 7;
+}
+
+export type ComputeUpcomingSlotsParams = {
+  start: Date;
+  end: Date;
+  postingTime: string;
+  postingTimes: string[];
+  frequency: 'daily' | 'every2days' | '3weekly' | string;
+  timezone: string;
+  maxSlots: number;
+  now?: Date;
+};
+
 /**
  * Compute upcoming posting slots for a schedule cadence based on frequency and postingTime(s).
  * Returns Date objects representing the brand-local time converted to UTC for storage.
  */
-export async function computeUpcomingSlots(
-  start: Date,
-  end: Date,
-  postingTime: string,
-  postingTimes: string[],
-  frequency: 'daily' | 'every2days' | '3weekly' | string,
-  timezone: string,
-  maxSlots: number,
-  now: Date = new Date()
-): Promise<Date[]> {
+export async function computeUpcomingSlots(params: ComputeUpcomingSlotsParams): Promise<Date[]> {
+  const {
+    start,
+    end,
+    postingTime,
+    postingTimes,
+    frequency,
+    timezone,
+    maxSlots,
+    now = new Date(),
+  } = params;
   const slots: Date[] = [];
-
-  const times = (
-    Array.isArray(postingTimes) && postingTimes.length > 0 ? postingTimes : [postingTime]
-  )
-    .filter(Boolean)
-    .map((t) => {
-      const [h, m] = t.split(':');
-      const hh = String(parseInt(h ?? '0', 10)).padStart(2, '0');
-      const mm = String(parseInt(m ?? '0', 10)).padStart(2, '0');
-      return `${hh}:${mm}`;
-    })
-    .filter((v, i, a) => a.indexOf(v) === i);
+  const times = normalizePostingTimes(postingTime, postingTimes);
 
   // Compute day boundaries using timezone-aware formatting to avoid DST issues
   const fmtYmd = (d: Date) =>
@@ -57,8 +83,7 @@ export async function computeUpcomingSlots(
   let cursor = toUtcMidnight(cursorStr);
 
   // Determine day step
-  const intervalDays =
-    frequency === 'daily' ? 1 : frequency === 'every2days' ? 2 : frequency === '3weekly' ? 1 : 7;
+  const intervalDays = resolveIntervalDays(frequency);
   // Note: for '3weekly' we still generate daily slots; weekly quota enforced in caller
 
   // First, include any remaining times today (even if cadence would skip today)

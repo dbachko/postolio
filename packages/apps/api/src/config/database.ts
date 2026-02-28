@@ -10,6 +10,10 @@ interface QueryEventLike {
   duration: number;
 }
 
+function logInfo(message: string): void {
+  process.stdout.write(`${message}\n`);
+}
+
 export function getDatabaseUrl(): string {
   // First check if DATABASE_URL is provided
   if (process.env.DATABASE_URL) {
@@ -67,8 +71,8 @@ export function getDatabaseClient(): PrismaClient {
     // Connection event handlers
     if (enableQueryLogging) {
       prismaInstance.$on('query' as never, (e: QueryEventLike) => {
-        console.log(`Query: ${e.query}`);
-        console.log(`Duration: ${e.duration}ms`);
+        logInfo(`Query: ${e.query}`);
+        logInfo(`Duration: ${e.duration}ms`);
       });
     }
 
@@ -79,12 +83,12 @@ export function getDatabaseClient(): PrismaClient {
         return;
       }
       shutdownStarted = true;
-      console.log('🔌 Disconnecting from database...');
+      logInfo('🔌 Disconnecting from database...');
       try {
         await prismaInstance?.$disconnect();
         await prismaPool?.end();
         prismaPool = null;
-        console.log('✅ Database disconnected successfully');
+        logInfo('✅ Database disconnected successfully');
       } catch (error) {
         console.error('❌ Error disconnecting from database:', error);
       }

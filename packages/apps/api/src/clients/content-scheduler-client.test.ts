@@ -3,6 +3,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import { ContentSchedulerClient } from './content-scheduler-client.js';
 
+const BRAND_ID = '11111111-1111-4111-8111-111111111111';
+const CONTENT_ID = '22222222-2222-4222-8222-222222222222';
+const USER_ID = '33333333-3333-4333-8333-333333333333';
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -53,9 +57,9 @@ describe('ContentSchedulerClient', () => {
         success: true,
         data: {
           scheduleId,
-          contentId: 'content-123',
-          brandId: 'brand-456',
-          userId: 'user-789',
+          contentId: CONTENT_ID,
+          brandId: BRAND_ID,
+          userId: USER_ID,
           platform: 'instagram',
           scheduledAt,
           caption: 'hello',
@@ -88,9 +92,9 @@ describe('ContentSchedulerClient', () => {
 
     const schedule = await client.updateSchedule('schedule-123', {
       scheduledAt: new Date(Date.now() + 60_000).toISOString(),
-      brandId: 'brand-456',
-      contentId: 'content-123',
-      userId: 'user-789',
+      brandId: BRAND_ID,
+      contentId: CONTENT_ID,
+      userId: USER_ID,
       platform: 'instagram',
     });
 
@@ -103,9 +107,9 @@ describe('ContentSchedulerClient', () => {
 
     const schedule = await client.updateSchedule('schedule-abc', {
       scheduledAt: new Date(Date.now() + 60_000).toISOString(),
-      brandId: 'brand-456',
-      contentId: 'content-123',
-      userId: 'user-789',
+      brandId: BRAND_ID,
+      contentId: CONTENT_ID,
+      userId: USER_ID,
       platform: 'instagram',
     });
 

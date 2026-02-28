@@ -2,19 +2,13 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  QueryCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
-// import { LambdaClient } from '@aws-sdk/client-lambda';
-import { SchedulerClient, CreateScheduleCommand } from '@aws-sdk/client-scheduler';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { SchedulerClient } from '@aws-sdk/client-scheduler';
 import type { ScheduledEvent, SQSEvent, SQSRecord } from 'aws-lambda';
 import { RetryStrategy } from './retry-strategy';
+import { RetryProcessor } from './domain/retry-processor';
 import { initSentry, captureException } from '@postolio/observability';
 
-// Initialize Powertools
 const logger = new Logger({ serviceName: 'retry-handler' });
 const tracer = new Tracer({ serviceName: 'retry-handler' });
 const metrics = new Metrics({
@@ -26,31 +20,56 @@ initSentry({
   serviceName: 'retry-handler',
 });
 
-// Initialize AWS SDK clients
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-// Lambda client currently not used; initialize when needed
-// const lambdaClient = tracer.captureAWSv3Client(new LambdaClient({}));
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
-// Initialize retry strategy with industry best practices
 const retryStrategy = new RetryStrategy(metrics);
+const retryProcessor = new RetryProcessor({
+  logger,
+  metrics,
+  docClient,
+  schedulerClient,
+  retryStrategy,
+});
 
-// Constant kept for backward compatibility in logs
-const MAX_RETRY_ATTEMPTS = 5; // Increased to match industry standard
+const MAX_PROCESSING_TIME_MS = 45000;
+const MAX_BATCH_RECORDS = 50;
 
-function isSQSEvent(e: unknown): e is SQSEvent {
-  return !!e && typeof e === 'object' && Array.isArray((e as { Records?: unknown }).Records);
+function isSQSEvent(event: unknown): event is SQSEvent {
+  return (
+    !!event && typeof event === 'object' && Array.isArray((event as { Records?: unknown }).Records)
+  );
+}
+
+function getSqsRecords(event: SQSEvent | ScheduledEvent | undefined): SQSRecord[] {
+  return isSQSEvent(event) ? event.Records : [];
+}
+
+function isApproachingTimeout(startTime: number): boolean {
+  return Date.now() - startTime > MAX_PROCESSING_TIME_MS;
+}
+
+async function handleProcessingError(record: SQSRecord, error: unknown): Promise<void> {
+  logger.error('Failed to process retry message - marking as permanently failed', error as Error);
+  captureException(error, {
+    function: 'retry-handler',
+  });
+  metrics.addMetric('RetryFailed', MetricUnit.Count, 1);
+
+  const scheduleId = retryProcessor.extractScheduleId(record);
+  if (scheduleId) {
+    await retryProcessor.markAsFailed(scheduleId, 'Retry handler processing failed', error);
+    return;
+  }
+
+  logger.error('Failed to parse message for error handling', error as Error);
 }
 
 export const handler = async (event: SQSEvent | ScheduledEvent | undefined): Promise<void> => {
-  // 🚨 RECURSIVE LOOP PREVENTION: Add circuit breaker with timestamp tracking
   const processingStartTime = Date.now();
-  const maxProcessingTime = 45000; // 45 seconds max processing time
+  const records = getSqsRecords(event);
 
-  const records: SQSRecord[] = isSQSEvent(event) ? event.Records : [];
-
-  // Handle non-SQS invocations gracefully (e.g., EventBridge schedule rule)
   if (records.length === 0) {
     logger.info('Non-SQS invocation or empty batch; skipping processing');
     metrics.publishStoredMetrics();
@@ -62,449 +81,30 @@ export const handler = async (event: SQSEvent | ScheduledEvent | undefined): Pro
     processingStartTime,
   });
 
-  // 🚨 PREVENT RECURSIVE LOOPS: Validate message count is reasonable
-  if (records.length > 50) {
+  if (records.length > MAX_BATCH_RECORDS) {
     logger.error('Received too many messages in single batch - potential recursive loop detected', {
       messageCount: records.length,
     });
     metrics.addMetric('RecursiveLoopPrevented', MetricUnit.Count, 1);
-    return; // Exit early to prevent processing potentially malformed batch
+    return;
   }
 
   for (const record of records) {
-    // 🚨 TIMEOUT PROTECTION: Check if we're approaching timeout
-    if (Date.now() - processingStartTime > maxProcessingTime) {
+    if (isApproachingTimeout(processingStartTime)) {
       logger.warn('Approaching timeout - stopping message processing to prevent incomplete work', {
         processedTime: Date.now() - processingStartTime,
-        maxProcessingTime,
+        maxProcessingTime: MAX_PROCESSING_TIME_MS,
       });
       break;
     }
 
     try {
-      await processRetryMessage(record);
+      await retryProcessor.processRetryMessage(record);
       metrics.addMetric('RetryProcessed', MetricUnit.Count, 1);
     } catch (error) {
-      logger.error(
-        'Failed to process retry message - marking as permanently failed',
-        error as Error
-      );
-      captureException(error, {
-        function: 'retry-handler',
-      });
-      metrics.addMetric('RetryFailed', MetricUnit.Count, 1);
-
-      // 🔥 CRITICAL FIX: Never throw errors to prevent SQS from retrying the retry-handler
-      // Instead, mark the message as processed but failed
-      try {
-        const message = JSON.parse(record.body);
-        const { scheduleId } = message;
-        if (scheduleId) {
-          await markAsFailed(scheduleId, 'Retry handler processing failed', error as Error);
-        }
-      } catch (parseError) {
-        logger.error('Failed to parse message for error handling', parseError as Error);
-        // 🚨 CRITICAL: Even if we can't parse the message, we MUST NOT throw
-        // This would cause SQS to retry and potentially create a recursive loop
-      }
-
-      // Always succeed to prevent SQS retry loop
-      // The message has been processed (marked as failed) and should not be retried
+      await handleProcessingError(record, error);
     }
   }
 
   metrics.publishStoredMetrics();
 };
-
-async function processRetryMessage(record: SQSRecord): Promise<void> {
-  const message = JSON.parse(record.body);
-  const { scheduleId, originalError, errorMeta, httpStatus } = message;
-
-  // 🚨 RECURSIVE LOOP PREVENTION: Validate scheduleId exists and is reasonable
-  if (!scheduleId || typeof scheduleId !== 'string' || scheduleId.length > 100) {
-    logger.error('Invalid scheduleId in retry message - skipping to prevent loops', {
-      scheduleId,
-      messageLength: JSON.stringify(message).length,
-    });
-    metrics.addMetric('InvalidScheduleIdSkipped', MetricUnit.Count, 1);
-    return; // Skip invalid messages to prevent infinite processing
-  }
-
-  logger.info('Processing retry for schedule', { scheduleId });
-
-  // Get retry information
-  const retryInfo = await getRetryInfo(scheduleId);
-  const attemptNumber = (retryInfo?.attemptNumber || 0) + 1;
-
-  // 🚨 RECURSIVE LOOP PREVENTION: Hard limit on retry attempts to prevent infinite loops
-  const absoluteMaxRetries = 10; // Absolute hard limit regardless of retry strategy
-  if (attemptNumber > absoluteMaxRetries) {
-    logger.error('Retry attempt exceeds absolute maximum - preventing potential infinite loop', {
-      scheduleId,
-      attemptNumber,
-      absoluteMaxRetries,
-    });
-    await markAsFailed(
-      scheduleId,
-      `Exceeded absolute maximum retry limit (${absoluteMaxRetries})`,
-      new Error('Absolute retry limit exceeded')
-    );
-    metrics.addMetric('AbsoluteRetryLimitExceeded', MetricUnit.Count, 1);
-    return;
-  }
-
-  // Parse the original error from the message
-  let analysisInput: unknown;
-  if (errorMeta && typeof errorMeta === 'object') {
-    // Prefer structured metadata from publisher if available
-    analysisInput = {
-      ...(errorMeta as Record<string, unknown>),
-      httpStatusCode:
-        typeof (errorMeta as { httpStatus?: unknown }).httpStatus === 'number'
-          ? (errorMeta as { httpStatus: number }).httpStatus
-          : typeof httpStatus === 'number'
-            ? (httpStatus as number)
-            : undefined,
-    };
-  } else {
-    try {
-      analysisInput = originalError
-        ? new Error(originalError)
-        : new Error('Unknown publishing error');
-    } catch {
-      analysisInput = new Error('Failed to parse error from retry message');
-    }
-  }
-
-  // Use industry-standard retry strategy to determine if we should retry
-  const retryDecision = retryStrategy.shouldRetry(analysisInput, attemptNumber, scheduleId);
-
-  logger.info('Retry decision made', {
-    scheduleId,
-    attemptNumber,
-    shouldRetry: retryDecision.shouldRetry,
-    reason: retryDecision.reason,
-    delayMs: retryDecision.delayMs,
-    circuitBreakerOpen: retryDecision.circuitBreakerOpen,
-    errorAnalysis: retryStrategy.analyzeError(analysisInput),
-  });
-
-  // If we shouldn't retry, mark as failed
-  if (!retryDecision.shouldRetry) {
-    // Pass the analyzed error context instead of undefined variable
-    await markAsFailed(scheduleId, retryDecision.reason, analysisInput);
-
-    // Record metrics based on failure reason
-    if (retryDecision.circuitBreakerOpen) {
-      metrics.addMetric('CircuitBreakerActivated', MetricUnit.Count, 1);
-    } else {
-      metrics.addMetric('MaxRetriesExceeded', MetricUnit.Count, 1);
-    }
-    return;
-  }
-
-  // Record retry attempt
-  await recordRetryAttempt(scheduleId, attemptNumber, retryDecision.delayMs);
-
-  try {
-    // Get schedule metadata to include brandId and userId
-    const scheduleData = await getScheduleData(scheduleId);
-
-    if (!scheduleData) {
-      // Include analyzed error for better diagnostics
-      await markAsFailed(scheduleId, 'Schedule data not found', analysisInput);
-      return;
-    }
-
-    // Schedule the retry with proper exponential backoff delay
-    // Use AWS EventBridge Scheduler for precise timing
-    await scheduleRetryWithDelay(scheduleId, scheduleData, retryDecision.delayMs, attemptNumber);
-
-    logger.info('Retry scheduled with exponential backoff', {
-      scheduleId,
-      attemptNumber,
-      delayMs: retryDecision.delayMs,
-      brandId: scheduleData.brandId,
-      userId: scheduleData.userId,
-    });
-
-    metrics.addMetric('RetryScheduled', MetricUnit.Count, 1);
-    metrics.addMetric('RetryDelayMs', MetricUnit.Milliseconds, retryDecision.delayMs);
-  } catch (error) {
-    logger.error('Failed to schedule retry', error as Error);
-
-    // Mark as failed if we can't even schedule the retry
-    await markAsFailed(scheduleId, 'Failed to schedule retry after error analysis', error as Error);
-
-    // 🔥 CRITICAL: Never throw errors - this would cause SQS to retry the retry-handler
-    // The message has been processed (marked as failed) successfully
-    logger.warn('Retry message processed with failure - will not be retried', {
-      scheduleId,
-      error: (error as Error).message,
-    });
-  }
-}
-
-interface ScheduleRecord {
-  pk: string;
-  sk: string;
-  brandId?: string;
-  userId?: string;
-  contentId?: string;
-  [key: string]: unknown;
-}
-
-async function getScheduleData(scheduleId: string): Promise<ScheduleRecord | null> {
-  try {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: process.env.SCHEDULES_TABLE!,
-        IndexName: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'ScheduleIdIndex',
-        KeyConditionExpression: 'scheduleId = :sid',
-        ExpressionAttributeValues: {
-          ':sid': scheduleId,
-        },
-        Limit: 1,
-      })
-    );
-
-    const item = result.Items?.[0] as ScheduleRecord | undefined;
-    if (!item) {
-      logger.warn('No schedule data found via GSI', { scheduleId });
-      return null;
-    }
-    return item;
-  } catch (err) {
-    logger.warn('Failed to read schedule via GSI', { scheduleId, error: (err as Error).message });
-    return null;
-  }
-}
-
-interface RetryInfo {
-  scheduleId: string;
-  attemptNumber: number;
-  [key: string]: unknown;
-}
-
-async function getRetryInfo(scheduleId: string): Promise<RetryInfo | null> {
-  try {
-    // Query the latest attempt (highest sort key) for this scheduleId
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: process.env.RETRY_QUEUE_TABLE!,
-        KeyConditionExpression: 'scheduleId = :sid',
-        ExpressionAttributeValues: {
-          ':sid': scheduleId,
-        },
-        ScanIndexForward: false, // descending order by sort key (attemptNumber)
-        Limit: 1,
-      })
-    );
-
-    const latest = result.Items?.[0];
-    return (latest as RetryInfo) || null;
-  } catch (err) {
-    logger.warn('No retry info found or query failed', {
-      scheduleId,
-      error: (err as Error).message,
-    });
-    return null;
-  }
-}
-
-/**
- * Schedule a retry with exponential backoff delay using AWS EventBridge Scheduler
- * This replaces immediate Lambda invocation to prevent recursive loops
- */
-async function scheduleRetryWithDelay(
-  scheduleId: string,
-  scheduleData: ScheduleRecord,
-  delayMs: number,
-  attemptNumber: number
-): Promise<void> {
-  const scheduleAt = new Date(Date.now() + delayMs);
-  const scheduleName = `retry-${scheduleId}-attempt-${attemptNumber}`;
-
-  // Create one-time schedule for the retry
-  await schedulerClient.send(
-    new CreateScheduleCommand({
-      Name: scheduleName,
-      GroupName: process.env.SCHEDULER_GROUP_NAME!,
-      ScheduleExpression: `at(${scheduleAt.toISOString().slice(0, -5)})`, // EventBridge format
-      Target: {
-        Arn: process.env.SCHEDULING_EVENT_BUS_ARN!,
-        RoleArn: process.env.SCHEDULER_EVENTS_ROLE_ARN!,
-        Input: JSON.stringify({
-          scheduleId,
-          brandId: scheduleData.brandId,
-          userId: scheduleData.userId,
-          retryAttempt: attemptNumber,
-        }),
-        EventBridgeParameters: {
-          DetailType: 'schedule.due',
-          Source: 'postolio.scheduling',
-        },
-      },
-      FlexibleTimeWindow: {
-        Mode: 'OFF',
-      },
-      Description: `Retry attempt ${attemptNumber} for schedule ${scheduleId}`,
-    })
-  );
-
-  logger.info('Retry scheduled successfully', {
-    scheduleId,
-    attemptNumber,
-    scheduleName,
-    scheduleAt: scheduleAt.toISOString(),
-    delayMs,
-  });
-}
-
-async function recordRetryAttempt(
-  scheduleId: string,
-  attemptNumber: number,
-  delayMs?: number
-): Promise<void> {
-  await docClient.send(
-    new PutCommand({
-      TableName: process.env.RETRY_QUEUE_TABLE!,
-      Item: {
-        scheduleId,
-        attemptNumber,
-        timestamp: new Date().toISOString(),
-        delayMs: delayMs || 0,
-        nextRetryAt: delayMs ? new Date(Date.now() + delayMs).toISOString() : undefined,
-        ttl: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7 days
-      },
-    })
-  );
-
-  // Also update the main schedule record (lookup keys via GSI)
-  const sched = await getScheduleData(scheduleId);
-  if (sched && sched.pk && sched.sk) {
-    await docClient.send(
-      new UpdateCommand({
-        TableName: process.env.SCHEDULES_TABLE!,
-        Key: {
-          pk: sched.pk,
-          sk: sched.sk,
-        },
-        UpdateExpression: 'SET #retryCount = :count, #lastRetry = :timestamp',
-        ExpressionAttributeNames: {
-          '#retryCount': 'retryCount',
-          '#lastRetry': 'lastRetryAt',
-        },
-        ExpressionAttributeValues: {
-          ':count': attemptNumber,
-          ':timestamp': new Date().toISOString(),
-        },
-      })
-    );
-  } else {
-    logger.warn('Could not update schedule retry fields; schedule not found via GSI', {
-      scheduleId,
-    });
-  }
-}
-
-async function markAsFailed(
-  scheduleId: string,
-  reason: string,
-  originalError?: Error | unknown
-): Promise<void> {
-  try {
-    // Analyze error to get structured information
-    const errorAnalysis = retryStrategy.analyzeError(originalError || reason);
-
-    // Prefer a more user-friendly reason if the generic message is returned
-    const rawOriginalMsg =
-      originalError instanceof Error ? originalError.message : String(originalError || '');
-    const userReason = (() => {
-      if (reason === 'Non-retryable error type' && rawOriginalMsg) {
-        const lower = rawOriginalMsg.toLowerCase();
-        if (lower.includes('token not found')) {
-          return 'Account token not found. Please reconnect your account in Settings.';
-        }
-        if (
-          lower.includes('media could not be fetched') ||
-          lower.includes('failed to create media')
-        ) {
-          return 'Image URL not accessible by Instagram. Try again or regenerate the image.';
-        }
-        return rawOriginalMsg;
-      }
-      return reason;
-    })();
-
-    const sched = await getScheduleData(scheduleId);
-    if (sched && sched.pk && sched.sk) {
-      await docClient.send(
-        new UpdateCommand({
-          TableName: process.env.SCHEDULES_TABLE!,
-          Key: {
-            pk: sched.pk,
-            sk: sched.sk,
-          },
-          UpdateExpression:
-            'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
-          ExpressionAttributeNames: {
-            '#status': 'status',
-            '#error': 'schedulingError',
-            '#errorType': 'errorType',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':status': 'failed',
-            ':error': userReason,
-            ':errorType': errorAnalysis.errorType,
-            ':updatedAt': new Date().toISOString(),
-          },
-        })
-      );
-    } else {
-      logger.warn('Could not mark schedule as failed; schedule not found via GSI', {
-        scheduleId,
-        reason,
-      });
-    }
-
-    // Log to audit table - wrapped in try/catch to prevent audit logging failures from causing recursion
-    try {
-      await docClient.send(
-        new PutCommand({
-          TableName: process.env.AUDIT_LOG_TABLE!,
-          Item: {
-            pk: `SCHEDULE#${scheduleId}`,
-            timestamp: new Date().toISOString(),
-            action: 'FAILED_AFTER_RETRIES',
-            reason,
-            metadata: {
-              maxAttempts: MAX_RETRY_ATTEMPTS,
-            },
-          },
-        })
-      );
-    } catch (auditError) {
-      // 🚨 CRITICAL: Never let audit logging failures prevent marking as failed
-      logger.warn('Failed to write to audit log but schedule marked as failed', {
-        scheduleId,
-        auditError: (auditError as Error).message,
-      });
-      metrics.addMetric('AuditLogWriteFailed', MetricUnit.Count, 1);
-      // Continue - the main schedule update succeeded
-    }
-  } catch (error) {
-    // 🚨 CRITICAL: Log error but don't throw to prevent recursion
-    logger.error('Failed to mark schedule as failed - this could cause retry loops', {
-      scheduleId,
-      reason,
-      error: (error as Error).message,
-    });
-    metrics.addMetric('MarkAsFailedError', MetricUnit.Count, 1);
-    // Don't throw - this would cause the entire handler to fail and potentially retry
-  }
-}
-
-// Removed scheduleNextRetry function to prevent recursive invocations
-// The DLQ's built-in retry mechanism with exponential backoff handles retries automatically

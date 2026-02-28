@@ -5,8 +5,170 @@ import { makeCachedTimezoneGetter } from './timezone';
 const DEBUG_AUTH_ME_REFRESH = Boolean(
   (import.meta as any).env?.VITE_DEBUG_AUTH_ME_REFRESH === 'true'
 );
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const CSRF_ERROR_CODES = new Set([
+  'CSRF_TOKEN_MISSING',
+  'CSRF_TOKEN_INVALID',
+  'CSRF_VALIDATION_FAILED',
+]);
 
 export type HttpRequest = (path: string, init?: RequestInit) => Promise<any>;
+
+type ErrorPayload = { errorText: string; errorData: any };
+
+function getRequestMethod(options: RequestInit): string {
+  return (options.method || 'GET').toUpperCase();
+}
+
+function createRequestHeaders(
+  options: RequestInit,
+  getTimezone: () => string
+): Record<string, string> {
+  const headers: Record<string, string> = { ...(options.headers as any) };
+  if (options.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+  headers['X-Timezone'] = getTimezone();
+  return headers;
+}
+
+async function addCsrfHeaderIfNeeded(
+  csrf: CSRFTokenManager,
+  method: string,
+  headers: Record<string, string>
+): Promise<void> {
+  if (!MUTATING_METHODS.has(method)) {
+    return;
+  }
+  const csrfToken = await csrf.ensureToken();
+  if (csrfToken) {
+    headers['csrf-token'] = csrfToken;
+  }
+}
+
+async function parseErrorPayload(response: Response): Promise<ErrorPayload> {
+  let errorText = '';
+  let errorData: any = null;
+  try {
+    errorText = await response.text();
+    if (errorText) {
+      errorData = JSON.parse(errorText);
+    }
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+  return { errorText, errorData };
+}
+
+function isCsrfErrorCode(code: unknown): boolean {
+  return typeof code === 'string' && CSRF_ERROR_CODES.has(code);
+}
+
+async function retryRequestAfterCsrfFailure(params: {
+  response: Response;
+  csrf: CSRFTokenManager;
+  errorData: any;
+  url: string;
+  options: RequestInit;
+  headers: Record<string, string>;
+}): Promise<any | null> {
+  const { response, csrf, errorData, url, options, headers } = params;
+  if (response.status !== 403 || !isCsrfErrorCode(errorData?.code)) {
+    return null;
+  }
+  csrf.clearToken();
+  const newToken = await csrf.fetchToken();
+  if (!newToken) {
+    return null;
+  }
+
+  headers['csrf-token'] = newToken;
+  const retryResponse = await fetch(url, { ...options, headers, credentials: 'include' });
+  if (retryResponse.ok) {
+    return retryResponse.json();
+  }
+  return null;
+}
+
+async function handleUnauthorizedResponse(
+  response: Response,
+  endpoint: string,
+  headers: Record<string, string>,
+  options: RequestInit,
+  request: HttpRequest
+): Promise<any | null> {
+  const isRetry = String(headers['x-skip-auth-retry']) === 'true';
+  if (response.status !== 401 || endpoint === '/api/auth/refresh' || isRetry) {
+    return null;
+  }
+
+  const { AuthInterceptor } = await import('../auth-interceptor');
+  if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
+    console.warn('[AuthDebug] /api/auth/me 401 detected, attempting refresh...');
+  }
+
+  const retryResult = await AuthInterceptor.handleUnauthorized(() =>
+    request(endpoint, {
+      ...options,
+      headers: {
+        ...(options.headers as any),
+        'x-skip-auth-retry': 'true',
+      },
+    })
+  );
+
+  if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
+    console.warn('[AuthDebug] /api/auth/me refresh result', {
+      shouldRetry: retryResult.shouldRetry,
+      hasResult: Boolean(retryResult.result),
+    });
+  }
+
+  if (retryResult.shouldRetry && retryResult.result) {
+    return retryResult.result;
+  }
+  if (retryResult.isOffline) {
+    const offlineError = new Error('Network unavailable during auth refresh');
+    (offlineError as any).code = 'NETWORK_OFFLINE';
+    (offlineError as any).status = 0;
+    throw offlineError;
+  }
+  if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
+    console.warn('[AuthDebug] /api/auth/me refresh failed, redirecting to /login');
+  }
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
+  return null;
+}
+
+function throwRequestError(response: Response, payload: ErrorPayload): never {
+  const { errorText, errorData } = payload;
+  if (response.status === 413) {
+    throw new Error('Image too large. Please optimize your image to be under 10MB.');
+  }
+  if (errorData) {
+    const primaryMessage =
+      errorData.error ||
+      errorData.message ||
+      (Array.isArray(errorData.errors) ? errorData.errors[0] : undefined) ||
+      'Request failed';
+    const err = new Error(primaryMessage);
+    (err as any).status = response.status;
+    (err as any).data = errorData;
+    throw err;
+  }
+  if (response.status === 404) {
+    throw new Error('Resource not found');
+  }
+  if (response.status === 500) {
+    throw new Error('Server error. Please try again later.');
+  }
+  if (errorText) {
+    throw new Error(errorText);
+  }
+  throw new Error(`Request failed with status ${response.status}`);
+}
 
 export function createHttp(): HttpRequest {
   const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || '';
@@ -24,132 +186,40 @@ export function createHttp(): HttpRequest {
     options: RequestInit = {}
   ): Promise<any> => {
     const url = `${API_BASE_URL}${endpoint}`;
-    const headers: Record<string, string> = { ...(options.headers as any) };
+    const method = getRequestMethod(options);
+    const headers = createRequestHeaders(options, getTimezone);
+    await addCsrfHeaderIfNeeded(csrf, method, headers);
 
-    if (options.body) {
-      headers['Content-Type'] = 'application/json';
-    }
-    headers['X-Timezone'] = getTimezone();
-
-    const method = (options.method || 'GET').toUpperCase();
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const csrfToken = await csrf.ensureToken();
-      if (csrfToken) {
-        headers['csrf-token'] = csrfToken;
-      }
+    const response = await fetch(url, { ...options, headers, credentials: 'include' });
+    if (response.ok) {
+      return response.json();
     }
 
-    const exec = () =>
-      fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-      });
-
-    const response = await exec();
-
-    if (!response.ok) {
-      let errorText = '';
-      let errorData: any = null;
-      try {
-        errorText = await response.text();
-        if (errorText) {
-          errorData = JSON.parse(errorText);
-        }
-      } catch {
-        // ignore JSON parse errors for error bodies
-      }
-
-      if (response.status === 403) {
-        const code = errorData?.code;
-        if (
-          code === 'CSRF_TOKEN_MISSING' ||
-          code === 'CSRF_TOKEN_INVALID' ||
-          code === 'CSRF_VALIDATION_FAILED'
-        ) {
-          csrf.clearToken();
-          const newToken = await csrf.fetchToken();
-          if (newToken) {
-            headers['csrf-token'] = newToken;
-            const retryResponse = await fetch(url, { ...options, headers, credentials: 'include' });
-            if (retryResponse.ok) {
-              return retryResponse.json();
-            }
-          }
-        }
-      }
-
-      // Guard against infinite 401 -> refresh -> retry loops.
-      // If this request is already a post-refresh retry, skip re-invoking the interceptor.
-      const isRetry = String(headers['x-skip-auth-retry']) === 'true';
-
-      if (response.status === 401 && endpoint !== '/api/auth/refresh' && !isRetry) {
-        const { AuthInterceptor } = await import('../auth-interceptor');
-        if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
-          console.debug('[AuthDebug] /api/auth/me 401 detected, attempting refresh...');
-        }
-        const retryResult = await AuthInterceptor.handleUnauthorized(() =>
-          request(endpoint, {
-            ...options,
-            headers: {
-              ...(options.headers as any),
-              'x-skip-auth-retry': 'true',
-            },
-          })
-        );
-        if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
-          console.debug('[AuthDebug] /api/auth/me refresh result', {
-            shouldRetry: retryResult.shouldRetry,
-            hasResult: Boolean(retryResult.result),
-          });
-        }
-        if (retryResult.shouldRetry && retryResult.result) {
-          return retryResult.result;
-        }
-
-        // If refresh failed due to network issues, surface an offline error instead of forcing logout
-        if (retryResult.isOffline) {
-          const offlineError = new Error('Network unavailable during auth refresh');
-          (offlineError as any).code = 'NETWORK_OFFLINE';
-          (offlineError as any).status = 0;
-          throw offlineError;
-        }
-        if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
-          console.debug('[AuthDebug] /api/auth/me refresh failed, redirecting to /login');
-        }
-        if (!window.location.pathname.startsWith('/login')) {
-          window.location.href = '/login';
-        }
-      }
-
-      if (response.status === 413) {
-        throw new Error('Image too large. Please optimize your image to be under 10MB.');
-      }
-      if (errorData) {
-        const primaryMessage =
-          errorData.error ||
-          errorData.message ||
-          (Array.isArray(errorData.errors) ? errorData.errors[0] : undefined) ||
-          'Request failed';
-        const err = new Error(primaryMessage);
-        // Attach status and data for richer client error handling (e.g., 429 throttling)
-        (err as any).status = response.status;
-        (err as any).data = errorData;
-        throw err;
-      }
-      if (response.status === 404) {
-        throw new Error('Resource not found');
-      }
-      if (response.status === 500) {
-        throw new Error('Server error. Please try again later.');
-      }
-      if (errorText) {
-        throw new Error(errorText);
-      }
-      throw new Error(`Request failed with status ${response.status}`);
+    const errorPayload = await parseErrorPayload(response);
+    const csrfRetryResult = await retryRequestAfterCsrfFailure({
+      response,
+      csrf,
+      errorData: errorPayload.errorData,
+      url,
+      options,
+      headers,
+    });
+    if (csrfRetryResult !== null) {
+      return csrfRetryResult;
     }
 
-    return response.json();
+    const unauthorizedRetryResult = await handleUnauthorizedResponse(
+      response,
+      endpoint,
+      headers,
+      options,
+      request
+    );
+    if (unauthorizedRetryResult !== null) {
+      return unauthorizedRetryResult;
+    }
+
+    throwRequestError(response, errorPayload);
   };
 
   return request;

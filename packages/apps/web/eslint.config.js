@@ -106,11 +106,10 @@ export default [
     ignores: ['src/components/ui/**/*'],
     rules: {
       'max-lines': [
-        'warn',
+        'error',
         {
           // Target: ~200-300 lines for React component files.
-          // Using warn so violations are visible without blocking commits;
-          // fix in a dedicated refactoring session.
+          // Violations are enforced as errors to keep components decomposed.
           max: 300,
           skipBlankLines: true,
           skipComments: true,
@@ -123,10 +122,10 @@ export default [
     ignores: ['src/components/ui/**/*'],
     rules: {
       'max-lines': [
-        'warn',
+        'error',
         {
           // Allow slightly larger non-UI modules (hooks/utils) while still
-          // flagging runaway files for future extraction.
+          // flagging runaway files for extraction as hard errors.
           max: 400,
           skipBlankLines: true,
           skipComments: true,

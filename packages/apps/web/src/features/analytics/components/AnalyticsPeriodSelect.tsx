@@ -8,6 +8,16 @@ import {
 import type { Period } from '../types';
 import { daysFromPeriod } from '../utils';
 
+function periodFromDays(days: number): Period {
+  if (days === 7) {
+    return '7d';
+  }
+  if (days === 90) {
+    return '90d';
+  }
+  return '30d';
+}
+
 export function AnalyticsPeriodSelect({
   value,
   onChange,
@@ -18,7 +28,7 @@ export function AnalyticsPeriodSelect({
   return (
     <Select
       value={String(daysFromPeriod(value))}
-      onValueChange={(v) => onChange(Number(v) === 7 ? '7d' : Number(v) === 90 ? '90d' : '30d')}
+      onValueChange={(v) => onChange(periodFromDays(Number(v)))}
     >
       <SelectTrigger className="w-full sm:w-[160px]">
         <SelectValue placeholder="Select range" />

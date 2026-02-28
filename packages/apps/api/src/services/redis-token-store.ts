@@ -318,6 +318,57 @@ export class RedisTokenStore {
     return await this.redis.scard(userSetKey);
   }
 
+  private shouldDeleteTokenFromBatchResult(
+    result: [Error | null, unknown] | undefined,
+    nowMs: number
+  ): boolean {
+    if (!result) {
+      return false;
+    }
+
+    const [err, data] = result;
+    if (err) {
+      return false;
+    }
+    if (!data) {
+      return true;
+    }
+
+    try {
+      const tokenData = JSON.parse(data as string) as TokenMetadata;
+      return new Date(tokenData.expiresAt).getTime() < nowMs;
+    } catch {
+      return true;
+    }
+  }
+
+  private extractExpiredTokenIds(
+    batch: string[],
+    results: Array<[Error | null, unknown]> | null
+  ): string[] {
+    if (!results) {
+      return [];
+    }
+
+    const nowMs = Date.now();
+    const toDelete: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      if (this.shouldDeleteTokenFromBatchResult(results[i], nowMs)) {
+        toDelete.push(batch[i]);
+      }
+    }
+    return toDelete;
+  }
+
+  private async deleteTokenBatch(tokenIds: string[]): Promise<number> {
+    let deletedCount = 0;
+    for (const tokenId of tokenIds) {
+      await this.deleteToken(tokenId);
+      deletedCount++;
+    }
+    return deletedCount;
+  }
+
   /**
    * Cleanup expired tokens (for background job)
    * This is the only method that needs to check all tokens
@@ -338,28 +389,11 @@ export class RedisTokenStore {
       }
 
       const results = await pipeline.exec();
-      const toDelete: string[] = [];
-
-      if (results) {
-        for (let j = 0; j < results.length; j++) {
-          const [err, data] = results[j];
-          if (!err && data) {
-            const tokenData: TokenMetadata = JSON.parse(data as string);
-            if (new Date(tokenData.expiresAt) < new Date()) {
-              toDelete.push(batch[j]);
-            }
-          } else if (!data) {
-            // Token doesn't exist but is in set - clean it up
-            toDelete.push(batch[j]);
-          }
-        }
-      }
-
-      // Delete expired tokens
-      for (const tokenId of toDelete) {
-        await this.deleteToken(tokenId);
-        deletedCount++;
-      }
+      const toDelete = this.extractExpiredTokenIds(
+        batch,
+        results as Array<[Error | null, unknown]> | null
+      );
+      deletedCount += await this.deleteTokenBatch(toDelete);
     }
 
     return deletedCount;

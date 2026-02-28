@@ -67,6 +67,49 @@ export const BrandStyleProfileSchema = z.object({
 
 export type BrandStyleProfile = z.infer<typeof BrandStyleProfileSchema>;
 
+function collectToneValidationErrors(data: BrandStyleProfile, errors: string[]): void {
+  if (data.text?.tone && data.text.tone.length > 10) {
+    errors.push('text.tone must have at most 10 entries');
+  }
+
+  if (!data.text?.tone) {
+    return;
+  }
+
+  for (const tone of data.text.tone) {
+    if (tone.length > 32) {
+      errors.push('text.tone entries must be <= 32 chars');
+    }
+  }
+}
+
+function collectVisualValidationErrors(data: BrandStyleProfile, errors: string[]): void {
+  if (!data.visual?.motifs || data.visual.motifs.length === 0) {
+    return;
+  }
+
+  if (!data.visual.palette || data.visual.palette.length === 0) {
+    errors.push('visual.palette required when visual.motifs present');
+  }
+}
+
+function collectTopicValidationErrors(data: BrandStyleProfile, errors: string[]): void {
+  if (!data.topics) {
+    return;
+  }
+
+  const seen = new Set<string>();
+  for (const topic of data.topics) {
+    if (topic.count <= 0) {
+      errors.push(`topics[${topic.value}].count must be > 0`);
+    }
+    if (seen.has(topic.value)) {
+      errors.push(`topics duplicate value: ${topic.value}`);
+    }
+    seen.add(topic.value);
+  }
+}
+
 export function validateProfile(profile: unknown): { ok: boolean; errors?: string[] } {
   const result = BrandStyleProfileSchema.safeParse(profile);
   if (!result.success) {
@@ -78,33 +121,9 @@ export function validateProfile(profile: unknown): { ok: boolean; errors?: strin
   // Cross-field checks
   const errors: string[] = [];
   const data = result.data;
-  // text tone constraints
-  if (data.text?.tone && data.text.tone.length > 10) {
-    errors.push('text.tone must have at most 10 entries');
-  }
-  if (data.text?.tone) {
-    for (const t of data.text.tone) {
-      if (t.length > 32) {
-        errors.push('text.tone entries must be <= 32 chars');
-      }
-    }
-  }
-  if (data.visual?.motifs && data.visual.motifs.length > 0) {
-    if (!data.visual.palette || data.visual.palette.length === 0) {
-      errors.push('visual.palette required when visual.motifs present');
-    }
-  }
-  if (data.topics) {
-    const seen = new Set<string>();
-    for (const t of data.topics) {
-      if (t.count <= 0) {
-        errors.push(`topics[${t.value}].count must be > 0`);
-      }
-      if (seen.has(t.value)) {
-        errors.push(`topics duplicate value: ${t.value}`);
-      }
-      seen.add(t.value);
-    }
-  }
+  collectToneValidationErrors(data, errors);
+  collectVisualValidationErrors(data, errors);
+  collectTopicValidationErrors(data, errors);
+
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }

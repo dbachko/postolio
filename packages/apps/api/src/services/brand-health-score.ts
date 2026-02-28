@@ -22,6 +22,16 @@ export interface HealthScoreResult {
   };
 }
 
+function daysFromPeriod(period: '7d' | '30d' | '90d'): number {
+  if (period === '7d') {
+    return 7;
+  }
+  if (period === '90d') {
+    return 90;
+  }
+  return 30;
+}
+
 /**
  * Calculate brand health score based on multiple factors
  *
@@ -36,7 +46,7 @@ export async function calculateBrandHealthScore(
   brandId: string,
   period: '7d' | '30d' | '90d' = '30d'
 ): Promise<HealthScoreResult> {
-  const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+  const days = daysFromPeriod(period);
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 

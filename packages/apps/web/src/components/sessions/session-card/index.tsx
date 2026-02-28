@@ -19,6 +19,91 @@ interface SessionCardProps {
   onEditDeviceName: (sessionId: string, currentName: string) => Promise<void>;
 }
 
+function SessionBadges({ session }: { session: Session }) {
+  return (
+    <>
+      {session.isCurrent ? (
+        <Badge variant="default">
+          <CheckCircle className="mr-1 h-3 w-3" />
+          Current
+        </Badge>
+      ) : null}
+      {session.trusted ? <Badge variant="secondary">Trusted</Badge> : null}
+    </>
+  );
+}
+
+function SessionActions({
+  session,
+  isRevoking,
+  onEditDeviceName,
+  onRevoke,
+}: {
+  session: Session;
+  isRevoking: boolean;
+  onEditDeviceName: () => void;
+  onRevoke: () => void;
+}) {
+  if (session.isCurrent) {
+    return null;
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEditDeviceName}>
+          <Edit2 className="mr-2 h-4 w-4" />
+          Edit name
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onRevoke} disabled={isRevoking} className="text-destructive">
+          <LogOut className="mr-2 h-4 w-4" />
+          {isRevoking ? 'Revoking...' : 'Revoke session'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SessionMetadata({
+  session,
+  locationString,
+}: {
+  session: Session;
+  locationString: string | null;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-4 text-sm">
+      {locationString ? (
+        <div>
+          <div className="text-muted-foreground">Location</div>
+          <div className="font-medium">{locationString}</div>
+        </div>
+      ) : null}
+      {session.ipAddress ? (
+        <div>
+          <div className="text-muted-foreground">IP Address</div>
+          <div className="font-mono text-xs font-medium">{session.ipAddress}</div>
+        </div>
+      ) : null}
+      <div>
+        <div className="text-muted-foreground">Last active</div>
+        <div className="font-medium">
+          {formatDistanceToNow(new Date(session.lastActivityAt), { addSuffix: true })}
+        </div>
+      </div>
+      <div>
+        <div className="text-muted-foreground">Logged in</div>
+        <div className="font-medium">{format(new Date(session.createdAt), 'PPp')}</div>
+      </div>
+    </div>
+  );
+}
+
 export function SessionCard({ session, onRevoke, onEditDeviceName }: SessionCardProps) {
   const [isRevoking, setIsRevoking] = useState(false);
 
@@ -64,68 +149,22 @@ export function SessionCard({ session, onRevoke, onEditDeviceName }: SessionCard
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="truncate text-base font-semibold">{session.deviceName}</h3>
-                {session.isCurrent && (
-                  <Badge variant="default">
-                    <CheckCircle className="mr-1 h-3 w-3" />
-                    Current
-                  </Badge>
-                )}
-                {session.trusted && <Badge variant="secondary">Trusted</Badge>}
+                <SessionBadges session={session} />
               </div>
             </div>
           </div>
 
-          {!session.isCurrent && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleEditDeviceName}>
-                  <Edit2 className="mr-2 h-4 w-4" />
-                  Edit name
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleRevoke}
-                  disabled={isRevoking}
-                  className="text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  {isRevoking ? 'Revoking...' : 'Revoke session'}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <SessionActions
+            session={session}
+            isRevoking={isRevoking}
+            onEditDeviceName={handleEditDeviceName}
+            onRevoke={handleRevoke}
+          />
         </div>
       </CardHeader>
 
       <CardContent className="space-y-2">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          {locationString && (
-            <div>
-              <div className="text-muted-foreground">Location</div>
-              <div className="font-medium">{locationString}</div>
-            </div>
-          )}
-          {session.ipAddress && (
-            <div>
-              <div className="text-muted-foreground">IP Address</div>
-              <div className="font-mono text-xs font-medium">{session.ipAddress}</div>
-            </div>
-          )}
-          <div>
-            <div className="text-muted-foreground">Last active</div>
-            <div className="font-medium">
-              {formatDistanceToNow(new Date(session.lastActivityAt), { addSuffix: true })}
-            </div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Logged in</div>
-            <div className="font-medium">{format(new Date(session.createdAt), 'PPp')}</div>
-          </div>
-        </div>
+        <SessionMetadata session={session} locationString={locationString} />
 
         {session.userAgent && (
           <div className="border-t pt-2">

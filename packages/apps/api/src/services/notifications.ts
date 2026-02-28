@@ -62,8 +62,7 @@ class NotificationsServiceImpl {
     return this.broadcaster;
   }
 
-  async emitEvent(input: EmitEventInput) {
-    // Check master preference (category/type-wide disable) before creating anything
+  private async isSuppressedByMasterPreference(input: EmitEventInput) {
     try {
       const master = await prisma.notificationPreference.findFirst({
         where: {
@@ -75,90 +74,85 @@ class NotificationsServiceImpl {
         },
         orderBy: { brandId: 'desc' },
       });
-      if (master?.enabled === false) {
-        // Suppressed by master preference: do not create/broadcast/email
-        return null;
-      }
+      return master?.enabled === false;
     } catch (err) {
       this.logError({ err }, 'Failed to check master notification preference');
+      return false;
     }
-    const notification = await prisma.notification
+  }
+
+  private buildNotificationCreateData(
+    input: EmitEventInput
+  ): Prisma.NotificationUncheckedCreateInput {
+    return {
+      userId: input.userId,
+      brandId: input.brandId || null,
+      type: input.type,
+      category: input.category,
+      severity: input.severity,
+      title: input.title,
+      body: input.body || null,
+      linkUrl: input.linkUrl || null,
+      actorId: input.actorId || null,
+      resourceType: input.resource?.type || null,
+      resourceId: input.resource?.id || null,
+      metadata: input.metadata as Prisma.InputJsonValue | undefined,
+      dedupeKey: input.dedupeKey || null,
+      groupKey: input.groupKey || null,
+      expiresAt: input.expiresAt || null,
+    };
+  }
+
+  private async upsertNotification(input: EmitEventInput) {
+    const createData = this.buildNotificationCreateData(input);
+    return prisma.notification
       .upsert({
         where: input.dedupeKey ? { dedupeKey: input.dedupeKey } : { id: '___noop___' },
         update: {
-          // If deduped, we might update createdAt/body etc.
           createdAt: new Date(),
           groupKey: input.groupKey || undefined,
           metadata: input.metadata as Prisma.InputJsonValue | undefined,
         },
-        create: {
-          userId: input.userId,
-          brandId: input.brandId || null,
-          type: input.type,
-          category: input.category,
-          severity: input.severity,
-          title: input.title,
-          body: input.body || null,
-          linkUrl: input.linkUrl || null,
-          actorId: input.actorId || null,
-          resourceType: input.resource?.type || null,
-          resourceId: input.resource?.id || null,
-          metadata: input.metadata as Prisma.InputJsonValue | undefined,
-          dedupeKey: input.dedupeKey || null,
-          groupKey: input.groupKey || null,
-          expiresAt: input.expiresAt || null,
-        },
+        create: createData,
       })
       .catch(async (err) => {
-        // If upsert fails because dedupeKey not provided, create directly
         if (!input.dedupeKey) {
-          return prisma.notification.create({
-            data: {
-              userId: input.userId,
-              brandId: input.brandId || null,
-              type: input.type,
-              category: input.category,
-              severity: input.severity,
-              title: input.title,
-              body: input.body || null,
-              linkUrl: input.linkUrl || null,
-              actorId: input.actorId || null,
-              resourceType: input.resource?.type || null,
-              resourceId: input.resource?.id || null,
-              metadata: input.metadata as Prisma.InputJsonValue | undefined,
-              groupKey: input.groupKey || null,
-              expiresAt: input.expiresAt || null,
-            },
-          });
+          return prisma.notification.create({ data: createData });
         }
         throw err;
       });
+  }
 
-    // Bump unread count cache
-    await this.recomputeUnreadCount(input.userId);
-
-    // Broadcast
+  private async broadcastNotification(
+    userId: string,
+    notification: Awaited<ReturnType<typeof prisma.notification.upsert>>
+  ) {
     try {
-      const b = this.getBroadcaster();
-      if (b) {
-        await b.broadcastNew(input.userId, {
-          id: notification.id,
-          type: notification.type,
-          category: notification.category,
-          severity: notification.severity,
-          title: notification.title,
-          body: notification.body,
-          linkUrl: notification.linkUrl,
-          resource: { type: notification.resourceType, id: notification.resourceId },
-          createdAt: notification.createdAt.toISOString(),
-          readAt: notification.readAt ? notification.readAt.toISOString() : null,
-        });
+      const broadcaster = this.getBroadcaster();
+      if (!broadcaster) {
+        return;
       }
+
+      await broadcaster.broadcastNew(userId, {
+        id: notification.id,
+        type: notification.type,
+        category: notification.category,
+        severity: notification.severity,
+        title: notification.title,
+        body: notification.body,
+        linkUrl: notification.linkUrl,
+        resource: { type: notification.resourceType, id: notification.resourceId },
+        createdAt: notification.createdAt.toISOString(),
+        readAt: notification.readAt ? notification.readAt.toISOString() : null,
+      });
     } catch (error) {
       this.logError({ error }, 'Failed to broadcast notification');
     }
+  }
 
-    // Attempt immediate email for critical/default-enabled types
+  private async queueNotificationEmail(
+    notification: Awaited<ReturnType<typeof prisma.notification.upsert>>
+  ) {
     try {
       await maybeSendImmediateEmail({
         userId: notification.userId,
@@ -173,7 +167,18 @@ class NotificationsServiceImpl {
     } catch (error) {
       this.logError({ error }, 'Failed to queue notification email');
     }
+  }
 
+  async emitEvent(input: EmitEventInput) {
+    const suppressed = await this.isSuppressedByMasterPreference(input);
+    if (suppressed) {
+      return null;
+    }
+
+    const notification = await this.upsertNotification(input);
+    await this.recomputeUnreadCount(input.userId);
+    await this.broadcastNotification(input.userId, notification);
+    await this.queueNotificationEmail(notification);
     return notification;
   }
 

@@ -21,6 +21,7 @@ export async function logAudit(
     logger.debug('Audit log table not configured; skipping audit', { action, scheduleId });
     return;
   }
+
   try {
     await docClient.send(
       new PutCommand({
@@ -70,16 +71,139 @@ export async function getSchedule(
     logger.warn('Schedule item missing platform field', { scheduleId });
     return undefined;
   }
+
   return item as ScheduleRecord;
+}
+
+interface UpdateExpressionParts {
+  setParts: string[];
+  removeParts: string[];
+  expressionAttributeNames: Record<string, string>;
+  expressionAttributeValues: Record<string, string>;
+}
+
+interface UpdateScheduleStatusMetadata {
+  errorMessage?: string;
+  platformPostId?: string;
+  platformUrl?: string;
+}
+
+function ensureExpressionName(
+  expressionAttributeNames: Record<string, string>,
+  token: string,
+  targetField: string
+): void {
+  if (!expressionAttributeNames[token]) {
+    expressionAttributeNames[token] = targetField;
+  }
+}
+
+function buildExpressionAttributeNames(
+  setParts: string[],
+  removeParts: string[]
+): Record<string, string> {
+  const expressionAttributeNames: Record<string, string> = {
+    '#status': 'status',
+    '#updatedAt': 'updatedAt',
+  };
+
+  if (setParts.some((part) => part.includes('#error')) || removeParts.includes('#error')) {
+    ensureExpressionName(expressionAttributeNames, '#error', 'schedulingError');
+  }
+
+  if (setParts.some((part) => part.includes('#errorType')) || removeParts.includes('#errorType')) {
+    ensureExpressionName(expressionAttributeNames, '#errorType', 'errorType');
+  }
+
+  if (setParts.some((part) => part.includes('#publishedAt'))) {
+    ensureExpressionName(expressionAttributeNames, '#publishedAt', 'publishedAt');
+  }
+
+  if (setParts.some((part) => part.includes('#platformPostId'))) {
+    ensureExpressionName(expressionAttributeNames, '#platformPostId', 'platformPostId');
+  }
+
+  if (setParts.some((part) => part.includes('#platformUrl'))) {
+    ensureExpressionName(expressionAttributeNames, '#platformUrl', 'platformUrl');
+  }
+
+  return expressionAttributeNames;
+}
+
+function buildExpressionAttributeValues(
+  status: string,
+  metadata: UpdateScheduleStatusMetadata
+): Record<string, string> {
+  const expressionAttributeValues: Record<string, string> = {
+    ':status': status,
+    ':updatedAt': new Date().toISOString(),
+  };
+
+  if (metadata.errorMessage) {
+    expressionAttributeValues[':error'] = metadata.errorMessage;
+    return expressionAttributeValues;
+  }
+
+  if (status === 'published') {
+    expressionAttributeValues[':publishedAt'] = new Date().toISOString();
+    if (metadata.platformPostId) {
+      expressionAttributeValues[':platformPostId'] = metadata.platformPostId;
+    }
+    if (metadata.platformUrl) {
+      expressionAttributeValues[':platformUrl'] = metadata.platformUrl;
+    }
+  }
+
+  return expressionAttributeValues;
+}
+
+function buildUpdateExpressionParts(
+  status: string,
+  metadata: UpdateScheduleStatusMetadata
+): UpdateExpressionParts {
+  const setParts: string[] = ['#status = :status', '#updatedAt = :updatedAt'];
+  const removeParts: string[] = [];
+
+  if (metadata.errorMessage) {
+    setParts.push('#error = :error');
+  } else {
+    removeParts.push('#error', '#errorType');
+
+    if (status === 'published') {
+      setParts.push('#publishedAt = :publishedAt');
+      if (metadata.platformPostId) {
+        setParts.push('#platformPostId = :platformPostId');
+      }
+      if (metadata.platformUrl) {
+        setParts.push('#platformUrl = :platformUrl');
+      }
+    }
+  }
+
+  const expressionAttributeNames = buildExpressionAttributeNames(setParts, removeParts);
+  const expressionAttributeValues = buildExpressionAttributeValues(status, metadata);
+
+  return {
+    setParts,
+    removeParts,
+    expressionAttributeNames,
+    expressionAttributeValues,
+  };
+}
+
+function buildUpdateExpression(setParts: string[], removeParts: string[]): string {
+  if (!removeParts.length) {
+    return `SET ${setParts.join(', ')}`;
+  }
+
+  return `SET ${setParts.join(', ')} REMOVE ${removeParts.join(', ')}`;
 }
 
 export async function updateScheduleStatus(
   docClient: DynamoDBDocumentClient,
   scheduleId: string,
   status: string,
-  errorMessage?: string,
-  platformPostId?: string,
-  platformUrl?: string
+  metadata: UpdateScheduleStatusMetadata = {}
 ): Promise<void> {
   try {
     const schedule = await getSchedule(docClient, scheduleId);
@@ -90,77 +214,8 @@ export async function updateScheduleStatus(
       });
       return;
     }
-    const setParts: string[] = ['#status = :status', '#updatedAt = :updatedAt'];
-    const removeParts: string[] = [];
 
-    if (errorMessage) {
-      setParts.push('#error = :error');
-    } else {
-      removeParts.push('#error', '#errorType');
-
-      if (status === 'published') {
-        setParts.push('#publishedAt = :publishedAt');
-        if (platformPostId) {
-          setParts.push('#platformPostId = :platformPostId');
-        }
-        if (platformUrl) {
-          setParts.push('#platformUrl = :platformUrl');
-        }
-      }
-    }
-
-    const expressionAttributeNames: Record<string, string> = {
-      '#status': 'status',
-      '#updatedAt': 'updatedAt',
-    };
-
-    if (
-      setParts.some((p) => p.includes('#error')) ||
-      removeParts.some((p) => p.includes('#error'))
-    ) {
-      expressionAttributeNames['#error'] = 'schedulingError';
-    }
-    if (
-      setParts.some((p) => p.includes('#errorType')) ||
-      removeParts.some((p) => p.includes('#errorType'))
-    ) {
-      expressionAttributeNames['#errorType'] = 'errorType';
-    }
-    if (
-      setParts.some((p) => p.includes('#publishedAt')) ||
-      removeParts.some((p) => p.includes('#publishedAt'))
-    ) {
-      expressionAttributeNames['#publishedAt'] = 'publishedAt';
-    }
-    if (
-      setParts.some((p) => p.includes('#platformPostId')) ||
-      removeParts.some((p) => p.includes('#platformPostId'))
-    ) {
-      expressionAttributeNames['#platformPostId'] = 'platformPostId';
-    }
-    if (
-      setParts.some((p) => p.includes('#platformUrl')) ||
-      removeParts.some((p) => p.includes('#platformUrl'))
-    ) {
-      expressionAttributeNames['#platformUrl'] = 'platformUrl';
-    }
-
-    const expressionAttributeValues: Record<string, string> = {
-      ':status': status,
-      ':updatedAt': new Date().toISOString(),
-    };
-
-    if (errorMessage) {
-      expressionAttributeValues[':error'] = errorMessage;
-    } else if (status === 'published') {
-      expressionAttributeValues[':publishedAt'] = new Date().toISOString();
-      if (platformPostId) {
-        expressionAttributeValues[':platformPostId'] = platformPostId;
-      }
-      if (platformUrl) {
-        expressionAttributeValues[':platformUrl'] = platformUrl;
-      }
-    }
+    const expression = buildUpdateExpressionParts(status, metadata);
 
     await docClient.send(
       new UpdateCommand({
@@ -169,24 +224,18 @@ export async function updateScheduleStatus(
           pk: schedule.pk,
           sk: schedule.sk,
         },
-        UpdateExpression: `SET ${setParts.join(', ')}${
-          removeParts.length ? ` REMOVE ${removeParts.join(', ')}` : ''
-        }`,
-        ExpressionAttributeNames: expressionAttributeNames,
-        ExpressionAttributeValues: expressionAttributeValues,
+        UpdateExpression: buildUpdateExpression(expression.setParts, expression.removeParts),
+        ExpressionAttributeNames: expression.expressionAttributeNames,
+        ExpressionAttributeValues: expression.expressionAttributeValues,
       })
     );
 
-    await logAudit(docClient, scheduleId, `status_update_${status}`, 'success', {
-      errorMessage,
-      platformPostId,
-      platformUrl,
-    });
-  } catch (e) {
+    await logAudit(docClient, scheduleId, `status_update_${status}`, 'success', metadata);
+  } catch (error) {
     logger.warn('Failed to update schedule status (ignored)', {
       scheduleId,
       status,
-      error: (e as Error).message,
+      error: (error as Error).message,
     });
   }
 }
