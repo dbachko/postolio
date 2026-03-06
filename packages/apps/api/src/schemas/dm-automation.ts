@@ -17,27 +17,28 @@ export const activeHoursSchema = z.object({
   timezone: z.string().optional(),
 });
 
+const createRuleBaseSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
+  triggerType: z.enum(['comment_keyword', 'dm_keyword', 'comment_any', 'dm_any']),
+  triggerConfig: dmTriggerConfigSchema,
+  actionType: z.enum(['send_dm', 'reply_comment', 'send_dm_and_reply']),
+  messageTemplate: z
+    .string()
+    .max(2000, 'Message template must be 2000 characters or less')
+    .optional(),
+  commentReplyTemplate: z
+    .string()
+    .max(500, 'Comment reply must be 500 characters or less')
+    .optional(),
+  maxUsesPerUser: z.number().int().positive().optional(),
+  cooldownMinutes: z.number().int().positive().optional(),
+  activeHours: activeHoursSchema.optional(),
+  activeDays: z.array(z.number().int().min(0).max(6)).optional(),
+  priority: z.number().int().default(0),
+});
+
 // Create rule schema with conditional validation
-export const createRuleSchema = z
-  .object({
-    name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
-    triggerType: z.enum(['comment_keyword', 'dm_keyword', 'comment_any', 'dm_any']),
-    triggerConfig: dmTriggerConfigSchema,
-    actionType: z.enum(['send_dm', 'reply_comment', 'send_dm_and_reply']),
-    messageTemplate: z
-      .string()
-      .max(2000, 'Message template must be 2000 characters or less')
-      .optional(),
-    commentReplyTemplate: z
-      .string()
-      .max(500, 'Comment reply must be 500 characters or less')
-      .optional(),
-    maxUsesPerUser: z.number().int().positive().optional(),
-    cooldownMinutes: z.number().int().positive().optional(),
-    activeHours: activeHoursSchema.optional(),
-    activeDays: z.array(z.number().int().min(0).max(6)).optional(),
-    priority: z.number().int().default(0),
-  })
+export const createRuleSchema = createRuleBaseSchema
   .refine(
     (data) => {
       // If action type requires sending a DM, messageTemplate is required
@@ -78,10 +79,13 @@ export const createRuleSchema = z
     }
   );
 
-// Update rule schema (all fields optional)
-export const updateRuleSchema = createRuleSchema.partial().extend({
-  status: z.enum(['active', 'paused', 'archived']).optional(),
-});
+// Zod 4.3 disallows masking methods on refined objects, so rebuild from the base shape.
+export const updateRuleSchema = z
+  .object(createRuleBaseSchema.shape)
+  .partial()
+  .extend({
+    status: z.enum(['active', 'paused', 'archived']).optional(),
+  });
 
 // Rule response schema
 export const ruleResponseSchema = z.object({

@@ -158,6 +158,12 @@ export class EmailService {
     if (typeof options.from === 'string') {
       return options.from;
     }
+    if (Array.isArray(options.from)) {
+      const address = options.from
+        .map((value) => this.resolveRecipientAddress(value))
+        .find((value): value is string => Boolean(value));
+      return address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example';
+    }
     return options.from?.address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example';
   }
 

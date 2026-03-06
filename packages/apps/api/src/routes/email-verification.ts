@@ -14,8 +14,8 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
       async preHandler(request: FastifyRequest, reply) {
         // Run authentication first
         try {
-          if (this.authenticate) {
-            await this.authenticate(request, reply);
+          if (fastify.authenticate) {
+            await fastify.authenticate(request, reply);
             // If authenticate sent a response, don't continue
             if (reply.sent) {
               return;
@@ -76,8 +76,8 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
       async preHandler(request: FastifyRequest, reply) {
         // Run authentication
         try {
-          if (this.authenticate) {
-            await this.authenticate(request, reply);
+          if (fastify.authenticate) {
+            await fastify.authenticate(request, reply);
             // If authenticate sent a response, don't continue
             if (reply.sent) {
               return;
