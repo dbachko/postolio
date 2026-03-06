@@ -1,0 +1,182 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy (branch, tag, or commit SHA)
+        required: false
+        default: main
+      imageTag:
+        description: Optional image tag (defaults to the ref SHA)
+        required: false
+      enableAnalytics:
+        description: Enable analytics ingestor profile
+        required: false
+        type: boolean
+        default: false
+      remoteDir:
+        description: Remote directory for stack files
+        required: false
+        default: /opt/postolio
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.20.0'
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+  DEPLOY_REF: ${{ inputs.ref || github.sha }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image_tag }}
+      deploy-ref: ${{ steps.meta.outputs.deploy_ref }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.DEPLOY_REF }}
+
+      - name: Resolve deploy metadata
+        id: meta
+        run: |
+          echo "deploy_ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.imageTag }}" ]; then
+            echo "image_tag=${{ inputs.imageTag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.VPS_STACK_ENV }}" ]; then
+            echo "VPS_STACK_ENV is required. Provide the stack.env content as a secret." >&2
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-api:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-api:latest
+
+      - name: Build Assets API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/apps/assets-api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-assets-api:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-assets-api:latest
+
+      - name: Build Analytics image
+        if: inputs.enableAnalytics == true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/services/analytics-ingestor/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-analytics:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-analytics:latest
+
+      - name: Build Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/apps/web/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-web:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/postolio-web:latest
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_URL || '' }}
+            VITE_API_URL=${{ vars.VITE_API_URL || '' }}
+            VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
+            VITE_FACEBOOK_APP_ID=${{ vars.VITE_FACEBOOK_APP_ID }}
+            VITE_AUTH_GOOGLE_ENABLED=${{ vars.VITE_AUTH_GOOGLE_ENABLED || 'true' }}
+            VITE_AUTH_FACEBOOK_ENABLED=${{ vars.VITE_AUTH_FACEBOOK_ENABLED || 'true' }}
+            VITE_AUTH_MAGIC_LINK_ENABLED=${{ vars.VITE_AUTH_MAGIC_LINK_ENABLED || 'true' }}
+            VITE_FEATURE_AI_SUGGESTIONS=${{ vars.VITE_FEATURE_AI_SUGGESTIONS || 'true' }}
+            VITE_FEATURE_VIDEO_SUPPORT=${{ vars.VITE_FEATURE_VIDEO_SUPPORT || 'false' }}
+            VITE_SENTRY_FRONTEND_DSN=${{ vars.VITE_SENTRY_FRONTEND_DSN }}
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    env:
+      DEPLOY_REF: ${{ needs.build-and-push.outputs.deploy-ref }}
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+      REMOTE_DIR: ${{ inputs.remoteDir }}
+      REGISTRY_USERNAME: ${{ secrets.VPS_REGISTRY_USERNAME || github.repository_owner }}
+      REGISTRY_PASSWORD: ${{ secrets.VPS_REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout repo (compose manifests)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ env.DEPLOY_REF }}
+
+      - name: Deploy stack
+        uses: appleboy/ssh-action@v1.0.3
+        envs: DEPLOY_REF,IMAGE_TAG,REGISTRY,IMAGE_NAMESPACE,REMOTE_DIR,REGISTRY_USERNAME,REGISTRY_PASSWORD
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            mkdir -p "$REMOTE_DIR"
+            cd "$REMOTE_DIR"
+
+            # Write stack env file from GitHub secret
+            cat > stack.env <<'EOF'
+            ${{ secrets.VPS_STACK_ENV }}
+            EOF
+
+            # Fetch the compose file for the deployed ref
+            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${DEPLOY_REF}/deploy/vps/docker-compose.yml" -o docker-compose.yml
+
+            # Log in to GHCR (for pulls on the VPS)
+            echo "${REGISTRY_PASSWORD}" | docker login "${REGISTRY}" -u "${REGISTRY_USERNAME}" --password-stdin
+
+            PROFILE_ARG=""
+            if [ "${{ inputs.enableAnalytics }}" = "true" ]; then
+              PROFILE_ARG="--profile analytics"
+            fi
+
+            IMAGE_NAMESPACE="$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')"
+            IMAGE_TAG="${IMAGE_TAG}"
+
+            IMAGE_TAG="${IMAGE_TAG}" IMAGE_NAMESPACE="${IMAGE_NAMESPACE}" REGISTRY="${REGISTRY}" \
+              docker compose --env-file stack.env ${PROFILE_ARG} pull
+
+            IMAGE_TAG="${IMAGE_TAG}" IMAGE_NAMESPACE="${IMAGE_NAMESPACE}" REGISTRY="${REGISTRY}" \
+              docker compose --env-file stack.env ${PROFILE_ARG} up -d --remove-orphans

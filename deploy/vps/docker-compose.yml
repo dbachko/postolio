@@ -1,0 +1,106 @@
+version: '3.9'
+
+x-stack-env: &stack-env
+  env_file:
+    - ./stack.env
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postolio}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  postgres_assets:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${ASSETS_POSTGRES_DB:-postolio_assets}
+      POSTGRES_USER: ${ASSETS_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${ASSETS_POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_assets_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-postolio}/postolio-api:${IMAGE_TAG:-latest}
+    <<: *stack-env
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      PORT: 3000
+      NODE_ENV: ${NODE_ENV:-prod}
+      ENVIRONMENT: ${ENVIRONMENT:-prod}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      ASSETS_API_BASE_URL: ${ASSETS_API_BASE_URL:-http://assets-api:3002/assets-api/v1}
+      ASSETS_API_SERVICE_TOKEN: ${ASSETS_API_SERVICE_TOKEN}
+      ASSETS_SERVICE_TOKEN: ${ASSETS_SERVICE_TOKEN}
+      API_URL: ${API_URL:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      APP_URL: ${APP_URL:-http://localhost}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      USE_AWS_SES: ${USE_AWS_SES:-false}
+
+  assets-api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-postolio}/postolio-assets-api:${IMAGE_TAG:-latest}
+    <<: *stack-env
+    restart: unless-stopped
+    depends_on:
+      - postgres_assets
+    environment:
+      ASSETS_API_PORT: 3002
+      NODE_ENV: ${NODE_ENV:-prod}
+      ASSETS_DATABASE_URL: ${ASSETS_DATABASE_URL}
+      ASSETS_SERVICE_TOKEN: ${ASSETS_SERVICE_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
+      ASSETS_S3_BUCKET: ${ASSETS_S3_BUCKET}
+      ASSETS_CDN_DOMAIN: ${ASSETS_CDN_DOMAIN}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+
+  analytics-ingestor:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-postolio}/postolio-analytics:${IMAGE_TAG:-latest}
+    <<: *stack-env
+    restart: unless-stopped
+    profiles:
+      - analytics
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NODE_ENV: ${NODE_ENV:-prod}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TOKEN_SERVICE_URL: ${TOKEN_SERVICE_URL:-http://api:3000}
+      DUMMY_ACCESS_TOKEN: ${DUMMY_ACCESS_TOKEN:-}
+      EVENT_BUS_NAME: ${EVENT_BUS_NAME:-default}
+
+  web:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-postolio}/postolio-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - api
+      - assets-api
+    ports:
+      - '${WEB_PORT:-80}:80'
+
+volumes:
+  postgres_data:
+  postgres_assets_data:
+  redis_data:

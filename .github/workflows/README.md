@@ -245,6 +245,18 @@ pnpm cdk deploy service-name-dev
 - Check base branch is correct
 - Verify path filters match your structure
 
+### 🌐 deploy-vps.yml - Deploy to a Single VPS
+
+**Trigger:** Manual dispatch (`workflow_dispatch`) only
+
+**Key Features:**
+
+- Builds API, Assets API, Web (Nginx proxy), and optional Analytics images
+- Pushes images to GHCR with `latest` and SHA tags
+- Writes `stack.env` from `VPS_STACK_ENV` secret on the VPS
+- Pulls + applies `deploy/vps/docker-compose.yml` via SSH (optional `--profile analytics`)
+- Uses repo vars for Vite build args (e.g., `VITE_API_URL`, OAuth app IDs)
+
 ## Local Testing
 
 ### Test Workflows Locally
