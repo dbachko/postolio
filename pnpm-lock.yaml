@@ -722,8 +722,8 @@ importers:
         specifier: ^24.11.2
         version: 24.11.2
       aws-cdk:
-        specifier: 2.1100.1
-        version: 2.1100.1
+        specifier: 2.1107.0
+        version: 2.1107.0
       aws-lambda:
         specifier: ^1.0.7
         version: 1.0.7
@@ -5219,8 +5219,8 @@ packages:
       - yaml
       - mime-types
 
-  aws-cdk@2.1100.1:
-    resolution: {integrity: sha512-q2poFrQh90TK6eqeI0zznA8r1JkDI63WVOSqC7gFGo6qjQjAnvFk/utxHoNRgAC0RL0CLd19uCcHh3jfX9NiSg==}
+  aws-cdk@2.1107.0:
+    resolution: {integrity: sha512-7GKCq7p/33Jw+C+Ohwl4LnnKjvI/MzemeNZlTu/Kg8IwuZx5WEXEi32YLOlxbE1JOvleDslCWK5AIkBZ0omx/Q==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
 
@@ -13024,9 +13024,7 @@ snapshots:
       '@aws-cdk/cloud-assembly-schema': 52.2.0
       constructs: 10.5.1
 
-  aws-cdk@2.1100.1:
-    optionalDependencies:
-      fsevents: 2.3.2
+  aws-cdk@2.1107.0: {}
 
   aws-lambda@1.0.7:
     dependencies:
