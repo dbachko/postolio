@@ -10,7 +10,7 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"]
+      "inputs": ["$TURBO_DEFAULT$"]
     },
     "dev": {
       "cache": false,
@@ -18,6 +18,12 @@
     },
     "deploy": {
       "dependsOn": ["build", "lint", "test"]
+    },
+    "@postolio/database#build": {
+      "cache": false
+    },
+    "@postolio/database-assets#build": {
+      "cache": false
     }
   }
 }

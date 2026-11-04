@@ -29,6 +29,16 @@ async function handleBulkAssets(request: FastifyRequest, reply: FastifyReply): P
     return reply.code(400).send({ error: 'assetIds are required' });
   }
 
+  if (!body.brandId || typeof body.brandId !== 'string') {
+    return reply.code(400).send({ error: 'brandId is required' });
+  }
+  const ownedAssets = await prismaAssets.asset.count({
+    where: { id: { in: assetIds }, brandId: body.brandId },
+  });
+  if (ownedAssets !== assetIds.length) {
+    return reply.code(403).send({ error: 'All assets must belong to the selected brand' });
+  }
+
   if (!body.action || typeof body.action !== 'object') {
     return reply.code(400).send({ error: 'action is required' });
   }
@@ -47,7 +57,7 @@ async function handleBulkAssets(request: FastifyRequest, reply: FastifyReply): P
   }
 
   if ('remove_labels' in body.action) {
-    return removeLabelsFromAssets(assetIds, body.action.remove_labels.labelIds ?? []);
+    return removeLabelsFromAssets(assetIds, body.brandId, body.action.remove_labels.labelIds ?? []);
   }
 
   if ('delete' in body.action) {
@@ -67,7 +77,7 @@ function normalizeAssetIds(assetIds: string[] | undefined): string[] {
 
 async function moveAssetsToCollection(
   assetIds: string[],
-  brandId: string | undefined,
+  brandId: string,
   collectionId: string | null | undefined,
   reply: FastifyReply
 ): Promise<unknown> {
@@ -83,7 +93,7 @@ async function moveAssetsToCollection(
   }
 
   await prismaAssets.asset.updateMany({
-    where: { id: { in: assetIds } },
+    where: { id: { in: assetIds }, brandId },
     data: { collectionId: collectionId ?? null },
   });
 
@@ -92,7 +102,7 @@ async function moveAssetsToCollection(
 
 async function addLabelsToAssets(
   assetIds: string[],
-  brandId: string | undefined,
+  brandId: string,
   action: { labelIds?: string[]; labelNames?: string[]; createdBy?: string },
   reply: FastifyReply
 ): Promise<unknown> {
@@ -115,6 +125,12 @@ async function addLabelsToAssets(
   }
 
   const labelsToAssign = Array.from(labelIds);
+  const validLabels = await prismaAssets.assetTaxonomyItem.count({
+    where: { id: { in: labelsToAssign }, brandId, type: 'LABEL', deletedAt: null },
+  });
+  if (validLabels !== labelsToAssign.length) {
+    return reply.code(400).send({ error: 'Invalid labels for brand' });
+  }
   if (labelsToAssign.length === 0) {
     return { success: true };
   }
@@ -133,6 +149,7 @@ async function addLabelsToAssets(
 
 async function removeLabelsFromAssets(
   assetIds: string[],
+  brandId: string,
   labelIds: string[]
 ): Promise<{ success: true }> {
   if (labelIds.length === 0) {
@@ -142,6 +159,7 @@ async function removeLabelsFromAssets(
   await prismaAssets.assetTaxonomyAssignment.deleteMany({
     where: {
       assetId: { in: assetIds },
+      asset: { brandId },
       taxonomyItemId: { in: labelIds },
     },
   });
@@ -149,13 +167,10 @@ async function removeLabelsFromAssets(
   return { success: true };
 }
 
-async function deleteAssets(
-  assetIds: string[],
-  brandId: string | undefined
-): Promise<{ success: true }> {
+async function deleteAssets(assetIds: string[], brandId: string): Promise<{ success: true }> {
   const where: AssetsPrisma.AssetWhereInput = {
     id: { in: assetIds },
-    ...(brandId ? { brandId } : {}),
+    brandId,
   };
 
   const assetsToDelete = await prismaAssets.asset.findMany({
@@ -179,9 +194,9 @@ async function deleteAssets(
     )
   );
 
-  await deleteS3Objects(storageKeys);
+  await deleteS3Objects(storageKeys, brandId);
   await prismaAssets.asset.deleteMany({
-    where: { id: { in: assetsToDelete.map((asset) => asset.id) } },
+    where: { id: { in: assetsToDelete.map((asset) => asset.id) }, brandId },
   });
 
   return { success: true };

@@ -9,6 +9,13 @@ export const publicationsAnalyticsRoutes: FastifyPluginAsync = async (fastify) =
   fastify.get('/analytics/publications/:publicationId', async (request, reply) => {
     try {
       const { publicationId } = request.params as { publicationId: string };
+      const owned = await prisma.contentPublication.findFirst({
+        where: { id: publicationId, content: { brand: { userId: request.user.id } } },
+        select: { id: true },
+      });
+      if (!owned) {
+        return reply.code(404).send({ error: 'Publication not found' });
+      }
       const latest = await prisma.publicationMetricsLatest.findUnique({
         where: { publicationId },
       });
@@ -26,6 +33,13 @@ export const publicationsAnalyticsRoutes: FastifyPluginAsync = async (fastify) =
   fastify.post('/analytics/publications/:publicationId/refresh', async (request, reply) => {
     try {
       const { publicationId } = request.params as { publicationId: string };
+      const owned = await prisma.contentPublication.findFirst({
+        where: { id: publicationId, content: { brand: { userId: request.user.id } } },
+        select: { id: true },
+      });
+      if (!owned) {
+        return reply.code(404).send({ error: 'Publication not found' });
+      }
       const pub = await prisma.contentPublication.findUnique({ where: { id: publicationId } });
       if (!pub) {
         return reply.code(404).send({ error: 'Publication not found' });

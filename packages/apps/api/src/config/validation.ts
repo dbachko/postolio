@@ -77,7 +77,7 @@ export function validateEnvironment(): void {
     if (!process.env.REDIS_URL.match(/^redis:\/\//)) {
       console.warn('REDIS_URL should start with redis://');
     }
-    logInfo(`Redis configured via REDIS_URL: ${process.env.REDIS_URL}`);
+    logInfo('Redis configured via REDIS_URL');
   } else if (process.env.REDIS_HOST) {
     const redisPort = process.env.REDIS_PORT || '6379';
     logInfo(`Redis configured via REDIS_HOST: redis://${process.env.REDIS_HOST}:${redisPort}`);

@@ -176,8 +176,7 @@ const NonForeachStepSchema = z.discriminatedUnion('type', [
 
 type NonForeachStep = z.infer<typeof NonForeachStepSchema>;
 export type RecipeStep =
-  | NonForeachStep
-  | (z.infer<typeof ForeachStepBaseSchema> & { do: RecipeStep[] });
+  NonForeachStep | (z.infer<typeof ForeachStepBaseSchema> & { do: RecipeStep[] });
 
 export const RecipeStepSchema: z.ZodType<RecipeStep> = z.lazy(() =>
   z.union([

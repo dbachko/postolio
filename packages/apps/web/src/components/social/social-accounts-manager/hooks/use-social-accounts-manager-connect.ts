@@ -126,8 +126,7 @@ function useCandidates(args: { connectSessionId: string | null; connectDialogOpe
   );
 
   const candidatesError = candidatesQuery.error as
-    | { status?: number; data?: { error?: string }; message?: string }
-    | undefined;
+    { status?: number; data?: { error?: string }; message?: string } | undefined;
   const isWaitingForCandidates =
     candidatesQuery.isError &&
     candidatesError?.status === 404 &&

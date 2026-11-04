@@ -14,11 +14,12 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Endpoint**: `POST /{ig-user-id}/media`
 
 **Parameters We Send**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `image_url` | string | ✅ Yes | Publicly accessible URL of the image | ✅ Sent |
-| `caption` | string | ✅ Yes | Caption text (max 2,200 chars) | ✅ Sent |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
+
+| Parameter      | Type   | Required | Description                          | Status  |
+| -------------- | ------ | -------- | ------------------------------------ | ------- |
+| `image_url`    | string | ✅ Yes   | Publicly accessible URL of the image | ✅ Sent |
+| `caption`      | string | ✅ Yes   | Caption text (max 2,200 chars)       | ✅ Sent |
+| `access_token` | string | ✅ Yes   | User access token                    | ✅ Sent |
 
 **Optional Parameters Available** (not currently sent):
 
@@ -35,14 +36,15 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Endpoint**: `POST /{ig-user-id}/media`
 
 **Parameters We Send**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `video_url` | string | ✅ Yes | Publicly accessible URL of the video | ✅ Sent |
-| `media_type` | string | ✅ Yes | "REELS" for reels/videos | ✅ Sent |
-| `caption` | string | ⚪ Optional | Caption text | ✅ Sent |
-| `share_to_feed` | boolean | ⚪ Optional | Whether reel appears in feed | ✅ Sent |
-| `thumb_offset` | number | ⚪ Optional | Thumbnail frame offset (ms) | ✅ **NEW!** |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
+
+| Parameter       | Type    | Required    | Description                          | Status      |
+| --------------- | ------- | ----------- | ------------------------------------ | ----------- |
+| `video_url`     | string  | ✅ Yes      | Publicly accessible URL of the video | ✅ Sent     |
+| `media_type`    | string  | ✅ Yes      | "REELS" for reels/videos             | ✅ Sent     |
+| `caption`       | string  | ⚪ Optional | Caption text                         | ✅ Sent     |
+| `share_to_feed` | boolean | ⚪ Optional | Whether reel appears in feed         | ✅ Sent     |
+| `thumb_offset`  | number  | ⚪ Optional | Thumbnail frame offset (ms)          | ✅ **NEW!** |
+| `access_token`  | string  | ✅ Yes      | User access token                    | ✅ Sent     |
 
 **Optional Parameters Available** (not currently sent):
 
@@ -60,12 +62,13 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Endpoint**: `POST /{ig-user-id}/media`
 
 **Parameters We Send**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `image_url` or `video_url` | string | ✅ Yes | Media URL | ✅ Sent |
-| `media_type` | string | ✅ Yes | "STORIES" | ✅ Sent |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
-| `thumb_offset` | number | ⚪ Optional | For video stories | ✅ Sent |
+
+| Parameter                  | Type   | Required    | Description       | Status  |
+| -------------------------- | ------ | ----------- | ----------------- | ------- |
+| `image_url` or `video_url` | string | ✅ Yes      | Media URL         | ✅ Sent |
+| `media_type`               | string | ✅ Yes      | "STORIES"         | ✅ Sent |
+| `access_token`             | string | ✅ Yes      | User access token | ✅ Sent |
+| `thumb_offset`             | number | ⚪ Optional | For video stories | ✅ Sent |
 
 **Note**: Stories don't support captions in the API.
 
@@ -78,12 +81,13 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Endpoint for Container**: `POST /{ig-user-id}/media`
 
 **Parameters We Send**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `media_type` | string | ✅ Yes | "CAROUSEL" | ✅ Sent |
-| `caption` | string | ⚪ Optional | Caption for carousel | ✅ Sent |
-| `children` | string | ✅ Yes | Comma-separated child IDs | ✅ Sent |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
+
+| Parameter      | Type   | Required    | Description               | Status  |
+| -------------- | ------ | ----------- | ------------------------- | ------- |
+| `media_type`   | string | ✅ Yes      | "CAROUSEL"                | ✅ Sent |
+| `caption`      | string | ⚪ Optional | Caption for carousel      | ✅ Sent |
+| `children`     | string | ✅ Yes      | Comma-separated child IDs | ✅ Sent |
+| `access_token` | string | ✅ Yes      | User access token         | ✅ Sent |
 
 **Optional Parameters Available** (not currently sent):
 
@@ -99,11 +103,12 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Endpoint**: `POST /{ig-user-id}/media`
 
 **Parameters We Send**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `image_url` | string | ✅ Yes | Image URL | ✅ Sent |
-| `is_carousel_item` | boolean | ✅ Yes | "true" | ✅ Sent |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
+
+| Parameter          | Type    | Required | Description       | Status  |
+| ------------------ | ------- | -------- | ----------------- | ------- |
+| `image_url`        | string  | ✅ Yes   | Image URL         | ✅ Sent |
+| `is_carousel_item` | boolean | ✅ Yes   | "true"            | ✅ Sent |
+| `access_token`     | string  | ✅ Yes   | User access token | ✅ Sent |
 
 **Status**: ✅ **Fully Compliant**
 
@@ -114,12 +119,13 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Method**: Resumable Upload
 
 **Step 1 - Create Upload Session**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `media_type` | string | ✅ Yes | "VIDEO" | ✅ Sent |
-| `is_carousel_item` | boolean | ✅ Yes | "true" | ✅ Sent |
-| `upload_type` | string | ✅ Yes | "resumable" | ✅ Sent |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
+
+| Parameter          | Type    | Required | Description       | Status  |
+| ------------------ | ------- | -------- | ----------------- | ------- |
+| `media_type`       | string  | ✅ Yes   | "VIDEO"           | ✅ Sent |
+| `is_carousel_item` | boolean | ✅ Yes   | "true"            | ✅ Sent |
+| `upload_type`      | string  | ✅ Yes   | "resumable"       | ✅ Sent |
+| `access_token`     | string  | ✅ Yes   | User access token | ✅ Sent |
 
 **Step 2 - Upload Video Data**:
 
@@ -135,10 +141,11 @@ This document validates all parameters sent to the Instagram Graph API for diffe
 **Endpoint**: `POST /{ig-user-id}/media_publish`
 
 **Parameters We Send**:
-| Parameter | Type | Required | Description | Status |
-|-----------|------|----------|-------------|--------|
-| `creation_id` | string | ✅ Yes | Container ID from creation | ✅ Sent |
-| `access_token` | string | ✅ Yes | User access token | ✅ Sent |
+
+| Parameter      | Type   | Required | Description                | Status  |
+| -------------- | ------ | -------- | -------------------------- | ------- |
+| `creation_id`  | string | ✅ Yes   | Container ID from creation | ✅ Sent |
+| `access_token` | string | ✅ Yes   | User access token          | ✅ Sent |
 
 **Status**: ✅ **Fully Compliant**
 

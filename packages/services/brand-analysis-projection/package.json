@@ -8,22 +8,22 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@aws-lambda-powertools/logger": "^2.31.0",
-    "@aws-lambda-powertools/metrics": "^2.31.0",
-    "@aws-sdk/client-dynamodb": "^3.1003.0",
-    "@aws-sdk/client-secrets-manager": "^3.1003.0",
-    "@aws-sdk/client-ssm": "^3.1003.0",
-    "@aws-sdk/lib-dynamodb": "^3.1003.0",
+    "@aws-lambda-powertools/logger": "^2.36.0",
+    "@aws-lambda-powertools/metrics": "^2.36.0",
+    "@aws-sdk/client-dynamodb": "^3.1161.0",
+    "@aws-sdk/client-secrets-manager": "^3.1161.0",
+    "@aws-sdk/client-ssm": "^3.1161.0",
+    "@aws-sdk/lib-dynamodb": "^3.1161.0",
     "@postolio/database": "workspace:*",
     "@postolio/observability": "workspace:*",
-    "@prisma/adapter-pg": "^7.4.2",
-    "pg": "^8.20.0"
+    "@prisma/adapter-pg": "^7.10.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "@types/aws-lambda": "^8.10.161",
+    "@types/aws-lambda": "^8.10.164",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.12"
   }
 }

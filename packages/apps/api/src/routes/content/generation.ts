@@ -53,8 +53,7 @@ async function importGeneratedAssetForContent(params: {
     const asset = await resolveGeneratedImageAsset(
       params.imageUrl,
       params.imageMetadata as
-        | { source: string; originalPrompt: string; assetId?: string }
-        | undefined,
+        { source: string; originalPrompt: string; assetId?: string } | undefined,
       {
         contentId: params.contentId,
         brandId: params.brandId,

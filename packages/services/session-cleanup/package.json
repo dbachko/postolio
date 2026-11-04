@@ -7,18 +7,18 @@
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
-    "@aws-lambda-powertools/logger": "^2.31.0",
-    "@aws-lambda-powertools/metrics": "^2.31.0",
+    "@aws-lambda-powertools/logger": "^2.36.0",
+    "@aws-lambda-powertools/metrics": "^2.36.0",
     "@postolio/database": "workspace:*",
     "@postolio/errors": "workspace:*",
     "@postolio/observability": "workspace:*",
-    "@prisma/adapter-pg": "^7.4.2",
-    "date-fns": "^4.1.0",
-    "pg": "^8.20.0"
+    "@prisma/adapter-pg": "^7.10.1",
+    "date-fns": "^4.4.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "@types/aws-lambda": "^8.10.161",
+    "@types/aws-lambda": "^8.10.164",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   }

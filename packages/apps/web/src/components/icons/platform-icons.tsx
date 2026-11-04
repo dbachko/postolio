@@ -4,13 +4,7 @@ import { FacebookIcon, TikTokIcon, XBrandIcon, YouTubeIcon } from '@/components/
 import { cn } from '@/lib/utils';
 
 export type Platform =
-  | 'instagram'
-  | 'facebook'
-  | 'linkedin'
-  | 'x'
-  | 'twitter'
-  | 'youtube'
-  | 'tiktok';
+  'instagram' | 'facebook' | 'linkedin' | 'x' | 'twitter' | 'youtube' | 'tiktok';
 
 /**
  * Returns the appropriate platform icon component for a given platform.

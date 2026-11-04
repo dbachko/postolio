@@ -30,3 +30,15 @@ scripts/*.sh
 !legal/DATA_DELETION.md
 !legal/PRIVACY_POLICY.md
 !legal/TERMS_OF_SERVICE.md
+
+# Never include workstation credentials or session state in images
+.claude
+.codex
+.aws
+**/*.cookies
+**/*cookies.txt
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/cdk.out*

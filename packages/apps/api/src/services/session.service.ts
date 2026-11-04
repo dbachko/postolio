@@ -174,6 +174,7 @@ export class SessionService {
         id: sessionId,
         userId,
         revokedAt: null,
+        expiresAt: { gt: new Date() },
       },
     });
   }

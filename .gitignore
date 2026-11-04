@@ -24,7 +24,7 @@ packages/libs/database-assets/assets-client/
 
 # Environment variables
 .env
-.env.*.local
+.env.*
 .env.local
 !.env.example
 
@@ -91,3 +91,12 @@ coverage/
 .claude
 aws-infrastructure/
 /package-lock.json
+
+# Private workstation and authentication artifacts
+.codex/
+*.cookies
+cookies.txt
+*.pem
+*.key
+*.p12
+*.pfx

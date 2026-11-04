@@ -129,17 +129,16 @@ async function uploadVideoInMixedMode(params: {
     );
 
     setMediaItems((prev) => {
-      const next = prev.map(
-        (item): MediaItem =>
-          item.id === tempId
-            ? {
-                id: assetId || tempId,
-                url: cdnUrl,
-                uploading: false,
-                type: 'video',
-                progressPercent: undefined,
-              }
-            : item
+      const next = prev.map((item): MediaItem =>
+        item.id === tempId
+          ? {
+              id: assetId || tempId,
+              url: cdnUrl,
+              uploading: false,
+              type: 'video',
+              progressPercent: undefined,
+            }
+          : item
       );
       emitChange(next);
       return next;

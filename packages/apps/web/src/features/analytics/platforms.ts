@@ -3,13 +3,7 @@ import type { Platform } from '@/lib/platform-config';
 export type AnalyticsTabKey = 'overview' | 'posts' | 'insights' | 'recommendations' | 'forecasts';
 
 export type PostMetricKey =
-  | 'impressions'
-  | 'reach'
-  | 'likes'
-  | 'comments'
-  | 'saves'
-  | 'shares'
-  | 'engagementRate';
+  'impressions' | 'reach' | 'likes' | 'comments' | 'saves' | 'shares' | 'engagementRate';
 
 export type PostMetricColumn = {
   key: PostMetricKey;

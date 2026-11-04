@@ -64,6 +64,8 @@ export async function generateUploadUrl(params: UploadUrlParams): Promise<Upload
   const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
   const s3Key = `brands/${brandId}/uploads/${fileType}s/${timestamp}_${uniqueId}_${sanitizedFileName}`;
 
+  assertBrandStorageKey(brandId, s3Key);
+
   // Determine max file size based on type
   const maxSize = fileType === 'image' ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
   if (fileSize > maxSize) {
@@ -110,10 +112,22 @@ export function getAssetUrl(s3Key: string): string {
   return `${domainWithProtocol}/${normalizedKey}`;
 }
 
-export async function deleteS3Objects(keys: string[]): Promise<void> {
-  const normalized = Array.from(
-    new Set(keys.map((key) => key.trim()).filter((key) => key.length > 0))
-  );
+/** Reject foreign keys and noncanonical aliases, including poisoned legacy records. */
+export function assertBrandStorageKey(brandId: string, key: string): void {
+  if (
+    !/^[a-zA-Z0-9_-]+$/.test(brandId) ||
+    typeof key !== 'string' ||
+    !key.startsWith(`brands/${brandId}/`) ||
+    /[\s\\%?#]/.test(key) ||
+    key.split('/').some((part) => !part || part === '.' || part === '..')
+  ) {
+    throw new Error('Invalid storage key for brand');
+  }
+}
+
+export async function deleteS3Objects(keys: string[], brandId: string): Promise<void> {
+  keys.forEach((key) => assertBrandStorageKey(brandId, key));
+  const normalized = Array.from(new Set(keys));
   if (normalized.length === 0) {
     return;
   }

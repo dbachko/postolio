@@ -15,8 +15,7 @@ import type { LabelRecord } from '@/features/assets/api/client';
 import { AssetLabelInputView } from './asset-label-input-view';
 
 type SuggestionItem =
-  | { kind: 'existing'; id: string; name: string }
-  | { kind: 'create'; name: string };
+  { kind: 'existing'; id: string; name: string } | { kind: 'create'; name: string };
 
 interface AssetLabelInputProps {
   labels: LabelRecord[];

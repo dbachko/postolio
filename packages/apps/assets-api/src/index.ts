@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import fastify, {
+  type FastifyBaseLogger,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -45,8 +50,9 @@ function createServer(): FastifyInstance {
     environment: NODE_ENV,
   });
 
+  const loggerInstance: FastifyBaseLogger = fastifyLogger.toPino();
   return fastify({
-    loggerInstance: fastifyLogger.toPino(),
+    loggerInstance,
     requestIdLogLabel: 'reqId',
     disableRequestLogging: false,
     requestIdHeader: 'x-request-id',

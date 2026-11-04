@@ -267,8 +267,7 @@ function useScheduleAheadLimit() {
     staleTime: 60 * 1000,
   });
   const scheduleAheadLimits = (scheduleAheadLimitQuery.data as any)?.data as
-    | { tier: string; maxAllowed: number; currentCount: number }
-    | undefined;
+    { tier: string; maxAllowed: number; currentCount: number } | undefined;
   const scheduleAheadAtCapacity =
     !!scheduleAheadLimits &&
     Number.isFinite(scheduleAheadLimits.maxAllowed) &&

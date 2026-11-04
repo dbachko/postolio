@@ -75,4 +75,11 @@ describe('authenticateRequest', () => {
 
     expect(() => authenticateRequest(event)).toThrow(AuthenticationError);
   });
+  it('rejects a gateway owner account ID without an authenticated IAM identity', () => {
+    const event = {
+      headers: { 'x-user-context': 'victim' },
+      requestContext: { accountId: '123456789012' },
+    } as unknown as APIGatewayProxyEventV2;
+    expect(() => authenticateRequest(event)).toThrow(AuthenticationError);
+  });
 });

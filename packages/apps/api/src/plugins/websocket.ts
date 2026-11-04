@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastif
 import fastifyPlugin from 'fastify-plugin';
 import fastifyWebsocket from '@fastify/websocket';
 import { WebSocket } from 'ws';
+import { authorizeRooms } from './websocket-authorization.js';
+import { SessionService } from '../services/session.service.js';
 
 interface BaseMessage<T extends string> {
   type: T;
@@ -30,6 +32,8 @@ type OutboundPayload =
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: string;
+  authToken?: string;
+  expiresAt?: number;
   brandId?: string | undefined;
   subscribedRooms?: Set<string>;
   isAlive?: boolean;
@@ -77,7 +81,10 @@ function registerBroadcastDecorator(fastify: FastifyInstance): void {
 
       const sendBatch = () => {
         socketArray.slice(index, index + batchSize).forEach((socket) => {
-          if (socket.readyState !== WebSocket.OPEN) {
+          if (
+            socket.readyState !== WebSocket.OPEN ||
+            (socket.expiresAt && socket.expiresAt <= Date.now())
+          ) {
             return;
           }
 
@@ -115,8 +122,10 @@ async function authenticateSocket(
   }
 
   try {
-    const decoded = (await fastify.jwt.verify(authToken)) as { id: string; email: string };
+    const decoded = await verifySocketToken(fastify, authToken);
     socket.userId = decoded.id;
+    socket.authToken = authToken;
+    socket.expiresAt = decoded.exp * 1000;
     sendPayload(socket, {
       type: 'authenticated',
       userId: socket.userId,
@@ -132,11 +141,11 @@ async function authenticateSocket(
   }
 }
 
-function handleSocketMessage(
+async function handleSocketMessage(
   fastify: FastifyInstance,
   socket: AuthenticatedSocket,
   message: WebSocketMessage
-): void {
+): Promise<void> {
   switch (message.type) {
     case 'ping':
       socket.isAlive = true;
@@ -148,7 +157,7 @@ function handleSocketMessage(
       socket.missedHeartbeats = 0;
       return;
     case 'subscribe':
-      handleSubscribe(socket, message);
+      await handleSubscribe(socket, message);
       return;
     case 'unsubscribe':
       handleUnsubscribe(socket);
@@ -170,7 +179,8 @@ function registerSocketHandlers(fastify: FastifyInstance, socket: AuthenticatedS
   socket.on('message', async (data: Buffer) => {
     try {
       const message: WebSocketMessage = JSON.parse(data.toString());
-      handleSocketMessage(fastify, socket, message);
+      await verifySocketToken(fastify, socket.authToken || '');
+      await handleSocketMessage(fastify, socket, message);
     } catch (error) {
       fastify.log.error({ error }, 'WebSocket message error');
       sendPayload(socket, { type: 'error', message: 'Invalid message format' });
@@ -209,6 +219,8 @@ function monitorHeartbeat(fastify: FastifyInstance): void {
         cleanupSocket(socket);
         return;
       }
+
+      void verifySocketToken(fastify, socket.authToken || '').catch(() => cleanupSocket(socket));
 
       if (socket.isAlive === false) {
         socket.missedHeartbeats = (socket.missedHeartbeats || 0) + 1;
@@ -277,7 +289,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   registerCleanupHook(fastify);
 };
 
-function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage) {
+async function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage) {
   if (!socket.userId) {
     socket.send(
       JSON.stringify({
@@ -297,7 +309,6 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
 
   if (message.brandId) {
     roomsToSubscribe.push(`brand:${message.brandId}`);
-    socket.brandId = message.brandId; // Keep for backward compatibility
   }
 
   // Handle explicit rooms array
@@ -314,6 +325,15 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
     );
     return;
   }
+
+  if (!(await authorizeRooms(socket.userId, roomsToSubscribe))) {
+    sendPayload(socket, { type: 'error', message: 'Room subscription forbidden' });
+    return;
+  }
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  socket.brandId = message.brandId;
 
   // Unsubscribe from previous rooms
   if (socket.subscribedRooms.size > 0) {
@@ -408,4 +428,22 @@ declare module 'fastify' {
   interface FastifyInstance {
     broadcastToRoom: (room: string, message: OutboundPayload | Record<string, unknown>) => void;
   }
+}
+
+async function verifySocketToken(fastify: FastifyInstance, token: string) {
+  const decoded = fastify.jwt.verify<{ id: string; email: string; sid?: string; exp: number }>(
+    token
+  );
+  if (
+    !decoded.id ||
+    !decoded.email ||
+    !Number.isFinite(decoded.exp) ||
+    decoded.exp * 1000 <= Date.now()
+  ) {
+    throw new Error('Invalid authentication token');
+  }
+  if (decoded.sid && !(await SessionService.getSessionById(decoded.sid, decoded.id))) {
+    throw new Error('Session revoked');
+  }
+  return decoded;
 }

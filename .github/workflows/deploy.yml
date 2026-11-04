@@ -686,7 +686,7 @@ jobs:
               # Build assets API and its dependencies
               pnpm --filter=@postolio/database-assets build || true
               pnpm --filter=@postolio/errors build || true
-              pnpm --filter=@postolio/assets-api run build:server || true
+              pnpm --filter=@postolio/assets-api run build:server
               ;;
             "web")
               # Build frontend dependencies

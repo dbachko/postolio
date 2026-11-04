@@ -222,14 +222,13 @@ describe('Calendar Timezone Integration', () => {
     });
 
     it('should handle invalid timezone in localizer gracefully', () => {
-      // Luxon handles invalid timezones gracefully by falling back to system timezone
+      // Invalid stored timezone preferences fall back deterministically to UTC.
       const localizer = luxon.create({ timezone: 'Invalid/Timezone' });
       const date = new Date('2025-01-16T04:31:00Z');
       const formatted = localizer.format(date, 'h:mm a');
 
       // Should still produce a formatted string (falls back to system/UTC)
-      expect(formatted).toBeTruthy();
-      expect(typeof formatted).toBe('string');
+      expect(formatted).toBe('4:31 AM');
     });
 
     it('should handle malformed ISO strings', () => {

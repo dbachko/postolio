@@ -36,7 +36,8 @@ export function createLuxonLocalizer(opts?: {
       // Then shift to the requested IANA zone for display.
       const dtUtc = DateTime.fromMillis(d.getTime(), { zone: 'utc' });
       const dt = timezone ? dtUtc.setZone(timezone) : dtUtc;
-      return dt.toFormat(token);
+      if (!dtUtc.isValid) throw new RangeError('Invalid date');
+      return (dt.isValid ? dt : dtUtc).toFormat(token);
     },
     startOfWeek(d: Date, w?: 0 | 1) {
       const dt = DateTime.fromJSDate(d);

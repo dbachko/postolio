@@ -789,23 +789,6 @@ export class AssetLibraryStack extends cdk.Stack {
             // Non-sensitive DB connection details provided as plain env vars
             ASSETS_DB_HOST: this.assetsDatabase.dbInstanceEndpointAddress,
             ASSETS_DB_PORT: this.assetsDatabase.dbInstanceEndpointPort,
-            DATABASE_URL: `postgresql://${databaseSecret
-              .secretValueFromJson('username')
-              .unsafeUnwrap()}:${databaseSecret
-              .secretValueFromJson('password')
-              .unsafeUnwrap()}@${this.assetsDatabase.dbInstanceEndpointAddress}:${
-              this.assetsDatabase.dbInstanceEndpointPort
-            }/postolio_assets`,
-            ASSETS_DATABASE_URL: `postgresql://${databaseSecret
-              .secretValueFromJson('username')
-              .unsafeUnwrap()}:${databaseSecret
-              .secretValueFromJson('password')
-              .unsafeUnwrap()}@${this.assetsDatabase.dbInstanceEndpointAddress}:${
-              this.assetsDatabase.dbInstanceEndpointPort
-            }/postolio_assets`,
-            REDIS_HOST: redisEndpointParam.stringValue,
-            REDIS_PORT: redisPortParam.stringValue,
-            REDIS_URL: `redis://${redisEndpointParam.stringValue}:${redisPortParam.stringValue}`,
           },
           secrets: {
             ASSETS_DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),

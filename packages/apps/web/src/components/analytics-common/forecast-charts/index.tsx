@@ -164,12 +164,12 @@ function ForecastChartArea({
               borderRadius: '8px',
             }}
             labelStyle={{ color: 'hsl(var(--foreground))' }}
-            formatter={(value: unknown, name?: string) => {
+            formatter={(value: unknown, name?: string | number) => {
               const numericValue = typeof value === 'number' ? value : Number(value);
               if (!Number.isFinite(numericValue)) {
-                return [value as any, name ?? ''];
+                return [String(value ?? ''), String(name ?? '')];
               }
-              return [formatForecastValue(numericValue, selectedMetric), name ?? ''];
+              return [formatForecastValue(numericValue, selectedMetric), String(name ?? '')];
             }}
           />
           <Legend />

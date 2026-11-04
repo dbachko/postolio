@@ -122,11 +122,8 @@ describe('Luxon Localizer Timezone Handling', () => {
 
   describe('Edge cases', () => {
     it('should handle invalid timezone gracefully', () => {
-      // Luxon should throw or use fallback for invalid timezone
-      expect(() => {
-        const localizer = createLuxonLocalizer({ timezone: 'Invalid/Timezone' });
-        localizer.format(new Date(), 'h:mm a');
-      }).toThrow();
+      const localizer = createLuxonLocalizer({ timezone: 'Invalid/Timezone' });
+      expect(localizer.format(new Date('2025-01-16T04:31:00Z'), 'h:mm a')).toBe('4:31 AM');
     });
 
     it('should handle leap year dates', () => {

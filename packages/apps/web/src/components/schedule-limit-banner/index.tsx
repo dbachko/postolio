@@ -29,8 +29,7 @@ export function ScheduleLimitBanner() {
   });
 
   const limits = limitsQuery.data?.data as
-    | { tier: string; maxAllowed: number; currentCount: number }
-    | undefined;
+    { tier: string; maxAllowed: number; currentCount: number } | undefined;
 
   const atCapacity =
     !!limits && Number.isFinite(limits.maxAllowed) && limits.currentCount >= limits.maxAllowed;

@@ -392,7 +392,9 @@ async function getVideoSize(videoUrl: string): Promise<number> {
   try {
     const response = await axios.head(videoUrl);
     const contentLength = response.headers['content-length'];
-    return parseInt(contentLength, 10);
+    const size = Number(contentLength);
+    if (!Number.isSafeInteger(size) || size <= 0) throw new Error('Invalid video content length');
+    return size;
   } catch (error) {
     console.error('Failed to get video size:', error);
     // Return a default size if we can't determine it

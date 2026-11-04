@@ -1,8 +1,8 @@
-import type Mail from 'nodemailer/lib/mailer/index.js';
+import type { SendMailOptions } from 'nodemailer';
 import { generateEmailTemplate } from './template.js';
 
 type EmailResult = { success: boolean; error?: string };
-type SendEmailFn = (options: Mail.Options) => Promise<EmailResult>;
+type SendEmailFn = (options: SendMailOptions) => Promise<EmailResult>;
 
 function getFrontendBaseUrl(): string {
   return process.env.FRONTEND_URL || 'http://localhost:5173';

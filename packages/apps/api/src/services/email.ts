@@ -1,5 +1,4 @@
-import nodemailer, { type Transporter } from 'nodemailer';
-import type Mail from 'nodemailer/lib/mailer';
+import nodemailer, { type Transporter, type SendMailOptions } from 'nodemailer';
 import { logger as baseLogger } from '@postolio/logger';
 import { SESClient, SendEmailCommand, type SESClientConfig } from '@aws-sdk/client-ses';
 import CircuitBreaker from 'opossum';
@@ -73,7 +72,7 @@ export class EmailService {
    */
   private static getSMTPCircuitBreaker(): CircuitBreaker {
     if (!this.smtpCircuitBreaker) {
-      const smtpAction = async (mailOptions: Mail.Options) => {
+      const smtpAction = async (mailOptions: SendMailOptions) => {
         const transporter = this.getTransporter();
         return await transporter.sendMail(mailOptions);
       };
@@ -154,7 +153,7 @@ export class EmailService {
   /**
    * Send email via AWS SES with circuit breaker
    */
-  private static resolveFromAddress(options: Mail.Options): string {
+  private static resolveFromAddress(options: SendMailOptions): string {
     if (typeof options.from === 'string') {
       return options.from;
     }
@@ -167,19 +166,19 @@ export class EmailService {
     return options.from?.address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example';
   }
 
-  private static resolveRecipientAddress(
-    value: Mail.Address | string | undefined
-  ): string | undefined {
+  private static resolveRecipientAddress(value: unknown): string | undefined {
     if (!value) {
       return undefined;
     }
     if (typeof value === 'string') {
       return value;
     }
-    return value.address;
+    return typeof value === 'object' && 'address' in value && typeof value.address === 'string'
+      ? value.address
+      : undefined;
   }
 
-  private static resolveToAddresses(options: Mail.Options): string[] {
+  private static resolveToAddresses(options: SendMailOptions): string[] {
     if (Array.isArray(options.to)) {
       return options.to
         .map((value) => this.resolveRecipientAddress(value))
@@ -190,7 +189,7 @@ export class EmailService {
   }
 
   private static toSesBodyPart(
-    value: Mail.Options['html'] | Mail.Options['text']
+    value: SendMailOptions['html'] | SendMailOptions['text']
   ): { Data: string; Charset: 'UTF-8' } | undefined {
     if (!value) {
       return undefined;
@@ -202,7 +201,7 @@ export class EmailService {
   }
 
   private static buildSesCommand(
-    options: Mail.Options,
+    options: SendMailOptions,
     from: string,
     to: string[]
   ): SendEmailCommand {
@@ -224,7 +223,7 @@ export class EmailService {
     });
   }
 
-  private static async sendViaSES(options: Mail.Options): Promise<void> {
+  private static async sendViaSES(options: SendMailOptions): Promise<void> {
     const from = this.resolveFromAddress(options);
     const to = this.resolveToAddresses(options);
 
@@ -262,7 +261,7 @@ export class EmailService {
   /**
    * Send email via SMTP with circuit breaker
    */
-  private static async sendViaSMTP(options: Mail.Options): Promise<unknown> {
+  private static async sendViaSMTP(options: SendMailOptions): Promise<unknown> {
     const smtpCircuitBreaker = this.getSMTPCircuitBreaker();
     return await smtpCircuitBreaker.fire(options);
   }
@@ -270,7 +269,7 @@ export class EmailService {
   /**
    * Send an email with the specified options
    */
-  static async sendEmail(options: Mail.Options): Promise<{ success: boolean; error?: string }> {
+  static async sendEmail(options: SendMailOptions): Promise<{ success: boolean; error?: string }> {
     try {
       if (!this.isConfigured()) {
         emailLogger.warn('Email service not configured');

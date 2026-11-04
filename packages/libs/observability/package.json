@@ -17,7 +17,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@sentry/node": "^10.42.0"
+    "@sentry/node": "^10.78.0"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",

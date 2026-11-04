@@ -227,8 +227,7 @@ class RollingContentService {
       const asset = await resolveGeneratedImageAsset(
         params.generated.imageUrl,
         params.generated.imageMetadata as
-          | { source: string; originalPrompt: string; assetId?: string }
-          | undefined,
+          { source: string; originalPrompt: string; assetId?: string } | undefined,
         {
           contentId: params.contentId,
           brandId: params.brandId,

@@ -102,13 +102,13 @@ function resolveIamRequestContext(
 
 function isIamAuthenticatedRequest(
   iamContext: Record<string, string> | null,
-  accountId: string | undefined
+  _accountId: string | undefined
 ): boolean {
   if (iamContext?.userArn || iamContext?.accessKey) {
     return true;
   }
 
-  return !!accountId && accountId !== 'anonymous';
+  return false;
 }
 
 function resolveIamUserContextHeaders(normalizedHeaders: NormalizedHeaders): IamUserContextHeaders {

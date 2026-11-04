@@ -36,8 +36,7 @@ type PostPreviewCardMenuProps = {
 };
 
 type MenuTarget =
-  | { kind: 'content'; contentId: string }
-  | { kind: 'group'; contentGroupId: string };
+  { kind: 'content'; contentId: string } | { kind: 'group'; contentGroupId: string };
 
 function getMenuTarget(item: CalendarItem, groupMeta: GroupMeta | null): MenuTarget {
   return groupMeta

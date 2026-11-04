@@ -35,10 +35,10 @@ This document outlines the fixes applied to resolve the CI/CD deployment failure
 ### Enhanced Timeout Configuration
 
 ```yaml
-timeout-minutes: 60  # CDK deployments
-timeout-minutes: 45  # Complex operations
-timeout-minutes: 30  # Image builds
-timeout-minutes: 15  # Dependency builds
+timeout-minutes: 60 # CDK deployments
+timeout-minutes: 45 # Complex operations
+timeout-minutes: 30 # Image builds
+timeout-minutes: 15 # Dependency builds
 ```
 
 ### Improved Retry Logic

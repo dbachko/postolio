@@ -145,11 +145,7 @@ export interface InstagramHashtag {
 }
 
 export type InstagramAudienceDemographicsStatus =
-  | 'available'
-  | 'no_data'
-  | 'not_connected'
-  | 'insufficient_permissions'
-  | 'error';
+  'available' | 'no_data' | 'not_connected' | 'insufficient_permissions' | 'error';
 
 export interface InstagramAudienceDemographics {
   totalAudience: number;

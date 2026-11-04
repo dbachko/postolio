@@ -3,12 +3,7 @@ import type { HttpRequest } from '../http/http';
 export type RecipeCategory = 'get_started' | 'content' | 'growth' | 'social' | 'other';
 export type RecipeStatus = 'draft' | 'published' | 'archived';
 export type RecipeInputFieldType =
-  | 'input'
-  | 'textarea'
-  | 'select'
-  | 'date'
-  | 'asset_picker'
-  | 'asset_reference_selector';
+  'input' | 'textarea' | 'select' | 'date' | 'asset_picker' | 'asset_reference_selector';
 export type RecipeInputOption = { label: string; value: string };
 export type RecipeInputField = {
   key: string;

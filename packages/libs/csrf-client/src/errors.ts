@@ -55,9 +55,9 @@ export class CSRFTokenError extends Error {
   public readonly severity: CSRFErrorSeverity;
   public readonly timestamp: number;
   public readonly details?: unknown;
-  public readonly statusCode?: number;
+  public readonly statusCode: number | undefined;
   public readonly retryable: boolean;
-  public readonly retryAfter?: number;
+  public readonly retryAfter: number | undefined;
 
   constructor(
     message: string,
@@ -201,7 +201,7 @@ export class CSRFTokenError extends Error {
       severity,
       statusCode: response.status,
       retryable,
-      retryAfter,
+      ...(retryAfter === undefined ? {} : { retryAfter }),
       details: {
         url: response.url,
         statusText: response.statusText,

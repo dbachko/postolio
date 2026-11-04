@@ -6,14 +6,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./test/setup.ts'],
-    // Only run colocated tests under src; exclude legacy TAP tests and connector unit aimed at old path
-    exclude: [
-      'node_modules/',
-      'dist/',
-      'test/**',
-      '**/test/**',
-      'src/services/connectors/__tests__/instagram-connector.test.ts',
-    ],
+    // Colocated suites include migrated authentication, analytics, and connector regressions.
+    exclude: ['node_modules/', 'dist/', 'test/**', '**/test/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
