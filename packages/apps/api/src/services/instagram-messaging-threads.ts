@@ -37,7 +37,7 @@ async function postDmMessage(params: {
       return { supported: false, success: false, message };
     }
     messagingLogger.error('Failed to send DM message', formatError(error));
-    throw new Error(`Failed to send DM: ${message}`);
+    throw new Error(`Failed to send DM: ${message}`, { cause: error });
   }
 }
 

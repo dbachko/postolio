@@ -16,12 +16,12 @@
     "@postolio/connectors": "workspace:*",
     "@postolio/database": "workspace:*",
     "@postolio/observability": "workspace:*",
-    "ioredis": "^5.11.1",
+    "ioredis": "^6.0.0",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

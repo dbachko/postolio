@@ -6,7 +6,7 @@
     "rootDir": "src",
     "lib": ["ES2022"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": true,
     "declaration": true,
     "declarationMap": true,

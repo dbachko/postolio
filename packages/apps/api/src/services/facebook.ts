@@ -84,7 +84,8 @@ export const facebookService = {
     } catch (error) {
       facebookLogger.error('Failed to fetch Facebook post comments', formatError(error));
       throw new Error(
-        `Failed to fetch Facebook post comments: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to fetch Facebook post comments: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error }
       );
     }
   },
@@ -112,7 +113,8 @@ export const facebookService = {
     } catch (error) {
       facebookLogger.error('Failed to reply to Facebook comment', formatError(error));
       throw new Error(
-        `Failed to reply to Facebook comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to reply to Facebook comment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error }
       );
     }
   },
@@ -132,7 +134,9 @@ export const facebookService = {
       const message =
         (error?.response?.data?.error?.message as string) || (error as Error).message || '';
       facebookLogger.error('Failed to like Facebook comment', formatError(error));
-      throw new Error(`Failed to like Facebook comment: ${message || 'Unknown error'}`);
+      throw new Error(`Failed to like Facebook comment: ${message || 'Unknown error'}`, {
+        cause: error,
+      });
     }
   },
 };

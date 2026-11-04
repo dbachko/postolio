@@ -4,7 +4,7 @@ import { clearIntervalRef } from './scheduling-websocket-utils';
 interface CreateSchedulingWebSocketOpenHandlerParams {
   wsRef: MutableRefObject<WebSocket | null>;
   isConnectingRef: MutableRefObject<boolean>;
-  countdownIntervalRef: MutableRefObject<NodeJS.Timeout | undefined>;
+  countdownIntervalRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>;
   heartbeatInterval: number;
   handleConnectionChange: (status: 'connecting') => void;
   setRetryIn: (value: number) => void;

@@ -18,7 +18,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import { Construct } from 'constructs';
 import { WAFConstruct } from '../constructs/waf-construct';
 import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-config';
@@ -211,6 +211,10 @@ export class ApiStack extends cdk.Stack {
         maxAzs: 2,
         natGateways: 1,
       });
+      // Only exists for synth without a Foundation VPC; real deployments look that VPC up.
+      acknowledgeNagRules(vpc, [
+        { id: 'AwsSolutions-VPC7', reason: 'Placeholder VPC is never deployed to production' },
+      ]);
     }
 
     // Import security groups and database secret from Foundation stack (runtime values)
@@ -469,7 +473,7 @@ export class ApiStack extends cdk.Stack {
         autoDeleteObjects: true,
       });
 
-      NagSuppressions.addResourceSuppressions(logBucket, [
+      acknowledgeNagRules(logBucket, [
         {
           id: 'AwsSolutions-S1',
           reason:
@@ -520,6 +524,8 @@ export class ApiStack extends cdk.Stack {
             NODE_OPTIONS:
               environment === 'prod' ? '--max_old_space_size=1024' : '--max_old_space_size=512',
             NODE_ENV: environment,
+            // CloudFront, then the ALB
+            TRUST_PROXY_HOPS: '2',
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
             FB_OAUTH_DEBUG: fbOauthDebug,
@@ -792,7 +798,7 @@ export class ApiStack extends cdk.Stack {
     });
 
     // ==================== CDK Nag Suppressions ====================
-    NagSuppressions.addStackSuppressions(this, [
+    acknowledgeNagRules(this, [
       {
         id: 'AwsSolutions-IAM4',
         reason: 'ECS task role uses managed policies for SSM access which is acceptable',
@@ -830,21 +836,13 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
-    NagSuppressions.addResourceSuppressions(
-      this.loadBalancer,
-      loadBalancerSuppressions,
-      true // Apply to child constructs
-    );
+    acknowledgeNagRules(this.loadBalancer, loadBalancerSuppressions);
 
-    NagSuppressions.addResourceSuppressions(
-      this.apiService.service,
-      [
-        {
-          id: 'AwsSolutions-EC23',
-          reason: 'Service security group is properly restricted to only allow traffic from ALB',
-        },
-      ],
-      true // Apply to child constructs
-    );
+    acknowledgeNagRules(this.apiService.service, [
+      {
+        id: 'AwsSolutions-EC23',
+        reason: 'Service security group is properly restricted to only allow traffic from ALB',
+      },
+    ]);
   }
 }

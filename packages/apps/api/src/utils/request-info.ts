@@ -11,37 +11,19 @@ export function getUserAgent(request: FastifyRequest): string | undefined {
   return undefined;
 }
 
+/**
+ * Forwarding headers are client-controlled, so only Fastify may interpret them, using the
+ * hop count from createTrustProxy().
+ */
 export function getClientIp(request: FastifyRequest): string {
-  // Cloudflare header
-  const cfIp = request.headers['cf-connecting-ip'];
-  if (cfIp && typeof cfIp === 'string') {
-    return cfIp;
-  }
-
-  // Standard X-Forwarded-For (left-most is original client)
-  const forwarded = request.headers['x-forwarded-for'];
-  if (forwarded) {
-    if (typeof forwarded === 'string') {
-      const first = forwarded.split(',')[0]?.trim();
-      if (first) {
-        return first;
-      }
-    } else if (Array.isArray(forwarded) && forwarded[0]) {
-      const first = forwarded[0].split(',')[0]?.trim();
-      if (first) {
-        return first;
-      }
-    }
-  }
-
-  // X-Real-IP (e.g., Nginx/CloudFront)
-  const realIp = request.headers['x-real-ip'];
-  if (realIp && typeof realIp === 'string') {
-    return realIp;
-  }
-
-  // Fastify will honor X-Forwarded-For when trustProxy=true
   return request.ip || 'unknown';
+}
+
+/** Proxies in front of the API: nginx on a VPS, CloudFront + ALB on AWS. */
+export function createTrustProxy(env = process.env.TRUST_PROXY_HOPS) {
+  const parsed = Number.parseInt(env ?? '', 10);
+  const hops = Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
+  return (_address: string, hop: number) => hop < hops;
 }
 
 function detectOs(ua: string): string {

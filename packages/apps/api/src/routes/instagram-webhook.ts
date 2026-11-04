@@ -12,7 +12,7 @@ import { processWebhookEntries } from './instagram-webhook/process-webhook-entri
 const logger = baseLogger.child({ module: 'instagram-webhook' });
 
 // Webhook verification token (set in Meta App Dashboard)
-const VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN || 'postolio_webhook_secret';
+const VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN;
 const APP_SECRET = process.env.FACEBOOK_APP_SECRET!;
 
 /**
@@ -42,7 +42,7 @@ function registerWebhookVerificationRoute(fastify: Parameters<FastifyPluginAsync
     const challenge = query['hub.challenge'];
 
     logger.info('Webhook verification request received', { mode, token: '***' });
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    if (VERIFY_TOKEN && mode === 'subscribe' && token === VERIFY_TOKEN) {
       logger.info('Webhook verified successfully');
       return reply.send(challenge);
     }

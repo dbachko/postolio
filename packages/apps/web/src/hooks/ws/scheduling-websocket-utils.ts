@@ -26,7 +26,7 @@ function buildDevFallbackWebSocketUrl() {
   return `${protocol}//${window.location.hostname}:3000/ws`;
 }
 
-export function clearTimeoutRef(ref: MutableRefObject<NodeJS.Timeout | undefined>) {
+export function clearTimeoutRef(ref: MutableRefObject<ReturnType<typeof setTimeout> | undefined>) {
   if (!ref.current) {
     return;
   }
@@ -34,7 +34,7 @@ export function clearTimeoutRef(ref: MutableRefObject<NodeJS.Timeout | undefined
   ref.current = undefined;
 }
 
-export function clearIntervalRef(ref: MutableRefObject<NodeJS.Timeout | undefined>) {
+export function clearIntervalRef(ref: MutableRefObject<ReturnType<typeof setTimeout> | undefined>) {
   if (!ref.current) {
     return;
   }

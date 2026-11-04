@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@10.19.0",
+  "packageManager": "pnpm@12.16.1",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=24.0.0",
     "npm": ">=10.0.0"
   },
   "scripts": {
@@ -30,22 +30,23 @@
     "@fastify/jwt": "^10.2.7",
     "@postolio/database-assets": "workspace:*",
     "@postolio/logger": "workspace:*",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.9",
     "fastify": "^5.12.8",
     "ipaddr.js": "^2.5.0",
-    "nanoid": "^5.1.16",
+    "nanoid": "^6.0.2",
     "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@postolio/tsconfig": "workspace:*",
-    "@types/node": "^24.19.2",
-    "eslint": "^9.39.5",
-    "globals": "^16.5.0",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "pino-pretty": "^13.2.0",
     "tsx": "^4.23.15",
-    "typescript": "~5.9.3",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
-    "vitest": "^4.1.12"
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   }
 }

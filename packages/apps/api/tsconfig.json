@@ -4,8 +4,8 @@
     "outDir": "./dist",
     "lib": ["ES2022", "DOM"],
     "module": "ESNext",
-    "moduleResolution": "node",
-    "downlevelIteration": true
+    "moduleResolution": "bundler",
+    "rootDir": "./src"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/__tests__/**", "**/*.test.ts"]

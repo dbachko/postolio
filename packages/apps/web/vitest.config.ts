@@ -12,13 +12,14 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/tests/e2e/**',
+      '**/tests/live/**',
       '**/tests/screenshots/**',
       '**/.ignored/**',
     ],
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
 });

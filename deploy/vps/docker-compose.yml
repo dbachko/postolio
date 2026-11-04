@@ -1,36 +1,35 @@
-version: '3.9'
-
 x-stack-env: &stack-env
   env_file:
     - ./stack.env
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-postolio}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_18_data:/var/lib/postgresql
 
   postgres_assets:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${ASSETS_POSTGRES_DB:-postolio_assets}
       POSTGRES_USER: ${ASSETS_POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${ASSETS_POSTGRES_PASSWORD:-postgres}
     volumes:
-      - postgres_assets_data:/var/lib/postgresql/data
+      - postgres_assets_18_data:/var/lib/postgresql
 
+  # Valkey, matching ElastiCache. The service keeps the name `redis`: same protocol and REDIS_* config.
   redis:
-    image: redis:7-alpine
-    command: ['redis-server', '--appendonly', 'yes']
+    image: valkey/valkey:8-alpine
+    command: ['valkey-server', '--appendonly', 'yes']
     restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - valkey_8_data:/data
 
   api:
     image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-postolio}/postolio-api:${IMAGE_TAG:-latest}
@@ -101,6 +100,7 @@ services:
       - '${WEB_PORT:-80}:80'
 
 volumes:
-  postgres_data:
-  postgres_assets_data:
-  redis_data:
+  # Versioned: a new Postgres major cannot open an older data directory.
+  postgres_18_data:
+  postgres_assets_18_data:
+  valkey_8_data:

@@ -11,7 +11,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import { Construct } from 'constructs';
 
 export interface WebStackProps extends cdk.StackProps {
@@ -561,42 +561,30 @@ export class WebStack extends cdk.Stack {
       });
     }
 
-    NagSuppressions.addResourceSuppressions(this.distribution, distributionSuppressions, true);
+    acknowledgeNagRules(this.distribution, distributionSuppressions);
 
-    NagSuppressions.addResourceSuppressions(
-      accessLogsBucket,
-      [
-        {
-          id: 'AwsSolutions-S1',
-          reason:
-            'Access logs bucket is the final destination for server logs and cannot log to itself',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(accessLogsBucket, [
+      {
+        id: 'AwsSolutions-S1',
+        reason:
+          'Access logs bucket is the final destination for server logs and cannot log to itself',
+      },
+    ]);
 
-    NagSuppressions.addResourceSuppressions(
-      logsBucket,
-      [
-        {
-          id: 'AwsSolutions-S1',
-          reason:
-            'CloudFront logs bucket is a terminal log destination and should not write recursive server access logs.',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(logsBucket, [
+      {
+        id: 'AwsSolutions-S1',
+        reason:
+          'CloudFront logs bucket is a terminal log destination and should not write recursive server access logs.',
+      },
+    ]);
 
-    NagSuppressions.addResourceSuppressions(
-      this,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'S3 bucket policy requires wildcard for CloudFront access to all objects',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(this, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'S3 bucket policy requires wildcard for CloudFront access to all objects',
+      },
+    ]);
   }
 }
 

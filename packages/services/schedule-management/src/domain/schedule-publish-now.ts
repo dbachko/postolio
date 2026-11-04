@@ -279,7 +279,7 @@ async function emitScheduleDue(schedule: Schedule): Promise<void> {
       scheduleId: schedule.scheduleId,
     });
 
-    throw new Error('Failed to enqueue publish event');
+    throw new Error('Failed to enqueue publish event', { cause: error });
   }
 }
 

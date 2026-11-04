@@ -8,8 +8,8 @@ const __dirname = path.dirname(__filename);
 // Prefer the monorepo root `.env` (most docs/scripts assume env lives there).
 // pnpm sets the package cwd to `packages/apps/api`, so `dotenv.config()` alone
 // would otherwise look for `packages/apps/api/.env`.
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env'), quiet: true });
+dotenv.config({ quiet: true });
 
 // Set DATABASE_URL from individual database components if not already set
 if (!process.env.DATABASE_URL && process.env.DB_USERNAME) {

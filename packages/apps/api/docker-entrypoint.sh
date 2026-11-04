@@ -63,17 +63,8 @@ if [ ! -x "$PRISMA_BIN" ]; then
 fi
 echo "Using Prisma CLI from workspace package"
 
-# Check for failed migrations and resolve them by marking as rolled back (so deploy will re-apply)
-echo "Checking for failed migrations..."
-FAILED=$("$PRISMA_BIN" migrate status 2>&1 | grep -Eo '[0-9]{14}_[A-Za-z0-9_]+' | sort -u || true)
-if [ -n "$FAILED" ]; then
-  echo "Found failed migrations: $FAILED"
-  for MID in $FAILED; do
-    echo "Resolving failed migration as rolled-back: $MID"
-    "$PRISMA_BIN" migrate resolve --rolled-back "$MID" || true
-  done
-fi
-
+# Failed migrations need a human: a parallel replica's in-progress migration looks failed too,
+# so never auto-resolve here. migrate deploy holds a Postgres advisory lock across replicas.
 # Apply all migrations for main DB (idempotent).
 # On failure, exit hard. Never reset database state in deploy/runtime paths.
 if ! "$PRISMA_BIN" migrate deploy; then

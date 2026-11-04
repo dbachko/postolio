@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { assertBrandOwnership } from '../../services/ownership.js';
 import {
   FACEBOOK_APP_ID,
+  FACEBOOK_APP_SECRET,
   REDIRECT_URI,
   captureOauthException,
   ensureAuth,
@@ -40,6 +41,10 @@ export function registerInstagramOAuthAuthorizeRoute(fastify: FastifyInstance): 
       try {
         if (!ensureAuth(request, reply)) {
           return;
+        }
+
+        if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) {
+          return reply.status(503).send({ error: 'Instagram connection is not configured' });
         }
 
         const { brandId } = request.query;

@@ -39,14 +39,14 @@
 
     /* Emit */
     "removeComments": false,
-    "importsNotUsedAsValues": "remove",
     "preserveConstEnums": true,
     "inlineSources": true,
 
     /* Advanced */
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]

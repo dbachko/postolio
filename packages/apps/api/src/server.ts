@@ -1,5 +1,6 @@
 import './dotenv-init.js';
 import { isProductionEnv } from './utils/env-mode.js';
+import { createTrustProxy } from './utils/request-info.js';
 import fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
@@ -221,7 +222,7 @@ export function buildFastify(): FastifyInstance {
   const app = fastify({
     logger: { level: 'info' },
     bodyLimit: 10 * 1024 * 1024,
-    trustProxy: true,
+    trustProxy: createTrustProxy(),
     ...loadHttpsOptions(),
   });
 

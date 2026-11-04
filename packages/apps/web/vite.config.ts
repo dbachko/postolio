@@ -16,9 +16,11 @@ const httpsConfig = (() => {
   try {
     // Look for SSL certificates
     const certPath =
-      process.env.SSL_CERT_PATH || path.resolve(__dirname, '../../../certs/ai.localhost.pem');
+      process.env.SSL_CERT_PATH ||
+      path.resolve(import.meta.dirname, '../../../certs/ai.localhost.pem');
     const keyPath =
-      process.env.SSL_KEY_PATH || path.resolve(__dirname, '../../../certs/ai.localhost-key.pem');
+      process.env.SSL_KEY_PATH ||
+      path.resolve(import.meta.dirname, '../../../certs/ai.localhost-key.pem');
 
     if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       return {
@@ -85,7 +87,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
     dedupe: ['react', 'react-dom', '@postolio/calendar'],
   },

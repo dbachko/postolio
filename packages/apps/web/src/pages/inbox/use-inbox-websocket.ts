@@ -46,7 +46,7 @@ function handleWebSocketMessage(
 export function useInboxWebSocket(brandId: string | undefined) {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const connectWebSocket = useCallback(() => {
     if (!brandId) {

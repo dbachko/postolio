@@ -34,7 +34,7 @@ function resolveTriggerStyle(args: {
     size = 'default';
   }
 
-  let className = '';
+  let className: string;
   if (args.revealAddTextOnHover) {
     className = cn(
       'group relative shrink-0 overflow-visible rounded-full bg-transparent p-0 shadow-none hover:bg-transparent',

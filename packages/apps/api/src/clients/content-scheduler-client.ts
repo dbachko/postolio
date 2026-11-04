@@ -261,7 +261,7 @@ export class ContentSchedulerClient {
           baseLogger.warn('Using Content Scheduler fallback URL', { baseURL: fallbackUrl });
         } else {
           baseLogger.error('Content Scheduler URL not found in SSM or environment variables');
-          throw new Error('Unable to resolve Content Scheduler service URL');
+          throw new Error('Unable to resolve Content Scheduler service URL', { cause: ssmError });
         }
       }
     }

@@ -64,12 +64,10 @@ export function useContentCalendarUrlState() {
 
   const handlePrevious = useCallback(() => {
     setCurrentDate((prev) => {
-      let next = prev;
-      if (viewMode === 'month') {
-        next = subMonths(prev, 1);
-      } else {
-        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
-      }
+      const next =
+        viewMode === 'month'
+          ? subMonths(prev, 1)
+          : new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
       setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });
@@ -77,12 +75,10 @@ export function useContentCalendarUrlState() {
 
   const handleNext = useCallback(() => {
     setCurrentDate((prev) => {
-      let next = prev;
-      if (viewMode === 'month') {
-        next = addMonths(prev, 1);
-      } else {
-        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
-      }
+      const next =
+        viewMode === 'month'
+          ? addMonths(prev, 1)
+          : new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
       setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });

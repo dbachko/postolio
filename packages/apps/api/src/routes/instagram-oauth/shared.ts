@@ -10,8 +10,8 @@ export const tokenServiceClient = new TokenServiceClient();
 export const eventBridge = new EventBridge({});
 
 export const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
-export const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || 'test_app_id';
-export const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || 'test_app_secret';
+export const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || '';
+export const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
 export const REDIRECT_URI =
   process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/api/auth/instagram/callback';
 export const FB_OAUTH_DEBUG_ENABLED = (process.env.FB_OAUTH_DEBUG || '').toLowerCase() === 'true';

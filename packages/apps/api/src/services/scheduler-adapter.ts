@@ -87,7 +87,7 @@ export class SchedulerAdapter {
           'To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.'
         );
         this.schedulerEnabled = false;
-        throw new Error('Scheduler not configured - degraded mode');
+        throw new Error('Scheduler not configured - degraded mode', { cause: error });
       } else {
         // Try with fallback URL
         try {

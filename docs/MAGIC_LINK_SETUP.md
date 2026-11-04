@@ -238,7 +238,7 @@ transporter.verify((error, success) => {
    - Ensure FROM address matches domain
 
 4. **Redis connection issues**
-   - Verify Redis is running: `redis-cli ping`
+   - Verify Valkey is running: `docker compose exec redis valkey-cli ping`
    - Check REDIS_URL in .env
 
 ## Production Considerations

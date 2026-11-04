@@ -8,7 +8,7 @@ This pipeline builds the API, Assets API, Analytics ingestor (optional), and web
 - `assets-api` (`packages/apps/assets-api`) on port 3002 (proxied)
 - `analytics-ingestor` (`packages/services/analytics-ingestor`) behind the optional `analytics` profile
 - `web` (Vite build served by Nginx, proxies `/api/*` and `/assets-api/*`)
-- Postgres (main + assets) and Redis on the VPS
+- Postgres (main + assets) and Valkey (Redis-compatible) on the VPS
 
 ## Prerequisites on the VPS
 

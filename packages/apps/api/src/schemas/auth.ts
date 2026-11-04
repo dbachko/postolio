@@ -31,11 +31,12 @@ const emailSchema = z
 export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
+  // Optional on the signup form, which submits an empty string when left blank.
   name: z
     .string()
     .trim()
-    .min(1, 'Name is required')
     .max(100, 'Name must be less than 100 characters')
+    .transform((name) => name || undefined)
     .optional(),
   timezone: z.string().optional(), // Browser-detected timezone (e.g., 'America/New_York')
   deviceFingerprint: z.string().optional(), // Device fingerprint for session tracking

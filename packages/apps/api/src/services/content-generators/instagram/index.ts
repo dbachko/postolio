@@ -214,7 +214,7 @@ async function requestOpenAiInstagramContent(params: {
         top_p: topP,
         presence_penalty: presencePenalty,
         frequency_penalty: frequencyPenalty,
-        max_tokens: 1500,
+        max_completion_tokens: 1500,
         response_format: {
           type: 'json_schema',
           json_schema: {

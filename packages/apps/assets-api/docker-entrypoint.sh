@@ -53,22 +53,22 @@ fi
 
 echo "ASSETS_DATABASE_URL is configured"
 
-# Ensure Prisma client is generated and run migrations (idempotent) from the database-assets package
+# Run migrations (idempotent) from the database-assets package. The client is generated at build time.
 echo "Running database migrations..."
 cd /app/packages/libs/database-assets
 
-# Check for failed migrations and resolve them
-echo "Checking for failed migrations..."
-if npx prisma migrate status 2>&1 | grep -q "migration.*failed"; then
-  echo "Found failed migration, resolving..."
-  npx prisma migrate resolve --applied $(npx prisma migrate status 2>&1 | grep "migration.*failed" | awk '{print $1}') || echo "Failed to resolve migration (might already be resolved)"
+PRISMA_BIN="./node_modules/.bin/prisma"
+if [ ! -x "$PRISMA_BIN" ]; then
+  echo "ERROR: Prisma CLI not found at $PRISMA_BIN"
+  exit 1
 fi
 
-# Generate client (safe if already generated)
-npx prisma generate
-
-# Apply migrations
-npx prisma migrate deploy
+# Failed migrations need a human: a parallel replica's in-progress migration looks failed too,
+# so never auto-resolve here. migrate deploy holds a Postgres advisory lock across replicas.
+if ! "$PRISMA_BIN" migrate deploy; then
+  echo "migrate deploy failed; refusing to start"
+  exit 1
+fi
 echo "Migrations completed"
 
 # Return to assets app directory

@@ -18,6 +18,48 @@ function resolveStripeReferenceId(value: unknown): string | null {
   return typeof id === 'string' ? id : null;
 }
 
+function resolveInvoiceSubscriptionId(invoiceAny: any): string | null {
+  return resolveStripeReferenceId(
+    invoiceAny.parent?.subscription_details?.subscription ?? invoiceAny.subscription
+  );
+}
+
+type InvoicePaymentRefs = {
+  stripePaymentIntentId: string | null;
+  stripeChargeId: string | null;
+};
+
+function pickInvoicePayment(payments: any[] | undefined) {
+  return payments?.find((entry) => entry?.status === 'paid') ?? payments?.[0];
+}
+
+/**
+ * Current Stripe API versions removed `payment_intent`/`charge` from invoices and only
+ * include `payments` when expanded, which webhook payloads never are, so fetch them.
+ * The top-level fields still arrive on webhook endpoints pinned to an older API version.
+ */
+async function resolveInvoicePaymentRefs(
+  client: BillingServiceLike,
+  invoiceAny: any,
+  invoiceId: string
+): Promise<InvoicePaymentRefs> {
+  if (invoiceAny.payment_intent) {
+    return {
+      stripePaymentIntentId: resolveStripeReferenceId(invoiceAny.payment_intent),
+      stripeChargeId: resolveStripeReferenceId(invoiceAny.charge),
+    };
+  }
+
+  const payments =
+    invoiceAny.payments?.data ??
+    (await client.requireStripe().invoicePayments.list({ invoice: invoiceId, limit: 100 })).data;
+  const payment = pickInvoicePayment(payments)?.payment;
+  return {
+    stripePaymentIntentId: resolveStripeReferenceId(payment?.payment_intent),
+    stripeChargeId: resolveStripeReferenceId(payment?.charge),
+  };
+}
+
 function buildInvoiceRecordData(
   invoiceAny: any,
   billingCustomerId: string,
@@ -51,6 +93,7 @@ async function resolveLocalSubscriptionId(stripeSubscriptionId: string | null) {
 
 async function upsertInvoicePayment(params: {
   stripePaymentIntentId: string;
+  stripeChargeId: string | null;
   billingCustomerId: string;
   invoiceAny: any;
   invoiceId: string;
@@ -71,10 +114,7 @@ async function upsertInvoicePayment(params: {
     create: {
       customerId: params.billingCustomerId,
       stripePaymentIntentId: params.stripePaymentIntentId,
-      stripeChargeId:
-        typeof params.invoiceAny.charge === 'string'
-          ? params.invoiceAny.charge
-          : params.invoiceAny.charge?.id || null,
+      stripeChargeId: params.stripeChargeId,
       amount: params.invoiceAny.amount_paid ?? params.invoiceAny.total ?? 0,
       currency: params.invoiceAny.currency || 'usd',
       status: params.eventType === 'invoice.payment_failed' ? 'failed' : 'succeeded',
@@ -133,7 +173,7 @@ export async function upsertInvoiceFromStripe(
     return null;
   }
 
-  const stripeSubscriptionId = resolveStripeReferenceId(invoiceAny.subscription);
+  const stripeSubscriptionId = resolveInvoiceSubscriptionId(invoiceAny);
   const localSubscriptionId = await resolveLocalSubscriptionId(stripeSubscriptionId);
   const invoiceRecordData = buildInvoiceRecordData(
     invoiceAny,
@@ -150,10 +190,15 @@ export async function upsertInvoiceFromStripe(
     },
   });
 
-  const stripePaymentIntentId = resolveStripeReferenceId(invoiceAny.payment_intent);
+  const { stripePaymentIntentId, stripeChargeId } = await resolveInvoicePaymentRefs(
+    client,
+    invoiceAny,
+    invoiceId
+  );
   if (stripePaymentIntentId) {
     await upsertInvoicePayment({
       stripePaymentIntentId,
+      stripeChargeId,
       billingCustomerId: billingCustomer.id,
       invoiceAny,
       invoiceId,

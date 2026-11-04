@@ -40,7 +40,7 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-  NODE_VERSION: '22'
+  NODE_VERSION: '26'
   PNPM_VERSION: '10.20.0'
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -669,30 +669,30 @@ jobs:
           case "$STACK" in
             "auth"|"scheduling"|"publishing")
               # Build shared libraries for microservices
-              pnpm --filter=@postolio/database build || true
-              pnpm --filter=@postolio/errors build || true
+              pnpm --filter=@postolio/database build
+              pnpm --filter=@postolio/errors build
               pnpm --filter=@postolio/aws build
               ;;
             "api")
               # Build API and its dependencies
-              pnpm --filter=@postolio/database build || true
-              pnpm --filter=@postolio/errors build || true
+              pnpm --filter=@postolio/database build
+              pnpm --filter=@postolio/errors build
               # Ensure social connectors lib is compiled before API build
-              pnpm --filter=@postolio/connectors build || true
-              pnpm --filter=@postolio/csrf-client build || true
+              pnpm --filter=@postolio/connectors build
+              pnpm --filter=@postolio/csrf-client build
               pnpm --filter=api build
               ;;
             "asset-library")
               # Build assets API and its dependencies
-              pnpm --filter=@postolio/database-assets build || true
-              pnpm --filter=@postolio/errors build || true
+              pnpm --filter=@postolio/database-assets build
+              pnpm --filter=@postolio/errors build
               pnpm --filter=@postolio/assets-api run build:server
               ;;
             "web")
               # Build frontend dependencies
-              pnpm --filter=@postolio/csrf-client build || true
-              pnpm --filter=@postolio/errors build || true
-              pnpm --filter=@postolio/database build || true
+              pnpm --filter=@postolio/csrf-client build
+              pnpm --filter=@postolio/errors build
+              pnpm --filter=@postolio/database build
               ;;
           esac
 
@@ -1045,9 +1045,9 @@ jobs:
 
       - name: Build frontend dependencies
         run: |
-          pnpm --filter=@postolio/csrf-client build || true
-          pnpm --filter=@postolio/errors build || true
-          pnpm --filter=@postolio/database build || true
+          pnpm --filter=@postolio/csrf-client build
+          pnpm --filter=@postolio/errors build
+          pnpm --filter=@postolio/database build
 
       - name: Build frontend
         working-directory: packages/apps/web

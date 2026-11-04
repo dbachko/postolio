@@ -153,13 +153,13 @@ const SKILL_DEFINITIONS: SkillSeed[] = [
         defaultModel: {
           type: 'string',
           title: 'Default Model',
-          enum: ['gpt-image-1'],
-          default: 'gpt-image-1',
+          enum: ['gpt-image-2'],
+          default: 'gpt-image-2',
         },
         defaultSize: {
           type: 'string',
           title: 'Default Image Size',
-          enum: ['1024x1024', '1792x1024', '1024x1792'],
+          enum: ['1024x1024', '1536x1024', '1024x1536'],
           default: '1024x1024',
         },
         defaultQuality: {

@@ -23,7 +23,7 @@ import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import * as path from 'path';
 import { ParameterNames, type Environment } from '@postolio/service-parameters';
 
@@ -498,7 +498,7 @@ export class SchedulingStack extends cdk.Stack {
       'ScheduleManagementFunction',
       {
         functionName: `${prefix}-schedule-management`,
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         handler: 'index.handler',
         entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
         depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -545,7 +545,7 @@ export class SchedulingStack extends cdk.Stack {
       'ScheduleCleanupFunction',
       {
         functionName: `${prefix}-schedule-cleanup`,
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         handler: 'index.handler',
         entry: path.join(__dirname, '../../../../services/schedule-cleanup/src/index.ts'),
         depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -579,7 +579,7 @@ export class SchedulingStack extends cdk.Stack {
     // 3. Status Sync Function
     const statusSyncFunction = new lambdaNodejs.NodejsFunction(this, 'StatusSyncFunction', {
       functionName: `${prefix}-status-sync`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/status-sync/src/index.ts'),
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -688,13 +688,8 @@ export class SchedulingStack extends cdk.Stack {
 
     // ==================== Function URLs ====================
     const scheduleManagementUrl = scheduleManagementFunction.addFunctionUrl({
+      // Called only by the API with SigV4; browsers never reach this URL, so no CORS.
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
-      cors: {
-        allowCredentials: true,
-        allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.ALL],
-        allowedHeaders: ['*'],
-      },
     });
 
     // ==================== CloudWatch Monitoring ====================
@@ -773,28 +768,24 @@ export class SchedulingStack extends cdk.Stack {
     });
 
     // ==================== CDK NAG Suppressions ====================
-    NagSuppressions.addResourceSuppressions(
-      schedulingLambdaRole,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'Lambda execution role requires broad permissions for DynamoDB and S3 operations',
-        },
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'AWS managed policies for Lambda execution are standard and secure',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
-          ],
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(schedulingLambdaRole, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'Lambda execution role requires broad permissions for DynamoDB and S3 operations',
+      },
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'AWS managed policies for Lambda execution are standard and secure',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+        ],
+      },
+    ]);
 
     // Suppress DynamoDB PITR requirement for non-prod environments
     if (environment !== 'prod') {
-      NagSuppressions.addResourceSuppressions(this.schedulesTable, [
+      acknowledgeNagRules(this.schedulesTable, [
         {
           id: 'AwsSolutions-DDB3',
           reason: 'Point-in-time recovery is only enabled for production to reduce costs',
@@ -803,27 +794,19 @@ export class SchedulingStack extends cdk.Stack {
     }
 
     // Suppress log retention function IAM issues (created automatically by CDK)
-    NagSuppressions.addResourceSuppressions(
-      this,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          ],
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
-          appliesTo: ['Resource::*'],
-        },
-        {
-          id: 'AwsSolutions-L1',
-          reason: 'Using latest stable Node.js runtime for Lambda functions',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(this, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        ],
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
+        appliesTo: ['Resource::*'],
+      },
+    ]);
   }
 }

@@ -2,6 +2,7 @@
   "extends": "@postolio/tsconfig/node-library.json",
   "compilerOptions": {
     "outDir": "dist",
+    "rootDir": "src",
     "sourceMap": true
   },
   "include": ["src/**/*"],

@@ -3,11 +3,8 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { Pool } from 'pg';
 import {
-  createLambdaPrismaClient,
+  connectLambdaDatabase,
   type PrismaClient as LambdaPrismaClient,
 } from '@postolio/database/lambda';
 import { initSentry, captureException } from '@postolio/observability';
@@ -37,97 +34,8 @@ function profileSk(version: number): string {
 // DB connection cached between cold starts
 let prisma: LambdaPrismaClient | null = null;
 
-async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: string }> {
-  const environment = process.env.ENVIRONMENT || 'dev';
-  const ssm = new SSMClient({});
-  const result: { endpoint?: string; proxy?: string } = {};
-  try {
-    const ep = await ssm.send(
-      new GetParameterCommand({ Name: `/postolio/${environment}/database/endpoint` })
-    );
-    if (ep.Parameter?.Value) {
-      result.endpoint = ep.Parameter.Value;
-    }
-  } catch {
-    logger.debug('SSM database endpoint not available at synth/runtime lookup');
-  }
-  try {
-    const px = await ssm.send(
-      new GetParameterCommand({ Name: `/postolio/${environment}/database/proxy-endpoint` })
-    );
-    if (px.Parameter?.Value) {
-      result.proxy = px.Parameter.Value;
-    }
-  } catch {
-    logger.debug('SSM database proxy endpoint not available at synth/runtime lookup');
-  }
-  return result;
-}
-
 async function getClient(): Promise<LambdaPrismaClient> {
-  if (prisma) {
-    return prisma;
-  }
-  // Prefer DATABASE_URL when present (local/dev)
-  if (process.env.DATABASE_URL) {
-    const url = process.env.DATABASE_URL;
-    const { client } = createLambdaPrismaClient({
-      connectionString: url,
-      poolConfig: {
-        connectionString: url,
-        max: 1,
-        connectionTimeoutMillis: 15000,
-        idleTimeoutMillis: 10000,
-        query_timeout: 30000,
-      },
-    });
-    prisma = client;
-    return prisma;
-  }
-
-  const secrets = new SecretsManagerClient({});
-  const { proxy } = await getDatabaseEndpoints();
-  if (!proxy) {
-    throw new Error('RDS Proxy endpoint not available');
-  }
-  const dbName = process.env.DB_NAME || 'postolio';
-  const secretArn =
-    process.env.DB_SECRET_ARN ||
-    (await (async () => {
-      const environment = process.env.ENVIRONMENT || 'dev';
-      const ssm = new SSMClient({});
-      const param = await ssm.send(
-        new GetParameterCommand({ Name: `/postolio/${environment}/database/secret-arn` })
-      );
-      const value = param.Parameter?.Value;
-      if (!value) {
-        throw new Error('Database secret ARN parameter is empty');
-      }
-      return value;
-    })());
-  const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));
-  if (!res.SecretString) {
-    throw new Error('Empty database secret');
-  }
-  const credentials = JSON.parse(res.SecretString);
-  const username: string = credentials.username;
-  const password: string = credentials.password;
-  const [host, portStr] = proxy.split(':');
-  const port = parseInt(portStr || '5432', 10);
-  const pool = new Pool({
-    host,
-    port,
-    database: dbName,
-    user: username,
-    password,
-    ssl: { rejectUnauthorized: false },
-    max: 1,
-    connectionTimeoutMillis: 15000,
-    idleTimeoutMillis: 10000,
-  });
-  await pool.query('SELECT 1');
-  const { client } = createLambdaPrismaClient({ pool });
-  prisma = client;
+  prisma ??= await connectLambdaDatabase();
   return prisma;
 }
 

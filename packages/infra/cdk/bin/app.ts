@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { AwsSolutionsChecks } from 'cdk-nag';
+import { RuleLevelAwsSolutionsChecks } from '../lib/utils/cdk-nag-suppressions';
 import { FoundationStack } from '../lib/stacks/foundation-stack';
 import { AuthStack } from '../lib/stacks/auth-stack';
 import { SchedulingStack } from '../lib/stacks/scheduling-stack';
@@ -366,11 +366,10 @@ if (analyticsStackRef) {
 // API stack is intentionally decoupled from Brand Analysis; no dependency here.
 
 // Apply CDK Nag security checks
-cdk.Aspects.of(app).add(
-  new AwsSolutionsChecks({
+cdk.Validations.of(app).addPlugins(
+  new RuleLevelAwsSolutionsChecks(app, {
     verbose: true,
-    reports: true,
-    logIgnores: false,
+    writeSuppressionsToCloudFormation: true,
   })
 );
 

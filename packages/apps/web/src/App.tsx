@@ -47,6 +47,7 @@ function App() {
               defaultTheme="system"
               storageKey="postolio-theme-mode"
               disableTransitionOnChange
+              scriptProps={{ type: 'application/json' }}
             >
               <ThemeBootstrapper />
               <RouterProvider router={router} />

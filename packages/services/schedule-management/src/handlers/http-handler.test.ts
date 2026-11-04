@@ -545,27 +545,6 @@ describe('HttpHandler CORS headers', () => {
 
     expect(result.headers).toEqual({
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    });
-  });
-
-  it('should handle OPTIONS preflight requests', async () => {
-    const event = buildEvent({
-      httpMethod: 'OPTIONS',
-      path: '/schedules',
-    });
-
-    const result = await httpHandler.handle(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    expect(result.body).toBe('');
-    expect(result.headers).toEqual({
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     });
   });
 });

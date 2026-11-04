@@ -13,7 +13,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as dashboards from 'aws-cdk-lib/aws-cloudwatch';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface BrandAnalysisStackProps extends cdk.StackProps {
@@ -140,7 +140,7 @@ export class BrandAnalysisStack extends cdk.Stack {
 
     const fn = new lambdaNodejs.NodejsFunction(this, 'BrandAnalysisFunction', {
       functionName: `${prefix}-service`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: path.join(__dirname, '../../../../services/brand-analysis/src/index.ts'),
       handler: 'handler',
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -270,7 +270,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       'BrandAnalysisProjectionFunction',
       {
         functionName: `${prefix}-projection`,
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         handler: 'index.handler',
         entry: path.join(__dirname, '../../../../services/brand-analysis-projection/src/index.ts'),
         depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -401,46 +401,38 @@ export class BrandAnalysisStack extends cdk.Stack {
     );
     // ============ CDK Nag Suppressions ============
     // BrandAnalysisLambdaRole and projection role managed policies acceptable for logging
-    NagSuppressions.addResourceSuppressions(
-      lambdaRole,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason:
-            'AWSLambdaBasicExecutionRole acceptable for Lambda execution; no sensitive permissions',
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
-          appliesTo: ['Resource::*'],
-        },
-      ],
-      true
-    );
-    NagSuppressions.addResourceSuppressions(
-      projectionRole,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
-          appliesTo: ['Resource::*'],
-        },
-      ],
-      true
-    );
-    NagSuppressions.addResourceSuppressions(projectionDlq, [
+    acknowledgeNagRules(lambdaRole, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason:
+          'AWSLambdaBasicExecutionRole acceptable for Lambda execution; no sensitive permissions',
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
+        appliesTo: ['Resource::*'],
+      },
+    ]);
+    acknowledgeNagRules(projectionRole, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
+        appliesTo: ['Resource::*'],
+      },
+    ]);
+    acknowledgeNagRules(projectionDlq, [
       {
         id: 'AwsSolutions-SQS3',
         reason: 'Queue is a DLQ target from EventBridge rule; not intended to have its own DLQ',
       },
     ]);
-    NagSuppressions.addResourceSuppressions(alertTopic, [
+    acknowledgeNagRules(alertTopic, [
       {
         id: 'AwsSolutions-SNS3',
         reason: 'SSL-only policy applied explicitly to the topic',
@@ -517,7 +509,7 @@ export class BrandAnalysisStack extends cdk.Stack {
 
     const schedulerFn = new lambdaNodejs.NodejsFunction(this, 'BrandAnalysisSchedulerFunction', {
       functionName: `${prefix}-scheduler`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/brand-analysis-scheduler/src/index.ts'),
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -562,36 +554,17 @@ export class BrandAnalysisStack extends cdk.Stack {
 
     // ==================== CDK-Nag Suppressions ====================
     // Allow AWS managed basic execution policy for Lambda roles (logs only)
-    NagSuppressions.addResourceSuppressions(
-      schedulerRole,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
-          appliesTo: ['Resource::*'],
-        },
-      ],
-      true
-    );
-
-    // Suppress Lambda runtime \"latest version\" rule for Node.js functions.
-    // aws-cdk-lib currently exposes nodejs24.x in Runtime.ALL, but this stack
-    // pins Lambdas to nodejs22.x as the latest generally available runtime.
-    NagSuppressions.addResourceSuppressions(
-      this,
-      [
-        {
-          id: 'AwsSolutions-L1',
-          reason:
-            'Using latest generally available Node.js Lambda runtime (nodejs22.x); aws-cdk-lib also exposes nodejs24.x, which AwsSolutions-L1 treats as latest even though it is not yet widely available.',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(schedulerRole, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
+        appliesTo: ['Resource::*'],
+      },
+    ]);
   }
 }

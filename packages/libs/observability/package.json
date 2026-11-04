@@ -17,11 +17,11 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@sentry/node": "^10.78.0"
+    "@sentry/node": "^11.10.0"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3"
   }
 }

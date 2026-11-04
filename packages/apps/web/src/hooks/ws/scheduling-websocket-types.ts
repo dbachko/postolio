@@ -3,10 +3,10 @@ import type { ConnectionStatus, StatusUpdateEvent, WebSocketMessage } from '@/ty
 
 export interface SchedulingWebSocketRefs {
   wsRef: MutableRefObject<WebSocket | null>;
-  reconnectTimeoutRef: MutableRefObject<NodeJS.Timeout | undefined>;
+  reconnectTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>;
   reconnectAttemptsRef: MutableRefObject<number>;
   isConnectingRef: MutableRefObject<boolean>;
-  countdownIntervalRef: MutableRefObject<NodeJS.Timeout | undefined>;
+  countdownIntervalRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>;
   lastConnectionAttemptRef: MutableRefObject<number>;
   isAuthenticatedRef: MutableRefObject<boolean>;
   isRefreshingRef: MutableRefObject<boolean>;

@@ -61,7 +61,7 @@ function DatePickerField({
           mode="single"
           selected={date}
           onSelect={(selected) => selected && onDateChange(selected)}
-          initialFocus
+          autoFocus
           weekStartsOn={weekStartsOn as any}
         />
       </PopoverContent>

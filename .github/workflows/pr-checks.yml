@@ -6,7 +6,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '26'
   CI: 'true'
   VITE_API_BASE_URL: http://127.0.0.1:65434
   VITE_GOOGLE_CLIENT_ID: test-client-id
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -79,6 +79,51 @@ jobs:
           name: browser-test-results
           path: packages/apps/web/test-results
           retention-days: 7
+
+  infra-validation:
+    name: Infrastructure Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Synthesize stacks and run cdk-nag
+        working-directory: packages/infra/cdk
+        # Runs the app directly: no AWS credentials or lookups, and a nag failure fails the job.
+        env:
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+          CDK_DEFAULT_REGION: us-east-1
+        run: pnpm exec ts-node --prefer-ts-exts bin/app.ts
+
+  container-images:
+    name: Container Image (${{ matrix.dockerfile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - packages/apps/api/Dockerfile
+          - packages/apps/assets-api/Dockerfile
+          - packages/apps/web/Dockerfile
+          - packages/services/analytics-ingestor/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f ${{ matrix.dockerfile }} -t image-under-test .
+      - name: Serve the SPA from the web image
+        if: matrix.dockerfile == 'packages/apps/web/Dockerfile'
+        run: |
+          docker network create smoke
+          docker run -d --name web --network smoke -p 8080:80 image-under-test
+          sleep 3
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'id="root"'
+          curl -fsS http://127.0.0.1:8080/dashboard | grep -q 'id="root"'
+          # The /assets route must not collide with the dist/assets bundle folder.
+          curl -fsS http://127.0.0.1:8080/assets | grep -q 'id="root"'
 
   security-scan:
     name: Security Scan

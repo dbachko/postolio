@@ -1,16 +1,14 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: postolio
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_18_data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
@@ -18,34 +16,36 @@ services:
       retries: 5
 
   postgres_assets:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: postolio_assets_dev
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - '5433:5432'
+      - '127.0.0.1:5433:5432'
     volumes:
-      - postgres_assets_data:/var/lib/postgresql/data
+      - postgres_assets_18_data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # Valkey, matching ElastiCache. The service keeps the name `redis`: same protocol and REDIS_* config.
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8-alpine
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     volumes:
-      - redis_data:/data
+      - valkey_8_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ['CMD', 'valkey-cli', 'ping']
       interval: 10s
       timeout: 3s
       retries: 5
 
 volumes:
-  postgres_data:
-  postgres_assets_data:
-  redis_data:
+  # Versioned: a new Postgres major cannot open an older data directory.
+  postgres_18_data:
+  postgres_assets_18_data:
+  valkey_8_data:

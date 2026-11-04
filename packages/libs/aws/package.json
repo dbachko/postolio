@@ -14,13 +14,13 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --target node22 --out-dir dist --dts",
+    "build": "tsup src/index.ts --format esm,cjs --target node24 --out-dir dist --dts",
     "lint": "eslint src/**/*.ts"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",

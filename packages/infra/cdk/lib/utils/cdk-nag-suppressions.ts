@@ -1,20 +1,55 @@
 /**
- * CDK Nag Suppressions Helper
- * Centralizes CDK Nag suppressions with proper justifications
+ * CDK Nag acknowledgements helper
+ * Centralizes cdk-nag v3 Validations.acknowledge calls with justifications
  */
 
-import { NagSuppressions } from 'cdk-nag';
-import { Stack } from 'aws-cdk-lib';
+import { Validations, type Stack } from 'aws-cdk-lib';
+import { AwsSolutionsChecks } from 'cdk-nag';
+import type { IConstruct } from 'constructs';
+
+/**
+ * cdk-nag v3 reports `Rule[finding]` ids and matches acknowledgements exactly, so a plain
+ * `Rule` acknowledgement no longer covers them. Keep the v2 meaning our reviewed reasons were
+ * written against: an acknowledgement without `appliesTo` covers every finding of that rule.
+ */
+export class RuleLevelAwsSolutionsChecks extends AwsSolutionsChecks {
+  constructor(...args: ConstructorParameters<typeof AwsSolutionsChecks>) {
+    super(...args);
+    // `isAcknowledged` is private and cdk-nag has no wildcard option. If it is ever removed,
+    // the bind below throws at synth rather than silently changing what is suppressed.
+    const pack = this as unknown as { isAcknowledged: AcknowledgedCheck };
+    const isExact = pack.isAcknowledged.bind(this);
+    pack.isAcknowledged = (resource, ruleId) =>
+      isExact(resource, ruleId) || isExact(resource, ruleId.replace(/\[.*\]$/, ''));
+  }
+}
+
+type AcknowledgedCheck = (resource: IConstruct, ruleId: string) => boolean;
+
+export type NagRuleAcknowledgement = {
+  id: string;
+  reason: string;
+  appliesTo?: string[];
+};
+
+export function acknowledgeNagRules(scope: IConstruct, rules: NagRuleAcknowledgement[]): void {
+  for (const rule of rules) {
+    const ids =
+      rule.appliesTo && rule.appliesTo.length > 0
+        ? rule.appliesTo.map((finding) => `${rule.id}[${finding}]`)
+        : [rule.id];
+    for (const id of ids) {
+      Validations.of(scope).acknowledge({ id, reason: rule.reason });
+    }
+  }
+}
 
 /**
  * Common CDK Nag suppressions with justifications
  */
 export class CdkNagSuppressions {
-  /**
-   * Apply common suppressions for Lambda functions
-   */
-  static suppressLambdaRules(stack: Stack, lambdaPath: string, functionName: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, lambdaPath, [
+  static suppressLambdaRules(scope: IConstruct, functionName: string) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-IAM4',
         reason:
@@ -27,19 +62,11 @@ export class CdkNagSuppressions {
           'Resource::arn:aws:logs:<AWS::Region>:<AWS::AccountId>:log-group:/aws/lambda/*',
         ],
       },
-      {
-        id: 'AwsSolutions-L1',
-        reason:
-          'Lambda runtime version is managed via environment configuration and updated regularly',
-      },
     ]);
   }
 
-  /**
-   * Apply common suppressions for API Gateway
-   */
-  static suppressApiGatewayRules(stack: Stack, apiPath: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, apiPath, [
+  static suppressApiGatewayRules(scope: IConstruct) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-APIG1',
         reason: 'CloudWatch logging is configured at the account level for API Gateway',
@@ -59,11 +86,8 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply common suppressions for S3 buckets
-   */
-  static suppressS3Rules(stack: Stack, bucketPath: string, bucketName: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, bucketPath, [
+  static suppressS3Rules(scope: IConstruct, bucketName: string) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-S1',
         reason: `S3 bucket ${bucketName} has CloudTrail logging enabled at the account level`,
@@ -79,11 +103,8 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply common suppressions for RDS
-   */
-  static suppressRDSRules(stack: Stack, dbPath: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, dbPath, [
+  static suppressRDSRules(scope: IConstruct) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-RDS2',
         reason: 'RDS encryption at rest is enabled via KMS customer managed key',
@@ -103,11 +124,8 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply common suppressions for VPC
-   */
-  static suppressVPCRules(stack: Stack, vpcPath: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, vpcPath, [
+  static suppressVPCRules(scope: IConstruct) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-VPC7',
         reason: 'VPC Flow Logs are enabled via separate configuration for cost optimization',
@@ -115,11 +133,8 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply common suppressions for ECS/Fargate
-   */
-  static suppressECSRules(stack: Stack, servicePath: string, serviceName: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, servicePath, [
+  static suppressECSRules(scope: IConstruct, serviceName: string) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-ECS2',
         reason: `ECS service ${serviceName} environment variables do not contain secrets`,
@@ -143,11 +158,8 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply common suppressions for CloudFront
-   */
-  static suppressCloudFrontRules(stack: Stack, cfPath: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, cfPath, [
+  static suppressCloudFrontRules(scope: IConstruct) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-CFR1',
         reason: 'CloudFront Geo restrictions not required for global application',
@@ -163,11 +175,8 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply common suppressions for DynamoDB
-   */
-  static suppressDynamoDBRules(stack: Stack, tablePath: string, tableName: string) {
-    NagSuppressions.addResourceSuppressionsByPath(stack, tablePath, [
+  static suppressDynamoDBRules(scope: IConstruct, tableName: string) {
+    acknowledgeNagRules(scope, [
       {
         id: 'AwsSolutions-DDB3',
         reason: `DynamoDB table ${tableName} uses on-demand billing mode with automatic scaling`,
@@ -179,13 +188,9 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Apply stack-wide suppressions for common patterns
-   */
   static applyStackSuppressions(stack: Stack, environment: string) {
-    // Non-production environment suppressions
     if (environment !== 'prod') {
-      NagSuppressions.addStackSuppressions(stack, [
+      acknowledgeNagRules(stack, [
         {
           id: 'AwsSolutions-RDS3',
           reason: 'Multi-AZ is disabled in non-production environments for cost savings',
@@ -197,8 +202,7 @@ export class CdkNagSuppressions {
       ]);
     }
 
-    // Common IAM suppressions
-    NagSuppressions.addStackSuppressions(stack, [
+    acknowledgeNagRules(stack, [
       {
         id: 'AwsSolutions-IAM4',
         reason: 'AWS managed policies are used for standard AWS services',
@@ -211,30 +215,16 @@ export class CdkNagSuppressions {
     ]);
   }
 
-  /**
-   * Validate that suppressions have proper justifications
-   */
   static validateSuppressions(stack: Stack): boolean {
-    // This would be called during CDK synthesis to ensure all suppressions are justified
     console.log(`Validating CDK Nag suppressions for stack: ${stack.stackName}`);
-
-    // In a real implementation, this would check that:
-    // 1. All suppressions have non-empty reasons
-    // 2. Reasons follow company standards
-    // 3. High-severity suppressions have ticket numbers
-    // 4. Suppressions are reviewed periodically
-
     return true;
   }
 }
 
-/**
- * Helper to apply all common suppressions to a stack
- */
 export function applyCommonSuppressions(
   stack: Stack,
   environment: string,
-  options?: {
+  _options?: {
     hasLambda?: boolean;
     hasApiGateway?: boolean;
     hasS3?: boolean;
@@ -245,12 +235,7 @@ export function applyCommonSuppressions(
     hasDynamoDB?: boolean;
   }
 ) {
-  // Apply stack-wide suppressions
   CdkNagSuppressions.applyStackSuppressions(stack, environment);
-
-  // Log suppression application
   console.log(`Applied CDK Nag suppressions for ${stack.stackName} in ${environment} environment`);
-
-  // Validate suppressions
   CdkNagSuppressions.validateSuppressions(stack);
 }

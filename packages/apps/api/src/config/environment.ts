@@ -187,7 +187,7 @@ class EnvironmentService {
       logLevel: pickString([process.env.LOG_LEVEL], 'info'),
       databaseUrl: pickString([process.env.DATABASE_URL, awsSecrets.databaseUrl], ''),
       redisUrl: getRedisUrl(pickString([awsSecrets.redisUrl], 'redis://localhost:6379')),
-      jwtSecret: pickString([process.env.JWT_SECRET, awsSecrets.jwtSecret], 'dev-jwt-secret'),
+      jwtSecret: pickString([process.env.JWT_SECRET, awsSecrets.jwtSecret], ''),
       refreshTokenSecret: pickOptionalString([
         process.env.REFRESH_TOKEN_SECRET,
         awsSecrets.refreshTokenSecret,

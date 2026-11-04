@@ -263,7 +263,6 @@ export async function syncSubscriptionFromStripe(
   client: BillingServiceLike,
   subscription: Stripe.Subscription
 ) {
-  const subscriptionAny = subscription as any;
   const stripeCustomerId = resolveSubscriptionCustomerId(subscription);
   const billingCustomer = await findOrCreateBillingCustomerByStripeId(client, stripeCustomerId);
   if (!billingCustomer) {
@@ -280,8 +279,16 @@ export async function syncSubscriptionFromStripe(
     throw asHttpError('Unable to sync Stripe price for subscription.', 502);
   }
 
-  const currentPeriodStart = toDate(subscriptionAny.current_period_start) ?? new Date();
-  const currentPeriodEnd = toDate(subscriptionAny.current_period_end) ?? new Date();
+  // Webhook payloads follow the endpoint's API version, which may predate item-level periods.
+  const periodItem = subscription.items?.data?.[0];
+  const legacyPeriod = subscription as unknown as {
+    current_period_start?: number;
+    current_period_end?: number;
+  };
+  const currentPeriodStart =
+    toDate(periodItem?.current_period_start ?? legacyPeriod.current_period_start) ?? new Date();
+  const currentPeriodEnd =
+    toDate(periodItem?.current_period_end ?? legacyPeriod.current_period_end) ?? new Date();
   const subscriptionRecordData = buildSubscriptionRecordData({
     subscription,
     billingCustomerId: billingCustomer.id,
