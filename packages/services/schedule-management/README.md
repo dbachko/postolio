@@ -1,17 +1,13 @@
-# Service: @postolio/schedule-management
+# schedule-management
 
-This service is the core of the content scheduling system. It is responsible for creating, updating, and managing the lifecycle of scheduled posts.
+Creates, updates, cancels, and retrieves content schedules.
 
 ## Development
 
-### Scripts
-
-- **Build:** `pnpm build`
-- **Lint:** `pnpm lint`
-- **Test:** `pnpm test`
-
-To run any script for only this service from the monorepo root, use the `--filter` flag:
+Run from the repository root:
 
 ```bash
-pnpm --filter=@postolio/schedule-management <script_name>
+pnpm --filter @postolio/schedule-management build
+pnpm --filter @postolio/schedule-management lint
+pnpm --filter @postolio/schedule-management test
 ```

@@ -11,7 +11,7 @@ AWS Lambda function that performs periodic cleanup of expired and revoked sessio
 
 ## Scheduled Execution
 
-This Lambda is invoked daily by EventBridge Scheduler to maintain session hygiene.
+An EventBridge rule invokes the Lambda daily.
 
 ## Metrics
 

@@ -1,6 +1,6 @@
 # Google Auth Platform setup (Sign in with Google) for Postolio
 
-This guide updates our setup to the current Google Auth Platform flow. Reference: "Get started with the Google Auth Platform" ([support article](https://support.google.com/cloud/answer/15544987)).
+Configure Sign in with Google for Postolio. Reference: "Get started with the Google Auth Platform" ([support article](https://support.google.com/cloud/answer/15544987)).
 
 ## What we use in Postolio
 

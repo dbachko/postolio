@@ -58,7 +58,7 @@ export abstract class BaseImageProvider implements IImageProvider {
   }
 
   /**
-   * Build enhanced prompt with brand context
+   * Add brand context to the prompt.
    */
   protected buildPrompt(request: ImageGenerationRequest): string {
     let prompt = request.prompt;

@@ -121,7 +121,6 @@ async function createGeneratedContentRecord(params: {
   return {
     id: created.id,
     caption: created.caption,
-    primaryAssetCdnUrl: null,
     status: created.status,
     createdAt: created.createdAt,
   };

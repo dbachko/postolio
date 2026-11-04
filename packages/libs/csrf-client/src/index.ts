@@ -1,13 +1,12 @@
 /**
  * @postolio/csrf-client
- * Modern CSRF Token Management for Frontend Applications
+ * CSRF token caching, storage, and refresh
  *
  * Implements the Double Submit Cookie pattern with:
  * - Memory caching for performance
  * - SessionStorage persistence
  * - Request deduplication
  * - Automatic token refresh
- * - TypeScript 5.5+ features
  */
 
 export interface CSRFTokenConfig {
@@ -40,8 +39,7 @@ type StorageAdapter = {
 };
 
 /**
- * Modern CSRF Token Manager with advanced features
- * Uses the latest TypeScript and JavaScript features
+ * Caches CSRF tokens and deduplicates refresh requests.
  */
 export class CSRFTokenManager {
   private static readonly DEFAULT_TOKEN_KEY = 'csrf_token' as const;
@@ -53,7 +51,6 @@ export class CSRFTokenManager {
   private readonly config: Required<CSRFTokenConfig>;
   private readonly storage: StorageAdapter | null;
 
-  // Memory cache with WeakRef for garbage collection optimization
   private memoryToken: string | null = null;
   private memoryExpiry = 0;
 

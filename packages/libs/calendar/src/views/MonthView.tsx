@@ -262,8 +262,7 @@ function MonthCell<E extends CalendarEventBase>({
             onClick={(e) => {
               e.stopPropagation();
               setShowAll((prev) => !prev);
-              // onMoreClick is kept for backwards compatibility but no longer controls navigation;
-              // consumers can still observe "show more" interactions if needed.
+              // Notify consumers when expanding the list.
               if (!showAll) {
                 onMoreClick?.(day);
               }

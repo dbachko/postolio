@@ -363,7 +363,6 @@ export class WebStack extends cdk.Stack {
             cookieBehavior: cloudfront.CacheCookieBehavior.none(),
           }),
         },
-        // (Removed) MF remote behavior: All asset UI is now local to the web app.
         // API proxy behavior (optional - for same-domain API calls)
         '/api/*': {
           origin: apiOrigin,

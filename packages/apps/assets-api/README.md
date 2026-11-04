@@ -1,35 +1,34 @@
-# @postolio/assets-api
+# Assets API
 
-Fastify microservice that powers the Asset Library backend. It exposes REST endpoints at `/assets-api/v1` and uses a separate PostgreSQL database (`postolio_assets_dev` locally) and S3 for object storage.
+Fastify service for the Asset Library, with endpoints under `/assets-api/v1`, a separate PostgreSQL database, and S3 object storage.
 
-## Local Development
+## Local development
 
-- Start dependencies (Postgres + Redis):
-  - `docker compose up -d`
-- Migrate databases:
-  - Main API DB: `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio pnpm --filter @postolio/database db:migrate`
-  - Assets DB: `ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio_assets_dev pnpm --filter @postolio/database-assets db:migrate`
-- Start services:
-  - Assets API: `ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio_assets_dev JWT_SECRET=<same-as-API> pnpm --filter @postolio/assets-api dev:server`
-  - Main API: `pnpm --filter api dev`
-  - Web: `pnpm --filter @postolio/web dev`
+Set `ASSETS_DATABASE_URL` and use the same `JWT_SECRET` as the main API. Docker Compose exposes the assets database on port 5433:
 
-Vite dev server proxies `/assets-api/*` to the assets service on port 3002. Login at the web UI; both API and assets share the `auth_token` cookie name.
-
-## Seeding Demo Assets
-
-Use the assets database seed script to generate image records (optionally with a CDN base such as `https://picsum.photos`):
-
+```env
+ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postolio_assets_dev
 ```
-ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio_assets_dev \
+
+From the repository root:
+
+```bash
+docker compose up -d
+pnpm --filter @postolio/database-assets db:migrate
+pnpm --filter @postolio/assets-api dev
+```
+
+Start the main API and web app as described in the [root README](../../../README.md). Vite proxies `/assets-api/*` to port 3002. The assets API accepts the `auth_token` cookie or an `Authorization: Bearer <token>` header.
+
+## Demo assets
+
+With `ASSETS_DATABASE_URL` set, seed assets for an existing brand:
+
+```bash
 pnpm --filter @postolio/database-assets db:seed -- \
   --brandId <brandId> --count 12 --cdnBase https://picsum.photos
 ```
 
-Where `brandId` can be obtained after logging in and creating/selecting a brand in the app. The seed writes `Asset` records plus taxonomy collections/labels (Collections: `General`, `Brand Assets`; Labels: `seed`, `demo`, `video`). Images are referenced by CDN URL when `--cdnBase` is supplied.
+The seeder creates asset records, collections (`General`, `Brand Assets`), and labels (`seed`, `demo`, `video`). With `--cdnBase`, images use external URLs. Set `ASSETS_CDN_DOMAIN=https://picsum.photos` for local thumbnails without S3 uploads.
 
-## Notes
-
-- Prisma client for assets is generated to `packages/libs/database-assets/assets-client/` and is git‑ignored by default.
-- Auth: The assets API accepts either the `auth_token` cookie (preferred in browser) or a `Bearer` token in `Authorization` header.
-- For development, set `ASSETS_CDN_DOMAIN=https://picsum.photos` to see thumbnails without uploading to S3.
+The generated Prisma client lives in `packages/libs/database-assets/assets-client/` and is ignored by Git.

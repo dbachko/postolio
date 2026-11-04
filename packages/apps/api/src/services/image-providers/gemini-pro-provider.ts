@@ -52,7 +52,6 @@ export class GeminiProProvider extends BaseImageProvider {
 
     const startTime = Date.now();
 
-    // Note: Model name may need adjustment based on Google's API
     const model = genAI.getGenerativeModel({ model: 'gemini-3.0-pro-vision' });
 
     const enhancedPrompt = this.buildPrompt(request);

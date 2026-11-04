@@ -39,7 +39,7 @@ export function ConnectionStatusProvider({ children }: { children: React.ReactNo
   );
 }
 
-// Enhanced hook that provides all connection status data
+// Connection status and controls.
 export function useConnectionStatus() {
   const context = React.useContext(ConnectionStatusContext);
 

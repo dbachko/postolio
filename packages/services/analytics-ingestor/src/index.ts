@@ -6,8 +6,6 @@ import fetch from 'node-fetch';
 import { signRequest } from '@postolio/aws';
 import { initSentry, captureException, registerGlobalErrorHandlers } from '@postolio/observability';
 
-// Minimal scaffolding for the ingestion loop; real selection logic will be added in Phase 3
-
 initSentry({
   serviceName: 'analytics-ingestor',
 });
@@ -137,10 +135,7 @@ async function upsertPublicationLatest(
         : 0;
   const impressions = Math.max(0, Math.floor(impressionsSource || 0));
   const reach = Math.max(0, Math.floor(reachSource || 0));
-  // Instagram Graph API has deprecated the `video_views` metric in favor of `views`
-  // (and `plays`/`ig_reels_aggregated_all_plays_count` for reels). Our canonical
-  // column is still named `videoViews`, so prefer the new `views` metric when present,
-  // falling back to `video_views` (old API) and then `plays`.
+  // Prefer Graph `views` over deprecated `video_views`, then `plays` for reels. The column is still `videoViews`.
   const viewsSource =
     typeof metrics.views === 'number'
       ? metrics.views

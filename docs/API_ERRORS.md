@@ -5,11 +5,11 @@ in `packages/apps/api`. All of these errors are surfaced through the shared
 error handler in `src/middleware/error-handler.ts`, which:
 
 - Maps `APIError` → HTTP response with a stable JSON shape:
-  - `status` – HTTP status (from `error.statusCode`)
-  - `error` – human-readable message
-  - `code` – machine-friendly error code
-  - `details` – structured context (ids, fields, etc.)
-  - `correlationId` – Fastify request id for tracing
+  - `status`: HTTP status (from `error.statusCode`)
+  - `error`: human-readable message
+  - `code`: machine-friendly error code
+  - `details`: structured context (ids, fields, etc.)
+  - `correlationId`: Fastify request id for tracing
 - Handles non-`APIError` exceptions as `INTERNAL_SERVER_ERROR`.
 
 The goal is:
@@ -39,7 +39,7 @@ Notes:
 
 ## Social / Analytics / Platform Errors
 
-Some social routes still return ad-hoc JSON for platform-specific failures. Where we’ve standardized on `APIError`, codes include:
+Some social routes still return ad-hoc JSON for platform-specific failures. Where we've standardized on `APIError`, codes include:
 
 | Code                 | Status  | Message                        | Details                     | Emitted From                           |
 | -------------------- | ------- | ------------------------------ | --------------------------- | -------------------------------------- |
@@ -115,7 +115,7 @@ When adding new invariants or refactoring routes/services:
   }
   ```
 
-- Only return manual 4xx JSON when you have a very local concern (e.g., Zod schema parsing in a single route) and it’s not a shared domain invariant.
+- Only return manual 4xx JSON when you have a very local concern (e.g., Zod schema parsing in a single route) and it's not a shared domain invariant.
 
 Over time, the goal is to:
 

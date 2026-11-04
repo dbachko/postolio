@@ -1,12 +1,6 @@
 /**
- * Industry-Standard Retry Strategy Implementation
- *
- * Based on AWS, Netflix, Google, and Uber best practices for 2024:
- * - Exponential backoff with jitter (AWS/Google standard)
- * - Circuit breaker pattern (Netflix standard)
- * - Smart error classification
- * - Maximum retry limits per error type
- * - Proper observability and monitoring
+ * Publishing retries with exponential backoff, jitter, circuit breakers,
+ * and per-error retry limits.
  */
 
 import { Logger } from '@aws-lambda-powertools/logger';
@@ -14,9 +8,8 @@ import { type Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 
 const logger = new Logger({ serviceName: 'retry-strategy' });
 
-// AWS/Google recommended constants
 const BASE_DELAY_MS = 1000; // 1 second base delay
-const MAX_DELAY_MS = 20000; // 20 seconds maximum delay (AWS SDK standard)
+const MAX_DELAY_MS = 20000; // 20 seconds maximum delay
 const JITTER_FACTOR = 0.1; // 10% jitter
 const MAX_RETRIES_TRANSIENT = 5; // For retryable errors
 const MAX_RETRIES_NON_TRANSIENT = 1; // For non-retryable errors (fast fail)
@@ -126,7 +119,7 @@ class CircuitBreaker {
 }
 
 /**
- * Main retry strategy class implementing industry best practices
+ * Classifies failures and selects retry delays.
  */
 export class RetryStrategy {
   private static circuitBreakers = new Map<string, CircuitBreaker>();

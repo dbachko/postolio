@@ -50,22 +50,3 @@ export async function generateBrandContentImage(
 
   return result;
 }
-
-/**
- * Legacy function for backward compatibility
- */
-export async function generateContentImage(
-  prompt: string,
-  imageSource: 'ai' | 'assets' | 'mix' = 'ai'
-): Promise<string> {
-  if (imageSource !== 'ai') {
-    // Handle assets/mix logic (existing implementation)
-    return generatePlaceholderImageUrl('1024x1024', `content-${Date.now()}`);
-  }
-
-  const result = await generateBrandContentImage(prompt, null, 'default-brand');
-  if (!result.imageUrl) {
-    throw new Error('No image URL returned from generation');
-  }
-  return result.imageUrl;
-}

@@ -32,11 +32,8 @@ export class SecretManager {
 
   /**
    * Get platform credentials from environment variables
-   * Note: These are now passed as environment variables from GitHub Secrets
    */
   async getPlatformSecrets(): Promise<PlatformSecrets> {
-    // Platform secrets are now managed via GitHub Secrets and passed as environment variables
-    // This method returns them in the expected format for backward compatibility
     return {
       FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET,
       INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET,
@@ -97,7 +94,6 @@ export class SecretManager {
 
   /**
    * Get a specific platform credential
-   * Both IDs and secrets are now from environment variables (passed from GitHub Secrets)
    */
   async getPlatformCredential(
     platform: string,
@@ -112,7 +108,6 @@ export class SecretManager {
       return undefined;
     }
 
-    // Secrets also from environment variables now (passed from GitHub Secrets)
     if (platform === 'facebook') return process.env.FACEBOOK_APP_SECRET;
     if (platform === 'instagram') return process.env.INSTAGRAM_APP_SECRET;
     if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_SECRET;

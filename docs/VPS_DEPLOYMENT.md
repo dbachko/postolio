@@ -20,11 +20,11 @@ This pipeline builds the API, Assets API, Analytics ingestor (optional), and web
 
 ## Required GitHub secrets
 
-- `VPS_HOST` – VPS hostname or IP
-- `VPS_USER` – SSH user
-- `VPS_SSH_KEY` – private key for SSH
-- `VPS_STACK_ENV` – contents of your `stack.env` (see `deploy/vps/stack.env.example`)
-- `VPS_REGISTRY_TOKEN` – GHCR PAT with `read:packages` (recommended for pulls on the VPS)
+- `VPS_HOST`: VPS hostname or IP
+- `VPS_USER`: SSH user
+- `VPS_SSH_KEY`: private key for SSH
+- `VPS_STACK_ENV`: contents of your `stack.env` (see `deploy/vps/stack.env.example`)
+- `VPS_REGISTRY_TOKEN`: GHCR PAT with `read:packages` (recommended for pulls on the VPS)
 - Optional: `VPS_SSH_PORT` (default `22`), `VPS_REGISTRY_USERNAME` (default repo owner)
 
 ## Workflow: `.github/workflows/deploy-vps.yml`
@@ -33,10 +33,10 @@ Trigger manually → **Deploy to VPS**.
 
 Inputs:
 
-- `ref` – git ref to deploy (default `main`)
-- `imageTag` – override image tag (default commit SHA)
-- `enableAnalytics` – include the analytics ingestor profile
-- `remoteDir` – where stack files live on the VPS (default `/opt/postolio`)
+- `ref`: git ref to deploy (default `main`)
+- `imageTag`: override image tag (default commit SHA)
+- `enableAnalytics`: include the analytics ingestor profile
+- `remoteDir`: where stack files live on the VPS (default `/opt/postolio`)
 
 Build args for the web image reuse existing repo variables (e.g. `VITE_API_URL`, `VITE_API_BASE_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_FACEBOOK_APP_ID`, `VITE_SENTRY_FRONTEND_DSN`, etc.). Set both `VITE_API_URL` and `VITE_API_BASE_URL` (usually the same value) so frontend API calls resolve correctly.
 

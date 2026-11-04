@@ -65,10 +65,3 @@ export class RateLimiter {
     return await redisService.del(key);
   }
 }
-
-// Pre-configured rate limiters were removed; define per-endpoint rate limits in middleware.
-
-/**
- * Fastify middleware for rate limiting
- */
-// createRateLimitMiddleware removed; direct checks are used inline by routes

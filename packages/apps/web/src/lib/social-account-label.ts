@@ -10,7 +10,7 @@ export function formatSocialAccountHandle(
   const normalized = raw.replace(/^@+/, '');
   const p = typeof platform === 'string' ? platform.trim().toLowerCase() : '';
 
-  // Product decision: Instagram handles are shown without '@'.
+  // Display Instagram handles without the @ prefix.
   if (p === 'instagram') {
     return normalized;
   }

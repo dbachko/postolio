@@ -1,6 +1,5 @@
 /**
- * Scheduler Service - Refactored to use AWS Content Scheduler
- * This service now acts as a facade to the scheduler-adapter
+ * Content scheduling facade for scheduler-adapter.
  */
 
 import { schedulerAdapter } from './scheduler-adapter.js';

@@ -24,14 +24,14 @@ This project standardizes all UI on shadcn/ui. Follow the guidelines below for a
 
 ## Colors and Tokens
 
-We do not keep legacy Tailwind color classes. Use shadcn tokens and neutral styling.
+Use shadcn tokens and neutral styling.
 
 - Use semantic token classes:
   - Backgrounds: `bg-background`, `bg-card`, `bg-muted`
   - Text: `text-foreground`, `text-muted-foreground`, `text-card-foreground`
   - Borders: `border`, `border-border`
 - Avoid hard-coded palette utilities:
-  - Don’t use `text-blue-600`, `bg-red-100`, `border-gray-200`, etc.
+  - Don't use `text-blue-600`, `bg-red-100`, `border-gray-200`, etc.
   - Prefer neutral or tokenized classes that adapt to theme.
 - Exception: dynamic, data-driven colors are allowed
   - Keep colors that come from data (e.g., brand palette, user-selected color chips).
@@ -49,7 +49,7 @@ We do not keep legacy Tailwind color classes. Use shadcn tokens and neutral styl
       ```
   - Consider contrast: when placing text on a dynamic background, compute readable text color or use neutral text and only color the border/dot.
 - Destructive/Status:
-  - Use `text-destructive` for error text and component variants (e.g., `Alert` “destructive” variant) instead of bespoke red classes.
+  - Use `text-destructive` for error text and component variants (e.g., `Alert` "destructive" variant) instead of bespoke red classes.
   - For status visualization, prefer icons and neutral backgrounds instead of color‑coding by status.
 - If you must reference a token directly in inline styles, use CSS variables:
   - Example: `style={{ color: 'hsl(var(--foreground))' }}`
@@ -62,8 +62,8 @@ We do not keep legacy Tailwind color classes. Use shadcn tokens and neutral styl
 
 ## Minimal CSS Baseline
 
-- Tailwind is present only to support shadcn/ui styles. We removed custom tokens.
-- Keep `src/index.css` minimal; don’t add new custom color scales or theme layers.
+- Use Tailwind with the shared shadcn/ui tokens.
+- Keep `src/index.css` minimal; don't add new custom color scales or theme layers.
 - Base color: Slate
   - Config: `packages/apps/web/components.json` → `tailwind.baseColor: "slate"` (packages/apps/web/components.json:9)
   - Tokens: defined in `packages/apps/web/src/index.css` under `:root` and `.dark` (packages/apps/web/src/index.css:71 and packages/apps/web/src/index.css:99)
@@ -166,17 +166,17 @@ Reference snippet (for future apps):
   </Dialog>;
   ```
 
-## Do / Don’t
+## Do / Don't
 
 - Do
   - Install with the CLI and keep components under `src/components/ui`
   - Import from `@/components/ui/*`
   - Use token classes (`bg-muted`, `text-foreground`, `border-border`)
   - Keep colors neutral unless a component variant provides semantics
-- Don’t
-  - Don’t use `text-blue-*`, `bg-red-*`, `border-gray-*` in app components
-  - Don’t duplicate primitives outside `src/components/ui`
-  - Don’t invent new color scales or themes in `index.css`
+- Don't
+  - Don't use `text-blue-*`, `bg-red-*`, `border-gray-*` in app components
+  - Don't duplicate primitives outside `src/components/ui`
+  - Don't invent new color scales or themes in `index.css`
 
 ## Links
 

@@ -1,8 +1,5 @@
 /**
- * Standardized Logger Service
- *
- * Creates consistent, structured logging across all services
- * Replaces console.error calls with proper structured logging
+ * Structured service logging with AWS Lambda Powertools.
  */
 
 import { Logger as PowertoolsLogger } from '@aws-lambda-powertools/logger';
@@ -321,29 +318,4 @@ export function logContentError(
     error,
     ...context,
   });
-}
-
-/**
- * Migration helper - gradually replace console.error calls
- */
-export function migrateConsoleError(
-  serviceName: string,
-  message: string,
-  error?: any,
-  context?: LogContext
-): void {
-  const logger = createServiceLogger(serviceName);
-
-  if (error) {
-    logger.error(message, {
-      operation: 'console_error_migration',
-      error,
-      ...context,
-    });
-  } else {
-    logger.warn(`console.error call (to migrate): ${message}`, {
-      operation: 'console_error_migration',
-      ...context,
-    });
-  }
 }

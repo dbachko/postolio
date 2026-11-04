@@ -5,7 +5,7 @@ import { supportsWebP } from '@/lib/image-utils';
 interface OptimizedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
   alt: string;
-  cdnUrl?: string | null; // New CDN URL if available
+  cdnUrl?: string | null;
   fallbackUrl?: string; // Original external URL as fallback
   priority?: boolean;
   onLoadComplete?: () => void;

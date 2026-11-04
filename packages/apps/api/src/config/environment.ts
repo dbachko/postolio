@@ -6,8 +6,7 @@
  * 2. AWS Secrets Manager (for actual secrets in production)
  * 3. Default values (for optional configuration)
  *
- * Public OAuth client IDs are now managed via GitHub Environment Variables
- * and passed as environment variables during CI/CD deployment.
+ * Public OAuth client IDs are environment variables, not Secrets Manager values.
  */
 
 import { SecretsManager } from '@aws-sdk/client-secrets-manager';

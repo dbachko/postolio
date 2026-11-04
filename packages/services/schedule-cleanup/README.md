@@ -1,17 +1,12 @@
-# Service: @postolio/schedule-cleanup
+# schedule-cleanup
 
-This service is a maintenance task responsible for cleaning up old or completed schedules from the database. It runs periodically to ensure the scheduling system remains performant.
+Removes orphaned schedules from DynamoDB and EventBridge Scheduler.
 
 ## Development
 
-### Scripts
-
-- **Build:** `pnpm build`
-- **Lint:** `pnpm lint`
-- **Test:** `pnpm test`
-
-To run any script for only this service from the monorepo root, use the `--filter` flag:
+Run from the repository root:
 
 ```bash
-pnpm --filter=@postolio/schedule-cleanup <script_name>
+pnpm --filter @postolio/schedule-cleanup build
+pnpm --filter @postolio/schedule-cleanup lint
 ```

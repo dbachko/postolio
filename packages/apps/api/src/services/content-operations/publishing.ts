@@ -266,7 +266,6 @@ export async function publishContent(
  * Publish content to Instagram
  *
  * @deprecated Use publishContent(contentId, 'instagram') instead.
- * This wrapper exists for backward compatibility with existing routes.
  */
 export async function publishContentToInstagram(
   contentId: string,

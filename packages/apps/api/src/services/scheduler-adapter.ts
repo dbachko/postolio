@@ -56,7 +56,6 @@ export class SchedulerAdapter {
 
   private async initializeClient(): Promise<ContentSchedulerClient> {
     try {
-      // Use the new service discovery-aware factory method
       const client = await ContentSchedulerClient.create({
         timeout: 30000,
         maxRetries: 3,

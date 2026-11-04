@@ -1,76 +1,41 @@
-Analytics Ingestor: Env Vars, Deploy, and Troubleshooting
+# Analytics ingestor
 
-Overview
+The ECS worker fetches Instagram account and publication metrics through the connectors library. It stores samples and latest aggregates in PostgreSQL, uses Redis for rate limiting, and signs Token Service requests with AWS SigV4.
 
-- The Analytics Ingestor runs as an ECS Fargate service and periodically fetches Instagram metrics via the connectors library and persists them to `MetricSample`, `PublicationMetricsLatest`, and `AccountMetricsLatest`.
-- It uses Redis for per-account rate limiting and reads DB/Redis/Token Service endpoints from SSM/Secrets injected by the CDK stack.
+## Configuration
 
-Key Environment Variables
+| Variable                                                      | Purpose                                                               |
+| ------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `DATABASE_URL`                                                | PostgreSQL connection string                                          |
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | Used to construct the connection string when `DATABASE_URL` is absent |
+| `REDIS_URL` or `REDIS_URI`                                    | Redis connection; defaults to `redis://localhost:6379`                |
+| `TOKEN_SERVICE_URL` or `TOKEN_SERVICE_FUNCTION_URL`           | IAM-authenticated Token Service URL                                   |
+| `DUMMY_ACCESS_TOKEN`                                          | Local credential fallback when Token Service is not configured        |
+| `FB_GRAPH_API_VERSION`                                        | Graph API version used by connectors                                  |
+| `RATE_LIMIT_PER_HOUR`                                         | Per-account request limit                                             |
+| `INGESTOR_LOOP_MS`                                            | Sleep after a pass that did work. `0` runs once. ECS sets `60000`.    |
+| `LOG_LEVEL`                                                   | Log verbosity                                                         |
 
-- FB_GRAPH_API_VERSION
-  - Purpose: Controls the Facebook/Instagram Graph API version used by connectors, API service calls, and OAuth flows.
-  - Default: `v24.0`
-  - How to set: Runtime env var, or via Analytics stack context `--context fbGraphApiVersion=v24.0`.
+The analytics stack injects database, Redis, and Token Service settings. Its `imageTag`, `rateLimitPerHour`, and `fbGraphApiVersion` context values select the image and runtime configuration.
 
-- RATE_LIMIT_PER_HOUR
-  - Purpose: Per-account rate limit enforced by the ingestor (token-bucket on Redis). When the limit is exceeded, items are skipped with a log message.
-  - Default: `200`
-  - How to set: Runtime env var, or via Analytics stack context `--context rateLimitPerHour=1000` (useful for dev/tests).
+A positive `INGESTOR_LOOP_MS` is clamped to at least `INGESTOR_LOOP_MIN_MS` (default 60 seconds). A pass with no work sleeps `IDLE_BACKOFF_MS` (default 5 minutes) instead. See `packages/services/analytics-ingestor/src/index.ts` for the other backoff settings.
 
-- TOKEN_SERVICE_URL (or TOKEN_SERVICE_FUNCTION_URL)
-  - Purpose: Base URL for the Token Service Lambda Function URL (IAM-authenticated). The ingestor signs requests using AWS SigV4.
-  - Injected by: Analytics stack from SSM (`/postolio/{env}/auth/token-service-url`).
+## Run and deploy
 
-- DATABASE*URL (or DB*\* variables)
-  - Purpose: Prisma connection string. If `DATABASE_URL` is not provided, the ingestor constructs it from `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` (all injected by the stack).
+From the repository root:
 
-- REDIS_URL
-  - Purpose: Redis connection for rate limiting. Injected from SSM via the stack using endpoint + port.
-  - Example: `redis://cache-endpoint:6379`.
+```bash
+pnpm --filter @postolio/analytics-ingestor build
+pnpm --filter @postolio/analytics-ingestor start
+```
 
-- INGESTOR_LOOP_MS
-  - Purpose: Interval between ingestor passes (ms). Default `60000` in ECS. For one-shot runs set to `0`.
+Build the analytics image from `packages/services/analytics-ingestor/Dockerfile`, push it to the configured registry, and deploy the `analytics` stack with that image tag. The image platform must match the ECS task. See [deployment scripts](../scripts/README.md).
 
-- LOG_LEVEL
-  - Purpose: `info`/`debug`/`trace` verbosity. Default `debug` in dev.
+## Troubleshooting
 
-CDK Context (Analytics Stack)
+- Image pull failure: check the image tag, platform, registry permissions, and network access.
+- Token Service 403: check the configured URL, request signing, and the task role's function URL permissions.
+- Platform 400: inspect connector errors and account permissions.
+- Missing metrics: inspect worker logs, account selection, and stored samples. Rate limits and backoff may defer ingestion.
 
-- `imageTag` – ECR image tag to deploy (e.g., `analytics-dev-latest`).
-- `rateLimitPerHour` – Sets `RATE_LIMIT_PER_HOUR` env on the task.
-- `fbGraphApiVersion` – Sets `FB_GRAPH_API_VERSION` env on the task.
-
-Deploy Script Usage
-
-- Build/push the image to ECR and deploy the stack:
-  - Build multi-arch (amd64) image and push:
-    - docker buildx build --platform linux/amd64 \
-      -f packages/services/analytics-ingestor/Dockerfile \
-      -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
-      . --push
-  - Deploy with higher rate limit for dev:
-    - RATE_LIMIT_PER_HOUR=1000 scripts/deploy-stack.sh -e dev analytics
-
-Troubleshooting
-
-- CannotPullContainerError: "image Manifest does not contain descriptor matching platform 'linux/amd64'"
-  - Cause: Image was built as `linux/arm64` (common on Apple Silicon), but ECS in dev uses `linux/amd64`.
-  - Fix (rebuild + push for amd64):
-    - docker buildx create --use --name postolio-builder || true
-    - docker buildx build --platform linux/amd64 \
-      -f packages/services/analytics-ingestor/Dockerfile \
-      -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
-      . --push
-  - Re-deploy the Analytics stack so the task pulls the matching image.
-
-- Token Service 403
-  - Ensure `TOKEN_SERVICE_URL` is set from SSM and the task role includes `lambda:InvokeFunctionUrl` on the Token Service function ARN.
-
-- Account insights 400
-  - Connector now retries without `profile_views` and logs Graph API error context; verify `instagram_manage_insights` permission if failures persist.
-
-Verifying Ingestion
-
-- Tail logs: `aws logs tail <analytics-log-group> --since 15m --follow`
-- Look for: "[Ingestor] Resolved external media to publication", "Fetching media insights", "Upserted metrics".
-- API check: `GET /api/analytics/publications/:id` should return `PublicationMetricsLatest`.
+Verify results through the analytics API and the `PublicationMetricsLatest` and account metric records.

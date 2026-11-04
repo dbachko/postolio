@@ -6,10 +6,7 @@ import {
 } from '@postolio/connectors';
 
 /**
- * Factory for getting platform-specific connectors
- *
- * This factory implements the Strategy pattern to route requests to the
- * appropriate platform connector based on the platform name.
+ * Resolves connectors by platform name.
  *
  * Usage:
  *   const connector = ConnectorFactory.get('instagram');

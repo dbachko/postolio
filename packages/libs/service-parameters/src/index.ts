@@ -66,7 +66,7 @@ export class ParameterNames {
 
   /**
    * Validate environment string and convert to type-safe Environment
-   * Now only accepts standardized values: dev, staging, prod
+   * Accepts dev, staging, or prod.
    */
   public static validateEnvironment(env: string): Environment {
     if (env === 'dev' || env === 'staging' || env === 'prod') {
@@ -97,8 +97,7 @@ interface ParameterMetrics {
 }
 
 /**
- * Enhanced parameter manager with caching and error handling
- * Provides runtime parameter retrieval with optimal performance
+ * Retrieves SSM parameters with caching and error metrics.
  */
 export class ParameterManager {
   private ssm: SSMClient;

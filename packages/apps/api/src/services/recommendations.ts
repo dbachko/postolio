@@ -51,7 +51,7 @@ export interface RecommendationsReport {
 
 export class RecommendationEngine {
   /**
-   * Generate comprehensive recommendations for a brand
+   * Generate recommendations for a brand.
    */
   async generateRecommendations(
     brandId: string,

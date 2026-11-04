@@ -235,7 +235,7 @@ export const dmRulesEngine = {
         timezone?: string;
       };
 
-      // For Phase 1, we'll use UTC. Phase 2 can add timezone support
+      // Time restrictions use UTC.
       const currentHour = now.getUTCHours();
       const currentMinute = now.getUTCMinutes();
       const currentTime = currentHour * 60 + currentMinute; // Minutes since midnight

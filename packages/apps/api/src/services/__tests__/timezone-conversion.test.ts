@@ -3,7 +3,7 @@ import { TimezoneService } from '../timezone.js';
 import { formatInTimeZone } from 'date-fns-tz';
 
 /**
- * Comprehensive tests for timezone conversion and scheduling
+ * Tests for timezone conversion and scheduling
  *
  * These tests verify that:
  * 1. Dates are converted correctly between UTC and brand timezones

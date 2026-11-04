@@ -15,7 +15,7 @@ This folder contains markdown prompt templates referenced by recipe steps that u
 
 ## Available state (v1)
 
-- `input.*` — user-provided run input JSON
+- `input.*`: user-provided run input JSON
 - Step outputs are written to `output_key` names (e.g. `url_context`, `hooks`, `thread_md`)
 
 Example:

@@ -1,15 +1,6 @@
 # AWS SES Email Setup Guide
 
-This guide walks you through setting up AWS Simple Email Service (SES) for Postolio's email functionality.
-
-## Why AWS SES?
-
-- **Reliability**: 99.9% uptime SLA with AWS infrastructure
-- **Deliverability**: Better inbox placement than SMTP
-- **Cost-effective**: $0.10 per 1,000 emails
-- **Scalability**: Handles millions of emails
-- **Analytics**: Built-in bounce and complaint tracking
-- **Integration**: Native AWS IAM authentication in production
+Configure Amazon SES for transactional email.
 
 ## Architecture
 
@@ -257,12 +248,6 @@ Throttling: Rate exceeded
 5. **Monitor your sender reputation** regularly
 6. **Use dedicated IPs** for high-volume sending (optional)
 
-## Cost Optimization
-
-- **Free Tier**: 62,000 emails/month when sent from EC2
-- **Standard Pricing**: $0.10 per 1,000 emails
-- **Attachments**: Charged per GB of attachments
-
 ## Support
 
 For issues with SES setup:
@@ -270,15 +255,3 @@ For issues with SES setup:
 1. Check CloudWatch logs in AWS Console
 2. Review [AWS SES Documentation](https://docs.aws.amazon.com/ses/)
 3. Contact AWS Support if needed
-
-## Implementation Status
-
-✅ **Completed**:
-
-- EmailService with SES integration
-- Automatic SES/SMTP switching based on environment
-- IAM permissions in CDK stack
-- Setup automation script
-- Error handling and fallback
-
-🚀 **Ready for Production**: The email system automatically uses SES when deployed to AWS.

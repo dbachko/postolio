@@ -1,6 +1,6 @@
 /**
  * CloudWatch Dashboards Configuration
- * Comprehensive monitoring dashboards for all microservices
+ * CloudWatch dashboards for backend services.
  */
 
 import * as cdk from 'aws-cdk-lib';

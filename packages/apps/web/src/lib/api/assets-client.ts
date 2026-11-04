@@ -17,7 +17,6 @@ export interface Asset {
   width?: number;
   height?: number;
   duration?: number;
-  // New aspect ratio fields
   aspectRatio?: string; // "1:1", "4:5", "9:16", etc.
   aspectRatioDecimal?: number;
   orientationType?: 'portrait' | 'landscape' | 'square';
