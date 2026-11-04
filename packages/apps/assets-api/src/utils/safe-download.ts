@@ -54,7 +54,7 @@ function openResponse(url: URL, signal: AbortSignal): Promise<IncomingMessage> {
               }
               const address = addresses[0]!;
               if (options.all) {
-                callback(null, [address]);
+                callback(null, addresses);
               } else {
                 callback(null, address.address, address.family);
               }

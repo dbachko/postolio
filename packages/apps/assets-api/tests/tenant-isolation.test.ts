@@ -143,3 +143,60 @@ it('supports valid creation and updates without a collection and explicit collec
     ).statusCode
   ).toBe(200);
 });
+
+it.each(['single', 'bulk'] as const)(
+  'deletes only an owned asset and its canonical thumbnails via %s',
+  async (mode) => {
+    send.mockClear();
+    const prefix = `brands/${own}/uploads/images/${mode}`;
+    const asset = await prismaAssets.asset.create({
+      data: {
+        brandId: own,
+        uploadedBy: 'test',
+        fileName: `${mode}.jpg`,
+        fileType: 'image',
+        mimeType: 'image/jpeg',
+        fileSize: 1,
+        s3Bucket: 'test-bucket',
+        s3Key: `${prefix}.jpg`,
+        thumbnailKey: `${prefix}-thumb.jpg`,
+        thumbnailSmallKey: `${prefix}-small.jpg`,
+        thumbnailLargeKey: `${prefix}-large.jpg`,
+      },
+    });
+    const response =
+      mode === 'single'
+        ? await app.inject({ method: 'DELETE', url: `/assets/${asset.id}` })
+        : await app.inject({
+            method: 'POST',
+            url: '/assets/bulk',
+            payload: { brandId: own, assetIds: [asset.id], action: { delete: {} } },
+          });
+    expect(response.statusCode).toBe(200);
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]![0].input).toMatchObject({
+      Delete: {
+        Objects: [
+          { Key: asset.s3Key },
+          { Key: asset.thumbnailKey },
+          { Key: asset.thumbnailSmallKey },
+          { Key: asset.thumbnailLargeKey },
+        ],
+      },
+    });
+    expect(await prismaAssets.asset.findUnique({ where: { id: asset.id } })).toBeNull();
+    expect(await prismaAssets.asset.findUnique({ where: { id: victimId } })).not.toBeNull();
+  }
+);
+it('rejects foreign labels without creating any assignments', async () => {
+  const label = await prismaAssets.assetTaxonomyItem.create({
+    data: { brandId: victim, type: 'LABEL', name: 'foreign' },
+  });
+  const response = await app.inject({
+    method: 'POST',
+    url: '/assets/bulk',
+    payload: { brandId: own, assetIds: [ownId], action: { add_labels: { labelIds: [label.id] } } },
+  });
+  expect(response.statusCode).toBe(400);
+  expect(await prismaAssets.assetTaxonomyAssignment.count({ where: { assetId: ownId } })).toBe(0);
+});

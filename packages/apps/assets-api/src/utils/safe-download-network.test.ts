@@ -74,3 +74,16 @@ it('rejects oversized declared lengths and compressed responses', async () => {
   respond({ 'content-encoding': 'gzip' }, []);
   await expect(downloadPublicAsset('https://source.example/file')).rejects.toThrow('invalid');
 });
+
+it('preserves every validated DNS fallback address', async () => {
+  const addresses = [
+    { address: '2606:4700:4700::1111', family: 6 },
+    { address: '1.1.1.1', family: 4 },
+  ];
+  mocks.lookup.mockResolvedValue(addresses);
+  respond({}, [Buffer.from('asset')]);
+  await downloadPublicAsset('https://source.example/file');
+  const callback = vi.fn();
+  mocks.request.mock.calls[0]![1].lookup('source.example', { all: true }, callback);
+  await vi.waitFor(() => expect(callback).toHaveBeenCalledWith(null, addresses));
+});

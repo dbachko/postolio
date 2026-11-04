@@ -36,8 +36,9 @@ async function send(socket: WebSocket, message: unknown) {
 
 beforeEach(async () => {
   state.active = true;
-  state.count.mockImplementation(
-    async ({ where }) => where.id.in.filter((id: string) => id === 'owned').length
+  state.count.mockReset();
+  state.count.mockImplementation(async ({ where }) =>
+    where.userId === 'alice' ? where.id.in.filter((id: string) => id === 'owned').length : 0
   );
   app = Fastify();
   await app.register(jwt, {
@@ -109,4 +110,48 @@ describe('cookie-authenticated WebSocket subscriptions', () => {
     ]);
     expect(await send(a.socket, { type: 'ping' })).toEqual({ type: 'pong' });
   });
+});
+
+it.each(['unsubscribe', 'subscribe'] as const)(
+  'a later %s supersedes a pending subscription',
+  async (type) => {
+    const { socket } = await connect();
+    let finish!: (count: number) => void;
+    state.count.mockImplementationOnce(
+      () =>
+        new Promise<number>((resolve) => {
+          finish = resolve;
+        })
+    );
+    socket.send(JSON.stringify({ type: 'subscribe', brandId: 'owned' }));
+    await vi.waitFor(() => expect(state.count).toHaveBeenCalledOnce());
+    expect(await send(socket, { type, rooms: ['user:alice'] })).toMatchObject({
+      type: type === 'subscribe' ? 'subscribed' : 'unsubscribed',
+    });
+    finish(1);
+    expect(await send(socket, { type: 'ping' })).toEqual({ type: 'pong' });
+    app.broadcastToRoom('brand:owned', { type: 'unexpected_old_room' });
+    expect(await send(socket, { type: 'ping' })).toEqual({ type: 'pong' });
+    if (type === 'subscribe') {
+      const response = nextMessage(socket);
+      app.broadcastToRoom('user:alice', { type: 'current_room' });
+      expect(await response).toEqual({ type: 'current_room' });
+    }
+  }
+);
+it('removes a subscribed socket immediately when session revocation is detected', async () => {
+  const { socket } = await connect();
+  await send(socket, { type: 'subscribe', brandId: 'owned' });
+  const closed = new Promise<void>((resolve) => socket.once('close', () => resolve()));
+  state.active = false;
+  expect(await send(socket, { type: 'ping' })).toMatchObject({ type: 'error' });
+  await closed;
+  expect(socket.readyState).toBe(WebSocket.CLOSED);
+});
+it('does not authorize a brand owned by a different user', async () => {
+  const { socket } = await connect({ id: 'bob', email: 'bob@example.test', sid: 'session' });
+  expect(await send(socket, { type: 'subscribe', brandId: 'owned' })).toMatchObject({
+    type: 'error',
+  });
+  expect(state.count).toHaveBeenCalledWith({ where: { id: { in: ['owned'] }, userId: 'bob' } });
 });

@@ -38,6 +38,7 @@ interface AuthenticatedSocket extends WebSocket {
   subscribedRooms?: Set<string>;
   isAlive?: boolean;
   missedHeartbeats?: number;
+  subscriptionVersion?: number;
 }
 
 const connections = new Map<string, Set<AuthenticatedSocket>>();
@@ -144,7 +145,8 @@ async function authenticateSocket(
 async function handleSocketMessage(
   fastify: FastifyInstance,
   socket: AuthenticatedSocket,
-  message: WebSocketMessage
+  message: WebSocketMessage,
+  subscriptionVersion: number | undefined
 ): Promise<void> {
   switch (message.type) {
     case 'ping':
@@ -157,7 +159,7 @@ async function handleSocketMessage(
       socket.missedHeartbeats = 0;
       return;
     case 'subscribe':
-      await handleSubscribe(socket, message);
+      await handleSubscribe(socket, message, subscriptionVersion);
       return;
     case 'unsubscribe':
       handleUnsubscribe(socket);
@@ -179,8 +181,21 @@ function registerSocketHandlers(fastify: FastifyInstance, socket: AuthenticatedS
   socket.on('message', async (data: Buffer) => {
     try {
       const message: WebSocketMessage = JSON.parse(data.toString());
-      await verifySocketToken(fastify, socket.authToken || '');
-      await handleSocketMessage(fastify, socket, message);
+      const subscriptionVersion =
+        message.type === 'subscribe' || message.type === 'unsubscribe'
+          ? (socket.subscriptionVersion = (socket.subscriptionVersion ?? 0) + 1)
+          : undefined;
+      try {
+        await verifySocketToken(fastify, socket.authToken || '');
+      } catch {
+        sendPayload(socket, { type: 'error', message: 'Authentication expired or revoked' });
+        cleanupSocket(socket);
+        return;
+      }
+      if (subscriptionVersion !== undefined && subscriptionVersion !== socket.subscriptionVersion) {
+        return;
+      }
+      await handleSocketMessage(fastify, socket, message, subscriptionVersion);
     } catch (error) {
       fastify.log.error({ error }, 'WebSocket message error');
       sendPayload(socket, { type: 'error', message: 'Invalid message format' });
@@ -289,7 +304,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   registerCleanupHook(fastify);
 };
 
-async function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage) {
+async function handleSubscribe(
+  socket: AuthenticatedSocket,
+  message: SubscribeMessage,
+  subscriptionVersion: number | undefined
+) {
   if (!socket.userId) {
     socket.send(
       JSON.stringify({
@@ -301,9 +320,7 @@ async function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMe
   }
 
   // Initialize subscribedRooms if not exists
-  if (!socket.subscribedRooms) {
-    socket.subscribedRooms = new Set();
-  }
+  socket.subscribedRooms ??= new Set();
 
   const roomsToSubscribe: string[] = [];
 
@@ -312,7 +329,7 @@ async function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMe
   }
 
   // Handle explicit rooms array
-  if (message.rooms && Array.isArray(message.rooms)) {
+  if (Array.isArray(message.rooms)) {
     roomsToSubscribe.push(...message.rooms);
   }
 
@@ -330,7 +347,7 @@ async function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMe
     sendPayload(socket, { type: 'error', message: 'Room subscription forbidden' });
     return;
   }
-  if (socket.readyState !== WebSocket.OPEN) {
+  if (socket.readyState !== WebSocket.OPEN || subscriptionVersion !== socket.subscriptionVersion) {
     return;
   }
   socket.brandId = message.brandId;
