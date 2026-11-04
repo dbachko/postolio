@@ -1,10 +1,4 @@
 /**
- * Content Response Builder Service
- * Provides standardized response formatting for content endpoints
- * Centralizes response structure for content endpoints
- */
-
-/**
  * Minimal content fields required for building a response
  */
 export interface ContentBase {
@@ -142,16 +136,6 @@ function addMediaAssetFields(content: ContentWithMetadata, response: ContentResp
   response.primaryAssetId = content.mediaAssets[0]?.assetId ?? null;
 }
 
-/**
- * Build a single content response with CDN URL
- *
- * @param content - Content record from database
- * @returns Formatted content response with CDN URL
- *
- * @example
- * const response = buildContentResponse(dbContent)
- * // Returns: { id, caption, hashtags, imageUrl, status, createdAt, ... }
- */
 export function buildContentResponse(content: ContentWithMetadata): ContentResponse {
   const response: ContentResponse = {
     id: content.id,
@@ -166,27 +150,10 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   return response;
 }
 
-/**
- * Build a list of content responses with CDN URLs
- *
- * @param contents - Array of content records from database
- * @returns Array of formatted content responses
- *
- * @example
- * const responses = buildContentListResponse(dbContents)
- * // Returns: [{ id, caption, ... }, { id, caption, ... }]
- */
 export function buildContentListResponse(contents: ContentWithMetadata[]): ContentResponse[] {
   return contents.map(buildContentResponse);
 }
 
-/**
- * Build a simple content response (minimal fields)
- * Used for endpoints that only need basic content information
- *
- * @param content - Content record with minimal fields
- * @returns Formatted content response with CDN URL
- */
 export function buildSimpleContentResponse(content: ContentBase): {
   id: string;
   caption: string;
@@ -201,12 +168,6 @@ export function buildSimpleContentResponse(content: ContentBase): {
   };
 }
 
-/**
- * Build a list of simple content responses
- *
- * @param contents - Array of content records with minimal fields
- * @returns Array of formatted simple content responses
- */
 export function buildSimpleContentListResponse(contents: ContentBase[]): Array<{
   id: string;
   caption: string;

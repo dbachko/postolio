@@ -320,27 +320,3 @@ export function logContentError(
   });
 }
 
-/**
- * Log an error with optional service and request context.
- */
-export function migrateConsoleError(
-  serviceName: string,
-  message: string,
-  error?: any,
-  context?: LogContext
-): void {
-  const logger = createServiceLogger(serviceName);
-
-  if (error) {
-    logger.error(message, {
-      operation: 'console_error_migration',
-      error,
-      ...context,
-    });
-  } else {
-    logger.warn(`console.error call (to migrate): ${message}`, {
-      operation: 'console_error_migration',
-      ...context,
-    });
-  }
-}

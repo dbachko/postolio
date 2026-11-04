@@ -51,7 +51,6 @@ export class GeminiFlashProvider extends BaseImageProvider {
 
     const startTime = Date.now();
 
-    // The model name might need to be updated based on Google's API availability
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const enhancedPrompt = this.buildPrompt(request);

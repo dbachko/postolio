@@ -1,8 +1,7 @@
 /**
  * Schedule Management Lambda
  *
- * Route dispatcher that delegates to focused handlers
- * Replaces the monolithic handler with clean separation of concerns
+ * Route dispatcher that delegates to focused handlers.
  */
 
 import { Logger } from '@aws-lambda-powertools/logger';

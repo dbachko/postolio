@@ -6,15 +6,15 @@ The assets service owns media metadata. Callers use `Asset.fileType` (`image` or
 
 - Assets schema: `packages/libs/database-assets/prisma/schema.prisma`
 - Main schema: `packages/libs/database/prisma/schema.prisma`
-- `Content.primaryAssetId` and `PostMediaAsset.assetId` reference assets.
-- Main database records cache CDN URLs and ordering; they do not replace asset metadata.
+- `ContentMediaAsset` stores `assetId` and `displayOrder`. There is no `Content.primaryAssetId` column. API responses set `primaryAssetId` from the first media row, ordered by `displayOrder`.
+- Assets store S3 keys (`s3Key` and thumbnail keys). The main database does not cache CDN URLs.
 
 ## Upload and attach
 
 1. The web app requests upload URLs through `/api/assets/upload-url`.
 2. The browser uploads bytes to S3 using presigned URLs.
 3. The API creates asset metadata through the assets service.
-4. Attaching an asset updates the content's primary asset reference and media rows. Replacing a carousel recreates media rows in display order.
+4. Attaching an asset upserts a `ContentMediaAsset` row (`assetId`, `displayOrder`). Replacing a carousel deletes the content's media rows and recreates them in display order.
 
 API proxy: `packages/apps/api/src/routes/assets-proxy.ts`.
 Content media routes: `packages/apps/api/src/routes/content/media.ts`.

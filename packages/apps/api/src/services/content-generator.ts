@@ -14,10 +14,7 @@ export type {
 } from './content-generators/types.js';
 
 export { generateInstagramContent } from './content-generators/instagram/index.js';
-export {
-  generateContentImage,
-  generateBrandContentImage,
-} from './content-generators/image-generation.js';
+export { generateBrandContentImage } from './content-generators/image-generation.js';
 
 export async function generateContentBatch(
   brandId: string,

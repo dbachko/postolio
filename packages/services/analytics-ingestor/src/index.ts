@@ -135,7 +135,7 @@ async function upsertPublicationLatest(
         : 0;
   const impressions = Math.max(0, Math.floor(impressionsSource || 0));
   const reach = Math.max(0, Math.floor(reachSource || 0));
-  // Store views in videoViews, accepting video_views and plays as fallbacks.
+  // Prefer Graph `views` over deprecated `video_views`, then `plays` for reels. The column is still `videoViews`.
   const viewsSource =
     typeof metrics.views === 'number'
       ? metrics.views

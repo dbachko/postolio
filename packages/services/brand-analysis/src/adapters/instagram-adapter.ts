@@ -17,7 +17,7 @@ export class InstagramAdapter implements SourceAdapter {
   }
 
   normalize(batch: RawSourceBatch): CanonicalEvent[] {
-    // Stub: return empty events for the supplied items.
+    // Stub: emits placeholder events and does not map Instagram payloads.
     return (batch.items || []).map((_, i) => ({
       id: `placeholder-${i}`,
       source: 'instagram',
