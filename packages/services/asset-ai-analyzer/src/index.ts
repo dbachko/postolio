@@ -154,7 +154,7 @@ async function generateImageAnalysis(
         ],
       },
     ],
-    max_tokens: 500,
+    max_completion_tokens: 500,
     temperature: 0.3,
   });
 

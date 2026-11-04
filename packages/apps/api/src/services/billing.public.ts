@@ -35,6 +35,9 @@ export async function createSubscriptionCheckoutSession(
       success_url: successUrl,
       cancel_url: cancelUrl,
       allow_promotion_codes: true,
+      subscription_data: {
+        billing_mode: { type: 'classic' },
+      },
       metadata: {
         type: 'subscription',
         userId: params.userId,

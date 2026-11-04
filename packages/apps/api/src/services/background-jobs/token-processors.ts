@@ -1,16 +1,16 @@
-import type Bull from 'bull';
+import type { Job } from 'bullmq';
 import { RefreshTokenService } from '../refresh-token.js';
 import type { RedisTokenStore } from '../redis-token-store.js';
 import { AuditLogger, AuditEventType } from '../audit-logger.js';
 import type { CleanupResult, JobData } from './types.js';
 
-export async function processTokenCleanupJob(job: Bull.Job<JobData>): Promise<CleanupResult> {
+export async function processTokenCleanupJob(job: Job<JobData>): Promise<CleanupResult> {
   const startTime = Date.now();
 
   try {
-    await job.progress(10);
+    await job.updateProgress(10);
     const deletedCount = await RefreshTokenService.cleanupExpiredTokens();
-    await job.progress(90);
+    await job.updateProgress(90);
 
     await AuditLogger.log({
       userId: 'system',
@@ -23,7 +23,7 @@ export async function processTokenCleanupJob(job: Bull.Job<JobData>): Promise<Cl
       success: true,
     });
 
-    await job.progress(100);
+    await job.updateProgress(100);
     return {
       deletedCount,
       duration: Date.now() - startTime,
@@ -47,15 +47,15 @@ export async function processTokenCleanupJob(job: Bull.Job<JobData>): Promise<Cl
 }
 
 export async function processTokenMigrationJob(
-  job: Bull.Job<JobData>,
+  job: Job<JobData>,
   tokenStore: RedisTokenStore
 ): Promise<{ migrated: number; errors: string[]; duration: number }> {
   const startTime = Date.now();
 
   try {
-    await job.progress(10);
+    await job.updateProgress(10);
     const result = await tokenStore.migrateFromKeysToSets();
-    await job.progress(90);
+    await job.updateProgress(90);
 
     await AuditLogger.log({
       userId: 'system',
@@ -69,7 +69,7 @@ export async function processTokenMigrationJob(
       success: result.errors.length === 0,
     });
 
-    await job.progress(100);
+    await job.updateProgress(100);
     return {
       ...result,
       duration: Date.now() - startTime,
@@ -93,7 +93,7 @@ export async function processTokenMigrationJob(
 }
 
 export async function processTokenIntegrityCheckJob(
-  job: Bull.Job<JobData>,
+  job: Job<JobData>,
   tokenStore: RedisTokenStore
 ): Promise<{
   valid: boolean;
@@ -104,9 +104,9 @@ export async function processTokenIntegrityCheckJob(
   const startTime = Date.now();
 
   try {
-    await job.progress(10);
+    await job.updateProgress(10);
     const result = await tokenStore.verifyIntegrity();
-    await job.progress(70);
+    await job.updateProgress(70);
 
     if (result.orphanedTokens.length > 0) {
       for (const tokenId of result.orphanedTokens) {
@@ -114,7 +114,7 @@ export async function processTokenIntegrityCheckJob(
       }
     }
 
-    await job.progress(90);
+    await job.updateProgress(90);
 
     await AuditLogger.log({
       userId: 'system',
@@ -129,7 +129,7 @@ export async function processTokenIntegrityCheckJob(
       success: true,
     });
 
-    await job.progress(100);
+    await job.updateProgress(100);
     return {
       ...result,
       duration: Date.now() - startTime,
@@ -153,17 +153,17 @@ export async function processTokenIntegrityCheckJob(
 }
 
 export async function processAuditLogCleanupJob(
-  job: Bull.Job<JobData>
+  job: Job<JobData>
 ): Promise<{ cutoffDate: string; duration: number }> {
   const startTime = Date.now();
 
   try {
-    await job.progress(10);
+    await job.updateProgress(10);
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - 90);
 
-    await job.progress(90);
+    await job.updateProgress(90);
 
     await AuditLogger.log({
       userId: 'system',
@@ -176,7 +176,7 @@ export async function processAuditLogCleanupJob(
       success: true,
     });
 
-    await job.progress(100);
+    await job.updateProgress(100);
     return {
       cutoffDate: cutoffDate.toISOString(),
       duration: Date.now() - startTime,

@@ -44,6 +44,15 @@ export const RateLimitTiers = {
     errorMessage: 'Too many authentication attempts. Please wait.',
   },
 
+  // Separate from AUTH: every signed-out page load calls refresh, so sharing that bucket would
+  // block a login after a few page views.
+  AUTH_REFRESH: {
+    max: 60,
+    timeWindow: '1 minute',
+    keyGenerator: (req: FastifyRequest) => `auth-refresh:${req.ip}`,
+    errorMessage: 'Too many session refresh attempts. Please wait.',
+  },
+
   // Registration (stricter)
   REGISTRATION: {
     max: 2,
@@ -194,7 +203,7 @@ export function applyRateLimiting(app: FastifyInstance, redisClient: RedisLikeCl
     }
 
     if (request.url === '/api/auth/refresh') {
-      await createRateLimiter(redisClient, 'AUTH')(request, reply);
+      await createRateLimiter(redisClient, 'AUTH_REFRESH')(request, reply);
     }
 
     if (request.url === '/api/auth/password-reset') {

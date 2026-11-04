@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist"
+    "build": "tsup src/index.ts --format esm --target node24 --out-dir dist"
   },
   "dependencies": {
     "@aws-lambda-powertools/logger": "^2.36.0",
@@ -18,7 +18,7 @@
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
     "@types/aws-lambda": "^8.10.164",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3"
   }
 }

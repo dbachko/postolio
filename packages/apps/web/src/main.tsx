@@ -48,6 +48,14 @@ if (sentryDsn) {
     environment:
       import.meta.env.VITE_ENVIRONMENT || (import.meta.env.MODE as string | undefined) || 'dev',
     tracesSampleRate: 0,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpBodies: [],
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+    },
   });
 }
 

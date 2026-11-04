@@ -84,16 +84,6 @@ export const RateLimitConfigs = {
 };
 
 export class EnhancedRateLimiter {
-  private static parseForwardedIp(forwarded: string | string[] | undefined): string | undefined {
-    if (!forwarded) {
-      return undefined;
-    }
-    if (Array.isArray(forwarded)) {
-      return forwarded[0];
-    }
-    return forwarded.split(',')[0];
-  }
-
   /**
    * Create a rate limiter with the specified configuration
    */
@@ -162,10 +152,7 @@ export class EnhancedRateLimiter {
     }
 
     // Otherwise use IP address
-    const forwarded = request.headers['x-forwarded-for'];
-    const ip = this.parseForwardedIp(forwarded) ?? request.ip;
-
-    return `ip:${ip}`;
+    return `ip:${request.ip}`;
   }
 
   /**

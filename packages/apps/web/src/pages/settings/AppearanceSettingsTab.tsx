@@ -43,11 +43,16 @@ export default function AppearanceSettingsTab() {
     }
   };
 
-  const handleResetTheme = () => {
+  const handleResetTheme = async () => {
     setAppearanceMode('system');
     setTheme('system');
     if (user) {
       setUser({ ...user, theme: 'system' });
+    }
+    try {
+      await authApi.updateUserTheme({ theme: 'system' });
+    } catch (_e) {
+      toast.error('Failed to save theme preference');
     }
   };
 

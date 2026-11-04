@@ -1,17 +1,14 @@
-type InlineDataPart = { inlineData: { data: string } };
-
-function isInlineDataPart(value: unknown): value is InlineDataPart {
+function readInlineData(value: unknown): string | null {
   if (!value || typeof value !== 'object') {
-    return false;
+    return null;
   }
-  if (!('inlineData' in value)) {
-    return false;
-  }
-  const inlineData = (value as { inlineData?: unknown }).inlineData;
+  const record = value as { inlineData?: unknown; inline_data?: unknown };
+  const inlineData = record.inlineData ?? record.inline_data;
   if (!inlineData || typeof inlineData !== 'object') {
-    return false;
+    return null;
   }
-  return typeof (inlineData as { data?: unknown }).data === 'string';
+  const data = (inlineData as { data?: unknown }).data;
+  return typeof data === 'string' ? data : null;
 }
 
 type GeminiResponseLike = {
@@ -34,8 +31,9 @@ export function extractInlineImageBuffer(response: unknown): Buffer | null {
   }
 
   for (const part of parts) {
-    if (isInlineDataPart(part)) {
-      return Buffer.from(part.inlineData.data, 'base64');
+    const data = readInlineData(part);
+    if (data) {
+      return Buffer.from(data, 'base64');
     }
   }
 

@@ -32,7 +32,7 @@ import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import * as path from 'path';
 
 export interface AssetLibraryStackProps extends cdk.StackProps {
@@ -180,8 +180,9 @@ export class AssetLibraryStack extends cdk.Stack {
 
     this.assetsDatabase = new rds.DatabaseInstance(this, 'AssetsDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_17,
+        version: rds.PostgresEngineVersion.VER_18,
       }),
+      allowMajorVersionUpgrade: true,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       vpc,
       vpcSubnets: {
@@ -461,7 +462,7 @@ export class AssetLibraryStack extends cdk.Stack {
       'ThumbnailGeneratorFunction',
       {
         functionName: `${prefix}-thumbnail-generator`,
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         handler: 'index.handler',
         entry: path.join(__dirname, '../../../../services/asset-thumbnail-generator/src/index.ts'),
         timeout: cdk.Duration.minutes(5),
@@ -496,9 +497,11 @@ export class AssetLibraryStack extends cdk.Stack {
             beforeBundling: () => [],
             beforeInstall: () => [],
             afterBundling: (inputDir: string, outputDir: string) => [
-              // Ensure Sharp is compiled for Lambda (linux-x64)
-              `cd ${outputDir}`,
-              `npm install --arch=x64 --platform=linux sharp`,
+              // Reinstall Sharp for Lambda (linux-x64) from any build host. npm cannot read the
+              // pnpm-layout node_modules CDK just created. Hooks run from the repo root, so every
+              // path here must stay absolute.
+              `rm -rf "${outputDir}/node_modules" "${outputDir}/pnpm-lock.yaml"`,
+              `npm install --prefix "${outputDir}" --omit=dev --os=linux --cpu=x64 --libc=glibc`,
               // Ensure no prisma client artifacts remain in asset
               `bash -lc "cd ${outputDir} && rm -rf node_modules/@prisma || true"`,
             ],
@@ -517,7 +520,7 @@ export class AssetLibraryStack extends cdk.Stack {
     // ==================== Lambda: AI Image Analyzer ====================
     const aiAnalyzerFunction = new lambdaNodejs.NodejsFunction(this, 'AIAnalyzerFunction', {
       functionName: `${prefix}-ai-analyzer`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/asset-ai-analyzer/src/index.ts'),
       timeout: cdk.Duration.minutes(3),
@@ -750,7 +753,7 @@ export class AssetLibraryStack extends cdk.Stack {
         autoDeleteObjects: true,
       });
 
-      NagSuppressions.addResourceSuppressions(albLogsBucket, [
+      acknowledgeNagRules(albLogsBucket, [
         {
           id: 'AwsSolutions-S1',
           reason:
@@ -937,10 +940,6 @@ export class AssetLibraryStack extends cdk.Stack {
           'Wildcard permissions required for Lambda and ECS tasks to access S3 objects with dynamic keys, database connections, and SSM parameters',
       },
       {
-        id: 'AwsSolutions-L1',
-        reason: 'Using latest Lambda runtime (Node.js 22) as specified in package configurations',
-      },
-      {
         id: 'AwsSolutions-ECS2',
         reason:
           'Environment variables for non-sensitive configuration are acceptable. Secrets use ECS secrets integration.',
@@ -970,7 +969,7 @@ export class AssetLibraryStack extends cdk.Stack {
       });
     }
 
-    NagSuppressions.addStackSuppressions(this, stackSuppressions);
+    acknowledgeNagRules(this, stackSuppressions);
 
     // ==================== Stack Outputs ====================
     new cdk.CfnOutput(this, 'AssetsDatabaseEndpointOutput', {

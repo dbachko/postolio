@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { BaseImageProvider } from './base-provider.js';
 import { extractInlineImageBuffer } from './gemini-utils.js';
 import type {
@@ -9,9 +9,12 @@ import type {
   ImageFeature,
 } from './types.js';
 
+// The provider id is persisted in brand settings and logs; this is the actual API model.
+const GEMINI_PRO_IMAGE_MODEL = 'gemini-3-pro-image';
+
 export class GeminiProProvider extends BaseImageProvider {
   readonly name: ImageProvider = 'gemini-3-pro';
-  readonly displayName = 'Gemini 3 Pro';
+  readonly displayName = 'Gemini 3 Pro Image';
 
   readonly pricing: ProviderPricing = {
     standard: 0.134, // 1K/2K
@@ -26,21 +29,21 @@ export class GeminiProProvider extends BaseImageProvider {
     speedEstimate: '15-30s',
   };
 
-  private genAI: GoogleGenerativeAI | null = null;
+  private genAI: GoogleGenAI | null = null;
   private lastApiKey: string | null = null;
 
   protected checkConfiguration(): boolean {
     return !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   }
 
-  private getClient(): GoogleGenerativeAI {
+  private getClient(): GoogleGenAI {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (!apiKey) {
       throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not configured');
     }
 
     if (!this.genAI || this.lastApiKey !== apiKey) {
-      this.genAI = new GoogleGenerativeAI(apiKey);
+      this.genAI = new GoogleGenAI({ apiKey });
       this.lastApiKey = apiKey;
     }
 
@@ -52,13 +55,14 @@ export class GeminiProProvider extends BaseImageProvider {
 
     const startTime = Date.now();
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.0-pro-vision' });
-
     const enhancedPrompt = this.buildPrompt(request);
 
     try {
-      const result = await model.generateContent([{ text: enhancedPrompt }]);
-      const response = result.response;
+      const response = await genAI.models.generateContent({
+        model: GEMINI_PRO_IMAGE_MODEL,
+        contents: enhancedPrompt,
+        config: { responseModalities: ['TEXT', 'IMAGE'] },
+      });
 
       const imageBuffer = extractInlineImageBuffer(response);
       if (!imageBuffer) {
@@ -73,7 +77,7 @@ export class GeminiProProvider extends BaseImageProvider {
         provider: this.name,
         cost,
         metadata: {
-          model: 'gemini-3.0-pro-vision',
+          model: GEMINI_PRO_IMAGE_MODEL,
           size: request.size || '1024x1024',
           quality: request.quality,
           generationTime,

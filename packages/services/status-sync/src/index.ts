@@ -6,7 +6,7 @@
 
 import { MetricUnit } from '@aws-lambda-powertools/metrics';
 import { captureException } from '@postolio/observability';
-import type { Context, EventBridgeEvent } from 'aws-lambda';
+import type { EventBridgeEvent } from 'aws-lambda';
 import { logger, metrics } from './runtime';
 import {
   handlePostFailed,
@@ -47,11 +47,8 @@ const EVENT_METRIC_NAMES: Record<string, string> = {
 };
 
 export async function handler(
-  event: EventBridgeEvent<string, EventDetail>,
-  context: Context
+  event: EventBridgeEvent<string, EventDetail>
 ): Promise<{ statusCode: number }> {
-  context.callbackWaitsForEmptyEventLoop = false;
-
   logger.info('StatusSync received event', {
     id: event.id,
     source: event.source,

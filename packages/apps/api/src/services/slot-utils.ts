@@ -108,7 +108,6 @@ export async function computeUpcomingSlots(params: ComputeUpcomingSlotsParams): 
   // If we already added today's slots, advance past today to avoid duplicates
   if (addedToday && cursorStr === todayStr) {
     cursorStr = addDays(cursorStr, intervalDays);
-    cursor = toUtcMidnight(cursorStr);
   }
 
   while (cursorStr <= endStr && slots.length < maxSlots) {
@@ -124,9 +123,7 @@ export async function computeUpcomingSlots(params: ComputeUpcomingSlotsParams): 
       }
     }
 
-    // Advance cursor
     cursorStr = addDays(cursorStr, intervalDays);
-    cursor = toUtcMidnight(cursorStr);
   }
 
   return slots;

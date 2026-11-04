@@ -89,7 +89,7 @@ function useOfflineQueuePersistence({
   retryTimeoutRef,
 }: {
   queueRef: MutableRefObject<QueuedAction[]>;
-  retryTimeoutRef: MutableRefObject<NodeJS.Timeout | undefined>;
+  retryTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>;
 }) {
   const clearRetryTimeout = useCallback(() => {
     const retryTimeout = retryTimeoutRef.current;
@@ -180,7 +180,7 @@ function useProcessQueue({
 }: {
   queueRef: MutableRefObject<QueuedAction[]>;
   processingRef: MutableRefObject<boolean>;
-  retryTimeoutRef: MutableRefObject<NodeJS.Timeout | undefined>;
+  retryTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>;
   processAction: (action: QueuedAction) => Promise<boolean>;
   maxRetries: number;
   retryDelay: number;
@@ -227,7 +227,7 @@ export function useOfflineQueue({
 }: UseOfflineQueueOptions = {}) {
   const queueRef = useRef<QueuedAction[]>([]);
   const processingRef = useRef(false);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const { saveQueue } = useOfflineQueuePersistence({ queueRef, retryTimeoutRef });
 

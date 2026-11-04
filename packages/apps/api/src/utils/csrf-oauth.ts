@@ -63,7 +63,7 @@ export class OAuthCSRFProtection {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       this.fastify.log.error({ message }, 'Failed to store OAuth state:');
-      throw new Error('Failed to initialize OAuth flow');
+      throw new Error('Failed to initialize OAuth flow', { cause: error });
     }
 
     return state;

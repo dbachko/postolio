@@ -79,7 +79,8 @@ export async function getProfileImpl(
   } catch (error) {
     profileLogger.error('Failed to fetch Instagram profile', formatError(error));
     throw new Error(
-      `Failed to fetch Instagram profile: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to fetch Instagram profile: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -121,7 +122,8 @@ export async function getRecentPostsImpl(
   } catch (error) {
     profileLogger.error('Failed to fetch Instagram posts', formatError(error));
     throw new Error(
-      `Failed to fetch Instagram posts: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to fetch Instagram posts: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -202,7 +204,8 @@ export async function publishMediaImpl(
   } catch (error) {
     profileLogger.error('Failed to publish Instagram media', formatError(error));
     throw new Error(
-      `Failed to publish Instagram media: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to publish Instagram media: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -228,7 +231,8 @@ export async function getMediaInsightsImpl(
   } catch (error) {
     profileLogger.error('Failed to fetch media insights', formatError(error));
     throw new Error(
-      `Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -274,7 +278,8 @@ export async function getPostCommentsImpl(
   } catch (error) {
     profileLogger.error('Failed to fetch post comments', formatError(error));
     throw new Error(
-      `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -303,7 +308,8 @@ export async function getPostCommentsForSocialAccountImpl(
   } catch (error) {
     profileLogger.error('Failed to fetch post comments', formatError(error));
     throw new Error(
-      `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }

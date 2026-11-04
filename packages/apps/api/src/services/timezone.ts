@@ -241,7 +241,8 @@ export class TimezoneService {
       return result;
     } catch (error) {
       throw new Error(
-        `Failed to create date in timezone ${timezone} from ${dateString} ${timeString}: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to create date in timezone ${timezone} from ${dateString} ${timeString}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       );
     }
   }

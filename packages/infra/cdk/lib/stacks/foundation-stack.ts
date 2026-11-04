@@ -28,7 +28,7 @@ import * as cr from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 
 export interface FoundationStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
@@ -42,7 +42,7 @@ export class FoundationStack extends cdk.Stack {
   public readonly vpc: ec2.IVpc;
   public readonly database: rds.IDatabaseInstance;
   public readonly databaseProxy?: rds.IDatabaseProxy;
-  public readonly cache: elasticache.CfnCacheCluster;
+  public readonly cache: elasticache.CfnReplicationGroup;
   public readonly sharedBucket: s3.IBucket;
   public readonly logsBucket: s3.IBucket;
   public readonly encryptionKey: kms.IKey;
@@ -259,7 +259,7 @@ export class FoundationStack extends cdk.Stack {
     // Ensure the secret exists: if missing, create; if present, reuse. Kept on stack deletion.
     const jwtSecretName = `${prefix}/jwt-secret`;
     const jwtSecretEnsurer = new lambdaNodejs.NodejsFunction(this, 'JwtSecretEnsurerFn', {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'handler',
       entry: path.join(__dirname, '../lambdas/foundation/jwt-secret-ensurer.ts'),
       // Explicitly point to the workspace lockfile to avoid bundling ambiguity
@@ -273,19 +273,8 @@ export class FoundationStack extends cdk.Stack {
       },
     });
 
-    // cdk-nag: Lambda runtime is pinned to latest GA Node.js (22.x).
-    // aws-cdk-lib exposes newer runtimes (e.g., nodejs24.x) that are not yet available
-    // in all regions, which causes AwsSolutions-L1 to flag a false positive.
-    NagSuppressions.addResourceSuppressions(jwtSecretEnsurer, [
-      {
-        id: 'AwsSolutions-L1',
-        reason:
-          'Using latest generally available Node.js Lambda runtime (nodejs22.x); aws-cdk-lib also exposes nodejs24.x, which AwsSolutions-L1 treats as latest even though it is not yet widely available.',
-      },
-    ]);
-
     // cdk-nag: Allow wildcard for CreateSecret (cannot be resource-scoped)
-    NagSuppressions.addResourceSuppressions(jwtSecretEnsurer.role!, [
+    acknowledgeNagRules(jwtSecretEnsurer.role!, [
       {
         id: 'AwsSolutions-IAM5',
         reason:
@@ -310,7 +299,7 @@ export class FoundationStack extends cdk.Stack {
     const ensurerRole = jwtSecretEnsurer.role as iam.Role;
     const ensurerDefaultPolicy = ensurerRole?.node.tryFindChild('DefaultPolicy');
     if (ensurerDefaultPolicy) {
-      NagSuppressions.addResourceSuppressions(ensurerDefaultPolicy, [
+      acknowledgeNagRules(ensurerDefaultPolicy, [
         {
           id: 'AwsSolutions-IAM5',
           reason:
@@ -329,22 +318,13 @@ export class FoundationStack extends cdk.Stack {
     });
 
     // cdk-nag: Provider framework function needs wildcard suffix to invoke versioned Lambda
-    NagSuppressions.addResourceSuppressions(
-      jwtSecretProvider,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Custom Resource provider framework uses lambda:InvokeFunction with version-qualified ARNs; wildcard suffix is required by AWS pattern and scoped to the target function only.',
-        },
-        {
-          id: 'AwsSolutions-L1',
-          reason:
-            'Custom Resource provider framework Lambda uses the latest generally available Node.js runtime; AwsSolutions-L1 compares against nodejs24.x from aws-cdk-lib, which may not yet be supported in all regions.',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(jwtSecretProvider, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Custom Resource provider framework uses lambda:InvokeFunction with version-qualified ARNs; wildcard suffix is required by AWS pattern and scoped to the target function only.',
+      },
+    ]);
 
     // Optional force-update knob to refresh the custom resource and export value
     const jwtSecretForceUpdate =
@@ -372,8 +352,9 @@ export class FoundationStack extends cdk.Stack {
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_17,
+        version: rds.PostgresEngineVersion.VER_18,
       }),
+      allowMajorVersionUpgrade: true,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         environment === 'prod' ? ec2.InstanceSize.MEDIUM : ec2.InstanceSize.MICRO
@@ -433,7 +414,7 @@ export class FoundationStack extends cdk.Stack {
     );
 
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'CacheSubnetGroup', {
-      description: 'Subnet group for ElastiCache Redis cluster',
+      description: 'Subnet group for ElastiCache Valkey',
       subnetIds: this.vpc.selectSubnets({
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       }).subnetIds,
@@ -441,24 +422,47 @@ export class FoundationStack extends cdk.Stack {
     });
 
     const cacheParameterGroup = new elasticache.CfnParameterGroup(this, 'RedisParameterGroup', {
-      cacheParameterGroupFamily: 'redis7',
-      description: 'Postolio Redis parameter configuration',
+      cacheParameterGroupFamily: 'valkey8',
+      description: 'Postolio Valkey parameter configuration',
       properties: {
         'maxmemory-policy': 'noeviction',
       },
     });
 
-    this.cache = new elasticache.CfnCacheCluster(this, 'RedisCache', {
+    // ElastiCache stops at Redis OSS 7.1; Valkey is its protocol-compatible successor and
+    // CacheCluster cannot run it, hence a single-node replication group.
+    this.cache = new elasticache.CfnReplicationGroup(this, 'ValkeyCache', {
+      replicationGroupId: `${prefix}-valkey`,
+      replicationGroupDescription: 'Postolio queues, sessions and rate limiting',
+      engine: 'valkey',
+      engineVersion: '8.2',
       cacheNodeType: environment === 'prod' ? 'cache.r7g.large' : 'cache.t3.micro',
-      engine: 'redis',
       cacheParameterGroupName: cacheParameterGroup.ref,
-      numCacheNodes: 1,
+      numCacheClusters: 1,
+      automaticFailoverEnabled: false,
+      atRestEncryptionEnabled: true,
+      transitEncryptionEnabled: false, // Clients connect over redis://; see the nag reasons below
       cacheSubnetGroupName: cacheSubnetGroup.ref,
-      vpcSecurityGroupIds: [cacheSecurityGroup.securityGroupId],
-      clusterName: `${prefix}-redis`,
+      securityGroupIds: [cacheSecurityGroup.securityGroupId],
       preferredMaintenanceWindow: 'sun:05:00-sun:06:00',
       snapshotRetentionLimit: environment === 'prod' ? 7 : 1,
     });
+    acknowledgeNagRules(this.cache, [
+      {
+        id: 'AwsSolutions-AEC3',
+        reason:
+          'No TLS yet: reachable only from private subnets through a restricted security group, and clients connect over redis://',
+      },
+      {
+        id: 'AwsSolutions-AEC4',
+        reason: 'Single node to control cost; queues and sessions tolerate a restart',
+      },
+      {
+        id: 'AwsSolutions-AEC6',
+        reason:
+          'No AUTH token yet: reachable only from private subnets through a restricted security group',
+      },
+    ]);
 
     // ==================== Shared S3 Buckets ====================
     this.logsBucket = new s3.Bucket(this, 'LogsBucket', {
@@ -572,13 +576,13 @@ export class FoundationStack extends cdk.Stack {
     // Cache Parameters
     new ssm.StringParameter(this, 'CacheEndpointParameter', {
       parameterName: `/postolio/${environment}/cache/endpoint`,
-      stringValue: this.cache.attrRedisEndpointAddress,
+      stringValue: this.cache.attrPrimaryEndPointAddress,
       description: 'Redis cache endpoint',
     });
 
     new ssm.StringParameter(this, 'CachePortParameter', {
       parameterName: `/postolio/${environment}/cache/port`,
-      stringValue: this.cache.attrRedisEndpointPort,
+      stringValue: this.cache.attrPrimaryEndPointPort,
       description: 'Redis cache port',
     });
 
@@ -648,7 +652,7 @@ export class FoundationStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'CacheEndpoint', {
-      value: this.cache.attrRedisEndpointAddress,
+      value: this.cache.attrPrimaryEndPointAddress,
       description: 'Redis Cache Endpoint',
       exportName: `${prefix}-cache-endpoint`,
     });
@@ -660,7 +664,7 @@ export class FoundationStack extends cdk.Stack {
     });
 
     // ==================== CDK Nag Suppressions ====================
-    NagSuppressions.addStackSuppressions(this, [
+    acknowledgeNagRules(this, [
       {
         id: 'AwsSolutions-IAM4',
         reason: 'Managed policies are acceptable for VPC Flow Logs role',
@@ -680,7 +684,7 @@ export class FoundationStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-AEC5',
-        reason: 'Using standard Redis port 6379 for operational simplicity and team familiarity',
+        reason: 'Using the standard port 6379 for operational simplicity and team familiarity',
       },
       {
         id: 'AwsSolutions-SMG4',

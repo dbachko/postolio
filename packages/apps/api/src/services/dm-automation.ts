@@ -332,7 +332,6 @@ export const dmAutomation = {
     };
 
     let messageSent = false;
-    let commentReplySent = false;
     let conversationId: string | undefined;
 
     if (rule.actionType === 'send_dm' || rule.actionType === 'send_dm_and_reply') {
@@ -341,7 +340,7 @@ export const dmAutomation = {
       messageSent = dmResult.messageSent;
     }
 
-    commentReplySent = await maybeSendCommentReply({ rule, context, variables });
+    const commentReplySent = await maybeSendCommentReply({ rule, context, variables });
     await this.logEvent({
       brandId: context.brandId,
       ruleId: rule.id,

@@ -1,4 +1,4 @@
-import millify from 'millify';
+import { millify } from 'millify';
 
 /**
  * Formats a number to a human-readable string with appropriate suffixes (K, M, B)

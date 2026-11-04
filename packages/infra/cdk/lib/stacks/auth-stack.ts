@@ -20,7 +20,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import { OAuthConfig } from '../utils/oauth-config';
 
 export interface AuthStackProps extends cdk.StackProps, OAuthConfig {
@@ -105,7 +105,7 @@ export class AuthStack extends cdk.Stack {
     });
 
     // Suppress PITR requirement for audit logs
-    NagSuppressions.addResourceSuppressions(auditTable, [
+    acknowledgeNagRules(auditTable, [
       {
         id: 'AwsSolutions-DDB3',
         reason: 'Audit logs use TTL for retention and do not require point-in-time recovery',
@@ -133,7 +133,7 @@ export class AuthStack extends cdk.Stack {
     });
 
     // Suppress PITR requirement for rate limit table
-    NagSuppressions.addResourceSuppressions(rateLimitTable, [
+    acknowledgeNagRules(rateLimitTable, [
       {
         id: 'AwsSolutions-DDB3',
         reason:
@@ -222,7 +222,7 @@ export class AuthStack extends cdk.Stack {
     // ==================== Token Service Lambda Function ====================
     const tokenServiceFunction = new NodejsFunction(this, 'TokenServiceFunction', {
       functionName: `${prefix}-token-service`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/token-service/src/index.ts'),
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -384,6 +384,14 @@ export class AuthStack extends cdk.Stack {
                 actions: ['secretsmanager:GetSecretValue'],
                 resources: [databaseSecretArn],
               }),
+              // RDS Proxy endpoint lookup
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['ssm:GetParameter'],
+                resources: [
+                  `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/database/proxy-endpoint`,
+                ],
+              }),
               // CloudWatch Metrics permissions
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
@@ -408,7 +416,7 @@ export class AuthStack extends cdk.Stack {
 
       const sessionCleanupFunction = new NodejsFunction(this, 'SessionCleanupFunction', {
         functionName: `${prefix}-session-cleanup`,
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         handler: 'index.handler',
         entry: path.join(__dirname, '../../../../services/session-cleanup/src/index.ts'),
         depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -495,27 +503,23 @@ export class AuthStack extends cdk.Stack {
       sessionCleanupDurationAlarm.addAlarmAction(new cwactions.SnsAction(alertTopic));
 
       // CDK NAG suppressions for session cleanup role
-      NagSuppressions.addResourceSuppressions(
-        sessionCleanupRole,
-        [
-          {
-            id: 'AwsSolutions-IAM4',
-            reason:
-              'AWS managed policies (AWSLambdaBasicExecutionRole, AWSLambdaVPCAccessExecutionRole) are standard for Lambda functions in VPC',
-            appliesTo: [
-              'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-              'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
-            ],
-          },
-          {
-            id: 'AwsSolutions-IAM5',
-            reason:
-              'Wildcard permissions required for CloudWatch Metrics (scoped to namespace) and X-Ray tracing',
-            appliesTo: ['Resource::*'],
-          },
-        ],
-        true
-      );
+      acknowledgeNagRules(sessionCleanupRole, [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason:
+            'AWS managed policies (AWSLambdaBasicExecutionRole, AWSLambdaVPCAccessExecutionRole) are standard for Lambda functions in VPC',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+          ],
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'Wildcard permissions required for CloudWatch Metrics (scoped to namespace) and X-Ray tracing',
+          appliesTo: ['Resource::*'],
+        },
+      ]);
 
       console.log(`Session cleanup Lambda configured for environment ${environment}`);
     } else {
@@ -577,28 +581,24 @@ export class AuthStack extends cdk.Stack {
     });
 
     // ==================== CDK NAG Suppressions ====================
-    NagSuppressions.addResourceSuppressions(
-      tokenServiceRole,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'Lambda execution role requires broad permissions for DynamoDB operations',
-        },
-        {
-          id: 'AwsSolutions-IAM4',
-          reason:
-            'AWS managed policy AWSLambdaBasicExecutionRole is standard for Lambda functions and provides minimal CloudWatch Logs permissions',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          ],
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(tokenServiceRole, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'Lambda execution role requires broad permissions for DynamoDB operations',
+      },
+      {
+        id: 'AwsSolutions-IAM4',
+        reason:
+          'AWS managed policy AWSLambdaBasicExecutionRole is standard for Lambda functions and provides minimal CloudWatch Logs permissions',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        ],
+      },
+    ]);
 
     // Suppress DynamoDB PITR requirement for non-prod environments
     if (environment !== 'prod') {
-      NagSuppressions.addResourceSuppressions(this.tokenTable, [
+      acknowledgeNagRules(this.tokenTable, [
         {
           id: 'AwsSolutions-DDB3',
           reason:
@@ -608,29 +608,21 @@ export class AuthStack extends cdk.Stack {
     }
 
     // Suppress log retention function IAM issues (created automatically by CDK)
-    NagSuppressions.addResourceSuppressions(
-      this,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason:
-            'Log retention function uses AWS managed policy for CloudWatch Logs access - this is standard CDK behavior',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          ],
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Log retention function requires wildcard permissions for CloudWatch Logs management - this is standard CDK behavior',
-          appliesTo: ['Resource::*'],
-        },
-        {
-          id: 'AwsSolutions-L1',
-          reason: 'Using latest stable Node.js runtime for Lambda functions',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(this, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason:
+          'Log retention function uses AWS managed policy for CloudWatch Logs access - this is standard CDK behavior',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        ],
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Log retention function requires wildcard permissions for CloudWatch Logs management - this is standard CDK behavior',
+        appliesTo: ['Resource::*'],
+      },
+    ]);
   }
 }

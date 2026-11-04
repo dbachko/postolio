@@ -2,10 +2,8 @@ import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { Logger } from '@aws-lambda-powertools/logger';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lambda';
-import { createLambdaPrismaClient } from '@postolio/database/lambda';
+import { connectLambdaDatabase } from '@postolio/database/lambda';
 import { initSentry, captureException } from '@postolio/observability';
 
 const logger = new Logger({ serviceName: 'brand-analysis-scheduler' });
@@ -28,31 +26,7 @@ const doc = DynamoDBDocumentClient.from(ddb, { marshallOptions: { removeUndefine
 let prisma: LambdaPrismaClient | null = null;
 
 async function getDbClient(): Promise<LambdaPrismaClient> {
-  if (prisma) return prisma;
-  if (process.env.DATABASE_URL) {
-    prisma = createLambdaPrismaClient({ connectionString: process.env.DATABASE_URL }).client;
-    return prisma;
-  }
-  const ssm = new SSMClient({});
-  const secrets = new SecretsManagerClient({});
-  const secretArnParam = await ssm.send(
-    new GetParameterCommand({ Name: `/postolio/${ENVIRONMENT}/database/secret-arn` })
-  );
-  const secretArn = secretArnParam.Parameter?.Value;
-  if (!secretArn) throw new Error('Missing DB secret ARN');
-  const creds = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));
-  if (!creds.SecretString) throw new Error('Empty DB secret');
-  const parsed = JSON.parse(creds.SecretString);
-  const hostParam = await ssm.send(
-    new GetParameterCommand({ Name: `/postolio/${ENVIRONMENT}/database/proxy-endpoint` })
-  );
-  const proxy = hostParam.Parameter?.Value;
-  const dbName = process.env.DB_NAME || 'postolio';
-  if (!proxy) throw new Error('Missing DB proxy endpoint');
-  const url = `postgresql://${encodeURIComponent(parsed.username)}:${encodeURIComponent(
-    parsed.password
-  )}@${proxy}/${dbName}?sslmode=require`;
-  prisma = createLambdaPrismaClient({ connectionString: url }).client;
+  prisma ??= await connectLambdaDatabase();
   return prisma;
 }
 

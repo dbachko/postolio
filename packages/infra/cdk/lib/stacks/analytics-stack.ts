@@ -12,7 +12,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 
 export interface AnalyticsStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
@@ -48,6 +48,10 @@ export class AnalyticsStack extends cdk.Stack {
       vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', { vpcId });
     } else {
       vpc = new ec2.Vpc(this, 'PlaceholderVpc', { maxAzs: 2, natGateways: 1 });
+      // Only exists for synth without a Foundation VPC; real deployments look that VPC up.
+      acknowledgeNagRules(vpc, [
+        { id: 'AwsSolutions-VPC7', reason: 'Placeholder VPC is never deployed to production' },
+      ]);
     }
 
     // Security groups and secrets
@@ -255,66 +259,54 @@ export class AnalyticsStack extends cdk.Stack {
 
     // ==================== CDK Nag Suppressions ====================
     // Execution role managed policy and wildcard allowances are standard for ECS execution
-    NagSuppressions.addResourceSuppressions(
-      executionRole,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason:
-            'ECS Execution role uses AWS managed policy AmazonECSTaskExecutionRolePolicy for pulling images and writing logs.',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
-          ],
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Execution role requires broad KMS decrypt for Secrets Manager and access to environment-scoped secrets.',
-          appliesTo: [
-            `Resource::arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
-            `Resource::arn:aws:kms:${this.region}:${this.account}:key/*`,
-            'Resource::*',
-          ],
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(executionRole, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason:
+          'ECS Execution role uses AWS managed policy AmazonECSTaskExecutionRolePolicy for pulling images and writing logs.',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+        ],
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Execution role requires broad KMS decrypt for Secrets Manager and access to environment-scoped secrets.',
+        appliesTo: [
+          `Resource::arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
+          `Resource::arn:aws:kms:${this.region}:${this.account}:key/*`,
+          'Resource::*',
+        ],
+      },
+    ]);
 
     // Task role managed policy and wildcard allowances for SSM/Secrets parameter reads
-    NagSuppressions.addResourceSuppressions(
-      taskRole,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason:
-            'Task role uses AWS managed policy AmazonSSMReadOnlyAccess for reading SSM parameters in the environment scope.',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/AmazonSSMReadOnlyAccess'],
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Task role requires access to environment-scoped Secrets Manager and SSM parameters to discover DB/Redis endpoints.',
-          appliesTo: [
-            `Resource::arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
-            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
-            'Resource::*',
-          ],
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(taskRole, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason:
+          'Task role uses AWS managed policy AmazonSSMReadOnlyAccess for reading SSM parameters in the environment scope.',
+        appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/AmazonSSMReadOnlyAccess'],
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Task role requires access to environment-scoped Secrets Manager and SSM parameters to discover DB/Redis endpoints.',
+        appliesTo: [
+          `Resource::arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
+          `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
+          'Resource::*',
+        ],
+      },
+    ]);
 
     // ECS2: we intentionally pass non-sensitive env vars (sensitive values are injected as secrets)
-    NagSuppressions.addResourceSuppressions(
-      taskDef,
-      [
-        {
-          id: 'AwsSolutions-ECS2',
-          reason:
-            'Non-sensitive configuration is provided via env vars; secrets (DB credentials) are injected via Secrets Manager.',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(taskDef, [
+      {
+        id: 'AwsSolutions-ECS2',
+        reason:
+          'Non-sensitive configuration is provided via env vars; secrets (DB credentials) are injected via Secrets Manager.',
+      },
+    ]);
   }
 }

@@ -1,9 +1,7 @@
-import Bull from 'bull';
+import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
-import type { Redis } from 'ioredis';
-import { getRedisUrl } from '../utils/redis-url.js';
-import { createRedisClient } from './redis.js';
+import { getQueueOptions } from './queue-config.js';
 
 const prisma = getDatabaseClient();
 
@@ -23,26 +21,13 @@ export interface DeletionJobResult {
 
 export class DeletionQueueService {
   private static instance: DeletionQueueService | null = null;
-  private deletionQueue: Bull.Queue<DeletionJob>;
-  private redis: Redis;
+  private deletionQueue: Queue<DeletionJob>;
+  private worker: Worker<DeletionJob>;
   private logger = baseLogger.child({ module: 'deletion-queue' });
 
   private constructor() {
-    // Use shared utility for Redis URL construction
-    const redisUrl = getRedisUrl();
-
-    // Create Redis connection for Bull
-    this.redis = createRedisClient({
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true,
-      family: 4, // Force IPv4
-    });
-
-    // Create Bull queue - use same URL for consistency
-    const redisConfig = redisUrl;
-
-    this.deletionQueue = new Bull('user-deletion', {
-      redis: redisConfig,
+    this.deletionQueue = new Queue<DeletionJob>('user-deletion', {
+      ...getQueueOptions(),
       defaultJobOptions: {
         removeOnComplete: true,
         removeOnFail: false,
@@ -54,8 +39,7 @@ export class DeletionQueueService {
       },
     });
 
-    // Process deletion jobs
-    this.deletionQueue.process('permanent-deletion', 5, async (job: Bull.Job<DeletionJob>) => {
+    const processPermanentDeletion = async (job: Job<DeletionJob>) => {
       this.logger.info('Processing deletion job', { jobId: job.id });
 
       try {
@@ -89,7 +73,23 @@ export class DeletionQueueService {
         });
         throw error; // Will trigger retry
       }
-    });
+    };
+
+    // Bull added concurrency per named processor: 5 + 1.
+    this.worker = new Worker<DeletionJob>(
+      'user-deletion',
+      async (job) =>
+        job.name === 'check-scheduled-deletions'
+          ? this.sweepScheduledDeletions()
+          : processPermanentDeletion(job),
+      { ...getQueueOptions(), concurrency: 6 }
+    );
+
+    const logQueueError = (err: Error) => {
+      this.logger.error('Deletion queue error', { error: err.message });
+    };
+    this.deletionQueue.on('error', logQueueError);
+    this.worker.on('error', logQueueError);
 
     // Daily cron job to check for scheduled deletions
     this.setupDailyCron();
@@ -128,8 +128,8 @@ export class DeletionQueueService {
     });
   }
 
-  async scheduleDeletion(data: DeletionJob, delay = 0): Promise<Bull.Job<DeletionJob>> {
-    const jobOptions: Bull.JobOptions = {
+  async scheduleDeletion(data: DeletionJob, delay = 0): Promise<Job<DeletionJob>> {
+    const jobOptions: JobsOptions = {
       delay: delay > 0 ? delay : 0,
       priority: 1, // Low priority
     };
@@ -173,27 +173,22 @@ export class DeletionQueueService {
 
   private setupDailyCron(): void {
     // Run every day at 2 AM to check for scheduled deletions
-    this.deletionQueue.add(
-      'check-scheduled-deletions',
-      {
-        userId: '',
-        scheduledDeletionDate: new Date(),
-        email: '',
-      } as DeletionJob,
-      {
-        repeat: {
-          cron: '0 2 * * *', // 2 AM daily
-        },
-      }
-    );
-
-    this.deletionQueue.process('check-scheduled-deletions', async () => {
-      return this.sweepScheduledDeletions();
-    });
+    void this.deletionQueue
+      .upsertJobScheduler(
+        'check-scheduled-deletions',
+        { pattern: '0 2 * * *' },
+        {
+          name: 'check-scheduled-deletions',
+          data: { userId: '', scheduledDeletionDate: new Date(), email: '' } as DeletionJob,
+        }
+      )
+      .catch((err: Error) => {
+        this.logger.error('Failed to schedule deletion sweep', { error: err.message });
+      });
   }
 
-  async getJobStatus(jobId: string): Promise<Bull.Job<DeletionJob> | null> {
-    return this.deletionQueue.getJob(jobId);
+  async getJobStatus(jobId: string): Promise<Job<DeletionJob> | null> {
+    return (await this.deletionQueue.getJob(jobId)) ?? null;
   }
 
   async getQueueStatus(): Promise<{
@@ -213,8 +208,8 @@ export class DeletionQueueService {
   }
 
   async close(): Promise<void> {
+    await this.worker.close();
     await this.deletionQueue.close();
-    this.redis.disconnect();
   }
 }
 

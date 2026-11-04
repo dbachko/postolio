@@ -215,7 +215,7 @@ Focus on significant changes only. Return only JSON.`;
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.1,
-        max_tokens: 300,
+        max_completion_tokens: 300,
       });
 
       const analysis = JSON.parse(response.choices[0]?.message?.content || '{}');

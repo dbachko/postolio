@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist",
+    "build": "tsup src/index.ts --format esm --target node24 --out-dir dist",
     "lint": "eslint src/**/*.ts",
     "test": "vitest run"
   },
@@ -21,8 +21,9 @@
     "@postolio/tsconfig": "workspace:*",
     "@types/aws-lambda": "^8.10.164",
     "aws-sdk-client-mock": "^4.1.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.12"
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   }
 }

@@ -317,15 +317,6 @@ class InstagramService {
     return refreshAccessTokenImpl(this, currentToken);
   }
 
-  static validateWebhookSignature(payload: string, signature: string): boolean {
-    const expected = crypto
-      .createHmac('sha256', process.env.FACEBOOK_APP_SECRET || 'test_secret')
-      .update(payload)
-      .digest('hex');
-    const received = signature.replace('sha256=', '');
-    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(received, 'hex'));
-  }
-
   async getProfile(brand: BrandData | string): Promise<InstagramProfile> {
     return getProfileImpl(this, brand);
   }

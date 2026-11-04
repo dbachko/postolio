@@ -33,7 +33,8 @@ export async function setCommentHiddenImpl(
     throw new Error(
       `Failed to ${hide ? 'hide' : 'unhide'} comment: ${
         error instanceof Error ? error.message : 'Unknown error'
-      }`
+      }`,
+      { cause: error }
     );
   }
 }
@@ -55,7 +56,8 @@ export async function deleteCommentImpl(
   } catch (error) {
     commentsLogger.error('Failed to delete comment', formatError(error));
     throw new Error(
-      `Failed to delete comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to delete comment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -79,10 +81,12 @@ export async function likeCommentImpl(
   } catch (error: any) {
     const message = (error?.response?.data?.error?.message as string) || (error as Error).message;
     if (/Unsupported|Invalid parameter|Unknown path|(#|code)\s?100|not allowed/i.test(message)) {
-      throw new Error('Instagram API does not support liking comments for this account');
+      throw new Error('Instagram API does not support liking comments for this account', {
+        cause: error,
+      });
     }
     commentsLogger.error('Failed to like comment', formatError(error));
-    throw new Error(`Failed to like comment: ${message || 'Unknown error'}`);
+    throw new Error(`Failed to like comment: ${message || 'Unknown error'}`, { cause: error });
   }
 }
 
@@ -101,9 +105,11 @@ export async function likeCommentForSocialAccountImpl(
   } catch (error: any) {
     const message = (error?.response?.data?.error?.message as string) || (error as Error).message;
     if (/Unsupported|Invalid parameter|Unknown path|(#|code)\s?100|not allowed/i.test(message)) {
-      throw new Error('Instagram API does not support liking comments for this account');
+      throw new Error('Instagram API does not support liking comments for this account', {
+        cause: error,
+      });
     }
     commentsLogger.error('Failed to like comment', formatError(error));
-    throw new Error(`Failed to like comment: ${message || 'Unknown error'}`);
+    throw new Error(`Failed to like comment: ${message || 'Unknown error'}`, { cause: error });
   }
 }

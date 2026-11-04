@@ -33,7 +33,7 @@ function registerRecentJobsRoute(fastify: FastifyInstance): void {
             id: job.id,
             name: job.name,
             data: job.data,
-            progress: job.progress(),
+            progress: job.progress,
             attemptsMade: job.attemptsMade,
             finishedOn: job.finishedOn,
             processedOn: job.processedOn,

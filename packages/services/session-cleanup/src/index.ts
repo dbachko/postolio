@@ -1,8 +1,13 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
-import { prisma } from '@postolio/database';
+import {
+  connectLambdaDatabase,
+  type PrismaClient as LambdaPrismaClient,
+} from '@postolio/database/lambda';
 import { addDays } from 'date-fns';
 import { initSentry, captureException } from '@postolio/observability';
+
+let prisma: LambdaPrismaClient;
 
 const logger = new Logger({ serviceName: 'session-cleanup' });
 const metrics = new Metrics({
@@ -34,6 +39,8 @@ export const handler = async (): Promise<CleanupResult> => {
   };
 
   try {
+    prisma ??= await connectLambdaDatabase();
+
     // 1. Revoke expired sessions (expiresAt < now)
     const expiredCount = await revokeExpiredSessions(result);
     logger.info(`Revoked ${expiredCount} expired sessions`);

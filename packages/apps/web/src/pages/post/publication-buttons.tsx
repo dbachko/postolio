@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { ExternalLink, Instagram } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { InstagramIcon } from '@/components/icons/brand-icons';
 
 type PublicationLink = { key: string; platform: string; permalink: string };
 
@@ -76,7 +77,7 @@ export function usePublicationButtons(
         className="w-full justify-start gap-2"
       >
         {link.platform === 'instagram' ? (
-          <Instagram className="h-4 w-4" />
+          <InstagramIcon className="h-4 w-4" />
         ) : (
           <ExternalLink className="h-4 w-4" />
         )}

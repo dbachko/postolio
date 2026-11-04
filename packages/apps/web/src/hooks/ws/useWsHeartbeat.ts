@@ -1,7 +1,7 @@
 import { type MutableRefObject, useCallback, useRef } from 'react';
 
 export function useWsHeartbeat() {
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const startHeartbeat = useCallback(
     (wsRef: MutableRefObject<WebSocket | null>, intervalMs = 25000) => {

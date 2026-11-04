@@ -12,6 +12,7 @@ function createRedisInstance(redisUrl: string, options?: RedisOptions): Redis {
     enableReadyCheck: true,
     lazyConnect: true,
     maxRetriesPerRequest: 3,
+    protocol: 2,
     ...options,
   });
 

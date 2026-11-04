@@ -124,7 +124,7 @@ async function initializeRuntimeServices(app: FastifyInstance): Promise<Redis> {
 
 async function startListening(app: FastifyInstance): Promise<void> {
   try {
-    const address = await app.listen({ port: 3000, host: '0.0.0.0' });
+    const address = await app.listen({ port: Number(process.env.PORT) || 3000, host: '0.0.0.0' });
     app.log.info(`Server listening at ${address}`);
   } catch (err) {
     app.log.error(err);

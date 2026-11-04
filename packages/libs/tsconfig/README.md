@@ -46,5 +46,5 @@ React/Vite example:
 
 ## Notes
 
-- Lambdas run on Node.js 22.x (CDK sets `NODEJS_22_X`), so Node packages should compile for ES2022 and build for `node22`.
+- Lambdas run on Node.js 24.x (CDK sets `NODEJS_24_X`), so Node packages should compile for ES2022 and build for `node22`.
 - Browser apps remain on `esnext` and DOM libs; bundlers (Vite/Rollup) downlevel per targets/browserslist.

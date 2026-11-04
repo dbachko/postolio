@@ -20,13 +20,7 @@ import {
 } from '../validators/schedule-validator';
 import { createErrorResponse, createSuccessResponse } from '../utils/response-utils';
 import { authenticateRequest, AuthenticationError } from '../utils/auth';
-import {
-  createCorsPreflightResponse,
-  getBody,
-  getMethod,
-  getPath,
-  getQueryParams,
-} from './http-event-utils';
+import { getBody, getMethod, getPath, getQueryParams } from './http-event-utils';
 
 const logger = new Logger({ serviceName: 'schedule-management-http' });
 const metrics = new Metrics({
@@ -57,11 +51,6 @@ export class HttpHandler {
 
     const method = getMethod(event);
     const path = getPath(event);
-
-    // Handle OPTIONS requests for CORS
-    if (method === 'OPTIONS') {
-      return createCorsPreflightResponse();
-    }
 
     try {
       // CRITICAL: Authenticate request (except health check)

@@ -1,23 +1,23 @@
 # Stage 1: prune workspace to only web and its deps
-FROM node:22-alpine AS pruner
+FROM node:26-alpine AS pruner
 WORKDIR /app
-RUN npm i -g pnpm
+RUN npm i -g pnpm@12.16.1
 COPY . .
-RUN pnpm dlx turbo prune --scope=@postolio/web --docker --out-dir out
+RUN pnpm dlx turbo@2.11.10 prune --scope=@postolio/web --docker --out-dir out
 
 # Stage 2: install pruned dependencies
-FROM node:22-alpine AS installer
+FROM node:26-alpine AS installer
 WORKDIR /app
-RUN npm i -g pnpm
+RUN npm i -g pnpm@12.16.1
 COPY --from=pruner /app/out/json/ ./
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 RUN pnpm install --frozen-lockfile
 
 # Stage 3: build web bundle
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
-RUN npm i -g pnpm && apk add --no-cache libc6-compat python3 make g++ openssl
+RUN npm i -g pnpm@12.16.1 && apk add --no-cache libc6-compat python3 make g++ openssl
 COPY --from=installer /app/node_modules ./node_modules
 COPY --from=installer /app/packages ./packages
 COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
@@ -48,7 +48,7 @@ ENV VITE_SENTRY_FRONTEND_DSN=${VITE_SENTRY_FRONTEND_DSN}
 RUN pnpm turbo run build --filter=@postolio/web...
 
 # Stage 4: runtime image serving static assets + reverse proxy
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.30-alpine AS runner
 WORKDIR /usr/share/nginx/html
 COPY --from=builder /app/packages/apps/web/dist ./
 COPY --from=pruner /app/packages/apps/web/docker/nginx.conf /etc/nginx/conf.d/default.conf

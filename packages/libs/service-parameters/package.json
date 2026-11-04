@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --target node22 --out-dir dist --dts",
+    "build": "tsup src/index.ts --format esm,cjs --target node24 --out-dir dist --dts",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
@@ -22,8 +22,8 @@
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "eslint": "^9.39.5",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "eslint": "^10.14.0",
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3"
   }
 }

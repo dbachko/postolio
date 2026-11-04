@@ -1,5 +1,6 @@
 import { BaseImageProvider } from './base-provider.js';
 import { getOpenAIClient } from '../openai-client.js';
+import { generateOpenAIImage, OPENAI_IMAGE_MODEL } from './openai-image.js';
 import type {
   ImageProvider,
   ImageGenerationRequest,
@@ -8,13 +9,18 @@ import type {
   ImageFeature,
 } from './types.js';
 
+/**
+ * OpenAI image provider. OpenAI shut DALL-E 3 down on 2026-05-12; the `dalle-3` id stays
+ * because brand settings and generation logs persist it.
+ */
 export class DalleProvider extends BaseImageProvider {
   readonly name: ImageProvider = 'dalle-3';
-  readonly displayName = 'DALL-E 3';
+  readonly displayName = 'OpenAI GPT Image';
 
   readonly pricing: ProviderPricing = {
-    standard: 0.04,
-    hd: 0.08,
+    // Estimates shown before generation; actual cost comes from the response's token usage.
+    standard: 0.053,
+    hd: 0.211,
     features: ['Photorealistic quality', 'Rich detail', 'Artistic styles', 'Mature API'],
     speedEstimate: '10-20s',
   };
@@ -33,33 +39,21 @@ export class DalleProvider extends BaseImageProvider {
 
     const enhancedPrompt = this.buildDallePrompt(request);
 
-    const response = await openai.images.generate({
-      model: 'dall-e-3',
+    const { imageBuffer, size, quality, cost } = await generateOpenAIImage(openai, {
       prompt: enhancedPrompt,
-      size: (request.size || '1024x1024') as '1024x1024' | '1792x1024' | '1024x1792',
+      size: request.size || '1024x1024',
       quality: request.quality || 'standard',
-      n: 1,
     });
 
-    const first = response.data?.[0];
-    const imageUrl = first?.url;
-    if (!imageUrl) {
-      throw new Error('No image URL received from DALL-E');
-    }
-
-    const cost = this.calculateCost(request);
-    const generationTime = Date.now() - startTime;
-
     return {
-      imageUrl,
+      imageBuffer,
       provider: this.name,
-      cost,
+      cost: cost ?? this.calculateCost(request),
       metadata: {
-        model: 'dall-e-3',
-        size: request.size || '1024x1024',
-        quality: request.quality || 'standard',
-        generationTime,
-        revisedPrompt: first?.revised_prompt,
+        model: OPENAI_IMAGE_MODEL,
+        size,
+        quality,
+        generationTime: Date.now() - startTime,
       },
     };
   }

@@ -7,10 +7,10 @@ import type {
 
 export function useSchedulingWebSocketState() {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const countdownIntervalRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastConnectionAttemptRef = useRef<number>(0);
   const isAuthenticatedRef = useRef(false);
   const isRefreshingRef = useRef(false);

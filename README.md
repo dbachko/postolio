@@ -15,7 +15,7 @@ See [STRUCTURE.md](STRUCTURE.md) for file placement and import rules.
 
 ## Local setup
 
-Use Node.js 22 or newer and the pnpm version pinned in `package.json`.
+Use Node.js 26 (Lambdas run on 24) and the pnpm version pinned in `package.json`.
 Configure `.env` using [.env.example](.env.example), with local database URLs:
 
 ```env
@@ -30,7 +30,7 @@ pnpm install --frozen-lockfile
 pnpm dev:stack
 ```
 
-The stack starts PostgreSQL on ports 5432 and 5433, Redis, the API on 3000, the assets API on 3002, and the web app on 5173. It applies pending migrations, builds workspace dependencies, and starts the watchers. Press `Ctrl+C` to stop them.
+The stack starts PostgreSQL on ports 5432 and 5433, Valkey (Redis-compatible), the API on 3000, the assets API on 3002, and the web app on 5173. It applies pending migrations, builds workspace dependencies, and starts the watchers. Press `Ctrl+C` to stop them.
 
 `dev:stack` stops lingering development processes and frees the development ports before starting. It uses the Docker Compose project name `postolio` by default, so clones share the same containers. Set `COMPOSE_PROJECT_NAME` to use a separate stack.
 
@@ -48,7 +48,7 @@ For local HTTPS and OAuth, see [scripts/README.md](scripts/README.md#local-https
 
 ### Run apps separately
 
-Start the databases and Redis:
+Start the databases and Valkey:
 
 ```bash
 pnpm dev:db

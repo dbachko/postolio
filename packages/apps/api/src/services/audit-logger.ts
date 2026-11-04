@@ -183,22 +183,6 @@ export class AuditLogger {
    * Get client IP address from request
    */
   private static getClientIp(request: FastifyRequest): string {
-    // Check for forwarded IP (when behind proxy/load balancer)
-    const forwarded = request.headers['x-forwarded-for'];
-    if (forwarded && typeof forwarded === 'string') {
-      return forwarded.split(',')[0]?.trim() || 'unknown';
-    }
-    if (forwarded && Array.isArray(forwarded) && forwarded[0]) {
-      return forwarded[0].split(',')[0]?.trim() || 'unknown';
-    }
-
-    // Check for real IP header (CloudFront, Nginx)
-    const realIp = request.headers['x-real-ip'];
-    if (realIp && typeof realIp === 'string') {
-      return realIp;
-    }
-
-    // Fallback to socket IP
     return request.ip || 'unknown';
   }
 

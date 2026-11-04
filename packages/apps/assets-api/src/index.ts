@@ -1,5 +1,5 @@
+import './dotenv-init.js';
 import crypto from 'node:crypto';
-import dotenv from 'dotenv';
 import fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
@@ -16,11 +16,9 @@ import taxonomyRoutes from './routes/taxonomy.js';
 import healthRoutes from './routes/health.js';
 import { logger as sharedLogger } from '@postolio/logger';
 
-dotenv.config();
-
 const PORT = parseInt(process.env.ASSETS_API_PORT || '3002', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
+const JWT_SECRET = resolveJwtSecret();
 const SERVICE_API_TOKEN = resolveServiceToken();
 
 export function buildFastify(): FastifyInstance {
@@ -30,6 +28,14 @@ export function buildFastify(): FastifyInstance {
   registerRoutePlugins(server);
   registerShutdownHooks(server);
   return server;
+}
+
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error('JWT_SECRET must be set and at least 32 characters long');
+  }
+  return secret;
 }
 
 function resolveServiceToken(): string {
@@ -53,8 +59,6 @@ function createServer(): FastifyInstance {
   const loggerInstance: FastifyBaseLogger = fastifyLogger.toPino();
   return fastify({
     loggerInstance,
-    requestIdLogLabel: 'reqId',
-    disableRequestLogging: false,
     requestIdHeader: 'x-request-id',
   });
 }

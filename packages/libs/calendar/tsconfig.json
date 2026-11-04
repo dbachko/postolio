@@ -6,7 +6,8 @@
     "declaration": true,
     "emitDeclarationOnly": false,
     "moduleResolution": "bundler",
-    "types": ["react", "react-dom"]
+    "types": ["react", "react-dom"],
+    "rootDir": "src"
   },
   "include": ["src"]
 }

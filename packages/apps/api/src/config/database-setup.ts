@@ -144,7 +144,7 @@ export async function ensureDatabaseSchema(options?: { generateClient?: boolean 
     runSchemaSync({ invocation, schemaPath });
   } catch (migrationError) {
     printMigrationHelp(migrationError);
-    throw new Error(`Database setup failed: ${migrationError}`);
+    throw new Error(`Database setup failed: ${migrationError}`, { cause: migrationError });
   }
 
   try {
@@ -161,6 +161,8 @@ export async function ensureDatabaseSchema(options?: { generateClient?: boolean 
     await verifyDatabaseConnectivity();
   } catch (error) {
     console.error('❌ Database connectivity check failed:', error);
-    throw new Error('Cannot connect to database. Please ensure PostgreSQL is running.');
+    throw new Error('Cannot connect to database. Please ensure PostgreSQL is running.', {
+      cause: error,
+    });
   }
 }

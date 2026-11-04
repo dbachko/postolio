@@ -1,4 +1,4 @@
-import type Bull from 'bull';
+import type { Job } from 'bullmq';
 import type { JobData, CleanupResult } from './types.js';
 
 type LoggerLike = {
@@ -15,7 +15,7 @@ export async function processNotificationRetentionJob(): Promise<CleanupResult> 
   return { deletedCount: res.deleted, duration: Date.now() - start };
 }
 
-export async function processInboxCommentsIngestJob(job: Bull.Job<JobData>): Promise<{
+export async function processInboxCommentsIngestJob(job: Job<JobData>): Promise<{
   brandId: string;
   postsProcessed: number;
   commentsUpserted: number;
@@ -35,9 +35,9 @@ export async function processInboxCommentsIngestJob(job: Bull.Job<JobData>): Pro
     throw new Error('Missing brandId for inbox comments ingest job');
   }
 
-  await job.progress(5);
+  await job.updateProgress(5);
   const { ingestBrandComments } = await import('../inbox-comments-ingestor.js');
-  await job.progress(15);
+  await job.updateProgress(15);
 
   const result = await ingestBrandComments(
     brandId,
@@ -48,7 +48,7 @@ export async function processInboxCommentsIngestJob(job: Bull.Job<JobData>): Pro
       socialAccountIds,
     }
   );
-  await job.progress(100);
+  await job.updateProgress(100);
 
   return {
     brandId,
@@ -58,7 +58,7 @@ export async function processInboxCommentsIngestJob(job: Bull.Job<JobData>): Pro
 }
 
 export async function processInboxCommentsBackfillJob(
-  job: Bull.Job<JobData>,
+  job: Job<JobData>,
   logger: LoggerLike
 ): Promise<{
   brandsTotal: number;
@@ -115,10 +115,10 @@ export async function processInboxCommentsBackfillJob(
       });
     }
 
-    await job.progress(Math.min(99, Math.round(((i + 1) / brands.length) * 100)));
+    await job.updateProgress(Math.min(99, Math.round(((i + 1) / brands.length) * 100)));
   }
 
-  await job.progress(100);
+  await job.updateProgress(100);
   return {
     brandsTotal: brands.length,
     brandsProcessed,
@@ -129,7 +129,7 @@ export async function processInboxCommentsBackfillJob(
   };
 }
 
-export async function processInboxDMsIngestJob(job: Bull.Job<JobData>): Promise<{
+export async function processInboxDMsIngestJob(job: Job<JobData>): Promise<{
   brandId: string;
   accountsProcessed: number;
   threadsProcessed: number;
@@ -151,9 +151,9 @@ export async function processInboxDMsIngestJob(job: Bull.Job<JobData>): Promise<
     throw new Error('Missing brandId for inbox DMs ingest job');
   }
 
-  await job.progress(5);
+  await job.updateProgress(5);
   const { ingestBrandDMs } = await import('../inbox-dm-ingestor.js');
-  await job.progress(15);
+  await job.updateProgress(15);
 
   const result = await ingestBrandDMs(
     brandId,
@@ -165,7 +165,7 @@ export async function processInboxDMsIngestJob(job: Bull.Job<JobData>): Promise<
     }
   );
 
-  await job.progress(100);
+  await job.updateProgress(100);
   return { brandId, ...result, duration: Date.now() - start };
 }
 

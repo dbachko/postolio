@@ -41,6 +41,14 @@ export function initSentry(config: SentryInitConfig): void {
     // Default to 0 to disable tracing by default; individual services can
     // opt in with a non-zero sample rate when they are ready to pay the cost.
     tracesSampleRate: config.tracesSampleRate ?? 0,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpBodies: [],
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+    },
     beforeSend(event) {
       event.tags = {
         ...(event.tags || {}),

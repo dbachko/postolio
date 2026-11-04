@@ -1,21 +1,21 @@
 # Stage 1: Prune workspace for analytics-ingestor
-FROM node:22-alpine AS pruner
+FROM node:26-alpine AS pruner
 WORKDIR /app
 
 # Install pnpm
-RUN npm i -g pnpm
+RUN npm i -g pnpm@12.16.1
 
 # Copy monorepo
 COPY . .
 
 # Create pruned workspace for the ingestor and its dependencies
-RUN pnpm dlx turbo prune --scope=@postolio/analytics-ingestor --docker --out-dir out
+RUN pnpm dlx turbo@2.11.10 prune --scope=@postolio/analytics-ingestor --docker --out-dir out
 
 
 # Stage 2: Install pruned deps
-FROM node:22-alpine AS installer
+FROM node:26-alpine AS installer
 WORKDIR /app
-RUN npm i -g pnpm
+RUN npm i -g pnpm@12.16.1
 
 COPY --from=pruner /app/out/json/ ./
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
@@ -26,10 +26,10 @@ RUN pnpm install --no-frozen-lockfile
 
 
 # Stage 3: Build in pruned workspace
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
-RUN npm i -g pnpm && apk add --no-cache libc6-compat python3 make g++ openssl
+RUN npm i -g pnpm@12.16.1 && apk add --no-cache libc6-compat python3 make g++ openssl
 
 COPY --from=installer /app/node_modules ./node_modules
 COPY --from=installer /app/packages ./packages
@@ -49,7 +49,7 @@ RUN pnpm --filter=@postolio/aws build \
 
 
 # Stage 4: Runner
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 
 # Security: non-root user
@@ -62,7 +62,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/ .
 USER nodejs
 
 # Default envs (overridden by ECS)
-ENV NODE_ENV=dev
+ENV NODE_ENV=prod
 ENV INGESTOR_LOOP_MS=60000
 
 # No healthcheck port; rely on logs and ECS task metrics

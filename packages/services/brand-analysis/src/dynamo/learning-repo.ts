@@ -68,7 +68,7 @@ export class LearningRepository {
       return [];
     }
 
-    let res: { Items?: Array<Record<string, unknown>> } = {};
+    let res: { Items?: Array<Record<string, unknown>> };
     try {
       res = (await doc.send(
         new QueryCommand({

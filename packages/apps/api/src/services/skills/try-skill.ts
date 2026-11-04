@@ -67,7 +67,7 @@ function buildImageGenerationOutput(
     ok: true,
     output: {
       provider,
-      model: 'dall-e-3',
+      model: 'gpt-image-2',
       prompt,
       imageUrl: null,
     },

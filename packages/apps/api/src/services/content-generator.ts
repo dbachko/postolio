@@ -38,7 +38,7 @@ export async function generateContentBatch(
             theme: request.theme || null,
             style: request.style || null,
             model: getDefaultOpenAIModel(),
-            imageModel: 'dall-e-3',
+            imageModel: 'gpt-image-2',
           },
         },
       };

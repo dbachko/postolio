@@ -4,7 +4,7 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { prismaAssets } from '@postolio/database-assets';
-import ffmpeg from 'fluent-ffmpeg';
+import { generateThumbnail, probeVideo } from './ffmpeg.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -364,41 +364,11 @@ async function streamToBuffer(
   return Buffer.concat(chunks);
 }
 
-function extractVideoMetadata(videoPath: string): Promise<VideoMetadata> {
-  return new Promise((resolve, reject) => {
-    ffmpeg.ffprobe(videoPath, (err, metadata) => {
-      if (err) {
-        return reject(err);
-      }
-
-      const videoStream = metadata.streams.find((stream) => stream.codec_type === 'video');
-      if (!videoStream) {
-        return reject(new Error('No video stream found'));
-      }
-
-      const duration = metadata.format.duration || 0;
-      const width = videoStream.width || 0;
-      const height = videoStream.height || 0;
-      const codec = videoStream.codec_name || 'unknown';
-      const bitrate = metadata.format.bit_rate || 0;
-      const fps = eval(videoStream.r_frame_rate || '0');
-
-      const aspectRatioDecimal = width / height;
-      const { aspectRatio, orientationType } = matchAspectRatio(aspectRatioDecimal);
-
-      resolve({
-        duration,
-        width,
-        height,
-        aspectRatio,
-        aspectRatioDecimal,
-        orientationType,
-        codec,
-        bitrate,
-        fps,
-      });
-    });
-  });
+async function extractVideoMetadata(videoPath: string): Promise<VideoMetadata> {
+  const probe = await probeVideo(videoPath);
+  const aspectRatioDecimal = probe.width / probe.height;
+  const { aspectRatio, orientationType } = matchAspectRatio(aspectRatioDecimal);
+  return { ...probe, aspectRatio, aspectRatioDecimal, orientationType };
 }
 
 function matchAspectRatio(aspectRatioDecimal: number): {
@@ -434,21 +404,4 @@ function matchAspectRatio(aspectRatioDecimal: number): {
   }
 
   return { aspectRatio, orientationType };
-}
-
-function generateThumbnail(
-  videoPath: string,
-  outputPath: string,
-  timestamp: number
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    ffmpeg(videoPath)
-      .screenshots({
-        timestamps: [timestamp],
-        filename: join(outputPath, '..', `thumbnail_${timestamp}s.jpg`),
-        size: '1280x720',
-      })
-      .on('end', () => resolve())
-      .on('error', reject);
-  });
 }

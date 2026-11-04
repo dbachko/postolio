@@ -1,23 +1,8 @@
-import fs from 'fs';
-import path from 'path';
-import dotenv from 'dotenv';
+import '../src/dotenv-init.js';
 import bcrypt from 'bcryptjs';
 import { ensureDatabaseSchema } from '../src/config/database-setup.js';
 import { getDatabaseClient } from '../src/config/database.js';
 import { ensureAiCreditsWalletInitialized } from '../src/services/ai-credits.js';
-
-const envCandidates = [
-  path.resolve(process.cwd(), '.env'),
-  // When running from packages/apps/api
-  path.resolve(process.cwd(), '../../../.env'),
-  // When running from deeper paths
-  path.resolve(process.cwd(), '../../../../.env'),
-];
-
-for (const candidate of envCandidates) {
-  if (!fs.existsSync(candidate)) continue;
-  dotenv.config({ path: candidate, override: false });
-}
 
 type Args = {
   email: string;

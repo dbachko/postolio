@@ -21,7 +21,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { NagSuppressions } from 'cdk-nag';
+import { acknowledgeNagRules } from '../utils/cdk-nag-suppressions';
 import * as path from 'path';
 import { ParameterNames, type Environment } from '@postolio/service-parameters';
 import { OAuthConfig } from '../utils/oauth-config';
@@ -65,6 +65,7 @@ export class PublishingStack extends cdk.Stack {
     // ==================== Internal DynamoDB Tables ====================
     // Retry attempts tracking table (per schedule)
     const retryTable = new dynamodb.Table(this, 'RetryQueueTable', {
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       tableName: `${prefix}-retry-info`,
       partitionKey: { name: 'scheduleId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'attemptNumber', type: dynamodb.AttributeType.NUMBER },
@@ -76,6 +77,7 @@ export class PublishingStack extends cdk.Stack {
 
     // DLQ processing state table
     const dlqStateTable = new dynamodb.Table(this, 'DlqStateTable', {
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       tableName: `${prefix}-dlq-state`,
       partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -441,7 +443,7 @@ export class PublishingStack extends cdk.Stack {
     // 1. Publisher Function
     const publisherFunction = new lambdaNodejs.NodejsFunction(this, 'PublisherFunction', {
       functionName: `${prefix}-publisher`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/publisher/src/index.ts'),
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -507,7 +509,7 @@ export class PublishingStack extends cdk.Stack {
     // 2. Retry Handler Function
     const retryHandlerFunction = new lambdaNodejs.NodejsFunction(this, 'RetryHandlerFunction', {
       functionName: `${prefix}-retry-handler`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/retry-handler/src/index.ts'),
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -558,7 +560,7 @@ export class PublishingStack extends cdk.Stack {
     // 3. DLQ Processor Function
     const dlqProcessorFunction = new lambdaNodejs.NodejsFunction(this, 'DLQProcessorFunction', {
       functionName: `${prefix}-dlq-processor`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/dlq-processor/src/index.ts'),
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
@@ -810,48 +812,36 @@ export class PublishingStack extends cdk.Stack {
     });
 
     // ==================== CDK NAG Suppressions ====================
-    NagSuppressions.addResourceSuppressions(
-      publishingLambdaRole,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Lambda execution role requires broad permissions for SQS and EventBridge operations',
-        },
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'AWS managed policies for Lambda execution are standard and secure',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
-          ],
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(publishingLambdaRole, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Lambda execution role requires broad permissions for SQS and EventBridge operations',
+      },
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'AWS managed policies for Lambda execution are standard and secure',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+        ],
+      },
+    ]);
 
     // Suppress log retention function IAM issues (created automatically by CDK)
-    NagSuppressions.addResourceSuppressions(
-      this,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          ],
-        },
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
-          appliesTo: ['Resource::*'],
-        },
-        {
-          id: 'AwsSolutions-L1',
-          reason: 'Using latest stable Node.js runtime for Lambda functions',
-        },
-      ],
-      true
-    );
+    acknowledgeNagRules(this, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
+        appliesTo: [
+          'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        ],
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
+        appliesTo: ['Resource::*'],
+      },
+    ]);
   }
 }

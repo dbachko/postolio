@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Uppy from '@uppy/core';
 import DashboardPlugin from '@uppy/dashboard';
 import AwsS3 from '@uppy/aws-s3';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { assetsApi } from '@/features/assets/api/client';
 import { validateInstagramVideo } from '@/lib/instagram-video-validator';
@@ -73,31 +74,21 @@ function scheduleDashboardVisibility(dashboardPlugin: any) {
   }
 }
 
-function ensureDashboardPlugin({
-  dashboardContainerRef,
-  dashboardPluginRef,
-  uppy,
-}: {
-  dashboardContainerRef: React.MutableRefObject<HTMLDivElement | null>;
-  dashboardPluginRef: React.MutableRefObject<any>;
-  uppy: Uppy;
-}) {
-  if (!dashboardContainerRef.current || dashboardPluginRef.current) {
-    return;
-  }
+type DashboardTheme = 'light' | 'dark';
+
+function installDashboard(uppy: Uppy, target: HTMLElement, theme: DashboardTheme) {
   (uppy as any).use(DashboardPlugin, {
     inline: true,
-    target: dashboardContainerRef.current,
+    target,
     width: '100%',
     height: 440,
     note: 'Supports: JPEG, PNG, WebP, GIF (max 10MB) • Video MP4/MOV up to 500MB (3–90s recommended)',
-    theme: 'auto',
+    theme,
     proudlyDisplayPoweredByUppy: false,
     showProgressDetails: true,
     hideUploadButton: false,
   } as any);
-  dashboardPluginRef.current = (uppy as any).getPlugin('Dashboard');
-  scheduleDashboardVisibility(dashboardPluginRef.current);
+  scheduleDashboardVisibility((uppy as any).getPlugin('Dashboard'));
 }
 
 function resolveUploadedFileS3Key(
@@ -144,6 +135,86 @@ async function finalizeUploadedAsset(params: {
   }
 }
 
+async function prepareAssetUpload(params: {
+  brandId: string;
+  file: any;
+  setError: (value: string | null) => void;
+  s3KeyById: React.MutableRefObject<Map<string, string>>;
+  videoMetaById: React.MutableRefObject<Map<string, VideoValidationMeta>>;
+}) {
+  const fileType = params.file.type?.startsWith('image/') ? 'image' : 'video';
+  const uploadLimit = fileType === 'image' ? IMAGE_UPLOAD_LIMIT : VIDEO_UPLOAD_LIMIT;
+  if (params.file.size > uploadLimit) {
+    const limitMb = Math.floor(uploadLimit / (1024 * 1024));
+    const message = `Please upload ${fileType === 'image' ? 'images' : 'videos'} smaller than ${limitMb}MB.`;
+    params.setError(message);
+    throw new Error(message);
+  }
+
+  if (fileType === 'video') {
+    const validation = await validateInstagramVideo(params.file.data as File, {
+      minDurationSeconds: VIDEO_MIN_DURATION,
+      maxDurationSeconds: VIDEO_MAX_DURATION,
+      minWidth: VIDEO_MIN_WIDTH,
+      minHeight: VIDEO_MIN_HEIGHT,
+      recommendedAspectRatios: [
+        { label: '9:16', ratio: 9 / 16 },
+        { label: '4:5', ratio: 4 / 5 },
+      ],
+    });
+    params.videoMetaById.current.set(params.file.id, validation);
+    if (validation.errors.length > 0) {
+      const message = validation.errors.join(' ');
+      params.setError(message);
+      throw new Error(message);
+    }
+    if (validation.warnings.length > 0) {
+      toast.warning(validation.warnings.join(' '));
+    }
+  }
+
+  const uploadInfo = await assetsApi.getUploadUrl({
+    brandId: params.brandId,
+    fileName: params.file.name,
+    contentType: params.file.type,
+    fileType,
+    fileSize: params.file.size,
+  });
+  params.s3KeyById.current.set(params.file.id, uploadInfo.s3Key);
+  return uploadInfo;
+}
+
+/**
+ * Uppy needs an object key synchronously, but ours comes from the assets API together with
+ * the presigned URL. Request the key by file id, then swap in the real key when signing.
+ */
+export function configureAssetUploadPlugin(
+  uppy: Uppy,
+  params: {
+    brandId: string;
+    setError: (value: string | null) => void;
+    s3KeyById: React.MutableRefObject<Map<string, string>>;
+    videoMetaById: React.MutableRefObject<Map<string, VideoValidationMeta>>;
+  }
+) {
+  uppy.use(AwsS3, {
+    shouldUseMultipart: false,
+    generateObjectKey: (file) => file.id,
+    signRequest: async (request) => {
+      if (request.method !== 'PUT') {
+        throw new Error(`Unsupported S3 request for asset upload: ${request.method}`);
+      }
+      const file = uppy.getFile(request.key);
+      const { uploadUrl, s3Key } = await prepareAssetUpload({ ...params, file });
+      return {
+        url: uploadUrl,
+        key: s3Key,
+        headers: { 'Content-Type': file.type },
+      };
+    },
+  });
+}
+
 function createUploadHandlers({
   brandId,
   closeRef,
@@ -166,11 +237,17 @@ function createUploadHandlers({
     setError(null);
   };
 
-  const onUploadSuccess = async (file: any) => {
-    await finalizeUploadedAsset({ brandId, file, s3KeyById, videoMetaById, setError });
+  const pendingAssets = new Set<Promise<void>>();
+
+  const onUploadSuccess = (file: any) => {
+    const pending = finalizeUploadedAsset({ brandId, file, s3KeyById, videoMetaById, setError });
+    pendingAssets.add(pending);
+    void pending.finally(() => pendingAssets.delete(pending));
   };
 
   const onComplete = async (result: any) => {
+    // Uppy does not wait for upload-success handlers; the list must not refresh before these.
+    await Promise.allSettled(pendingAssets);
     setBusy(false);
     if (!result?.successful?.length) {
       return;
@@ -183,118 +260,61 @@ function createUploadHandlers({
   return { onComplete, onUpload, onUploadSuccess };
 }
 
-function useAssetUploadUppy({
-  brandId,
-  setError,
-  s3KeyById,
-  videoMetaById,
-}: {
-  brandId?: string;
-  setError: (value: string | null) => void;
-  s3KeyById: React.MutableRefObject<Map<string, string>>;
-  videoMetaById: React.MutableRefObject<Map<string, VideoValidationMeta>>;
-}) {
-  return useMemo(() => {
-    if (!brandId) {
-      return null;
-    }
-
-    const uppyInstance = new Uppy({
-      autoProceed: false,
-      debug: !!import.meta.env.DEV,
-      restrictions: { allowedFileTypes: ['image/*', 'video/*'] },
-      locale: {
-        strings: {
-          dropPasteFiles: 'Drop files here or %{browseFiles}',
-          browseFiles: 'click to browse',
-        },
-        pluralize: (count: number) => (count === 1 ? 0 : 1),
+function createAssetUploadUppy() {
+  return new Uppy({
+    autoProceed: false,
+    debug: !!import.meta.env.DEV,
+    restrictions: { allowedFileTypes: ['image/*', 'video/*'] },
+    locale: {
+      strings: {
+        dropPasteFiles: 'Drop files here or %{browseFiles}',
+        browseFiles: 'click to browse',
       },
-    });
-
-    (uppyInstance as any).use(AwsS3, {
-      shouldUseMultipart: false,
-      getUploadParameters: async (file: any) => {
-        const fileType = file.type?.startsWith('image/') ? 'image' : 'video';
-        const uploadLimit = fileType === 'image' ? IMAGE_UPLOAD_LIMIT : VIDEO_UPLOAD_LIMIT;
-        if (file.size > uploadLimit) {
-          const limitMb = Math.floor(uploadLimit / (1024 * 1024));
-          const message = `Please upload ${fileType === 'image' ? 'images' : 'videos'} smaller than ${limitMb}MB.`;
-          setError(message);
-          throw new Error(message);
-        }
-
-        if (fileType === 'video') {
-          const validation = await validateInstagramVideo(file.data as File, {
-            minDurationSeconds: VIDEO_MIN_DURATION,
-            maxDurationSeconds: VIDEO_MAX_DURATION,
-            minWidth: VIDEO_MIN_WIDTH,
-            minHeight: VIDEO_MIN_HEIGHT,
-            recommendedAspectRatios: [
-              { label: '9:16', ratio: 9 / 16 },
-              { label: '4:5', ratio: 4 / 5 },
-            ],
-          });
-          videoMetaById.current.set(file.id, validation);
-          if (validation.errors.length > 0) {
-            const message = validation.errors.join(' ');
-            setError(message);
-            throw new Error(message);
-          }
-          if (validation.warnings.length > 0) {
-            toast.warning(validation.warnings.join(' '));
-          }
-        }
-
-        const uploadInfo = await assetsApi.getUploadUrl({
-          brandId,
-          fileName: file.name,
-          contentType: file.type,
-          fileType,
-          fileSize: file.size,
-        });
-        s3KeyById.current.set(file.id, uploadInfo.s3Key);
-        return {
-          method: 'PUT',
-          url: uploadInfo.uploadUrl,
-          headers: { 'Content-Type': file.type },
-        } as any;
-      },
-    });
-
-    return uppyInstance;
-  }, [brandId, setError, s3KeyById, videoMetaById]);
+      pluralize: (count: number) => (count === 1 ? 0 : 1),
+    },
+  });
 }
 
 function useAssetUploadLifecycle({
   brandId,
   closeRef,
   dashboardContainerRef,
-  dashboardPluginRef,
   queryClient,
   setBusy,
   setError,
   s3KeyById,
-  uppy,
+  theme,
   videoMetaById,
 }: {
   brandId?: string;
   closeRef: React.MutableRefObject<() => void>;
   dashboardContainerRef: React.MutableRefObject<HTMLDivElement | null>;
-  dashboardPluginRef: React.MutableRefObject<any>;
   queryClient: QueryClient;
   setBusy: (next: boolean) => void;
   setError: (value: string | null) => void;
   s3KeyById: React.MutableRefObject<Map<string, string>>;
-  uppy: Uppy | null;
+  theme: DashboardTheme;
   videoMetaById: React.MutableRefObject<Map<string, VideoValidationMeta>>;
 }) {
+  const uppyRef = useRef<Uppy | null>(null);
+  const themeRef = useRef(theme);
+
   useEffect(() => {
-    if (!uppy || !brandId) {
+    themeRef.current = theme;
+    uppyRef.current?.getPlugin('Dashboard')?.setOptions({ theme } as any);
+  }, [theme]);
+
+  // destroy() cannot be undone, so the instance must be created here rather than in render:
+  // an effect re-run (StrictMode, brand switch) needs a new one.
+  useEffect(() => {
+    if (!brandId || !dashboardContainerRef.current) {
       return;
     }
 
-    ensureDashboardPlugin({ dashboardContainerRef, dashboardPluginRef, uppy });
+    const uppy = createAssetUploadUppy();
+    uppyRef.current = uppy;
+    configureAssetUploadPlugin(uppy, { brandId, setError, s3KeyById, videoMetaById });
+    installDashboard(uppy, dashboardContainerRef.current, themeRef.current);
 
     const handlers = createUploadHandlers({
       brandId,
@@ -305,40 +325,23 @@ function useAssetUploadLifecycle({
       setError,
       videoMetaById,
     });
-
     uppy.on('upload', handlers.onUpload);
     uppy.on('upload-success', handlers.onUploadSuccess);
     uppy.on('complete', handlers.onComplete);
 
     return () => {
-      uppy.off('upload', handlers.onUpload);
-      uppy.off('upload-success', handlers.onUploadSuccess);
-      uppy.off('complete', handlers.onComplete);
-      try {
-        if (dashboardPluginRef.current) {
-          (uppy as any).removePlugin(dashboardPluginRef.current);
-          dashboardPluginRef.current = null;
-        }
-      } catch {
-        // No-op on teardown.
-      }
-      try {
-        uppy.cancelAll();
-        uppy.destroy();
-      } catch {
-        // No-op on teardown.
-      }
+      uppyRef.current = null;
+      uppy.cancelAll();
+      uppy.destroy();
     };
   }, [
     brandId,
     closeRef,
     dashboardContainerRef,
-    dashboardPluginRef,
     queryClient,
     setBusy,
     setError,
     s3KeyById,
-    uppy,
     videoMetaById,
   ]);
 }
@@ -350,24 +353,22 @@ export function useAssetUploadSidebarController(brandId: string | undefined, clo
   const s3KeyById = useRef<Map<string, string>>(new Map());
   const videoMetaById = useRef<Map<string, VideoValidationMeta>>(new Map());
   const dashboardContainerRef = useRef<HTMLDivElement | null>(null);
-  const dashboardPluginRef = useRef<any>(null);
   const closeRef = useRef(close);
 
   useEffect(() => {
     closeRef.current = close;
   }, [close]);
 
-  const uppy = useAssetUploadUppy({ brandId, setError, s3KeyById, videoMetaById });
+  const { resolvedTheme } = useTheme();
   useAssetUploadLifecycle({
     brandId,
     closeRef,
     dashboardContainerRef,
-    dashboardPluginRef,
     queryClient,
     setBusy,
     setError,
     s3KeyById,
-    uppy,
+    theme: resolvedTheme === 'dark' ? 'dark' : 'light',
     videoMetaById,
   });
 

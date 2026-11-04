@@ -1,7 +1,7 @@
 export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  'dalle-3': 'DALL-E 3',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'gemini-3-pro': 'Gemini 3 Pro',
+  'dalle-3': 'OpenAI GPT Image',
+  'gemini-2.5-flash': 'Gemini Flash Image',
+  'gemini-3-pro': 'Gemini 3 Pro Image',
 };
 
 export function getLogStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destructive' {

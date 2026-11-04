@@ -121,7 +121,7 @@ export async function replyToCommentDirectImpl(
   } catch (error) {
     const errorMsg = (error as any)?.response?.data?.error?.message || (error as Error).message;
     actionsLogger.error('Failed to reply to comment', formatError(error));
-    throw new Error(`Failed to reply to comment: ${errorMsg}`);
+    throw new Error(`Failed to reply to comment: ${errorMsg}`, { cause: error });
   }
 }
 
@@ -153,7 +153,7 @@ export async function replyToCommentDirectForSocialAccountImpl(
   } catch (error) {
     const errorMsg = (error as any)?.response?.data?.error?.message || (error as Error).message;
     actionsLogger.error('Failed to reply to comment', formatError(error));
-    throw new Error(`Failed to reply to comment: ${errorMsg}`);
+    throw new Error(`Failed to reply to comment: ${errorMsg}`, { cause: error });
   }
 }
 
@@ -187,7 +187,8 @@ export async function replyToCommentImpl(
   } catch (error) {
     actionsLogger.error('Failed to reply to comment', formatError(error));
     throw new Error(
-      `Failed to reply to comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to reply to comment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }
@@ -219,7 +220,8 @@ export async function replyToCommentForSocialAccountImpl(
   } catch (error) {
     actionsLogger.error('Failed to reply to comment', formatError(error));
     throw new Error(
-      `Failed to reply to comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to reply to comment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
 }

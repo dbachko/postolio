@@ -1,6 +1,6 @@
 # Contributing
 
-Use Node.js 22 or newer and the PNPM version pinned in `package.json`.
+Use Node.js 26 (Lambdas run on 24) and the PNPM version pinned in `package.json`.
 
 ```sh
 pnpm install --frozen-lockfile

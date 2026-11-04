@@ -1,13 +1,13 @@
 import baseConfig from '../../../eslint.config.js';
 import reactHooks from 'eslint-plugin-react-hooks';
-import reactRefresh from 'eslint-plugin-react-refresh';
+import { reactRefresh } from 'eslint-plugin-react-refresh';
 
 export default [
   ...baseConfig,
   {
     plugins: {
       'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
+      'react-refresh': reactRefresh.plugin,
     },
     rules: {
       // Transitional relaxations (frontend currently heavy with any/unused vars)

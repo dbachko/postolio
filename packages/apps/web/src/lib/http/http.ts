@@ -1,5 +1,6 @@
 import { CSRFTokenManager } from '@postolio/csrf-client';
 import { makeCachedTimezoneGetter } from './timezone';
+import { isPublicPath } from './public-paths';
 
 // Debug flag to trace /api/auth/me 401 -> refresh behavior (enable via Vite env)
 const DEBUG_AUTH_ME_REFRESH = Boolean(
@@ -136,7 +137,7 @@ async function handleUnauthorizedResponse(
   if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
     console.warn('[AuthDebug] /api/auth/me refresh failed, redirecting to /login');
   }
-  if (!window.location.pathname.startsWith('/login')) {
+  if (!isPublicPath(window.location.pathname)) {
     window.location.href = '/login';
   }
   return null;

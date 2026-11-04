@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../src/dotenv-init.js';
 import { getDatabaseClient, disconnectDatabase } from '../src/config/database.js';
 
 type Args = {
