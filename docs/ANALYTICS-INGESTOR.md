@@ -45,9 +45,9 @@ Deploy Script Usage
 - Build/push the image to ECR and deploy the stack:
   - Build multi-arch (amd64) image and push:
     - docker buildx build --platform linux/amd64 \
-       -f packages/services/analytics-ingestor/Dockerfile \
-       -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
-       . --push
+      -f packages/services/analytics-ingestor/Dockerfile \
+      -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
+      . --push
   - Deploy with higher rate limit for dev:
     - RATE_LIMIT_PER_HOUR=1000 scripts/deploy-stack.sh -e dev analytics
 
@@ -58,9 +58,9 @@ Troubleshooting
   - Fix (rebuild + push for amd64):
     - docker buildx create --use --name postolio-builder || true
     - docker buildx build --platform linux/amd64 \
-       -f packages/services/analytics-ingestor/Dockerfile \
-       -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
-       . --push
+      -f packages/services/analytics-ingestor/Dockerfile \
+      -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
+      . --push
   - Re-deploy the Analytics stack so the task pulls the matching image.
 
 - Token Service 403

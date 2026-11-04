@@ -155,7 +155,7 @@ What it does:
 - Sets `COMPOSE_PROJECT_NAME` (default `postolio`) so all clones share the same containers.
 - Runs `scripts/restart-dev-stack.sh` to down/up the Docker services.
 - Spins up both Postgres containers (`postgres` on 5432 for the main API, `postgres_assets` on 5433 for the assets service) plus Redis via Docker Compose.
-- Loads environment variables from `.env`, drops the local Postgres database, reapplies Prisma migrations, and seeds a deterministic dev user (`dev@postolio.test` / `Test123!@#`). Skip this by exporting `SKIP_DB_RESET=1`. Customize the seed via `DEV_SEED_EMAIL`, `DEV_SEED_PASSWORD`, `DEV_SEED_NAME`, `DEV_SEED_BRAND`, or `DEV_SEED_POSTS`. The assets database is also reset on every run (set `SKIP_ASSETS_DB_RESET=1` to keep its data), migrations are reapplied, and assets seeding runs unless you export `SKIP_ASSETS_SEED=1`.
+- Loads environment variables from `.env`, verifies that database targets are local, and applies pending migrations while preserving data. To deliberately reset and seed local data, run `CONFIRM_LOCAL_DB_RESET=delete-local-data pnpm dev:reset`. Customize seeds with `DEV_SEED_EMAIL`, `DEV_SEED_PASSWORD`, `DEV_SEED_NAME`, `DEV_SEED_BRAND`, and `DEV_SEED_POSTS`. Assets seeding is opt-in via `SKIP_ASSETS_SEED=0`.
 - Post/media thumbnails use placeholder CDN URLs by default: `POST_SEED_IMAGE_BASE=https://picsum.photos` for generated posts and `ASSETS_SEED_CDN_BASE=https://picsum.photos` for the Assets service. Override either env var if you want to point at an S3 bucket or custom CDN. At runtime, dev also skips OpenAI/Midjourney image generation when `SKIP_IMAGE_GENERATION=1` (default) and returns `PLACEHOLDER_IMAGE_BASE` URLs instead of hitting external providers.
 - Automatically looks up the seeded brand ID (based on `ASSETS_SEED_BRAND_EMAIL` / `ASSETS_SEED_BRAND_NAME`, defaulting to the main seed user) and runs the assets seeder with that ID. Tweak the payload via `ASSETS_SEED_COUNT` and `ASSETS_SEED_CDN_BASE`.
 - Builds the API and web workspace dependencies (skip with `SKIP_DEP_BUILDS=1 pnpm run dev:stack`).
@@ -164,7 +164,7 @@ What it does:
 
 The assets service connects via `ASSETS_DATABASE_URL` (default `postgresql://postgres:postgres@localhost:5433/postolio_assets_dev`). Docker Compose exposes that secondary Postgres on host port `5433`, so make sure your `.env` carries the matching URL if you previously pointed it elsewhere.
 
-> DB reset wipes your local data on every run. Export `SKIP_DB_RESET=1` before running the stack if you need to keep state for debugging. To wipe the assets database as well, export `RESET_ASSETS_DB=1` (ensure `ASSETS_DATABASE_URL` points at a running instance).
+> Database reset is destructive and requires the explicit reset command above. Normal `dev:stack` startup preserves both databases.
 
 #### Freeing stuck dev ports
 
@@ -280,3 +280,8 @@ Notes:
 
 - UI for the Asset Library now lives in the web app at `src/features/assets` (no Module Federation).
 - The assets Prisma client is generated to `packages/libs/database-assets/assets-client` and is ignored by git.
+
+## License and release preparation
+
+Postolio uses [Apache-2.0](LICENSE). Read [CONTRIBUTING.md](CONTRIBUTING.md),
+[SECURITY.md](SECURITY.md), and the [open-source readiness review](PUBLICATION.md).

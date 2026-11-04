@@ -3,12 +3,7 @@ import type { Redis } from 'ioredis';
 import type { Platform } from '@postolio/database';
 
 export type ContentStatus =
-  | 'draft'
-  | 'scheduled'
-  | 'published'
-  | 'failed'
-  | 'skipped'
-  | 'unavailable';
+  'draft' | 'scheduled' | 'published' | 'failed' | 'skipped' | 'unavailable';
 
 export interface StatusChangeEvent {
   type: 'status_change';

@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
-    baseURL: 'https://localhost:4173',
+    baseURL: 'http://localhost:4173',
     headless: true,
     viewport: { width: 1280, height: 900 },
     ignoreHTTPSErrors: true,
@@ -20,9 +20,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm preview --port 4173 --strictPort',
+    command: 'pnpm preview --host 127.0.0.1 --port 4173 --strictPort',
+    env: { CI: 'true', E2E: '1' },
     port: 4173,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

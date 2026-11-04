@@ -1,4 +1,5 @@
 import { customAlphabet } from 'nanoid';
+import { downloadPublicAsset } from '../../utils/safe-download.js';
 import { getAssetUrl } from '../../utils/s3.js';
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
@@ -23,20 +24,11 @@ export function guessExtension(mimeType: string, fallback = 'bin'): string {
 export async function fetchBufferFromUrl(
   url: string
 ): Promise<{ buffer: Buffer; fileName: string; mimeType?: string }> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch source asset: ${response.status} ${response.statusText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const parsedUrl = new URL(url);
-  const fileName = parsedUrl.pathname.split('/').pop() || `asset-${nanoid()}`;
-
+  const result = await downloadPublicAsset(url);
   return {
-    buffer,
-    fileName,
-    mimeType: response.headers.get('content-type') || undefined,
+    buffer: result.buffer,
+    fileName: result.url.pathname.split('/').pop() || `asset-${nanoid()}`,
+    mimeType: result.mimeType,
   };
 }
 

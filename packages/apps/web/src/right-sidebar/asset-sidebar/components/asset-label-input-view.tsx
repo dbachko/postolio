@@ -6,8 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 type SuggestionItem =
-  | { kind: 'existing'; id: string; name: string }
-  | { kind: 'create'; name: string };
+  { kind: 'existing'; id: string; name: string } | { kind: 'create'; name: string };
 
 type SuggestionsState = {
   selectedLabels: LabelRecord[];

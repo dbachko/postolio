@@ -7,11 +7,7 @@ import { TimeSeriesChart } from '@/components/analytics-common/time-series-chart
 import { formatNumber, formatPercent } from '@/utils/formatNumber';
 
 type DemographicsStatus =
-  | 'available'
-  | 'no_data'
-  | 'not_connected'
-  | 'insufficient_permissions'
-  | 'error';
+  'available' | 'no_data' | 'not_connected' | 'insufficient_permissions' | 'error';
 
 interface AudienceDemographics {
   totalAudience: number;

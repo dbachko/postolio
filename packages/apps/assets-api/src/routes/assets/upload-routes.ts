@@ -4,7 +4,7 @@ import {
   prismaAssets,
   type Prisma as AssetsPrisma,
 } from '@postolio/database-assets';
-import { assetsBucketName, generateUploadUrl } from '../../utils/s3.js';
+import { assertBrandStorageKey, assetsBucketName, generateUploadUrl } from '../../utils/s3.js';
 import { mapAssetWithLabelsAndUrls } from './shared.js';
 
 interface UploadUrlBody {
@@ -102,8 +102,13 @@ async function handleCreateAssetRequest(
   const body = request.body as CreateAssetBody;
 
   try {
+    try {
+      assertBrandStorageKey(body.brandId, body.s3Key);
+    } catch {
+      return reply.code(400).send({ error: 'Invalid storage key for brand' });
+    }
     const resolvedCollectionId = await resolveCollectionId(body.brandId, body.collectionId, reply);
-    if (resolvedCollectionId === undefined) {
+    if (reply.sent) {
       return;
     }
 
@@ -131,7 +136,7 @@ async function resolveCollectionId(
   reply: FastifyReply
 ): Promise<string | null | undefined> {
   if (!collectionId) {
-    return collectionId ?? undefined;
+    return collectionId ?? null;
   }
 
   const collection = await prismaAssets.assetTaxonomyItem.findUnique({

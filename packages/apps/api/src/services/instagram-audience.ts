@@ -150,8 +150,7 @@ async function fetchBreakdown(params: {
     return await requestWithKey('breakdowns');
   } catch (error: any) {
     const fbError = error?.response?.data?.error as
-      | { message?: string; code?: number; error_subcode?: number }
-      | undefined;
+      { message?: string; code?: number; error_subcode?: number } | undefined;
     const message =
       (typeof fbError?.message === 'string' && fbError.message) ||
       (error instanceof Error ? error.message : 'Unknown error');
@@ -167,8 +166,7 @@ async function fetchBreakdown(params: {
 
 function mapAudienceError(error: any): InstagramAudienceDemographicsResult {
   const fbError = error?.response?.data?.error as
-    | { message?: string; code?: number; error_subcode?: number }
-    | undefined;
+    { message?: string; code?: number; error_subcode?: number } | undefined;
   const message =
     (typeof fbError?.message === 'string' && fbError.message) ||
     (error instanceof Error ? error.message : 'Unknown error');

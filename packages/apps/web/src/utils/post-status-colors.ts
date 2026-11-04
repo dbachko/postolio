@@ -1,11 +1,5 @@
 export type CalendarPostStatus =
-  | 'draft'
-  | 'scheduled'
-  | 'published'
-  | 'failed'
-  | 'skipped'
-  | 'placeholder'
-  | string;
+  'draft' | 'scheduled' | 'published' | 'failed' | 'skipped' | 'placeholder' | string;
 
 export function getPostStatusTextClass(status: CalendarPostStatus): string {
   switch (status) {

@@ -30,3 +30,26 @@ scripts/*.sh
 !legal/DATA_DELETION.md
 !legal/PRIVACY_POLICY.md
 !legal/TERMS_OF_SERVICE.md
+
+# Never include workstation credentials or session state in images
+.claude
+.codex
+.aws
+**/.claude
+**/.codex
+**/.continue
+**/.cursor/mcp.json
+**/.vscode/mcp.json
+**/.mcp.json
+**/.mcp.local.json
+**/.claude.json
+**/CLAUDE.local.md
+**/.aider*
+**/.playwright-mcp
+**/*.cookies
+**/*cookies.txt
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/cdk.out*

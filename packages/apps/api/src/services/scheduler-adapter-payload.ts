@@ -42,8 +42,7 @@ export type PreparedSchedulingPayload = {
 };
 
 type DestinationResult =
-  | { ok: true; destinationPlatform: string; socialAccountId: string }
-  | { ok: false; error: string };
+  { ok: true; destinationPlatform: string; socialAccountId: string } | { ok: false; error: string };
 
 type PayloadResult = { ok: true; data: PreparedSchedulingPayload } | { ok: false; error: string };
 

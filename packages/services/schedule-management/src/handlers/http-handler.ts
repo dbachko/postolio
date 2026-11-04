@@ -35,8 +35,7 @@ const metrics = new Metrics({
 });
 
 type ParsedUpdateRequestResult =
-  | { updateRequest: Record<string, unknown> }
-  | { errorResponse: APIGatewayProxyResult };
+  { updateRequest: Record<string, unknown> } | { errorResponse: APIGatewayProxyResult };
 
 export class HttpHandler {
   private scheduleService: ScheduleService;

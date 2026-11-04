@@ -48,29 +48,11 @@ export default defineConfig({
     },
   ],
 
-  webServer: process.env.CI
-    ? {
-        // In CI, run both services from root using pnpm workspace commands
-        command: 'cd ../../../ && pnpm dev --filter=api --filter=@postolio/web',
-        port: 5173,
-        reuseExistingServer: false,
-        timeout: 120 * 1000,
-        env: {
-          ...process.env,
-          CI: 'true',
-          NODE_ENV: 'dev',
-        },
-      }
-    : {
-        // Local: build then serve static dist via http-server for stability
-        command: 'npm run build && npx --yes http-server ./dist -p 5173 -a 127.0.0.1 -c-1',
-        port: 5173,
-        reuseExistingServer: true,
-        timeout: 180 * 1000,
-        env: {
-          ...process.env,
-          E2E: '1',
-          CI: 'true',
-        },
-      },
+  webServer: {
+    command: 'pnpm exec vite preview --host 127.0.0.1 --port 5173 --strictPort',
+    port: 5173,
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: { CI: 'true', E2E: '1' },
+  },
 });

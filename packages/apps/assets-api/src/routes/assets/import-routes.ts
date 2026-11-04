@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prismaAssets } from '@postolio/database-assets';
 import sharp from 'sharp';
 import { calculateAspectRatio } from '../../utils/aspect-ratio.js';
-import { assetsBucketName, getAssetUrl, s3Client } from '../../utils/s3.js';
+import { assertBrandStorageKey, assetsBucketName, getAssetUrl, s3Client } from '../../utils/s3.js';
 import { fetchBufferFromUrl, guessExtension, nanoid, sanitizeFileName } from './shared.js';
 
 interface ImportAssetBody {
@@ -48,7 +48,6 @@ async function handleImportAsset(request: FastifyRequest, reply: FastifyReply): 
     const mimeType = resolveMimeType(body.mimeType, source.mimeType);
     const fileName = resolveFileName(body.fileName, source.fileName, mimeType);
     const fileType = resolveFileType(body.fileType, mimeType);
-    const s3Key = await uploadImportedBuffer(body.brandId, source.buffer, fileName, mimeType);
 
     const dimensions =
       fileType === 'image' ? await extractImageDimensions(source.buffer) : createEmptyDimensions();
@@ -58,6 +57,7 @@ async function handleImportAsset(request: FastifyRequest, reply: FastifyReply): 
       return;
     }
 
+    const s3Key = await uploadImportedBuffer(body.brandId, source.buffer, fileName, mimeType);
     const asset = await prismaAssets.asset.create({
       data: {
         brandId: body.brandId,
@@ -157,8 +157,8 @@ function resolveFileType(
   explicitType: ImportAssetBody['fileType'],
   mimeType: string
 ): 'image' | 'video' {
-  if (explicitType) {
-    return explicitType;
+  if (explicitType && !mimeType.startsWith(`${explicitType}/`)) {
+    throw new Error('MIME type does not match asset type');
   }
 
   if (mimeType.startsWith('image/')) {
@@ -182,6 +182,7 @@ async function uploadImportedBuffer(
   const sanitized = sanitizeFileName(fileName);
   const s3Key = `brands/${brandId}/imports/${timestamp}_${nanoid()}_${sanitized}`;
 
+  assertBrandStorageKey(brandId, s3Key);
   await s3Client.send(
     new PutObjectCommand({
       Bucket: assetsBucketName,

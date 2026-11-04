@@ -73,7 +73,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 stripe_api() {
-  curl -sS -u "${STRIPE_SECRET_KEY}:" "$@"
+  curl -sS -u "${STRIPE_SECRET_KEY}:" "$@" # gitleaks:allow -- environment reference, not a literal credential
 }
 
 json_first_id_by_name() {

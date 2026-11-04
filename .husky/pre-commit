@@ -8,6 +8,8 @@ fi
 
 set -e
 
+node scripts/check-private-artifacts.mjs
+
 echo "[pre-commit] Running Prettier (staged) and targeted lint..."
 
 # Only check staged files to keep commits fast.

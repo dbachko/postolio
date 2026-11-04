@@ -82,8 +82,7 @@ async function forwardDlqRecord(record: DlqRecord): Promise<boolean> {
       QueueUrl: queueUrl,
       MessageBody: record.body,
       MessageAttributes: record.messageAttributes as
-        | Record<string, MessageAttributeValue>
-        | undefined,
+        Record<string, MessageAttributeValue> | undefined,
     })
   );
 

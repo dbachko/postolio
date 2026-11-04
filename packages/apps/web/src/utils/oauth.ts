@@ -4,11 +4,7 @@ export class OAuthError extends Error {
   constructor(
     message: string,
     public code:
-      | 'CONFIG_MISSING'
-      | 'SDK_LOAD_FAILED'
-      | 'AUTH_FAILED'
-      | 'NETWORK_ERROR'
-      | 'USER_CANCELLED',
+      'CONFIG_MISSING' | 'SDK_LOAD_FAILED' | 'AUTH_FAILED' | 'NETWORK_ERROR' | 'USER_CANCELLED',
     public provider: 'google' | 'facebook'
   ) {
     super(message);

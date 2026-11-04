@@ -14,6 +14,19 @@ else
   echo "WARNING: .env not found in repo root; proceeding with existing environment variables."
 fi
 
+# Validate before touching infrastructure. Resets require an explicit command and confirmation.
+node scripts/validate-dev-databases.mjs
+if [[ "${1:-}" == "--reset" ]]; then
+  if [[ "${CONFIRM_LOCAL_DB_RESET:-}" != "delete-local-data" ]]; then
+    echo "Set CONFIRM_LOCAL_DB_RESET=delete-local-data to reset the local databases." >&2
+    exit 1
+  fi
+  export SKIP_DB_RESET=0 SKIP_ASSETS_DB_RESET=0 SKIP_ASSETS_SEED=0
+elif [[ "${SKIP_DB_RESET:-1}" != "1" || "${SKIP_ASSETS_DB_RESET:-1}" != "1" ]]; then
+  echo "Use pnpm dev:reset with explicit confirmation to reset local data." >&2
+  exit 1
+fi
+
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-postolio}"
 DEV_SEED_EMAIL="${DEV_SEED_EMAIL:-dev@postolio.test}"
 DEV_SEED_PASSWORD="${DEV_SEED_PASSWORD:-Test123!@#}"
@@ -21,8 +34,8 @@ DEV_SEED_NAME="${DEV_SEED_NAME:-Dev User}"
 DEV_SEED_BRAND="${DEV_SEED_BRAND:-Dev Brand}"
 DEV_SEED_POSTS="${DEV_SEED_POSTS:-10}"
 ASSETS_API_PORT="${ASSETS_API_PORT:-3002}"
-SKIP_ASSETS_DB_RESET="${SKIP_ASSETS_DB_RESET:-0}"
-SKIP_ASSETS_SEED="${SKIP_ASSETS_SEED:-0}"
+SKIP_ASSETS_DB_RESET="${SKIP_ASSETS_DB_RESET:-1}"
+SKIP_ASSETS_SEED="${SKIP_ASSETS_SEED:-1}"
 ASSETS_SEED_BRAND_EMAIL="${ASSETS_SEED_BRAND_EMAIL:-$DEV_SEED_EMAIL}"
 ASSETS_SEED_BRAND_NAME="${ASSETS_SEED_BRAND_NAME:-$DEV_SEED_BRAND}"
 ASSETS_SEED_COUNT="${ASSETS_SEED_COUNT:-12}"
@@ -179,7 +192,7 @@ wait_for_compose_service_health postgres 60 1
 wait_for_compose_service_health postgres_assets 60 1
 wait_for_compose_service_health redis 60 1
 
-if [[ "${SKIP_ASSETS_DB_RESET:-0}" != "1" ]]; then
+if [[ "${SKIP_ASSETS_DB_RESET:-1}" != "1" ]]; then
   if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
     echo "Resetting assets Postgres database via Prisma..."
     pnpm --filter @postolio/database-assets exec -- prisma migrate reset --force
@@ -204,7 +217,7 @@ else
   echo "ASSETS_DATABASE_URL is unset; skipping Assets API startup (asset imports may fail)."
 fi
 
-if [[ "${SKIP_DB_RESET:-0}" != "1" ]]; then
+if [[ "${SKIP_DB_RESET:-1}" != "1" ]]; then
   if [[ -n "${DATABASE_URL:-}" ]]; then
     echo "Resetting primary Postgres database via Prisma..."
     pnpm --filter @postolio/database exec -- prisma migrate reset --force

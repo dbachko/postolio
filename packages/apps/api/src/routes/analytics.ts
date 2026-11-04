@@ -6,6 +6,7 @@ import { brandAnalyticsRoutes } from './analytics/brand-analytics-routes.js';
 import { socialAccountAnalyticsRoutes } from './analytics/social-account-analytics-routes.js';
 
 const analytics: FastifyPluginAsync = async function (fastify) {
+  fastify.addHook('onRequest', fastify.authenticate);
   // Scheduler + wizard + analytics v2 compose under one plugin
   fastify.register(schedulerAnalyticsRoutes);
   fastify.register(wizardAnalyticsRoutes);

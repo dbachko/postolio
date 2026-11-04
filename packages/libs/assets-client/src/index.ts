@@ -102,10 +102,7 @@ export interface ListAssetsParams {
   aspectRatio?: string;
   aspectRatios?: string[] | string;
   orientationTypes?:
-    | Array<'portrait' | 'landscape' | 'square'>
-    | 'portrait'
-    | 'landscape'
-    | 'square';
+    Array<'portrait' | 'landscape' | 'square'> | 'portrait' | 'landscape' | 'square';
   minWidth?: number;
   maxWidth?: number;
   minHeight?: number;

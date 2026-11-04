@@ -95,8 +95,7 @@ function readErrorDetailsMessage(details: unknown): string | null {
 
 function normalizeAwsRescheduleError(error: unknown): string {
   const err = error as
-    | { code?: string; message?: string; details?: Record<string, unknown> }
-    | undefined;
+    { code?: string; message?: string; details?: Record<string, unknown> } | undefined;
   const detailsMessage = readErrorDetailsMessage(err?.details);
   if (err?.code === 'CIRCUIT_BREAKER_OPEN' || err?.code === 'EOPENBREAKER') {
     return 'AWS scheduler temporarily unavailable. Please try again in a few minutes.';

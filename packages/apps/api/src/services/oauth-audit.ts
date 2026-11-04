@@ -4,10 +4,7 @@ import { AuditLogger, AuditEventType } from './audit-logger.js';
 export type OAuthPlatform = 'instagram' | 'facebook' | 'google';
 
 export type OAuthEventType =
-  | 'authorize_started'
-  | 'callback_received'
-  | 'connection_success'
-  | 'connection_error';
+  'authorize_started' | 'callback_received' | 'connection_success' | 'connection_error';
 
 export interface OAuthAuditEvent {
   platform: OAuthPlatform;

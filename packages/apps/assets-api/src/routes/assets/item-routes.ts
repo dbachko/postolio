@@ -102,7 +102,7 @@ async function handleUpdateAsset(request: FastifyRequest, reply: FastifyReply): 
 
   try {
     const resolvedCollectionId = await resolveCollectionId(body.collectionId, reply);
-    if (resolvedCollectionId === undefined) {
+    if (reply.sent) {
       return;
     }
 
@@ -137,7 +137,7 @@ async function resolveCollectionId(
   reply: FastifyReply
 ): Promise<string | null | undefined> {
   if (!collectionId) {
-    return collectionId ?? undefined;
+    return collectionId;
   }
 
   const collection = await prismaAssets.assetTaxonomyItem.findUnique({
@@ -193,6 +193,7 @@ async function handleDeleteAsset(request: FastifyRequest, reply: FastifyReply): 
       where: { id },
       select: {
         id: true,
+        brandId: true,
         s3Key: true,
         thumbnailKey: true,
         thumbnailSmallKey: true,
@@ -211,7 +212,7 @@ async function handleDeleteAsset(request: FastifyRequest, reply: FastifyReply): 
       asset.thumbnailLargeKey,
     ].filter((key): key is string => !!key);
 
-    await deleteS3Objects(storageKeys);
+    await deleteS3Objects(storageKeys, asset.brandId);
     await prismaAssets.asset.delete({ where: { id: asset.id } });
     return { success: true, message: 'Asset deleted permanently' };
   } catch (error) {

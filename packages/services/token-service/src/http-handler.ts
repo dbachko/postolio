@@ -188,7 +188,7 @@ async function handleAccountScopedRoutes(
 
   if (method === 'PUT') {
     await storeToken(
-      { ...tokenScope, ...(getEventBody(event) as Record<string, unknown>) },
+      { ...(getEventBody(event) as Record<string, unknown>), ...tokenScope },
       requestContext
     );
     return jsonResponse(200, responseHeaders, { success: true });
@@ -233,7 +233,7 @@ async function handleBrandScopedRoutes(
 
   if (method === 'PUT') {
     await storeToken(
-      { ...tokenScope, ...(getEventBody(event) as Record<string, unknown>) },
+      { ...(getEventBody(event) as Record<string, unknown>), ...tokenScope },
       requestContext
     );
     return jsonResponse(200, responseHeaders, { success: true });
