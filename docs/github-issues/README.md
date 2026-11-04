@@ -94,7 +94,7 @@ All critical security vulnerabilities in the shell scripts have been fixed. Thes
 
 For full details of the code review that identified these issues, see:
 
-- [Phase 9 Code Review Report](../phase9-code-review-report.md)
+- Phase 9 Code Review Report
 
 ---
 

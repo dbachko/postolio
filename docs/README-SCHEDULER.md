@@ -208,4 +208,4 @@ GSI2SK: {scheduledAt}
 For issues or questions, refer to:
 
 - [Product Specification](../docs/content-scheduler-microservice.spec.md)
-- [Implementation Plan](../docs/content-scheduler-microservice.implementation.md)
+- Implementation Plan

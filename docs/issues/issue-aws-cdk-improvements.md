@@ -122,9 +122,9 @@ Add CloudWatch Synthetics canaries for API monitoring
 
 ## Resources
 
-- [Full Analysis Document](/docs/content-scheduler-awscdk-analysis.md)
+- Full Analysis Document
 - [AWS Solutions Constructs](https://docs.aws.amazon.com/solutions/latest/constructs/)
-- [Implementation Plan](/docs/content-scheduler-microservice.implementation.md)
+- Implementation Plan
 
 ## Labels
 

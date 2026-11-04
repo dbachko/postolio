@@ -7,9 +7,9 @@
 ## Quick Links
 
 - 📋 [Product Specification](./product-spec-instagram-post-sync.md)
-- 🔧 [Implementation Plan](./implementation-plan-instagram-post-sync.md)
+- 🔧 Implementation Plan
 - 📡 [API Documentation](./api-instagram-sync.md)
-- 📖 [Main README](../CLAUDE.md)
+- 📖 Main README
 
 ## Overview
 
@@ -45,7 +45,7 @@ The Instagram Post Sync feature allows users to import their published Instagram
 
 ### 2. Implementation Plan
 
-**File**: [`implementation-plan-instagram-post-sync.md`](./implementation-plan-instagram-post-sync.md)
+**File**: `implementation-plan-instagram-post-sync.md`
 
 **Contents**:
 
@@ -250,4 +250,4 @@ When modifying this feature:
 
 ---
 
-**Quick Reference**: For high-level project info, see [`CLAUDE.md`](../CLAUDE.md)
+**Quick Reference**: For high-level project info, see `CLAUDE.md`

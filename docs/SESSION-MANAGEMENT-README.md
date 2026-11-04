@@ -65,7 +65,7 @@ Implement industry-standard session management:
 
 #### Comprehensive Plan
 
-**[guides/session-management-implementation-plan.md](guides/session-management-implementation-plan.md)**
+**guides/session-management-implementation-plan.md**
 
 - All 4 phases detailed
 - File-by-file changes
@@ -79,7 +79,7 @@ Implement industry-standard session management:
 
 ### 3. Operational Guides
 
-**[runbooks/session-management-operations.md](runbooks/session-management-operations.md)**
+**runbooks/session-management-operations.md**
 
 - Emergency procedures
 - Incident response

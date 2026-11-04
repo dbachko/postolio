@@ -238,7 +238,9 @@ async function maybeSendFailureEmail(params: {
   }
 
   const fromAddress =
-    process.env.SES_FROM_EMAIL || process.env.NOTIFICATIONS_FROM_EMAIL || 'noreply@postolio.example';
+    process.env.SES_FROM_EMAIL ||
+    process.env.NOTIFICATIONS_FROM_EMAIL ||
+    'noreply@postolio.example';
 
   const message = buildFailureEmailMessage({
     platform,
