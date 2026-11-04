@@ -16,6 +16,56 @@ If the browser rejects the certificate, run `mkcert -install` and restart it. To
 
 See the [root README](../README.md) for starting the development stack and resetting local data.
 
+## Dev environment in OrbStack or Docker (macOS)
+
+`devenv.sh` runs the full development stack in an isolated Ubuntu environment, so Node, the databases, and the dev servers stay off your Mac. Pick a backend; every command works the same on both:
+
+| Backend  | What runs the stack                                                                                | Needs                                               |
+| -------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `orb`    | An [OrbStack](https://orbstack.dev) Linux machine named `postolio`                                 | OrbStack                                            |
+| `docker` | A privileged container named `postolio-devenv`, with its own Docker daemon for Postgres and Valkey | Any Docker engine: Docker Desktop, OrbStack, Colima |
+
+```bash
+scripts/devenv.sh up                    # orb if OrbStack is installed, otherwise docker
+scripts/devenv.sh --backend docker up   # or choose explicitly (also: POSTOLIO_DEV_BACKEND=docker)
+```
+
+After `up`, the other commands find the environment on their own. If both backends have one, they use the running one; pass `--backend` when both are running.
+
+```bash
+scripts/devenv.sh up         # create + provision, sync, install, start stack + MCP, wait until healthy
+scripts/devenv.sh watch      # hot reload: copy each saved file into the environment (leave running)
+scripts/devenv.sh seed       # add a test account (default test@postolio.test / Test123!@#)
+scripts/devenv.sh status     # environment, services, MCP, and port forwarding
+scripts/devenv.sh mcp config # how to register the browser MCP server with Claude Code
+scripts/devenv.sh logs       # follow the stack log
+scripts/devenv.sh stop       # stop dev processes, MCP and databases (data kept)
+scripts/devenv.sh restart    # stop, sync, reinstall if needed, start
+scripts/devenv.sh shell      # shell in the repo copy inside the environment
+scripts/devenv.sh destroy    # delete the environment (asks first)
+```
+
+The same commands are available as `pnpm devenv <command>` and `pnpm devenv:up`, `devenv:watch`, `devenv:sync`, `devenv:seed`, `devenv:status`, `devenv:logs`, `devenv:stop`.
+
+The first `up` installs Docker, the Node major from `.nvmrc`, the pnpm version from `packageManager`, Chromium, and Playwright MCP, then resets and seeds the databases. `up` reinstalls Node or pnpm when the repo changes them. Later starts keep the data, and databases are reseeded automatically when `docker-compose.yml` switches to new volumes; pass `--reset` to `up`, `start`, or `restart` to reseed anyway. Sign in as `dev@postolio.test` / `Test123!@#`, or create another account with `seed --email you@example.test --password ...`.
+
+### Hot reload
+
+The environment runs a copy of the repo at `~/postolio` on its own disk. Shared mounts from the Mac (OrbStack's `/Users` mount, Docker bind mounts) can miss file-change events or serve stale contents right after a save, so dev servers don't watch your checkout directly. `watch` (or `up --watch`) listens for changes on the Mac and streams each saved file into the environment, where Vite HMR and `tsx watch` reload as usual. It needs Node on the Mac.
+
+`sync` and `watch` copy tracked and untracked files and skip ignored ones (`node_modules`, `dist`, `.env`), so the environment keeps its own Linux installs and `.env`. On first run the `.env` is copied from your root `.env`, or created from `.env.example` with a random `JWT_SECRET`. To change it, edit it with `scripts/devenv.sh shell`. After changing dependencies, run `restart` so `pnpm install` runs in the environment.
+
+### Ports and AI agents
+
+Both backends make web 5173, API 3000, assets API 3002, and Playwright MCP 8931 available on your Mac's `localhost`. The `orb` backend also forwards Postgres 5432/5433 and Valkey 6379; on `docker` the databases stay inside the container (use `scripts/devenv.sh shell` to reach them). `scripts/devenv.sh ports` shows whether each port reaches the environment. A Mac process already holding a port blocks it: stop that process (on `orb`, `http://postolio.orb.local:<port>` also works).
+
+AI agents can test the running app in two ways:
+
+- Open `http://localhost:5173` in the agent's own browser (for example, the Claude desktop app's browser pane).
+- Use the Playwright MCP server, which drives headless Chromium inside the environment. Register it once with `claude mcp add --transport http --scope local postolio-browser http://localhost:8931/mcp` (`scripts/devenv.sh mcp config` prints this and a JSON config for other clients). Screenshots and snapshots are saved to `.playwright-mcp/` in your checkout (gitignored).
+
+Set `POSTOLIO_DEV_NAME` to use a different environment name, and `POSTOLIO_DEV_MCP_PORT` for a different MCP port. Run both backends one at a time: they use the same Mac ports.
+
 ## Application URLs
 
 `get-app-urls.sh` reads deployed stack outputs for application URLs, API endpoints, resource IDs, and stack status:
