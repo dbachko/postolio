@@ -13,7 +13,7 @@ The ECS worker fetches Instagram account and publication metrics through the con
 | `DUMMY_ACCESS_TOKEN`                                          | Local credential fallback when Token Service is not configured        |
 | `FB_GRAPH_API_VERSION`                                        | Graph API version used by connectors                                  |
 | `RATE_LIMIT_PER_HOUR`                                         | Per-account request limit                                             |
-| `INGESTOR_LOOP_MS`                                            | Sleep after a pass that did work. `0` runs once. ECS sets `60000`.   |
+| `INGESTOR_LOOP_MS`                                            | Sleep after a pass that did work. `0` runs once. ECS sets `60000`.    |
 | `LOG_LEVEL`                                                   | Log verbosity                                                         |
 
 The analytics stack injects database, Redis, and Token Service settings. Its `imageTag`, `rateLimitPerHour`, and `fbGraphApiVersion` context values select the image and runtime configuration.
