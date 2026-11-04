@@ -35,6 +35,17 @@ scripts/*.sh
 .claude
 .codex
 .aws
+**/.claude
+**/.codex
+**/.continue
+**/.cursor/mcp.json
+**/.vscode/mcp.json
+**/.mcp.json
+**/.mcp.local.json
+**/.claude.json
+**/CLAUDE.local.md
+**/.aider*
+**/.playwright-mcp
 **/*.cookies
 **/*cookies.txt
 **/*.pem

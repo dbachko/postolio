@@ -90,6 +90,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+      - name: Reject private workstation and authentication artifacts
+        run: node scripts/check-private-artifacts.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high
       - name: Scan the proposed source tree for secrets

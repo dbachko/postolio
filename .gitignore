@@ -94,6 +94,16 @@ aws-infrastructure/
 
 # Private workstation and authentication artifacts
 .codex/
+.continue/
+**/.cursor/mcp.json
+.vscode/mcp.json
+.mcp.json
+.mcp.local.json
+.claude.json
+CLAUDE.local.md
+.aider*
+.playwright-mcp/
+.aws/
 *.cookies
 cookies.txt
 *.pem
