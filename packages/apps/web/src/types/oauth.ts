@@ -1,5 +1,3 @@
-// Google GIS types removed — we now use @react-oauth/google (auth-code flow)
-
 // Facebook OAuth Types
 export interface FacebookAuthResponse {
   accessToken: string;

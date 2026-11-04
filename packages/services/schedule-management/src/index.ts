@@ -1,5 +1,5 @@
 /**
- * Schedule Management Lambda - Refactored
+ * Schedule Management Lambda
  *
  * Route dispatcher that delegates to focused handlers
  * Replaces the monolithic handler with clean separation of concerns

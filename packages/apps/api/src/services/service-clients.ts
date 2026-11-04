@@ -36,7 +36,6 @@ export class ServiceClients {
   async getTokenService(): Promise<TokenServiceClient> {
     if (!this._tokenService) {
       try {
-        // TokenServiceClient with RESTful endpoints and enhanced features
         this._tokenService = new TokenServiceClient();
         logger.info(
           'Token Service client initialized with RESTful endpoints and enhanced features'

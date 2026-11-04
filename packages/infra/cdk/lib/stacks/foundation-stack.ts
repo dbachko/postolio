@@ -6,7 +6,6 @@
  * - Shared S3 buckets and KMS keys
  * - Security groups
  * - ECR repository
- * - (Legacy image CDN has been removed; all media flows through the assets stack)
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -28,7 +27,6 @@ import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
-// (No custom DB-grant Lambda; RDS Proxy uses Secrets to connect DB)
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 

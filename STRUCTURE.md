@@ -36,8 +36,6 @@ packages/
     cdk/          # AWS CDK stacks and constructs
 ```
 
-Legacy root folders (`backend/`, `frontend/`, `microservices/`, `shared/`) are not placement targets for new product code.
-
 ## 3. Required Internal Structure by Package Type
 
 ### 3.1 Backend apps (`packages/apps/api`, `packages/apps/assets-api`)
@@ -123,7 +121,7 @@ Implemented in:
 - `eslint.config.js`
 - `packages/apps/web/eslint.config.js`
 
-Rules now enforced:
+Import rules:
 
 1. `packages/libs/**/src/**` cannot import any app or service package.
 2. `packages/services/**/src/**` cannot import apps or other services.

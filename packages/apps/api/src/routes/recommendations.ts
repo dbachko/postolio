@@ -7,7 +7,7 @@ const recommendationEngine = new RecommendationEngine();
 export default async function recommendationsRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/recommendations/:brandId
-   * Get comprehensive recommendations for a brand
+   * Get recommendations for a brand.
    */
   fastify.get<{
     Params: { brandId: string };

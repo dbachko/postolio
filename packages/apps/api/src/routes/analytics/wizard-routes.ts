@@ -9,7 +9,7 @@ const prisma = getDatabaseClient();
 export const wizardAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
   const WizardEventSchema = z.object({
     eventName: z.enum(['wizard.step', 'wizard.reset', 'wizard.launch']),
-    step: z.number().int().min(1).max(7).optional(), // Updated to 7 for new wizard steps
+    step: z.number().int().min(1).max(7).optional(),
     brandId: z.string().min(1).optional(),
   });
 

@@ -131,7 +131,7 @@ async function getClient(): Promise<LambdaPrismaClient> {
   return prisma;
 }
 
-// With Prisma migration in place, table exists; keep as safety in dev
+// Create the projection table when a development database has not been migrated.
 type ExecClient = { $executeRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown> };
 
 async function ensureProjectionTable(client: ExecClient) {

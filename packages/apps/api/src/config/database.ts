@@ -45,7 +45,6 @@ let prismaPool: { end: () => Promise<void> } | null = null;
  */
 export function getDatabaseClient(): PrismaClient {
   if (!prismaInstance) {
-    // Enhanced Prisma configuration with connection pooling
     // Reduce noisy query logs in all environments unless explicitly enabled.
     const enableQueryLogging = (process.env.LOG_QUERIES || '').toLowerCase() === 'true';
 
@@ -177,5 +176,4 @@ export async function getDatabaseMetrics(): Promise<{
   }
 }
 
-// Export the client instance for backward compatibility
 export const prisma: PrismaClient = getDatabaseClient();

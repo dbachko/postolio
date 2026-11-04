@@ -114,7 +114,7 @@ export function validateImageSize(
 
 /**
  * Validate and convert base64 image data to buffer
- * Performs comprehensive validation: format, mime type, and size
+ * Validates format, MIME type, and size.
  *
  * @param imageData - Base64 encoded image string
  * @param mimeType - Optional MIME type (if not in data URI)

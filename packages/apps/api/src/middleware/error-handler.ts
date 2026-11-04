@@ -8,7 +8,6 @@ import {
 import { logger } from '@postolio/logger';
 import { captureException } from '@postolio/observability';
 
-// Type guards for enhanced error handling
 interface ExtendedAPIError extends APIError {
   correlationId?: string;
 }

@@ -11,14 +11,13 @@ export class InstagramAdapter implements SourceAdapter {
   capabilities = { text: true, images: true, engagement: true } as const;
 
   async fetch(input: FetchParams): Promise<RawSourceBatch> {
-    // Placeholder: In Phase 1, the API will supply normalized posts.
-    // A future iteration will read from our API or a cache.
+    // Stub: this adapter does not fetch posts.
     void input;
     return { items: [] };
   }
 
   normalize(batch: RawSourceBatch): CanonicalEvent[] {
-    // Map raw IG API payloads to CanonicalEvent
+    // Stub: return empty events for the supplied items.
     return (batch.items || []).map((_, i) => ({
       id: `placeholder-${i}`,
       source: 'instagram',
@@ -29,7 +28,7 @@ export class InstagramAdapter implements SourceAdapter {
   }
 
   async health(): Promise<AdapterHealth> {
-    // Basic always-ok health for skeleton
+    // Reports availability without contacting Instagram.
     return { ok: true };
   }
 }

@@ -1,17 +1,13 @@
-# Service: @postolio/token-service
+# token-service
 
-This service handles all aspects of authentication and authorization. It is responsible for issuing, validating, and refreshing JWTs and other API tokens used throughout the platform.
+Stores, retrieves, rotates, and deletes platform OAuth tokens using DynamoDB and KMS encryption.
 
 ## Development
 
-### Scripts
-
-- **Build:** `pnpm build`
-- **Lint:** `pnpm lint`
-- **Test:** `pnpm test`
-
-To run any script for only this service from the monorepo root, use the `--filter` flag:
+Run from the repository root:
 
 ```bash
-pnpm --filter=@postolio/token-service <script_name>
+pnpm --filter @postolio/token-service build
+pnpm --filter @postolio/token-service lint
+pnpm --filter @postolio/token-service test
 ```

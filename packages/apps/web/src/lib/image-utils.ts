@@ -24,7 +24,6 @@ export const supportsWebP = (): boolean => {
   return canvas.toDataURL('image/webp').indexOf('image/webp') === 5;
 };
 
-// Future enhancement: AVIF support detection
 export const supportsAVIF = (): boolean => {
   if (typeof window === 'undefined') {
     return false;

@@ -1,8 +1,5 @@
 /**
- * Social Accounts Service (Lambda handler scaffold)
- *
- * Greenfield: intended to become the single source of truth for social account connections,
- * candidates, and lifecycle events.
+ * Social accounts Lambda scaffold. Account routes return HTTP 501.
  */
 
 import type {

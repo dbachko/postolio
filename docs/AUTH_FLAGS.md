@@ -2,7 +2,7 @@
 
 This repo separates API runtime flags from Web (Vite) build‑time flags to control which auth options appear and/or function.
 
-## Web (Vite) – UI visibility
+## Web (Vite): UI visibility
 
 Set these in `packages/apps/web/.env` (local) or pass as build args/vars in CI:
 
@@ -28,7 +28,7 @@ VITE_AUTH_FACEBOOK_ENABLED=false
 VITE_AUTH_MAGIC_LINK_ENABLED=true
 ```
 
-## API (Fastify) – Magic Link runtime
+## API (Fastify): Magic Link runtime
 
 Set in API environment (ECS, Docker, etc.):
 

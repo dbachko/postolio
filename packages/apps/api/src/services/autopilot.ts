@@ -1,6 +1,5 @@
 /**
- * Autopilot Service - Refactored to use AWS EventBridge Scheduler
- * Removed node-cron dependency, now triggered by EventBridge rules
+ * Generates content for schedule gaps when triggered by EventBridge.
  */
 
 import { logger as baseLogger } from '@postolio/logger';
@@ -33,8 +32,7 @@ export interface ContentGap {
 
 class AutopilotService {
   /**
-   * Run autopilot generation - This will be triggered by EventBridge
-   * instead of node-cron
+   * Generate content for brands with schedule gaps.
    */
   async runAutopilotGeneration(): Promise<{
     totalGenerated: number;

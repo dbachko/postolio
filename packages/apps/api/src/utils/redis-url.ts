@@ -1,6 +1,5 @@
 /**
  * Shared utility for constructing Redis URL from environment variables
- * Following AWS best practices for dynamic infrastructure values
  */
 
 /**
@@ -9,7 +8,7 @@
  * @returns Constructed Redis URL
  */
 export function getRedisUrl(fallbackUrl = 'redis://localhost:6379'): string {
-  // AWS best practice: Use separate host/port environment variables for dynamic infrastructure
+  // Prefer separate host and port settings when available.
   if (process.env.REDIS_HOST) {
     const host = process.env.REDIS_HOST;
     const port = process.env.REDIS_PORT || '6379';

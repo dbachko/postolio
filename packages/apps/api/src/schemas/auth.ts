@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * NIST 2024 Password Guidelines
- * - Minimum 15 characters for enhanced security
+ * - Minimum 15 characters
  * - Maximum 128 characters
  * - Must contain uppercase, lowercase, and numbers
  * - Special characters recommended but not required

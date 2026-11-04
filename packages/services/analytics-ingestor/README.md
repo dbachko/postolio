@@ -1,16 +1,14 @@
-Analytics Ingestor (Scaffold)
+# Analytics ingestor
 
-Purpose
+Fetches Instagram account and publication metrics through the connectors library and stores them in PostgreSQL.
 
-- Background worker to fetch platform analytics via connectors and persist into MetricSample and PublicationMetricsLatest.
+Requires PostgreSQL and Redis. Credentials come from `TOKEN_SERVICE_URL` or `TOKEN_SERVICE_FUNCTION_URL`; for local development without Token Service, set `DUMMY_ACCESS_TOKEN`.
 
-Local Dev Notes
+From the repository root:
 
-- Requires a Postgres database with the Analytics v2 schema applied.
-- Requires Redis for token bucket rate limiting (coming next iteration).
-- Credentials: temporarily reads `DUMMY_ACCESS_TOKEN` from env. This will be replaced with Token Service integration.
+```bash
+pnpm --filter @postolio/analytics-ingestor build
+pnpm --filter @postolio/analytics-ingestor start
+```
 
-Commands
-
-- Build: pnpm --filter @postolio/analytics-ingestor build
-- Run once: node dist/index.js
+Set `INGESTOR_LOOP_MS` to run repeatedly. See [configuration and troubleshooting](../../../docs/ANALYTICS-INGESTOR.md).

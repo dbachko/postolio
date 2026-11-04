@@ -324,8 +324,6 @@ export class ContentClient {
     });
   }
 
-  // hide/delete removed
-
   likeComment(postId: string, commentId: string, opts?: { publicationId?: string }) {
     const params = new URLSearchParams();
     if (opts?.publicationId) {
