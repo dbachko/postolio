@@ -46,6 +46,8 @@ Generated posts and seeded assets use `https://picsum.photos` by default. Overri
 
 For local HTTPS and OAuth, see [scripts/README.md](scripts/README.md#local-https-ailocalhost-macos). For billing work, follow [Stripe setup](docs/STRIPE-BILLING-SETUP.md).
 
+To run the stack in an isolated Linux environment instead (an OrbStack machine or a Docker container), use `scripts/devenv.sh up`. See [Dev environment in OrbStack or Docker](scripts/README.md#dev-environment-in-orbstack-or-docker-macos).
+
 ### Run apps separately
 
 Start the databases and Valkey:

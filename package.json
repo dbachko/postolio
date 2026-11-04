@@ -21,6 +21,14 @@
     "format:check": "prettier --check \"**/*.{css,scss,js,jsx,ts,tsx,md,mdx,json,yml,yaml,html,graphql}\"",
     "ci:validate-migration": "bash scripts/validate-prisma-migrations.sh",
     "dev:reset": "bash scripts/dev-all.sh --reset",
+    "devenv": "bash scripts/devenv.sh",
+    "devenv:up": "bash scripts/devenv.sh up",
+    "devenv:sync": "bash scripts/devenv.sh sync",
+    "devenv:watch": "bash scripts/devenv.sh watch",
+    "devenv:stop": "bash scripts/devenv.sh stop",
+    "devenv:status": "bash scripts/devenv.sh status",
+    "devenv:logs": "bash scripts/devenv.sh logs",
+    "devenv:seed": "bash scripts/devenv.sh seed",
     "typecheck": "pnpm -r --if-present run typecheck"
   },
   "devDependencies": {
